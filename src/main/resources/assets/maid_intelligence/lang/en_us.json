@@ -1,0 +1,7 @@
+{
+  "command.maid_intelligence.error.not_maid": "%s is not a maid",
+  "command.maid_intelligence.level.get": "%s has intelligence level %s with %s experience",
+  "command.maid_intelligence.level.add": "Awarded %s %s intelligence experience; level %s, experience %s",
+  "command.maid_intelligence.level.set": "Set %s to intelligence level %s with %s experience",
+  "message.maid_intelligence.level_up": "%s's intelligence level increased from %s to %s"
+}

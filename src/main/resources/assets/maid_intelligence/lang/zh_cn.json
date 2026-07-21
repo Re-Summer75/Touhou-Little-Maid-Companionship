@@ -1,0 +1,7 @@
+{
+  "command.maid_intelligence.error.not_maid": "%s 不是女仆",
+  "command.maid_intelligence.level.get": "%s 的智能等级为 %s，当前经验为 %s",
+  "command.maid_intelligence.level.add": "已给予 %s %s 点智能经验；当前等级 %s，经验 %s",
+  "command.maid_intelligence.level.set": "已将 %s 的智能等级设为 %s，经验设为 %s",
+  "message.maid_intelligence.level_up": "%s 的智能等级从 %s 提升到了 %s"
+}

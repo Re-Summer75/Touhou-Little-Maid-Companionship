@@ -42,7 +42,7 @@ minecraft {
             args '--nogui'
         }
         gameTestServer {
-            property 'forge.enabledGameTestNamespaces', mod_id
+            property 'forge.enabledGameTestNamespaces', "${mod_id},minecraft"
         }
         data {
             workingDirectory project.file('run')
@@ -101,6 +101,25 @@ jar {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+}
+
+tasks.register('verifyLevelDomain', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free verification for the level domain and codec.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.laixia.maidintelligence.feature.level.LevelDomainVerification'
+}
+
+tasks.register('prepareGameTestStructures', Copy) {
+    from 'src/test/resources/gameteststructures'
+    into 'run/gameteststructures'
+}
+
+tasks.configureEach {
+    if (name == 'runGameTestServer') {
+        dependsOn prepareGameTestStructures
+    }
 }
 
 idea {
