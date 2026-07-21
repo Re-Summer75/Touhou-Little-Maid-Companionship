@@ -5,6 +5,7 @@ import com.laixia.maidintelligence.compat.tlm.TlmFeatureModule;
 import com.laixia.maidintelligence.core.feature.FeatureContext;
 import com.laixia.maidintelligence.core.feature.FeatureModule;
 import com.laixia.maidintelligence.feature.level.api.MaidLevelApi;
+import com.laixia.maidintelligence.feature.level.client.LevelGuiHandler;
 import com.laixia.maidintelligence.feature.level.command.LevelCommands;
 import com.laixia.maidintelligence.feature.level.domain.DefaultLevelCurve;
 import com.laixia.maidintelligence.feature.level.event.LevelExperienceHandler;
@@ -12,6 +13,8 @@ import com.laixia.maidintelligence.feature.level.service.DefaultMaidLevelService
 import com.laixia.maidintelligence.feature.level.tlm.LevelTaskData;
 import com.laixia.maidintelligence.feature.level.tlm.TlmMaidLevelStore;
 import com.laixia.maidintelligence.platform.network.ModNetwork;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 
 public final class LevelFeature implements FeatureModule, TlmFeatureModule {
     public static final LevelFeature INSTANCE = new LevelFeature();
@@ -35,6 +38,10 @@ public final class LevelFeature implements FeatureModule, TlmFeatureModule {
 
         context.gameEventBus().register(new LevelExperienceHandler(levelApi));
         context.gameEventBus().addListener(new LevelCommands(levelApi)::onRegisterCommands);
+        DistExecutor.unsafeRunWhenOn(
+                Dist.CLIENT,
+                () -> () -> context.gameEventBus().register(new LevelGuiHandler(levelApi))
+        );
     }
 
     @Override

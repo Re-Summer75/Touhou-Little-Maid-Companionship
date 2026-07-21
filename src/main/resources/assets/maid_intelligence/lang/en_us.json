@@ -1,7 +1,10 @@
 {
   "command.maid_intelligence.error.not_maid": "%s is not a maid",
-  "command.maid_intelligence.level.get": "%s has intelligence level %s with %s experience",
-  "command.maid_intelligence.level.add": "Awarded %s %s intelligence experience; level %s, experience %s",
-  "command.maid_intelligence.level.set": "Set %s to intelligence level %s with %s experience",
-  "message.maid_intelligence.level_up": "%s's intelligence level increased from %s to %s"
+  "command.maid_intelligence.level.get": "%s is level %s with %s experience",
+  "command.maid_intelligence.level.add": "Awarded %s %s experience; level %s, experience %s",
+  "command.maid_intelligence.level.set": "Set %s to level %s with %s experience",
+  "message.maid_intelligence.level_up": "%s's level increased from %s to %s",
+  "tooltips.maid_intelligence.info.level": "Level",
+  "tooltips.maid_intelligence.info.experience": "Level experience",
+  "tooltips.maid_intelligence.info.max_level": "MAX"
 }

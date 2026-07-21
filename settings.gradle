@@ -15,4 +15,5 @@ plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.7.0'
 }
 
-rootProject.name = 'MaidIntelligence-1.20.1'
+// Keep the internal Gradle project name stable; the public mod name is configured separately.
+rootProject.name = 'Example-1.20.1'

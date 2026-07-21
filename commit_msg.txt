@@ -1,0 +1,15 @@
+feat: 完善女仆扩展核心功能与UI交互
+
+- 核心功能：新增 `MaidInteractionFeature` 交互特性模块，并在 `FeatureCatalog` 中注册。
+- 客户端UI：新增 `LevelGuiHandler` 处理客户端等级相关的 GUI 渲染，并在 `LevelFeature` 中针对客户端进行注册。
+- 依赖更新：将 `touhou-little-maid` 依赖版本要求升级至 `[1.5.3,)`，并更新 CurseForge Maven 依赖源。
+- 语言与资源：
+  - 将模组名称从“女仆智能”更名为“女仆扩展”，同步更新 `pack.mcmeta` 和 `mods.toml` 的描述。
+  - 简化中英文语言文件中的等级提示（移除“智能”二字）。
+  - 新增等级、经验及满级相关的 tooltip 语言键。
+- 构建与环境配置：
+  - 修复 `build.gradle` 中 `processResources` 替换 `mods.toml` 属性的方式，改用 `doLast` 文本替换。
+  - 调整 `.vscode/launch.json` 和 `tasks.json`，适配当前项目名称 `6_CWNPmod` 并使用离线模式的 `gradlew.bat`。
+  - 在 `.gitignore` 中忽略 `_reference/` 目录。
+  - 恢复 `settings.gradle` 中的根项目名称为 `Example-1.20.1` 以保持内部构建稳定。
+  - 新增 `MAID_GUI_ANALYSIS.md` GUI 分析文档。

@@ -66,7 +66,7 @@ dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     // 目前只有 CurseForge Maven 能够支持同时下载模组和源码，方便开发
     // Current Only CurseForge Maven can support downloading both mod and source code, which is convenient for development
-    implementation fg.deobf('curse.maven:touhou-little-maid-355044:6613821-sources-6613853')
+    implementation fg.deobf('curse.maven:touhou-little-maid-355044:8061847-sources-8061848')
 }
 
 processResources {
@@ -77,15 +77,17 @@ processResources {
             forge_version_range    : forge_version_range,
             loader_version_range   : loader_version_range,
             mod_id                 : mod_id,
-            mod_name               : mod_name,
             mod_license            : mod_license,
-            mod_version            : mod_version,
-            mod_authors            : mod_authors,
-            mod_description        : mod_description
+            mod_version            : mod_version
     ]
     inputs.properties replaceProperties
-    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
-        expand replaceProperties + [project: project]
+    doLast {
+        def metadataFile = new File(destinationDir, 'META-INF/mods.toml')
+        def metadata = metadataFile.getText('UTF-8')
+        replaceProperties.each { key, value ->
+            metadata = metadata.replace('${' + key + '}', value.toString())
+        }
+        metadataFile.setText(metadata, 'UTF-8')
     }
 }
 
