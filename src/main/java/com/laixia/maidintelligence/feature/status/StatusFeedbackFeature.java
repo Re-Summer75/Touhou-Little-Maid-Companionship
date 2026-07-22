@@ -6,9 +6,11 @@ import com.laixia.maidintelligence.compat.tlm.TlmFeatureModule;
 import com.laixia.maidintelligence.core.feature.FeatureContext;
 import com.laixia.maidintelligence.core.feature.FeatureModule;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
+import com.laixia.maidintelligence.feature.status.client.MaidHungerGuiHandler;
 import com.laixia.maidintelligence.feature.status.domain.DefaultHungerPolicy;
 import com.laixia.maidintelligence.feature.status.domain.DefaultToolDurabilityPolicy;
 import com.laixia.maidintelligence.feature.status.event.MaidFoodStatusHandler;
+import com.laixia.maidintelligence.feature.status.event.MaidHungerRegenerationHandler;
 import com.laixia.maidintelligence.feature.status.service.DefaultMaidStatusService;
 import com.laixia.maidintelligence.feature.status.service.MaidActionService;
 import com.laixia.maidintelligence.feature.status.service.MaidExpressionService;
@@ -17,6 +19,8 @@ import com.laixia.maidintelligence.feature.status.tlm.MaidMealAccess;
 import com.laixia.maidintelligence.feature.status.tlm.StatusExtraBrain;
 import com.laixia.maidintelligence.feature.status.tlm.StatusTaskData;
 import com.laixia.maidintelligence.feature.status.tlm.TlmMaidStatusStore;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 
 public final class StatusFeedbackFeature implements FeatureModule, TlmFeatureModule {
     public static final StatusFeedbackFeature INSTANCE = new StatusFeedbackFeature();
@@ -41,6 +45,13 @@ public final class StatusFeedbackFeature implements FeatureModule, TlmFeatureMod
         }
         initialized = true;
         context.gameEventBus().register(new MaidFoodStatusHandler(statusService));
+        context.gameEventBus().register(new MaidHungerRegenerationHandler(statusService));
+        DistExecutor.unsafeRunWhenOn(
+                Dist.CLIENT,
+                () -> () -> context.gameEventBus().register(
+                        new MaidHungerGuiHandler(statusService)
+                )
+        );
     }
 
     @Override

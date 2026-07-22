@@ -1,0 +1,22 @@
+{
+  "command.tlm_companionship.error.not_maid": "%s is not a maid",
+  "command.tlm_companionship.level.get": "%s is level %s with %s experience",
+  "command.tlm_companionship.level.add": "Awarded %s %s experience; level %s, experience %s",
+  "command.tlm_companionship.level.set": "Set %s to level %s with %s experience",
+  "message.tlm_companionship.level_up": "%s's level increased from %s to %s",
+  "chat_bubble.tlm_companionship.status.needs_food": "I need some food...",
+  "chat_bubble.tlm_companionship.status.saturation_full": "I cannot eat any more...",
+  "chat_bubble.tlm_companionship.status.tool_low": "Tool durability critical: %s/%s",
+  "chat_bubble.tlm_companionship.status.tool_replaced": "Switched to a backup tool",
+  "overlay.tlm_companionship.interaction.empty_hand": "Right-click: sit or stand\nShift + right-click: open maid menu",
+  "overlay.tlm_companionship.interaction.feed": "Right-click: feed the maid",
+  "overlay.tlm_companionship.interaction.feed_saturation_full": "Saturation full: right-clicking will be refused",
+  "overlay.tlm_companionship.interaction.feed_aim": "Aim at the lower face, then right-click to feed",
+  "overlay.tlm_companionship.interaction.potion": "Right-click: apply the potion to the maid",
+  "overlay.tlm_companionship.interaction.milk": "Right-click: give milk to the maid",
+  "overlay.tlm_companionship.interaction.glass_bottle": "Right-click: extract 1 bottle of maid experience",
+  "tooltips.tlm_companionship.info.level": "Level",
+  "tooltips.tlm_companionship.info.experience": "Level experience",
+  "tooltips.tlm_companionship.info.max_level": "MAX",
+  "gui.tlm_companionship.hunger": "Hunger: %s/%s, Saturation: %s/%s"
+}

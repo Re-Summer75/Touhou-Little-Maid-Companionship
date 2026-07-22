@@ -45,7 +45,12 @@ public final class DefaultMaidStatusService implements MaidStatusApi {
     @Override
     public void setHunger(EntityMaid maid, int hunger) {
         int clamped = Math.max(0, Math.min(DefaultHungerPolicy.MAX_HUNGER, hunger));
-        store.set(maid, new MaidStatusState(clamped));
+        MaidStatusState current = store.get(maid);
+        store.set(maid, new MaidStatusState(
+                clamped,
+                Math.min(current.saturation(), clamped),
+                current.exhaustion()
+        ));
         if (clamped > DefaultHungerPolicy.AUTO_EAT_THRESHOLD) {
             expressionService.clearHungerWarning(maid);
         }
@@ -58,9 +63,92 @@ public final class DefaultMaidStatusService implements MaidStatusApi {
 
         actionService.tick(maid);
         RuntimeState runtime = runtimeStates.computeIfAbsent(maid, ignored -> new RuntimeState());
-        updateHunger(maid, runtime);
+        int elapsedTicks = advanceRuntimeClock(maid, runtime);
+        if (elapsedTicks > 0) {
+            updateHunger(maid, runtime, elapsedTicks);
+        }
         updateHungerFeedback(maid);
         updateToolFeedback(maid);
+    }
+
+    public void tickHungerRegeneration(EntityMaid maid) {
+        if (!(maid.level() instanceof ServerLevel)
+                || maid.isDeadOrDying()) {
+            return;
+        }
+
+        RuntimeState runtime = runtimeStates.computeIfAbsent(maid, ignored -> new RuntimeState());
+        MaidStatusState current = store.get(maid);
+        MaidStatusState updated = hungerPolicy.settleExhaustion(current);
+
+        if (maid.getHealth() >= maid.getMaxHealth()) {
+            runtime.hungerRegenerationTicks = 0;
+            runtime.saturatedRegenerationTicks = 0;
+            if (!updated.equals(current)) {
+                store.set(maid, updated);
+            }
+            return;
+        }
+
+        updated = updateHungerRegeneration(maid, runtime, updated);
+        if (maid.getHealth() < maid.getMaxHealth()) {
+            updated = updateSaturatedRegeneration(maid, runtime, updated);
+        } else {
+            runtime.saturatedRegenerationTicks = 0;
+        }
+        if (!updated.equals(current)) {
+            store.set(maid, updated);
+        }
+    }
+
+    private MaidStatusState updateHungerRegeneration(
+            EntityMaid maid,
+            RuntimeState runtime,
+            MaidStatusState state
+    ) {
+        int interval = hungerPolicy.regenerationIntervalTicks(state);
+        if (interval <= 0) {
+            runtime.hungerRegenerationTicks = 0;
+            return state;
+        }
+
+        runtime.hungerRegenerationTicks++;
+        if (runtime.hungerRegenerationTicks < interval) {
+            return state;
+        }
+        runtime.hungerRegenerationTicks = 0;
+
+        float previousHealth = maid.getHealth();
+        maid.heal(DefaultHungerPolicy.REGENERATION_HEALTH);
+        if (maid.getHealth() > previousHealth) {
+            return hungerPolicy.consumeForRegeneration(state);
+        }
+        return state;
+    }
+
+    private MaidStatusState updateSaturatedRegeneration(
+            EntityMaid maid,
+            RuntimeState runtime,
+            MaidStatusState state
+    ) {
+        int interval = hungerPolicy.saturatedRegenerationIntervalTicks(state);
+        if (interval <= 0) {
+            runtime.saturatedRegenerationTicks = 0;
+            return state;
+        }
+
+        runtime.saturatedRegenerationTicks++;
+        if (runtime.saturatedRegenerationTicks < interval) {
+            return state;
+        }
+        runtime.saturatedRegenerationTicks = 0;
+
+        float previousHealth = maid.getHealth();
+        maid.heal(hungerPolicy.saturatedRegenerationHealth(state));
+        if (maid.getHealth() > previousHealth) {
+            return hungerPolicy.consumeForSaturatedRegeneration(state);
+        }
+        return state;
     }
 
     @Override
@@ -70,15 +158,42 @@ public final class DefaultMaidStatusService implements MaidStatusApi {
         }
         var properties = food.getFoodProperties(maid);
         if (properties != null) {
-            runtimeStates.computeIfAbsent(maid, ignored -> new RuntimeState())
-                    .pendingNutrition = properties.getNutrition();
+            RuntimeState runtime = runtimeStates.computeIfAbsent(
+                    maid,
+                    ignored -> new RuntimeState()
+            );
+            runtime.pendingNutrition = properties.getNutrition();
+            runtime.pendingSaturationModifier = properties.getSaturationModifier();
         }
+    }
+
+    @Override
+    public void restoreFromFood(
+            EntityMaid maid,
+            int nutrition,
+            float saturationModifier
+    ) {
+        if (!(maid.level() instanceof ServerLevel) || nutrition <= 0) {
+            return;
+        }
+
+        MaidStatusState current = store.get(maid);
+        MaidStatusState restored = hungerPolicy.restoreFromFood(
+                current,
+                nutrition,
+                saturationModifier
+        );
+        if (!restored.equals(current)) {
+            store.set(maid, restored);
+        }
+        expressionService.clearHungerWarning(maid);
     }
 
     public void onFoodUseStopped(EntityMaid maid) {
         RuntimeState runtime = runtimeStates.get(maid);
         if (runtime != null) {
             runtime.pendingNutrition = 0;
+            runtime.pendingSaturationModifier = 0.0F;
         }
     }
 
@@ -89,34 +204,40 @@ public final class DefaultMaidStatusService implements MaidStatusApi {
 
         RuntimeState runtime = runtimeStates.computeIfAbsent(maid, ignored -> new RuntimeState());
         int nutrition = runtime.pendingNutrition;
+        float saturationModifier = runtime.pendingSaturationModifier;
         runtime.pendingNutrition = 0;
+        runtime.pendingSaturationModifier = 0.0F;
         if (nutrition <= 0 && !foodAfterEat.isEmpty()) {
             var properties = foodAfterEat.getFoodProperties(maid);
             if (properties != null) {
                 nutrition = properties.getNutrition();
+                saturationModifier = properties.getSaturationModifier();
             }
         }
         if (nutrition <= 0) {
             return;
         }
 
-        MaidStatusState current = store.get(maid);
-        MaidStatusState restored = hungerPolicy.restoreFromNutrition(current, nutrition);
-        if (!restored.equals(current)) {
-            store.set(maid, restored);
-        }
-        expressionService.clearHungerWarning(maid);
+        restoreFromFood(maid, nutrition, saturationModifier);
     }
 
-    private void updateHunger(EntityMaid maid, RuntimeState runtime) {
+    private int advanceRuntimeClock(EntityMaid maid, RuntimeState runtime) {
         int currentTick = maid.tickCount;
         if (runtime.lastMaidTick < 0 || currentTick < runtime.lastMaidTick) {
             runtime.lastMaidTick = currentTick;
-            return;
+            return 0;
         }
 
         int elapsedTicks = currentTick - runtime.lastMaidTick;
         runtime.lastMaidTick = currentTick;
+        return elapsedTicks;
+    }
+
+    private void updateHunger(
+            EntityMaid maid,
+            RuntimeState runtime,
+            int elapsedTicks
+    ) {
         if (elapsedTicks <= 0) {
             return;
         }
@@ -186,6 +307,9 @@ public final class DefaultMaidStatusService implements MaidStatusApi {
     private static final class RuntimeState {
         private int lastMaidTick = -1;
         private int hungerUnits;
+        private int hungerRegenerationTicks;
+        private int saturatedRegenerationTicks;
         private int pendingNutrition;
+        private float pendingSaturationModifier;
     }
 }

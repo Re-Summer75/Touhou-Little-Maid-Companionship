@@ -54,7 +54,7 @@ textures/chat_bubble/maid_emoji/
 附属可直接添加资源：
 
 ```text
-src/main/resources/assets/maid_intelligence/
+src/main/resources/assets/tlm_companionship/
 textures/chat_bubble/maid_emoji/happy.png
 ```
 
@@ -80,7 +80,7 @@ maid.getChatBubbleManager().addChatBubble(
 
 ```java
 ResourceLocation image = new ResourceLocation(
-        "maid_intelligence",
+        "tlm_companionship",
         "textures/chat_bubble/status/tool_warning.png"
 );
 maid.getChatBubbleManager().addChatBubble(

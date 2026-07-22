@@ -7,6 +7,7 @@ import com.laixia.maidintelligence.platform.resource.ModResources;
 
 public final class LevelTaskData {
     private static TaskDataKey<LevelProgress> progressKey;
+    private static TaskDataKey<LevelProgress> legacyProgressKey;
 
     private LevelTaskData() {
     }
@@ -16,6 +17,10 @@ public final class LevelTaskData {
             throw new IllegalStateException("Level task data has already been registered");
         }
         progressKey = register.register(ModResources.id("level_progress"), LevelProgress.CODEC);
+        legacyProgressKey = register.register(
+                ModResources.legacyId("level_progress"),
+                LevelProgress.CODEC
+        );
     }
 
     public static TaskDataKey<LevelProgress> progressKey() {
@@ -23,5 +28,12 @@ public final class LevelTaskData {
             throw new IllegalStateException("Level task data has not been registered yet");
         }
         return progressKey;
+    }
+
+    public static TaskDataKey<LevelProgress> legacyProgressKey() {
+        if (legacyProgressKey == null) {
+            throw new IllegalStateException("Legacy level task data has not been registered yet");
+        }
+        return legacyProgressKey;
     }
 }

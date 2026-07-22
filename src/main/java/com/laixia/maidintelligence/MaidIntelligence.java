@@ -13,7 +13,8 @@ import net.minecraftforge.fml.common.Mod;
 
 @Mod(MaidIntelligence.MOD_ID)
 public final class MaidIntelligence {
-    public static final String MOD_ID = "maid_intelligence";
+    public static final String MOD_ID = "tlm_companionship";
+    public static final String LEGACY_MOD_ID = "maid_intelligence";
 
     public MaidIntelligence() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();

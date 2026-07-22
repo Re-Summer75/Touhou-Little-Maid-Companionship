@@ -13,7 +13,7 @@ import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class ModNetwork {
-    private static final String PROTOCOL_VERSION = "7";
+    private static final String PROTOCOL_VERSION = "9";
     private static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
             .named(ModResources.id("main"))
             .networkProtocolVersion(() -> PROTOCOL_VERSION)
@@ -86,9 +86,27 @@ public final class ModNetwork {
         CHANNEL.send(
                 PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> maid),
                 new ClientboundMaidEatingParticlesPacket(
+                        maid.getId(),
                         food,
+                        false,
                         worldCenter,
                         worldNormal
+                )
+        );
+    }
+
+    public static void sendMaidEatingParticlesFromTrackedFace(
+            EntityMaid maid,
+            ItemStack food
+    ) {
+        CHANNEL.send(
+                PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> maid),
+                new ClientboundMaidEatingParticlesPacket(
+                        maid.getId(),
+                        food,
+                        true,
+                        Vec3.ZERO,
+                        Vec3.ZERO
                 )
         );
     }

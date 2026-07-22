@@ -78,7 +78,7 @@ attacked：普通优先级
 ```java
 AnimationManager.getInstance().register(
         new AnimationState(
-                "maid_intelligence:custom_action",
+                "tlm_companionship:custom_action",
                 loopType,
                 priority,
                 predicate

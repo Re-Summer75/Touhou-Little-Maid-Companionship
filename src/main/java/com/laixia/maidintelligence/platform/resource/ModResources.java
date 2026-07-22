@@ -14,6 +14,10 @@ public final class ModResources {
         return ResourceLocation.fromNamespaceAndPath(MaidIntelligence.MOD_ID, path);
     }
 
+    public static ResourceLocation legacyId(String path) {
+        return ResourceLocation.fromNamespaceAndPath(MaidIntelligence.LEGACY_MOD_ID, path);
+    }
+
     public static String translationKey(String category, String path) {
         return category + "." + MaidIntelligence.MOD_ID + "." + path;
     }

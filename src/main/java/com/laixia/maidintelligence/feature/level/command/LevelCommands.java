@@ -6,6 +6,7 @@ import com.laixia.maidintelligence.feature.level.api.LevelChange;
 import com.laixia.maidintelligence.feature.level.api.MaidLevelApi;
 import com.laixia.maidintelligence.feature.level.domain.DefaultLevelCurve;
 import com.laixia.maidintelligence.feature.level.domain.LevelProgress;
+import com.laixia.maidintelligence.platform.resource.ModResources;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -20,7 +21,7 @@ import net.minecraftforge.event.RegisterCommandsEvent;
 
 public final class LevelCommands {
     private static final DynamicCommandExceptionType NOT_A_MAID = new DynamicCommandExceptionType(
-            value -> Component.translatable("command.maid_intelligence.error.not_maid", value)
+            value -> Component.translatable(commandKey("error.not_maid"), value)
     );
 
     private final MaidLevelApi levelApi;
@@ -54,7 +55,7 @@ public final class LevelCommands {
                                                 IntegerArgumentType.getInteger(context, "experience")
                                         )))));
 
-        dispatcher.register(Commands.literal("maidintelligence")
+        dispatcher.register(Commands.literal("tlmcompanionship")
                 .requires(source -> source.hasPermission(2))
                 .then(Commands.literal("level")
                         .then(getCommand)
@@ -66,7 +67,7 @@ public final class LevelCommands {
         EntityMaid maid = getMaid(context);
         LevelProgress progress = levelApi.getProgress(maid);
         context.getSource().sendSuccess(() -> Component.translatable(
-                "command.maid_intelligence.level.get",
+                commandKey("level.get"),
                 maid.getDisplayName(),
                 progress.level(),
                 progress.experience()
@@ -79,7 +80,7 @@ public final class LevelCommands {
         int amount = IntegerArgumentType.getInteger(context, "experience");
         LevelChange change = levelApi.awardExperience(maid, amount, ExperienceSource.COMMAND);
         context.getSource().sendSuccess(() -> Component.translatable(
-                "command.maid_intelligence.level.add",
+                commandKey("level.add"),
                 maid.getDisplayName(),
                 amount,
                 change.after().level(),
@@ -93,7 +94,7 @@ public final class LevelCommands {
         int level = IntegerArgumentType.getInteger(context, "level");
         LevelProgress progress = levelApi.setProgress(maid, level, experience);
         context.getSource().sendSuccess(() -> Component.translatable(
-                "command.maid_intelligence.level.set",
+                commandKey("level.set"),
                 maid.getDisplayName(),
                 progress.level(),
                 progress.experience()
@@ -107,5 +108,9 @@ public final class LevelCommands {
             return maid;
         }
         throw NOT_A_MAID.create(entity.getDisplayName());
+    }
+
+    private static String commandKey(String path) {
+        return ModResources.translationKey("command", path);
     }
 }

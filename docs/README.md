@@ -1,6 +1,10 @@
-# 女仆扩展开发文档
+# 车万女仆：朝夕相伴开发文档
 
-本目录集中存放“女仆扩展”的设计、分析与兼容性文档，避免项目根目录随着功能增加而堆积 Markdown 文件。
+正式英文名：**Touhou Little Maid: Companionship**。
+
+本目录集中存放“车万女仆：朝夕相伴”的设计、分析与兼容性文档。中文可简称为“TLM：朝夕相伴”，英文可简称为“TLM: Companionship”。
+
+当前 MOD ID 为 `tlm_companionship`。旧 ID `maid_intelligence` 仅保留为存档数据迁移入口，不再用于模组注册、资源或网络命名空间。
 
 ## 文档索引
 

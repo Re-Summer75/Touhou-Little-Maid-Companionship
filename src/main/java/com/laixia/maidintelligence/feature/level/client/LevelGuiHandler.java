@@ -6,6 +6,7 @@ import com.mojang.datafixers.util.Either;
 import com.laixia.maidintelligence.feature.level.api.MaidLevelApi;
 import com.laixia.maidintelligence.feature.level.domain.DefaultLevelCurve;
 import com.laixia.maidintelligence.feature.level.domain.LevelProgress;
+import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -36,14 +37,14 @@ public final class LevelGuiHandler {
         int insertIndex = Math.min(1, event.getTooltipElements().size());
 
         event.getTooltipElements().add(insertIndex++, Either.left(infoLine(
-                "tooltips.maid_intelligence.info.level",
+                levelTooltip("level"),
                 Component.literal(String.valueOf(progress.level()))
         )));
         event.getTooltipElements().add(insertIndex, Either.left(infoLine(
-                "tooltips.maid_intelligence.info.experience",
+                levelTooltip("experience"),
                 required > 0
                         ? Component.literal(progress.experience() + "/" + required)
-                        : Component.translatable("tooltips.maid_intelligence.info.max_level")
+                        : Component.translatable(levelTooltip("max_level"))
         )));
     }
 
@@ -61,5 +62,9 @@ public final class LevelGuiHandler {
                 .append(Component.translatable(labelKey).withStyle(ChatFormatting.WHITE))
                 .append(": ")
                 .append(value.copy().withStyle(ChatFormatting.AQUA));
+    }
+
+    private static String levelTooltip(String path) {
+        return ModResources.translationKey("tooltips", "info." + path);
     }
 }

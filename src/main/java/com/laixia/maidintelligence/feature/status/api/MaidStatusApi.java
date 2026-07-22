@@ -10,4 +10,6 @@ public interface MaidStatusApi {
     void setHunger(EntityMaid maid, int hunger);
 
     void captureFoodNutrition(EntityMaid maid, ItemStack food);
+
+    void restoreFromFood(EntityMaid maid, int nutrition, float saturationModifier);
 }

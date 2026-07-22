@@ -35,7 +35,7 @@ manager.removeChatBubble(bubbleId);
 显示翻译键：
 
 ```java
-manager.addTextChatBubble("maid_intelligence.bubble.hello");
+manager.addTextChatBubble("tlm_companionship.bubble.hello");
 ```
 
 显示任意组件：
@@ -52,7 +52,7 @@ manager.addChatBubble(
 
 ```java
 long bubbleId = manager.addTextChatBubbleIfTimeout(
-        "maid_intelligence.bubble.warning",
+        "tlm_companionship.bubble.warning",
         previousBubbleId
 );
 ```
@@ -71,7 +71,7 @@ manager.addChatBubble(
 
 ```java
 ResourceLocation image = new ResourceLocation(
-        "maid_intelligence",
+        "tlm_companionship",
         "textures/chat_bubble/status/low_health.png"
 );
 manager.addChatBubble(
@@ -85,7 +85,7 @@ manager.addChatBubble(
 
 ```java
 long waitingId = manager.addThinkingText(
-        "maid_intelligence.bubble.thinking"
+        "tlm_companionship.bubble.thinking"
 );
 ```
 
@@ -93,7 +93,7 @@ long waitingId = manager.addThinkingText(
 
 ```java
 waitingId = manager.refreshThinkingText(
-        "maid_intelligence.bubble.thinking",
+        "tlm_companionship.bubble.thinking",
         waitingId,
         Component.literal("正在规划路径")
 );
@@ -129,7 +129,7 @@ manager.addChatBubble(
 @Override
 public void registerChatBubble(ChatBubbleRegister register) {
     register.register(
-            new ResourceLocation("maid_intelligence", "custom"),
+            new ResourceLocation("tlm_companionship", "custom"),
             new CustomBubbleSerializer()
     );
 }

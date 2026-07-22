@@ -11,7 +11,9 @@ import net.minecraftforge.network.NetworkEvent;
 import java.util.function.Supplier;
 
 public record ClientboundMaidEatingParticlesPacket(
+        int maidEntityId,
         ItemStack food,
+        boolean useTrackedFace,
         Vec3 worldCenter,
         Vec3 worldNormal
 ) {
@@ -19,7 +21,9 @@ public record ClientboundMaidEatingParticlesPacket(
             ClientboundMaidEatingParticlesPacket packet,
             FriendlyByteBuf buffer
     ) {
+        buffer.writeVarInt(packet.maidEntityId());
         buffer.writeItem(packet.food());
+        buffer.writeBoolean(packet.useTrackedFace());
         buffer.writeDouble(packet.worldCenter().x);
         buffer.writeDouble(packet.worldCenter().y);
         buffer.writeDouble(packet.worldCenter().z);
@@ -30,7 +34,9 @@ public record ClientboundMaidEatingParticlesPacket(
 
     public static ClientboundMaidEatingParticlesPacket decode(FriendlyByteBuf buffer) {
         return new ClientboundMaidEatingParticlesPacket(
+                buffer.readVarInt(),
                 buffer.readItem(),
+                buffer.readBoolean(),
                 new Vec3(
                         buffer.readDouble(),
                         buffer.readDouble(),

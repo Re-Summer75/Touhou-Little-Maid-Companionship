@@ -1,3 +1,14 @@
+buildscript {
+    repositories {
+        maven {
+            url = 'https://repo.spongepowered.org/repository/maven-public/'
+        }
+    }
+    dependencies {
+        classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'
+    }
+}
+
 plugins {
     id 'eclipse'
     id 'idea'
@@ -5,9 +16,11 @@ plugins {
     id 'org.parchmentmc.librarian.forgegradle' version '1.+'
 }
 
+apply plugin: 'org.spongepowered.mixin'
+
 group = mod_group_id
 version = mod_version
-archivesBaseName = "${mod_id}-${minecraft_version}-forge"
+archivesBaseName = "tlm-companionship-${minecraft_version}-forge"
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(17)
@@ -53,6 +66,11 @@ minecraft {
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
+mixin {
+    add sourceSets.main, 'tlm_companionship.refmap.json'
+    config 'tlm_companionship.mixins.json'
+}
+
 repositories {
     maven {
         url "https://cursemaven.com"
@@ -67,6 +85,7 @@ dependencies {
     // 目前只有 CurseForge Maven 能够支持同时下载模组和源码，方便开发
     // Current Only CurseForge Maven can support downloading both mod and source code, which is convenient for development
     implementation fg.deobf('curse.maven:touhou-little-maid-355044:8061847-sources-8061848')
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 }
 
 processResources {
@@ -94,7 +113,7 @@ processResources {
 jar {
     manifest {
         attributes([
-                "Implementation-Title"  : project.name,
+                "Implementation-Title"  : mod_name_en,
                 "Implementation-Version": "${version}"
         ])
     }

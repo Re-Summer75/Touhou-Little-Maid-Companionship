@@ -14,12 +14,15 @@ public final class StatusDomainVerification {
         verifiesCodecRoundTrip();
         verifiesHungerDrainRates();
         verifiesHungerRestorationAndClamp();
+        verifiesHungerRegenerationTiers();
+        verifiesPlayerStyleSaturation();
+        verifiesFullSaturationBoundary();
         verifiesToolDurabilityThreshold();
         System.out.println("Status domain verification passed.");
     }
 
     private static void verifiesCodecRoundTrip() {
-        MaidStatusState expected = new MaidStatusState(37);
+        MaidStatusState expected = new MaidStatusState(37, 12.5F, 3.0F);
         JsonElement encoded = MaidStatusState.CODEC.encodeStart(JsonOps.INSTANCE, expected)
                 .getOrThrow(false, message -> {
                     throw new AssertionError(message);
@@ -29,6 +32,17 @@ public final class StatusDomainVerification {
                     throw new AssertionError(message);
                 });
         require(expected.equals(decoded), "Codec round trip changed maid status");
+
+        MaidStatusState legacy = MaidStatusState.CODEC.parse(
+                JsonOps.INSTANCE,
+                com.google.gson.JsonParser.parseString("{\"hunger\":42}")
+        ).getOrThrow(false, message -> {
+            throw new AssertionError(message);
+        });
+        require(
+                legacy.equals(new MaidStatusState(42)),
+                "Legacy hunger-only status did not default saturation to zero"
+        );
     }
 
     private static void verifiesHungerDrainRates() {
@@ -51,20 +65,99 @@ public final class StatusDomainVerification {
                 policy.drain(new MaidStatusState(1), 3).hunger() == 0,
                 "Hunger drain did not clamp to zero"
         );
+        MaidStatusState saturationDrained = policy.drain(
+                new MaidStatusState(50, 2.5F, 0.0F),
+                3
+        );
+        require(
+                saturationDrained.hunger() == 50 && saturationDrained.saturation() == 0.0F,
+                "Saturation did not absorb hunger drain first"
+        );
     }
 
     private static void verifiesHungerRestorationAndClamp() {
         DefaultHungerPolicy policy = DefaultHungerPolicy.INSTANCE;
-        MaidStatusState restored = policy.restoreFromNutrition(new MaidStatusState(25), 4);
+        MaidStatusState restored = policy.restoreFromFood(
+                new MaidStatusState(25),
+                4,
+                0.3F
+        );
         require(restored.hunger() == 45, "Unexpected food restoration");
+        require(restored.saturation() == 12.0F, "Unexpected saturation restoration");
         require(
-                policy.restoreFromNutrition(new MaidStatusState(95), 20).hunger()
-                        == DefaultHungerPolicy.MAX_HUNGER,
-                "Food restoration did not clamp to maximum hunger"
+                policy.restoreFromFood(
+                        new MaidStatusState(95, 90.0F, 0.0F),
+                        20,
+                        0.8F
+                ).equals(new MaidStatusState(100, 100.0F, 0.0F)),
+                "Food restoration did not clamp hunger and saturation"
         );
         require(
                 policy.shouldAutoEat(new MaidStatusState(DefaultHungerPolicy.AUTO_EAT_THRESHOLD)),
                 "Auto-eat threshold should be inclusive"
+        );
+    }
+
+    private static void verifiesHungerRegenerationTiers() {
+        DefaultHungerPolicy policy = DefaultHungerPolicy.INSTANCE;
+        require(
+                policy.regenerationIntervalTicks(
+                        new MaidStatusState(100, 25.0F, 0.0F)
+                ) == 10,
+                "High hunger regeneration changed when saturation was present"
+        );
+        require(
+                policy.saturatedRegenerationIntervalTicks(
+                        new MaidStatusState(100, 25.0F, 0.0F)
+                ) == 10,
+                "Saturation enhancement interval is incorrect"
+        );
+        require(
+                policy.regenerationIntervalTicks(new MaidStatusState(79)) == 80,
+                "Medium hunger regeneration interval is incorrect"
+        );
+        require(
+                policy.regenerationIntervalTicks(new MaidStatusState(59)) == 160,
+                "Low hunger regeneration interval is incorrect"
+        );
+        require(
+                policy.regenerationIntervalTicks(new MaidStatusState(40)) == 0,
+                "Regeneration should stop at the auto-eat threshold"
+        );
+        require(
+                policy.consumeForRegeneration(new MaidStatusState(80)).hunger() == 79,
+                "Regeneration should consume one hunger point"
+        );
+    }
+
+    private static void verifiesPlayerStyleSaturation() {
+        DefaultHungerPolicy policy = DefaultHungerPolicy.INSTANCE;
+        MaidStatusState saturated = new MaidStatusState(100, 25.0F, 0.0F);
+        require(
+                Math.abs(policy.saturatedRegenerationHealth(saturated) - 5.0F / 6.0F)
+                        < 1.0E-6F,
+                "Saturated healing amount did not match player scaling"
+        );
+
+        MaidStatusState exhausted = policy.consumeForSaturatedRegeneration(saturated);
+        require(exhausted.exhaustion() == 5.0F, "Fast healing exhaustion is incorrect");
+
+        MaidStatusState settled = policy.settleExhaustion(exhausted);
+        require(
+                settled.equals(new MaidStatusState(100, 20.0F, 1.0F)),
+                "Exhaustion did not consume scaled saturation"
+        );
+    }
+
+    private static void verifiesFullSaturationBoundary() {
+        DefaultHungerPolicy policy = DefaultHungerPolicy.INSTANCE;
+        require(
+                policy.isSaturationFull(new MaidStatusState(100, 100.0F, 0.0F)),
+                "Maximum saturation should reject further feeding"
+        );
+        require(
+                !policy.isSaturationFull(new MaidStatusState(100, 99.0F, 0.0F)),
+                "Feeding should resume after saturation is consumed"
         );
     }
 

@@ -7,6 +7,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.implement.Prog
 import com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.implement.TextChatBubbleData;
 import com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.implement.WaitingChatBubbleData;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 
@@ -30,7 +31,7 @@ public final class MaidExpressionService {
 
         long key = addStatusBubble(maid, TextChatBubbleData.create(
                 STATUS_EXIST_TICKS,
-                Component.translatable("chat_bubble.maid_intelligence.status.needs_food"),
+                Component.translatable(statusBubble("needs_food")),
                 IChatBubbleData.TYPE_2,
                 STATUS_PRIORITY
         ));
@@ -53,7 +54,7 @@ public final class MaidExpressionService {
                 IChatBubbleData.TYPE_2,
                 STATUS_PRIORITY,
                 Component.translatable(
-                        "chat_bubble.maid_intelligence.status.tool_low",
+                        statusBubble("tool_low"),
                         tool.remainingDurability(),
                         tool.maximumDurability()
                 ),
@@ -77,7 +78,7 @@ public final class MaidExpressionService {
         }
         addStatusBubble(maid, TextChatBubbleData.create(
                 STATUS_EXIST_TICKS,
-                Component.translatable("chat_bubble.maid_intelligence.status.tool_replaced"),
+                Component.translatable(statusBubble("tool_replaced")),
                 IChatBubbleData.TYPE_2,
                 STATUS_PRIORITY
         ));
@@ -137,6 +138,10 @@ public final class MaidExpressionService {
 
     private BubbleState stateFor(EntityMaid maid) {
         return states.computeIfAbsent(maid, ignored -> new BubbleState());
+    }
+
+    private static String statusBubble(String path) {
+        return ModResources.translationKey("chat_bubble", "status." + path);
     }
 
     private static final class BubbleState {

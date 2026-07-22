@@ -4,6 +4,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.interaction.client.MaidEatingParticleEffect;
 import com.laixia.maidintelligence.platform.network.packet.ClientboundLevelUpPacket;
 import com.laixia.maidintelligence.platform.network.packet.ClientboundMaidEatingParticlesPacket;
+import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
@@ -24,7 +25,7 @@ public final class ClientPacketHandlers {
         Entity entity = minecraft.level.getEntity(packet.maidEntityId());
         if (entity instanceof EntityMaid maid) {
             minecraft.player.displayClientMessage(Component.translatable(
-                    "message.maid_intelligence.level_up",
+                    ModResources.translationKey("message", "level_up"),
                     maid.getDisplayName(),
                     packet.oldLevel(),
                     packet.newLevel()
@@ -35,6 +36,13 @@ public final class ClientPacketHandlers {
     public static void handleMaidEatingParticles(
             ClientboundMaidEatingParticlesPacket packet
     ) {
+        if (packet.useTrackedFace()) {
+            MaidEatingParticleEffect.spawnFromTrackedFace(
+                    packet.maidEntityId(),
+                    packet.food()
+            );
+            return;
+        }
         MaidEatingParticleEffect.spawn(
                 packet.food(),
                 packet.worldCenter(),

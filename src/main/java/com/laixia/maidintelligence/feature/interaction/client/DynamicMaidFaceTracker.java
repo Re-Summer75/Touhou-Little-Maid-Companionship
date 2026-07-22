@@ -61,6 +61,19 @@ public final class DynamicMaidFaceTracker {
         return trace(maid).isPresent();
     }
 
+    public static Optional<FaceCoordinates> getTrackedFace(EntityMaid maid) {
+        FaceRegion region = getFreshRegion(maid);
+        if (region == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new FaceCoordinates(
+                MouthTargetRegion.CENTER_U,
+                MouthTargetRegion.CENTER_V,
+                region.worldCenter(),
+                region.worldNormal()
+        ));
+    }
+
     public static void clear() {
         REGIONS.clear();
     }

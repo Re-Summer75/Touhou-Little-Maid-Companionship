@@ -15,7 +15,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 
 /**
- * 车万女仆扩展入口。后续的工作模式、AI 行为和互动功能统一从这里注册。
+ * “TLM：朝夕相伴”的本体兼容入口。后续的工作模式、AI 行为和互动功能统一从这里注册。
  */
 @LittleMaidExtension
 public final class LittleMaidCompat implements ILittleMaid {
