@@ -32,4 +32,17 @@ public final class PacketRegistrar {
                 .consumerMainThread(handler)
                 .add();
     }
+
+    public <T> void registerServerbound(
+            Class<T> type,
+            BiConsumer<T, FriendlyByteBuf> encoder,
+            Function<FriendlyByteBuf, T> decoder,
+            BiConsumer<T, Supplier<NetworkEvent.Context>> handler
+    ) {
+        channel.messageBuilder(type, nextMessageId++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(encoder)
+                .decoder(decoder)
+                .consumerMainThread(handler)
+                .add();
+    }
 }

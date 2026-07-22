@@ -1,7 +1,9 @@
 package com.laixia.maidintelligence.client.network;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.interaction.client.MaidEatingParticleEffect;
 import com.laixia.maidintelligence.platform.network.packet.ClientboundLevelUpPacket;
+import com.laixia.maidintelligence.platform.network.packet.ClientboundMaidEatingParticlesPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
@@ -28,5 +30,15 @@ public final class ClientPacketHandlers {
                     packet.newLevel()
             ), false);
         }
+    }
+
+    public static void handleMaidEatingParticles(
+            ClientboundMaidEatingParticlesPacket packet
+    ) {
+        MaidEatingParticleEffect.spawn(
+                packet.food(),
+                packet.worldCenter(),
+                packet.worldNormal()
+        );
     }
 }

@@ -1,0 +1,23 @@
+feat: 新增女仆状态反馈与进阶交互系统
+
+- 核心模块：新增 `StatusFeedbackFeature` 状态反馈特性模块，并在 `FeatureCatalog` 中注册。
+- 交互功能：
+  - 完善 `MaidInteractionFeature`，支持空手右键切换坐下/起立，手持物品直接交互而不打开界面。
+  - 新增 `MaidDirectItemInteractionHandler` 处理手持物品直接交互。
+  - 新增 `MaidFeedingService` 喂食服务，支持精准面部喂食。
+- 客户端表现：
+  - 新增 `DynamicMaidFaceTracker` 和 `MaidFaceTrackingLayer` 实现动态面部追踪。
+  - 新增 `MaidEatingParticleEffect` 渲染进食粒子效果。
+  - 注册客户端网络包处理器，处理进食粒子特效。
+- 网络通信：
+  - 升级网络协议版本至 `7`。
+  - 注册 `ServerboundMouthFeedPacket` 和 `ClientboundMaidEatingParticlesPacket`，并提供 `PacketRegistrar` 的 `registerServerbound` 方法。
+- 兼容性：
+  - 扩展 `LittleMaidCompat` 和 `TlmFeatureModule`，支持注册 `MaidTipsOverlay` 和附加渲染层（普通和 Gecko）。
+- 构建与测试：
+  - 调整 `build.gradle`，新增 `prepareVSCodeRunClient` 和 `prepareVSCodeTlmMod` 任务，优化 VS Code 运行配置。
+  - 调整 `tasks.json` 和 `launch.json`，支持 VS Code 运行客户端的快捷配置。
+  - 新增 `StatusDomainVerification` 验证任务和 `StatusFeedbackGameTests` 测试类。
+- 语言与文档：
+  - 新增状态反馈（饥饿、工具耐久）和交互（空手、喂食、药水等）相关的中英文语言键。
+  - 更新 `docs/README.md`，新增状态反馈与交互按键的文档目录。

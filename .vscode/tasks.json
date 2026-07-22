@@ -1,37 +1,37 @@
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "prepareRunClientCompile",
-      "type": "shell",
-      "command": "${workspaceFolder}\\gradlew.bat --offline prepareRunClientCompile",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      }
-    },
-    {
-      "label": "prepareRunDataCompile",
-      "type": "shell",
-      "command": "${workspaceFolder}\\gradlew.bat --offline prepareRunDataCompile",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      }
-    },
-    {
-      "label": "prepareRunGameTestServerCompile",
-      "type": "shell",
-      "command": "${workspaceFolder}\\gradlew.bat --offline prepareRunGameTestServerCompile",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      }
-    },
-    {
-      "label": "prepareRunServerCompile",
-      "type": "shell",
-      "command": "${workspaceFolder}\\gradlew.bat --offline prepareRunServerCompile",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      }
-    }
-  ]
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "prepareRunClientCompile",
+            "type": "shell",
+            "command": "${workspaceFolder}\\gradlew.bat --offline prepareVSCodeRunClient",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "prepareRunDataCompile",
+            "type": "shell",
+            "command": "./gradlew prepareRunDataCompile",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "prepareRunGameTestServerCompile",
+            "type": "shell",
+            "command": "./gradlew prepareRunGameTestServerCompile",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "prepareRunServerCompile",
+            "type": "shell",
+            "command": "./gradlew prepareRunServerCompile",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        }
+    ]
 }

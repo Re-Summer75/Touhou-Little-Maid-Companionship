@@ -3,6 +3,7 @@ package com.laixia.maidintelligence;
 import com.laixia.maidintelligence.core.feature.FeatureCatalog;
 import com.laixia.maidintelligence.core.feature.FeatureContext;
 import com.laixia.maidintelligence.gametest.LevelGameTests;
+import com.laixia.maidintelligence.gametest.StatusFeedbackGameTests;
 import com.laixia.maidintelligence.platform.network.ModNetwork;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -25,5 +26,6 @@ public final class MaidIntelligence {
 
     private void registerGameTests(RegisterGameTestsEvent event) {
         event.register(LevelGameTests.class);
+        event.register(StatusFeedbackGameTests.class);
     }
 }
