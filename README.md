@@ -5,9 +5,10 @@
 
 **为《车万女仆》带来更沉浸、更智能的互动体验**
 
-![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-4B5320?style=for-the-badge&logo=minecraft)
-![Mod Loader](https://img.shields.io/badge/Mod_Loader-Forge-E48E58?style=for-the-badge)
-![License](https://img.shields.io/badge/License-MIT-00599C?style=for-the-badge)
+![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-brightgreen?style=flat-square&logo=minecraft)
+![Mod Loader](https://img.shields.io/badge/Mod_Loader-Forge-orange?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
+![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen?style=flat-square)
 
 </div>
 
@@ -23,7 +24,7 @@
 - 全新的等级 UI 提示，直观展示女仆的成长进度。
 
 ### 饱食度与状态反馈
-- **独立的饱食机制**：女仆拥有自己的饱食度与饱和度（不再与玩家绑定或缺失），支持自动进食。
+- **独立的饱食度机制**：女仆拥有自己的饱食度与饱和度（不再与玩家绑定或缺失），支持自动进食。
 - **动态回血**：引入基于饱和度的快速回血机制，与基础饱食回血并行独立计算。
 - **拒绝进食**：满饱和度时禁止喂食，女仆会通过摇头、拒绝音效及聊天气泡向你反馈“吃不下了”。
 - **精细互动**：支持直接喂食整个蛋糕，并按比例恢复营养与饱和度。
@@ -82,5 +83,5 @@
 本项目采用 **MIT License** 开源协议。详细信息请参阅 [LICENSE](LICENSE) 文件。
 
 <div align="center">
-  <i>Made with ❤️ by LAY & 社区贡献者</i>
+  <i>Made with ❤️ by 铼夏 (LAY) & 社区贡献者</i>
 </div>
