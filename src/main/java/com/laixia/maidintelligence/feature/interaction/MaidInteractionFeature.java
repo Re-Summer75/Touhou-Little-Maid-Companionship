@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.feature.interaction;
 
 import com.github.tartaricacid.touhoulittlemaid.client.overlay.MaidTipsOverlay;
+import com.github.tartaricacid.touhoulittlemaid.client.model.bedrock.BedrockModel;
 import com.github.tartaricacid.touhoulittlemaid.client.renderer.entity.EntityMaidRenderer;
 import com.github.tartaricacid.touhoulittlemaid.client.renderer.entity.GeckoEntityMaidRenderer;
 import com.laixia.maidintelligence.compat.tlm.TlmFeatureModule;
@@ -10,10 +11,12 @@ import com.laixia.maidintelligence.feature.interaction.client.ClientInteractionS
 import com.laixia.maidintelligence.feature.interaction.client.DynamicMaidFaceTracker;
 import com.laixia.maidintelligence.feature.interaction.client.GeckoMaidFaceTrackingLayer;
 import com.laixia.maidintelligence.feature.interaction.client.MaidFaceTrackingLayer;
+import com.laixia.maidintelligence.feature.interaction.client.YsmFaceCaptureBoundaryLayer;
 import com.laixia.maidintelligence.feature.interaction.event.MaidAutomaticEatingParticleHandler;
 import com.laixia.maidintelligence.feature.interaction.event.MaidDirectItemInteractionHandler;
 import com.laixia.maidintelligence.feature.interaction.event.MaidInteractionHandler;
 import com.laixia.maidintelligence.feature.interaction.service.MaidFeedingService;
+import com.laixia.maidintelligence.mixin.LivingEntityRendererAccessor;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.world.entity.Mob;
@@ -81,11 +84,19 @@ public final class MaidInteractionFeature implements FeatureModule, TlmFeatureMo
 
     @Override
     @OnlyIn(Dist.CLIENT)
+    @SuppressWarnings("unchecked")
     public void registerMaidLayer(
             EntityMaidRenderer renderer,
             EntityRendererProvider.Context context
     ) {
-        renderer.addLayer(new MaidFaceTrackingLayer(renderer));
+        LivingEntityRendererAccessor<Mob, BedrockModel<Mob>> accessor =
+                (LivingEntityRendererAccessor<Mob, BedrockModel<Mob>>) (Object) renderer;
+        // TLM's backpack layer leaves scale/translation on the shared PoseStack.
+        // Capture the face before any third-party render layer can contaminate it.
+        accessor.maidIntelligence$getLayers().add(
+                0,
+                new MaidFaceTrackingLayer(renderer)
+        );
     }
 
     @Override
@@ -95,6 +106,10 @@ public final class MaidInteractionFeature implements FeatureModule, TlmFeatureMo
             GeckoEntityMaidRenderer<? extends Mob> renderer,
             EntityRendererProvider.Context context
     ) {
+        renderer.getLayerRenderers().add(
+                0,
+                new YsmFaceCaptureBoundaryLayer(renderer)
+        );
         renderer.addGeoLayerRenderer(new GeckoMaidFaceTrackingLayer(renderer));
     }
 

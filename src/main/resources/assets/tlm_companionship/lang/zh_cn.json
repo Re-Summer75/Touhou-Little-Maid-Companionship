@@ -18,5 +18,6 @@
   "tooltips.tlm_companionship.info.level": "等级",
   "tooltips.tlm_companionship.info.experience": "升级经验",
   "tooltips.tlm_companionship.info.max_level": "已满级",
+  "tooltips.tlm_companionship.info.favorability_level": "好感等级",
   "gui.tlm_companionship.hunger": "饱食度：%s/%s，饱和度：%s/%s"
 }

@@ -20,6 +20,7 @@ public final class ClientInteractionSetup {
     private static void registerReloadListener(RegisterClientReloadListenersEvent event) {
         event.registerReloadListener((ResourceManagerReloadListener) resourceManager -> {
             DynamicMaidFaceTracker.clear();
+            FaceTrackingGeometryCache.clear();
             MaidEatingParticleEffect.clearPendingEffects();
         });
     }

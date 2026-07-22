@@ -3,8 +3,6 @@ package com.laixia.maidintelligence.feature.interaction.client;
 import com.laixia.maidintelligence.feature.interaction.domain.MouthTargetRegion;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,72 +11,94 @@ final class MaidFacePlane {
     private static final double MIN_RAY_DENOMINATOR = 1.0E-5D;
 
     private final List<Vec3> vertices;
+    private final Vec3 origin;
     private final Vec3 bottomCenter;
     private final Vec3 horizontal;
     private final Vec3 up;
+    private final Vec3 rightSpan;
+    private final Vec3 upSpan;
     private final Vec3 normal;
     private final double width;
     private final double height;
+    private final double gramA;
+    private final double gramB;
+    private final double gramC;
+    private final double gramDeterminant;
 
     private MaidFacePlane(
             List<Vec3> vertices,
+            Vec3 origin,
             Vec3 bottomCenter,
             Vec3 horizontal,
             Vec3 up,
+            Vec3 rightSpan,
+            Vec3 upSpan,
             Vec3 normal,
             double width,
-            double height
+            double height,
+            double gramA,
+            double gramB,
+            double gramC,
+            double gramDeterminant
     ) {
         this.vertices = vertices;
+        this.origin = origin;
         this.bottomCenter = bottomCenter;
         this.horizontal = horizontal;
         this.up = up;
+        this.rightSpan = rightSpan;
+        this.upSpan = upSpan;
         this.normal = normal;
         this.width = width;
         this.height = height;
+        this.gramA = gramA;
+        this.gramB = gramB;
+        this.gramC = gramC;
+        this.gramDeterminant = gramDeterminant;
     }
 
     static Optional<MaidFacePlane> fromVertices(
             List<Vec3> vertices,
-            Vec3 expectedUp
+            FaceGeometry.Frame frame
     ) {
-        if (vertices.size() != 4 || expectedUp.lengthSqr() <= 1.0E-10D) {
-            return Optional.empty();
-        }
+        return FaceGeometry.orderQuad(vertices, frame)
+                .flatMap(MaidFacePlane::fromOrderedQuad);
+    }
 
-        Vec3 upReference = expectedUp.normalize();
-        List<Vec3> sorted = new ArrayList<>(vertices);
-        sorted.sort(Comparator.comparingDouble(vertex -> vertex.dot(upReference)));
-
-        Vec3 bottomCenter = average(sorted.get(0), sorted.get(1));
-        Vec3 topCenter = average(sorted.get(2), sorted.get(3));
-        Vec3 upSpan = topCenter.subtract(bottomCenter);
+    static Optional<MaidFacePlane> fromOrderedQuad(FaceGeometry.OrderedQuad quad) {
+        List<Vec3> vertices = quad.vertices();
+        Vec3 origin = vertices.get(0);
+        Vec3 rightSpan = vertices.get(1).subtract(origin);
+        Vec3 upSpan = vertices.get(3).subtract(origin);
+        double width = rightSpan.length();
         double height = upSpan.length();
-        if (height <= MIN_AXIS_LENGTH) {
+        if (width <= MIN_AXIS_LENGTH || height <= MIN_AXIS_LENGTH) {
             return Optional.empty();
         }
-        Vec3 up = upSpan.scale(1.0D / height);
 
-        Vec3 horizontalSpan = sorted.get(1).subtract(sorted.get(0));
-        horizontalSpan = horizontalSpan.subtract(up.scale(horizontalSpan.dot(up)));
-        double width = horizontalSpan.length();
-        if (width <= MIN_AXIS_LENGTH) {
-            return Optional.empty();
-        }
-        Vec3 horizontal = horizontalSpan.scale(1.0D / width);
-        Vec3 normal = horizontal.cross(up);
-        if (normal.lengthSqr() <= 1.0E-10D) {
+        double gramA = rightSpan.dot(rightSpan);
+        double gramB = rightSpan.dot(upSpan);
+        double gramC = upSpan.dot(upSpan);
+        double gramDeterminant = gramA * gramC - gramB * gramB;
+        if (gramDeterminant <= MIN_AXIS_LENGTH * MIN_AXIS_LENGTH) {
             return Optional.empty();
         }
 
         return Optional.of(new MaidFacePlane(
-                List.copyOf(vertices),
-                bottomCenter,
-                horizontal,
-                up,
-                normal.normalize(),
+                vertices,
+                origin,
+                origin.add(rightSpan.scale(0.5D)),
+                rightSpan.scale(1.0D / width),
+                upSpan.scale(1.0D / height),
+                rightSpan,
+                upSpan,
+                quad.normal(),
                 width,
-                height
+                height,
+                gramA,
+                gramB,
+                gramC,
+                gramDeterminant
         ));
     }
 
@@ -111,9 +131,9 @@ final class MaidFacePlane {
     }
 
     Vec3 point(float u, float v) {
-        return bottomCenter
-                .add(horizontal.scale(width * (u - 0.5D)))
-                .add(up.scale(height * v));
+        return origin
+                .add(rightSpan.scale(u))
+                .add(upSpan.scale(v));
     }
 
     Optional<TargetHit> intersectTarget(
@@ -127,7 +147,7 @@ final class MaidFacePlane {
             return Optional.empty();
         }
 
-        double distance = bottomCenter
+        double distance = origin
                 .subtract(rayStart)
                 .dot(normal) / denominator;
         if (distance < 0.0D || distance > maxDistance) {
@@ -136,17 +156,19 @@ final class MaidFacePlane {
 
         Vec3 localHit = rayStart
                 .add(direction.scale(distance))
-                .subtract(bottomCenter);
-        float u = (float) (localHit.dot(horizontal) / width + 0.5D);
-        float v = (float) (localHit.dot(up) / height);
+                .subtract(origin);
+        double localRight = localHit.dot(rightSpan);
+        double localUp = localHit.dot(upSpan);
+        float u = (float) (
+                (localRight * gramC - localUp * gramB) / gramDeterminant
+        );
+        float v = (float) (
+                (localUp * gramA - localRight * gramB) / gramDeterminant
+        );
         if (!MouthTargetRegion.contains(u, v)) {
             return Optional.empty();
         }
         return Optional.of(new TargetHit(u, v));
-    }
-
-    private static Vec3 average(Vec3 first, Vec3 second) {
-        return first.add(second).scale(0.5D);
     }
 
     record TargetHit(float u, float v) {

@@ -40,11 +40,15 @@ public final class LevelGuiHandler {
                 levelTooltip("level"),
                 Component.literal(String.valueOf(progress.level()))
         )));
-        event.getTooltipElements().add(insertIndex, Either.left(infoLine(
+        event.getTooltipElements().add(insertIndex++, Either.left(infoLine(
                 levelTooltip("experience"),
                 required > 0
                         ? Component.literal(progress.experience() + "/" + required)
                         : Component.translatable(levelTooltip("max_level"))
+        )));
+        event.getTooltipElements().add(insertIndex, Either.left(infoLine(
+                levelTooltip("favorability_level"),
+                Component.literal(String.valueOf(maid.getFavorabilityManager().getLevel()))
         )));
     }
 

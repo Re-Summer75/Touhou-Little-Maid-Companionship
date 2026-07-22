@@ -74,6 +74,10 @@ public final class DynamicMaidFaceTracker {
         ));
     }
 
+    public static void invalidate(EntityMaid maid) {
+        REGIONS.remove(maid);
+    }
+
     public static void clear() {
         REGIONS.clear();
     }
@@ -81,6 +85,7 @@ public final class DynamicMaidFaceTracker {
     private static FaceRegion getFreshRegion(EntityMaid maid) {
         FaceRegion region = REGIONS.get(maid);
         if (region == null || System.nanoTime() - region.updatedAtNanos() > MAX_REGION_AGE_NANOS) {
+            REGIONS.remove(maid);
             return null;
         }
         return region;

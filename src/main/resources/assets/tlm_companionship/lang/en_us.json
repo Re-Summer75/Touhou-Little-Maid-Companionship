@@ -18,5 +18,6 @@
   "tooltips.tlm_companionship.info.level": "Level",
   "tooltips.tlm_companionship.info.experience": "Level experience",
   "tooltips.tlm_companionship.info.max_level": "MAX",
+  "tooltips.tlm_companionship.info.favorability_level": "Favorability level",
   "gui.tlm_companionship.hunger": "Hunger: %s/%s, Saturation: %s/%s"
 }

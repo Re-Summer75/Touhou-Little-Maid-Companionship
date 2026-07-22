@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.feature.interaction.service;
 import com.github.tartaricacid.touhoulittlemaid.advancements.maid.TriggerType;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.meal.DefaultMaidWorkMeal;
+import com.github.tartaricacid.touhoulittlemaid.init.InitSounds;
 import com.github.tartaricacid.touhoulittlemaid.init.InitTrigger;
 import com.laixia.maidintelligence.feature.status.StatusFeedbackFeature;
 import com.laixia.maidintelligence.feature.status.domain.DefaultHungerPolicy;
@@ -102,9 +103,9 @@ public final class MaidFeedingService {
         maid.getLookControl().setLookAt(player, 30.0F, 30.0F);
         maid.swing(InteractionHand.OFF_HAND);
         maid.playSound(
-                SoundEvents.VILLAGER_NO,
-                0.7F,
-                1.05F + maid.getRandom().nextFloat() * 0.1F
+                InitSounds.MAID_HURT.get(),
+                1.0F,
+                1.0F
         );
         feedback.bubbleKey = maid.getChatBubbleManager().addTextChatBubbleIfTimeout(
                 SATURATION_FULL_BUBBLE,

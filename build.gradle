@@ -86,6 +86,7 @@ dependencies {
     // Current Only CurseForge Maven can support downloading both mod and source code, which is convenient for development
     implementation fg.deobf('curse.maven:touhou-little-maid-355044:8061847-sources-8061848')
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+
 }
 
 processResources {
@@ -127,23 +128,7 @@ tasks.withType(JavaCompile).configureEach {
 tasks.register('prepareVSCodeRunClient') {
     group = 'ide'
     description = 'Regenerates VS Code run metadata and compiles before F5.'
-    dependsOn 'genVSCodeRuns', 'prepareRunClientCompile', 'prepareVSCodeTlmMod'
-}
-
-tasks.register('prepareVSCodeTlmMod', Sync) {
-    group = 'ide'
-    description = 'Stages Touhou Little Maid as an exploded mod for VS Code F5.'
-    from {
-        def tlmRuntimeJar = configurations.runtimeClasspath.files.find {
-            it.name.toLowerCase().contains('touhou-little-maid')
-        }
-        if (tlmRuntimeJar == null) {
-            throw new GradleException('Touhou Little Maid runtime dependency was not resolved.')
-        }
-        zipTree(tlmRuntimeJar)
-    }
-    into layout.buildDirectory.dir('vscodeMods/touhou_little_maid')
-    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA'
+    dependsOn 'genVSCodeRuns', 'prepareRunClientCompile'
 }
 
 tasks.matching { it.name == 'genVSCodeRuns' }.configureEach {
@@ -154,6 +139,15 @@ tasks.matching { it.name == 'genVSCodeRuns' }.configureEach {
             tasksJson.tasks.findAll { it.label == 'prepareRunClientCompile' }.each {
                 it.command = '${workspaceFolder}\\gradlew.bat --offline prepareVSCodeRunClient'
             }
+            // Keep regenerated VS Code tasks on the Gradle cache used for setup.
+            def gradleUserHome = System.getenv('GRADLE_USER_HOME')
+            if (gradleUserHome) {
+                tasksJson.tasks.each {
+                    it.options = it.options ?: [:]
+                    it.options.env = it.options.env ?: [:]
+                    it.options.env['GRADLE_USER_HOME'] = gradleUserHome
+                }
+            }
             tasksFile.setText(
                     groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(tasksJson)),
                     'UTF-8'
@@ -163,15 +157,25 @@ tasks.matching { it.name == 'genVSCodeRuns' }.configureEach {
         def launchFile = file('.vscode/launch.json')
         if (launchFile.exists()) {
             def launchJson = new groovy.json.JsonSlurper().parse(launchFile)
+            // JDT LS disambiguates a Gradle root whose name differs from its folder.
+            def javaProjectName = rootProject.name == rootDir.name
+                    ? rootProject.name
+                    : "${rootProject.name}-${rootDir.name}"
             launchJson.configurations.each {
-                it.projectName = rootDir.name
+                it.projectName = javaProjectName
             }
+            // JDT LS may return duplicate Forge modules after its Gradle cache
+            // changes. Use the same ordered, deduplicated classpath as runClient.
+            def runClientClasspath = sourceSets.main.runtimeClasspath.files
+                    .findAll { it.exists() }
+                    .collect { it.absolutePath }
+                    .unique()
             launchJson.configurations.findAll { it.name == 'runClient' }.each {
-                def tlmModClasses = 'touhou_little_maid%%${workspaceFolder}\\build\\vscodeMods\\touhou_little_maid'
-                if (!it.env.MOD_CLASSES.split(';').contains(tlmModClasses)) {
-                    it.env.MOD_CLASSES += ';' + tlmModClasses
-                }
-                it.remove('classPaths')
+                it.env.MOD_CLASSES = it.env.MOD_CLASSES
+                        .split(';')
+                        .findAll { !it.startsWith('touhou_little_maid%%') }
+                        .join(';')
+                it.classPaths = runClientClasspath
                 it.shortenCommandLine = 'argfile'
             }
             launchFile.setText(
@@ -196,6 +200,14 @@ tasks.register('verifyStatusDomain', JavaExec) {
     dependsOn testClasses
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'com.laixia.maidintelligence.feature.status.StatusDomainVerification'
+}
+
+tasks.register('verifyFaceTracking', JavaExec) {
+    group = 'verification'
+    description = 'Runs verification for generalized maid face geometry selection.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.laixia.maidintelligence.feature.interaction.client.FaceTrackingVerification'
 }
 
 tasks.register('prepareGameTestStructures', Copy) {

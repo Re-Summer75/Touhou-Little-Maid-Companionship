@@ -6,6 +6,8 @@
   "refmap": "tlm_companionship.refmap.json",
   "client": [
     "EntityMaidClientRandomHealingMixin",
+    "EntityMaidRendererYsmCaptureMixin",
+    "LivingEntityRendererAccessor",
     "LivingEntityEatingParticleMixin"
   ],
   "injectors": {
