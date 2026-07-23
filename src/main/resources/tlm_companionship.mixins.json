@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "tlm_companionship.refmap.json",
   "client": [
+    "CustomPackPhysicsMetadataMixin",
     "EntityMaidClientRandomHealingMixin",
     "EntityMaidRendererYsmCaptureMixin",
     "GeckoMaidEntityBonePhysicsMixin",

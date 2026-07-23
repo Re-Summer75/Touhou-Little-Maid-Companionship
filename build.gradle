@@ -259,10 +259,14 @@ tasks.register('verifyFaceTracking', JavaExec) {
 
 tasks.register('verifyBonePhysics', JavaExec) {
     group = 'verification'
-    description = 'Runs verification for the weighted secondary-motion spring and bone classifier.'
+    description = 'Runs verification for physics metadata, geometry discovery, and bone selection.'
     dependsOn testClasses
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerification'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifyBonePhysics')
 }
 
 tasks.register('prepareGameTestStructures', Copy) {

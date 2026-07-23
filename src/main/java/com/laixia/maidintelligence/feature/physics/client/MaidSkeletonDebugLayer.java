@@ -35,7 +35,8 @@ public final class MaidSkeletonDebugLayer<T extends Mob, R extends IGeoEntityRen
     private static final float AXIS_LENGTH = 0.12F;
 
     private static final int[] IDLE_ORIGIN = {110, 110, 110};
-    private static final int[] DRIVEN_ORIGIN = {255, 235, 60};
+    private static final int[] AUTO_ORIGIN = {255, 235, 60};
+    private static final int[] METADATA_ORIGIN = {220, 90, 255};
     private static final int[] AXIS_X = {255, 60, 60};
     private static final int[] AXIS_Y = {60, 255, 60};
     private static final int[] AXIS_Z = {70, 130, 255};
@@ -63,7 +64,7 @@ public final class MaidSkeletonDebugLayer<T extends Mob, R extends IGeoEntityRen
             float netHeadYaw,
             float headPitch
     ) {
-        if (!(entity instanceof EntityMaid)) {
+        if (!(entity instanceof EntityMaid maid)) {
             return;
         }
         Player player = Minecraft.getInstance().player;
@@ -74,20 +75,34 @@ public final class MaidSkeletonDebugLayer<T extends Mob, R extends IGeoEntityRen
         if (!(modelObject instanceof AnimatedGeoModel model)) {
             return;
         }
+        PhysicsBoneSelectionPlan plan = MaidBonePhysics.lastPlan(maid);
+        if (plan == null) {
+            plan = PhysicsBonePlanCache.getOrCompute(maid.getModelId(), model);
+        }
         VertexConsumer lines = bufferSource.getBuffer(RenderType.lines());
         for (AnimatedGeoBone bone : model.topLevelBones()) {
-            renderBone(poseStack, lines, bone);
+            renderBone(poseStack, lines, bone, plan);
         }
     }
 
-    private void renderBone(PoseStack poseStack, VertexConsumer lines, AnimatedGeoBone bone) {
+    private void renderBone(
+            PoseStack poseStack,
+            VertexConsumer lines,
+            AnimatedGeoBone bone,
+            PhysicsBoneSelectionPlan plan
+    ) {
         poseStack.pushPose();
         RenderUtils.prepMatrixForBone(poseStack, bone);
         Matrix4f pose = poseStack.last().pose();
 
-        boolean driven = MaidBonePhysics.isDrivenBone(bone);
+        PhysicsBoneSelectionPlan.Decision decision = plan.decision(bone);
+        boolean driven = MaidBonePhysics.isDriven(bone, plan);
         float size = driven ? DRIVEN_ORIGIN_SIZE : ORIGIN_SIZE;
-        int[] originColor = driven ? DRIVEN_ORIGIN : IDLE_ORIGIN;
+        int[] originColor = !driven
+                ? IDLE_ORIGIN
+                : decision.source() == PhysicsBoneSelectionPlan.Source.METADATA
+                ? METADATA_ORIGIN
+                : AUTO_ORIGIN;
         line(lines, pose, -size, 0, 0, size, 0, 0, originColor);
         line(lines, pose, 0, -size, 0, 0, size, 0, originColor);
         line(lines, pose, 0, 0, -size, 0, 0, size, originColor);
@@ -100,7 +115,7 @@ public final class MaidSkeletonDebugLayer<T extends Mob, R extends IGeoEntityRen
         }
 
         for (AnimatedGeoBone child : bone.children()) {
-            renderBone(poseStack, lines, child);
+            renderBone(poseStack, lines, child, plan);
         }
         poseStack.popPose();
     }

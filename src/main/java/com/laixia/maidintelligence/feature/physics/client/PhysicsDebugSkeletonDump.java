@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.feature.physics.client;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
 import com.mojang.logging.LogUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -29,13 +30,23 @@ final class PhysicsDebugSkeletonDump {
 
     static void dump(Player player, EntityMaid maid, AnimatedGeoModel model) {
         String title = maid.getName().getString();
-        LOGGER.info("=== Maid skeleton dump: {} (id={}) ===", title, maid.getId());
-        chat(player, Component.literal("=== 骨架: " + title + " ===")
-                .withStyle(ChatFormatting.AQUA));
+        PhysicsBoneSelectionPlan plan = MaidBonePhysics.lastPlan(maid);
+        if (plan == null) {
+            plan = PhysicsBonePlanCache.getOrCompute(maid.getModelId(), model);
+        }
+        LOGGER.info(
+                "=== Maid skeleton dump: {} (entity={}, model={}) ===",
+                title,
+                maid.getId(),
+                plan.modelId()
+        );
+        chat(player, Component.literal(
+                "=== 骨架: " + title + "  模型: " + plan.modelId() + " ==="
+        ).withStyle(ChatFormatting.AQUA));
 
         int[] counts = new int[2];
         for (AnimatedGeoBone bone : model.topLevelBones()) {
-            dumpBone(player, bone, "root", 0, counts);
+            dumpBone(player, bone, null, 0, counts, plan);
         }
 
         LOGGER.info("=== End dump: {} bones, {} driven ===", counts[0], counts[1]);
@@ -50,23 +61,49 @@ final class PhysicsDebugSkeletonDump {
     private static void dumpBone(
             Player player,
             AnimatedGeoBone bone,
-            String parentName,
+            AnimatedGeoBone parent,
             int depth,
-            int[] counts
+            int[] counts,
+            PhysicsBoneSelectionPlan plan
     ) {
         counts[0]++;
-        boolean driven = MaidBonePhysics.isDrivenBone(bone);
+        PhysicsBoneSelectionPlan.Decision decision = plan.decision(bone);
+        boolean driven = MaidBonePhysics.isDriven(bone, plan);
         if (driven) {
             counts[1]++;
+        }
+        String parentName = parent == null ? "root" : parent.getName();
+        String kinematics = "";
+        if (driven) {
+            BoneKinematics.Metrics metrics = BoneKinematics.measure(
+                    bone,
+                    parent,
+                    decision.type()
+            );
+            if (metrics.compensatesPivot()) {
+                kinematics = String.format(
+                        Locale.ROOT,
+                        " virtualPivot=(%.2f,%.2f,%.2f) safeAngle=%.1fdeg",
+                        metrics.effectivePivot().x * 16.0F,
+                        metrics.effectivePivot().y * 16.0F,
+                        metrics.effectivePivot().z * 16.0F,
+                        Math.toDegrees(metrics.safeAngle()
+                                * decision.profile().angleScale())
+                );
+            }
         }
         int cubes = bone.geoBone().cubes().getCubeCount();
         String detail = String.format(
                 Locale.ROOT,
-                "%s%s%s  parent=%s pos=(%.2f,%.2f,%.2f) pivot=(%.2f,%.2f,%.2f)"
-                        + " rot=(%.1f,%.1f,%.1f)deg scale=(%.2f,%.2f,%.2f) cubes=%d children=%d%s",
+                "%s%s%s path=%s parent=%s pos=(%.2f,%.2f,%.2f)"
+                        + " pivot=(%.2f,%.2f,%.2f)"
+                        + " rot=(%.1f,%.1f,%.1f)deg scale=(%.2f,%.2f,%.2f)"
+                        + " cubes=%d children=%d decision=%s/%s confidence=%.3f"
+                        + " chain=%s reason=\"%s\"%s%s",
                 "  ".repeat(depth),
                 driven ? "[P] " : "",
                 bone.getName(),
+                plan.path(bone),
                 parentName,
                 bone.getPositionX(),
                 bone.getPositionY(),
@@ -82,6 +119,12 @@ final class PhysicsDebugSkeletonDump {
                 bone.getScaleZ(),
                 cubes,
                 bone.children().size(),
+                decision.source().label(),
+                decision.type(),
+                decision.confidence(),
+                decision.chainId(),
+                decision.reason(),
+                kinematics,
                 driven ? " <DRIVEN>" : ""
         );
         LOGGER.info(detail);
@@ -89,9 +132,13 @@ final class PhysicsDebugSkeletonDump {
         if (driven) {
             chat(player, Component.literal(String.format(
                     Locale.ROOT,
-                    "[P] %s  parent=%s pivot=(%.2f,%.2f,%.2f) rot=(%.0f,%.0f,%.0f) cubes=%d",
+                    "[P:%s/%s] %s parent=%s conf=%.2f pivot=(%.2f,%.2f,%.2f)"
+                            + " rot=(%.0f,%.0f,%.0f) cubes=%d",
+                    decision.source().label(),
+                    decision.type(),
                     bone.getName(),
                     parentName,
+                    decision.confidence(),
                     bone.getPivotX(),
                     bone.getPivotY(),
                     bone.getPivotZ(),
@@ -103,7 +150,7 @@ final class PhysicsDebugSkeletonDump {
         }
 
         for (AnimatedGeoBone child : bone.children()) {
-            dumpBone(player, child, bone.getName(), depth + 1, counts);
+            dumpBone(player, child, bone, depth + 1, counts, plan);
         }
     }
 

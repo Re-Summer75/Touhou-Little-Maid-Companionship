@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.feature.physics.client;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 import net.minecraft.world.InteractionResult;
@@ -12,8 +13,15 @@ import net.minecraftforge.client.event.RegisterClientReloadListenersEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 @OnlyIn(Dist.CLIENT)
 public final class ClientPhysicsSetup {
+    private static final AtomicBoolean CUSTOM_PACK_REFRESH_QUEUED =
+            new AtomicBoolean();
+
     private ClientPhysicsSetup() {
     }
 
@@ -23,9 +31,31 @@ public final class ClientPhysicsSetup {
     }
 
     private static void registerReloadListener(RegisterClientReloadListenersEvent event) {
-        event.registerReloadListener(
-                (ResourceManagerReloadListener) resourceManager -> MaidBonePhysics.clear()
-        );
+        event.registerReloadListener((ResourceManagerReloadListener) resourceManager -> {
+            PhysicsMetadataLoader.reload(resourceManager);
+            PhysicsBonePlanCache.clear();
+            MaidBonePhysics.clear();
+        });
+    }
+
+    public static void refreshAfterCustomPackLoad() {
+        if (!CUSTOM_PACK_REFRESH_QUEUED.compareAndSet(false, true)) {
+            return;
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        CompletableFuture.delayedExecutor(
+                1L,
+                TimeUnit.MILLISECONDS,
+                minecraft
+        ).execute(() -> {
+            try {
+                PhysicsMetadataLoader.reload(minecraft.getResourceManager());
+                PhysicsBonePlanCache.clear();
+                MaidBonePhysics.clear();
+            } finally {
+                CUSTOM_PACK_REFRESH_QUEUED.set(false);
+            }
+        });
     }
 
     /**
