@@ -1,7 +1,0 @@
-{
-    "java.configuration.updateBuildConfiguration": "interactive",
-    "java.import.gradle.user.home": "E:\\ALL\\KaiFa\\.gradle",
-    "terminal.integrated.env.windows": {
-        "GRADLE_USER_HOME": "E:\\ALL\\KaiFa\\.gradle"
-    }
-}
