@@ -108,6 +108,10 @@ final class BodyCandidateScorer {
 
     private static Candidate semanticCandidate(ScoringContext context) {
         double base = switch (context.hint()) {
+            case HAIR -> 0.60D + 0.10D * context.thinScore()
+                    + 0.08D * context.chainScore();
+            case EAR -> 0.60D + 0.08D * context.thinScore()
+                    + 0.08D * context.chainScore();
             case TAIL -> 0.60D + 0.10D * context.chainScore()
                     + 0.08D * context.lengthScore();
             case SKIRT, CAPE -> 0.56D + 0.12D * context.thinScore()
@@ -122,6 +126,8 @@ final class BodyCandidateScorer {
             return null;
         }
         String reason = switch (context.hint()) {
+            case HAIR -> "soft appendage with hair semantic hint";
+            case EAR -> "soft appendage with ear semantic hint";
             case TAIL -> "rear body appendage with tail semantic hint";
             case SKIRT -> "lower-body cloth with skirt semantic hint";
             case CAPE -> "rear cloth with cape semantic hint";

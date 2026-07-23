@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
+import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
 
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -18,15 +19,18 @@ public final class PhysicsBoneSelectionPlan {
     private final String modelId;
     private final Map<AnimatedGeoBone, Decision> decisions;
     private final Map<AnimatedGeoBone, String> paths;
+    private final Map<AnimatedGeoBone, BoneKinematics.Metrics> kinematics;
 
     private PhysicsBoneSelectionPlan(
             String modelId,
             IdentityHashMap<AnimatedGeoBone, Decision> decisions,
-            IdentityHashMap<AnimatedGeoBone, String> paths
+            IdentityHashMap<AnimatedGeoBone, String> paths,
+            IdentityHashMap<AnimatedGeoBone, BoneKinematics.Metrics> kinematics
     ) {
         this.modelId = modelId;
         this.decisions = Collections.unmodifiableMap(new IdentityHashMap<>(decisions));
         this.paths = Collections.unmodifiableMap(new IdentityHashMap<>(paths));
+        this.kinematics = Collections.unmodifiableMap(new IdentityHashMap<>(kinematics));
     }
 
     public String modelId() {
@@ -43,6 +47,10 @@ public final class PhysicsBoneSelectionPlan {
 
     public String path(AnimatedGeoBone bone) {
         return paths.getOrDefault(bone, bone.getName());
+    }
+
+    public BoneKinematics.Metrics kinematics(AnimatedGeoBone bone) {
+        return kinematics.get(bone);
     }
 
     public static Builder builder(String modelId) {
@@ -212,6 +220,8 @@ public final class PhysicsBoneSelectionPlan {
                 new IdentityHashMap<>();
         private final IdentityHashMap<AnimatedGeoBone, String> paths =
                 new IdentityHashMap<>();
+        private final IdentityHashMap<AnimatedGeoBone, BoneKinematics.Metrics> kinematics =
+                new IdentityHashMap<>();
 
         private Builder(String modelId) {
             this.modelId = modelId;
@@ -227,6 +237,16 @@ public final class PhysicsBoneSelectionPlan {
             return this;
         }
 
+        public Builder kinematics(
+                AnimatedGeoBone bone,
+                BoneKinematics.Metrics metrics
+        ) {
+            if (metrics != null) {
+                kinematics.put(bone, metrics);
+            }
+            return this;
+        }
+
         public Decision current(AnimatedGeoBone bone) {
             return decisions.get(bone);
         }
@@ -236,7 +256,12 @@ public final class PhysicsBoneSelectionPlan {
         }
 
         public PhysicsBoneSelectionPlan build() {
-            return new PhysicsBoneSelectionPlan(modelId, decisions, paths);
+            return new PhysicsBoneSelectionPlan(
+                    modelId,
+                    decisions,
+                    paths,
+                    kinematics
+            );
         }
     }
 }

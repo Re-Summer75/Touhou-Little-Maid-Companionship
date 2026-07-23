@@ -8,7 +8,7 @@ import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneSelectionPl
 import java.util.Set;
 
 final class AutomaticPlanSelector {
-    private static final double AUTO_THRESHOLD = 0.70D;
+    static final double AUTO_THRESHOLD = 0.70D;
 
     private AutomaticPlanSelector() {
     }

@@ -17,6 +17,7 @@ public final class AdaptiveMotionFilter {
 
     private final AdaptiveVector acceleration = new AdaptiveVector();
     private final AdaptiveScalar yawRate = new AdaptiveScalar();
+    private final Vector3f conditionedAcceleration = new Vector3f();
 
     public Output update(
             Vector3f rawAcceleration,
@@ -24,11 +25,30 @@ public final class AdaptiveMotionFilter {
             float maximumAcceleration,
             float dt
     ) {
-        Vector3f conditionedAcceleration = MotionNoiseGate.vector(
+        Vector3f output = new Vector3f();
+        float filteredYawRate = updateInto(
+                rawAcceleration,
+                rawYawRate,
+                maximumAcceleration,
+                dt,
+                output
+        );
+        return new Output(output, filteredYawRate);
+    }
+
+    public float updateInto(
+            Vector3f rawAcceleration,
+            float rawYawRate,
+            float maximumAcceleration,
+            float dt,
+            Vector3f accelerationOutput
+    ) {
+        MotionNoiseGate.vectorInto(
                 rawAcceleration,
                 maximumAcceleration,
                 maximumAcceleration * 0.02F,
-                maximumAcceleration * 0.08F
+                maximumAcceleration * 0.08F,
+                conditionedAcceleration
         );
         float maximumYawRate = (float) Math.toRadians(45.0D);
         float conditionedYaw = MotionNoiseGate.scalar(
@@ -37,14 +57,13 @@ public final class AdaptiveMotionFilter {
                 (float) Math.toRadians(0.15D),
                 (float) Math.toRadians(0.60D)
         );
-        return new Output(
-                acceleration.update(
-                        conditionedAcceleration,
-                        dt,
-                        ACCELERATION_BETA
-                ),
-                yawRate.update(conditionedYaw, dt, YAW_BETA)
+        acceleration.updateInto(
+                conditionedAcceleration,
+                dt,
+                ACCELERATION_BETA,
+                accelerationOutput
         );
+        return yawRate.update(conditionedYaw, dt, YAW_BETA);
     }
 
     public void reset() {
@@ -74,20 +93,28 @@ public final class AdaptiveMotionFilter {
         private final Vector3f previousInput = new Vector3f();
         private final Vector3f filtered = new Vector3f();
         private final Vector3f derivative = new Vector3f();
+        private final Vector3f rawDerivative = new Vector3f();
         private boolean initialized;
 
-        private Vector3f update(Vector3f input, float dt, float beta) {
+        private void updateInto(
+                Vector3f input,
+                float dt,
+                float beta,
+                Vector3f output
+        ) {
             if (!initialized) {
                 previousInput.set(input);
                 filtered.set(input);
                 derivative.zero();
                 initialized = true;
-                return new Vector3f(filtered);
+                output.set(filtered);
+                return;
             }
             if (dt <= EPSILON) {
-                return new Vector3f(filtered);
+                output.set(filtered);
+                return;
             }
-            Vector3f rawDerivative = new Vector3f(input)
+            rawDerivative.set(input)
                     .sub(previousInput)
                     .div(dt);
             derivative.lerp(
@@ -102,7 +129,7 @@ public final class AdaptiveMotionFilter {
                     )
             );
             previousInput.set(input);
-            return new Vector3f(filtered);
+            output.set(filtered);
         }
 
         private void reset() {

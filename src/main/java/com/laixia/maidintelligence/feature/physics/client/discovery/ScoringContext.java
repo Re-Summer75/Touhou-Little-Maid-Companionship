@@ -9,6 +9,7 @@ record ScoringContext(
         PhysicsBoneGeometry.Analysis geometry,
         PhysicsBoneSelectionPlan.PartType hint,
         double semanticScore,
+        boolean strongSemantic,
         PhysicsBoneGeometry.Bounds bodyBounds,
         Vector3f bodyCenter,
         Vector3f center,
@@ -34,7 +35,8 @@ record ScoringContext(
             PhysicsBoneGeometry.Node node,
             PhysicsBoneGeometry.Analysis geometry,
             PhysicsBoneSelectionPlan.PartType hint,
-            double semanticScore
+            double semanticScore,
+            boolean strongSemantic
     ) {
         PhysicsBoneGeometry.Bounds modelBounds = geometry.modelBounds();
         PhysicsBoneGeometry.Bounds headBounds = geometry.headBounds();
@@ -87,7 +89,8 @@ record ScoringContext(
         double behindHead = (center.z - headCenter.z)
                 / Math.max(headWidth, DiscoveryMath.EPSILON);
         return new ScoringContext(
-                node, geometry, hint, semanticScore, bodyBounds, bodyCenter,
+                node, geometry, hint, semanticScore, strongSemantic,
+                bodyBounds, bodyCenter,
                 center, size, headCenter, modelWidth, bodyWidth, headWidth,
                 headHeight, thinScore, chainScore, visibleLength, lengthScore,
                 geometry.isInHeadSubtree(node), lateralHead, belowHead, behindHead,

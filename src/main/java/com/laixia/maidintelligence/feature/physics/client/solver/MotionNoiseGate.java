@@ -17,13 +17,29 @@ public final class MotionNoiseGate {
             float noiseFloor,
             float noiseFade
     ) {
+        return vectorInto(
+                input,
+                maximum,
+                noiseFloor,
+                noiseFade,
+                new Vector3f()
+        );
+    }
+
+    public static Vector3f vectorInto(
+            Vector3f input,
+            float maximum,
+            float noiseFloor,
+            float noiseFade,
+            Vector3f output
+    ) {
         float length = input.length();
         if (length < EPSILON || maximum <= EPSILON) {
-            return new Vector3f();
+            return output.zero();
         }
         float limited = softLimit(length, maximum);
         float gain = deadZoneGain(limited, noiseFloor, noiseFade);
-        return new Vector3f(input).mul(limited * gain / length);
+        return output.set(input).mul(limited * gain / length);
     }
 
     public static float scalar(

@@ -1,7 +1,9 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
+import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.laixia.maidintelligence.feature.physics.client.discovery.DiscoveryPlanner;
+import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
 
 /**
  * Stable package-local entry point for building a model's physics plan.
@@ -19,6 +21,34 @@ final class PhysicsBoneDiscoverer {
             AnimatedGeoModel model,
             PhysicsMetadata metadata
     ) {
-        return DiscoveryPlanner.discover(modelId, model, metadata);
+        PhysicsBoneSelectionPlan discovered =
+                DiscoveryPlanner.discover(modelId, model, metadata);
+        PhysicsBoneSelectionPlan.Builder enriched =
+                PhysicsBoneSelectionPlan.builder(modelId);
+        for (AnimatedGeoBone bone : model.topLevelBones()) {
+            copyWithKinematics(bone, null, discovered, enriched);
+        }
+        return enriched.build();
+    }
+
+    private static void copyWithKinematics(
+            AnimatedGeoBone bone,
+            AnimatedGeoBone parent,
+            PhysicsBoneSelectionPlan discovered,
+            PhysicsBoneSelectionPlan.Builder output
+    ) {
+        PhysicsBoneSelectionPlan.Decision decision =
+                discovered.decision(bone);
+        output.path(bone, discovered.path(bone));
+        output.decide(bone, decision);
+        if (decision.driven()) {
+            output.kinematics(
+                    bone,
+                    BoneKinematics.measure(bone, parent, decision.type())
+            );
+        }
+        for (AnimatedGeoBone child : bone.children()) {
+            copyWithKinematics(child, bone, discovered, output);
+        }
     }
 }

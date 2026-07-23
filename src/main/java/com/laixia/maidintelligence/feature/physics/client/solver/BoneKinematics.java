@@ -97,25 +97,81 @@ public final class BoneKinematics {
                 || type == PhysicsBoneSelectionPlan.PartType.CAPE;
     }
 
-    public record Metrics(
-            Vector3f axis,
-            float leverArm,
-            float safeAngle,
-            Vector3f authoredPivot,
-            Vector3f effectivePivot
-    ) {
+    public static final class Metrics {
+        private final Vector3f axis;
+        private final float leverArm;
+        private final float safeAngle;
+        private final Vector3f authoredPivot;
+        private final Vector3f effectivePivot;
+        private final Vector3f pivotDelta;
+        private final boolean compensatesPivot;
+
+        public Metrics(
+                Vector3f axis,
+                float leverArm,
+                float safeAngle,
+                Vector3f authoredPivot,
+                Vector3f effectivePivot
+        ) {
+            this.axis = new Vector3f(axis);
+            this.leverArm = leverArm;
+            this.safeAngle = safeAngle;
+            this.authoredPivot = new Vector3f(authoredPivot);
+            this.effectivePivot = new Vector3f(effectivePivot);
+            this.pivotDelta = new Vector3f(effectivePivot).sub(authoredPivot);
+            this.compensatesPivot = pivotDelta.lengthSquared() > EPSILON;
+        }
+
+        public Vector3f axis() {
+            return new Vector3f(axis);
+        }
+
+        public Vector3f axisInto(Vector3f output) {
+            return output.set(axis);
+        }
+
+        public float leverArm() {
+            return leverArm;
+        }
+
+        public float safeAngle() {
+            return safeAngle;
+        }
+
+        public Vector3f authoredPivot() {
+            return new Vector3f(authoredPivot);
+        }
+
+        public Vector3f effectivePivot() {
+            return new Vector3f(effectivePivot);
+        }
+
         public boolean compensatesPivot() {
-            return authoredPivot.distanceSquared(effectivePivot) > EPSILON;
+            return compensatesPivot;
         }
 
         public Vector3f compensationOffset(Quaternionf physicalDelta) {
-            if (!compensatesPivot()) {
-                return new Vector3f();
+            return compensationOffsetInto(
+                    physicalDelta,
+                    new Vector3f(),
+                    new Vector3f()
+            );
+        }
+
+        public Vector3f compensationOffsetInto(
+                Quaternionf physicalDelta,
+                Vector3f output,
+                Vector3f scratch
+        ) {
+            if (!compensatesPivot) {
+                return output.zero();
             }
-            Vector3f pivotDelta =
-                    new Vector3f(effectivePivot).sub(authoredPivot);
-            return new Vector3f(pivotDelta)
-                    .sub(physicalDelta.transform(new Vector3f(pivotDelta)));
+            physicalDelta.transform(pivotDelta, scratch);
+            return output.set(
+                    pivotDelta.x - scratch.x,
+                    pivotDelta.y - scratch.y,
+                    pivotDelta.z - scratch.z
+            );
         }
     }
 

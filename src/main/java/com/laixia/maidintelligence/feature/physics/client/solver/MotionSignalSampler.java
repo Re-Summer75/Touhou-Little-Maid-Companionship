@@ -11,7 +11,9 @@ import org.joml.Vector3f;
 public final class MotionSignalSampler {
     private final AdaptiveMotionFilter filter = new AdaptiveMotionFilter();
     private final Vector3f sampledAcceleration = new Vector3f();
-    private Vec3 previousVelocity = Vec3.ZERO;
+    private double previousVelocityX;
+    private double previousVelocityY;
+    private double previousVelocityZ;
     private float sampledYawRate;
     private int sampledTick = Integer.MIN_VALUE;
 
@@ -23,42 +25,78 @@ public final class MotionSignalSampler {
             float maximumAcceleration,
             float dt
     ) {
+        Vector3f accelerationOutput = new Vector3f();
+        float yawRate = updateInto(
+                velocity.x,
+                velocity.y,
+                velocity.z,
+                currentTick,
+                bodyYaw,
+                previousBodyYaw,
+                maximumAcceleration,
+                dt,
+                accelerationOutput
+        );
+        return new Sample(accelerationOutput, yawRate);
+    }
+
+    public float updateInto(
+            double velocityX,
+            double velocityY,
+            double velocityZ,
+            int currentTick,
+            float bodyYaw,
+            float previousBodyYaw,
+            float maximumAcceleration,
+            float dt,
+            Vector3f accelerationOutput
+    ) {
         if (sampledTick == Integer.MIN_VALUE || currentTick < sampledTick) {
-            reset(velocity, currentTick);
+            reset(velocityX, velocityY, velocityZ, currentTick);
         } else if (currentTick > sampledTick) {
             float elapsedSeconds = (currentTick - sampledTick) / 20.0F;
-            Vec3 acceleration = velocity.subtract(previousVelocity)
-                    .scale(1.0D / elapsedSeconds);
+            double inverseElapsed = 1.0D / elapsedSeconds;
             sampledAcceleration.set(
-                    (float) acceleration.x,
-                    (float) acceleration.y,
-                    (float) acceleration.z
+                    (float) ((velocityX - previousVelocityX) * inverseElapsed),
+                    (float) ((velocityY - previousVelocityY) * inverseElapsed),
+                    (float) ((velocityZ - previousVelocityZ) * inverseElapsed)
             );
             sampledYawRate = (float) Math.toRadians(
                     Mth.wrapDegrees(bodyYaw - previousBodyYaw)
             );
-            previousVelocity = velocity;
+            previousVelocityX = velocityX;
+            previousVelocityY = velocityY;
+            previousVelocityZ = velocityZ;
             sampledTick = currentTick;
         }
-        AdaptiveMotionFilter.Output output = filter.update(
+        return filter.updateInto(
                 sampledAcceleration,
                 sampledYawRate,
                 maximumAcceleration,
-                dt
+                dt,
+                accelerationOutput
         );
-        return new Sample(output.acceleration(), output.yawRate());
     }
 
     public void reset() {
-        previousVelocity = Vec3.ZERO;
+        previousVelocityX = 0.0D;
+        previousVelocityY = 0.0D;
+        previousVelocityZ = 0.0D;
         sampledAcceleration.zero();
         sampledYawRate = 0.0F;
         sampledTick = Integer.MIN_VALUE;
         filter.reset();
     }
 
-    private void reset(Vec3 velocity, int currentTick) {
-        previousVelocity = velocity;
+    private void reset(
+            double velocityX,
+            double velocityY,
+            double velocityZ,
+            int currentTick
+    ) {
+        previousVelocityX = velocityX;
+        previousVelocityY = velocityY;
+        previousVelocityZ = velocityZ;
         sampledAcceleration.zero();
         sampledYawRate = 0.0F;
         sampledTick = currentTick;

@@ -7,9 +7,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.RegisterClientReloadListenersEvent;
+import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 
@@ -28,6 +30,7 @@ public final class ClientPhysicsSetup {
     public static void initialize(IEventBus modEventBus, IEventBus gameEventBus) {
         modEventBus.addListener(ClientPhysicsSetup::registerReloadListener);
         gameEventBus.addListener(ClientPhysicsSetup::onEntityInteract);
+        gameEventBus.addListener(ClientPhysicsSetup::onEntityLeaveLevel);
     }
 
     private static void registerReloadListener(RegisterClientReloadListenersEvent event) {
@@ -56,6 +59,13 @@ public final class ClientPhysicsSetup {
                 CUSTOM_PACK_REFRESH_QUEUED.set(false);
             }
         });
+    }
+
+    private static void onEntityLeaveLevel(EntityLeaveLevelEvent event) {
+        if (event.getLevel().isClientSide()
+                && event.getEntity() instanceof LivingEntity livingEntity) {
+            MaidBonePhysics.forget(livingEntity);
+        }
     }
 
     /**

@@ -8,6 +8,9 @@
 - 范围：仅 Gecko 模型（`AnimatedGeoModel`），覆盖头发、尾巴、耳朵、裙摆、丝带、披风、翅膀等软体链；纯客户端。
 - 参考技术：VRM `VRMC_springBone`、Dynamic Bone、t3ssel8r 二阶动力学。
 
+发饰防遮挡、动画姿态相对角限制、Backstop 和碰撞代理的调研与实施设计见
+[`SECONDARY_MOTION_CONSTRAINTS.md`](SECONDARY_MOTION_CONSTRAINTS.md)。
+
 ## 核心原则：刚度拉回动画，重力只是小扰动
 
 早期方案把"重力+惯性合力"当成骨骼的绝对倒向目标，导致抬头时头发朝世界下方倒、尾巴持续下垂——**重力覆盖了造型**。VRM 模型从根上避免这点:
@@ -25,15 +28,17 @@
 - **抬头头发跟随**：`restDir` 随头骨动画一起抬，刚度把头发拉向抬起的 `restDir`，只叠加轻微下垂，**不会向后倒**；
 - **运动才甩**：转身/起步/急停/跳跃的瞬态惯性驱动摆动，然后弹回动画姿态。
 
-## 逐骨骼独立解算（解决"一整块"）
+## 最小活动骨架上的逐骨骼解算
 
-[`MaidBonePhysics.solve`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/MaidBonePhysics.java) **递归骨骼树**，逐骨骼累积**动画姿态朝向四元数**（只用动画姿态，不把已施加的偏转喂回去，避免自激抖动）。每根骨骼在模型空间独立维护方向，使用各自的动画休息轴和参数积分，最后再把偏转转回该骨骼局部帧；父骨偏转由渲染层级自然传给子骨，子骨只叠加自己的局部弹簧。
+[`PhysicsSolverLayout`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/PhysicsSolverLayout.java) 在模型准备阶段构建“全部 driven 骨骼到根路径的并集”。这个最小活动子树只保留受驱动骨和传播朝向所必需的祖先；不含受驱动后代的手臂、武器、装饰等整棵分支不会进入每帧热路径。
+
+[`SpringBoneSolver`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/SpringBoneSolver.java) 按预序扁平数组迭代解算，不再递归完整骨骼树，也不在热路径查询 `IdentityHashMap`。祖先节点只传播动画姿态；driven 节点先以动画姿态积分并施加自身偏转，再把施加后的朝向传给子骨，因此与旧完整树递归的父子语义一致。
 
 偏转的施加：把模拟方向 `currentDir` 转回局部,求"从休息轴 `boneAxis` 到 `currentDir`"的旋转,按小角度近似（旋转矢量 = 轴 × 角）叠加到骨骼的 ZYX 欧拉旋转上。
 
 ## 力臂归一化（解决大块几何过摆）
 
-有些骨骼支点在几何边缘、几何体很大（如 `BaseHair` 头盖式整块头发）。同样的旋转角,几何越大末端扫得越远。[`leverArmOf`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/MaidBonePhysics.java) 算出每根骨骼**支点到几何最远角的力臂**,把偏转角上限按反比压低:
+有些骨骼支点在几何边缘、几何体很大（如 `BaseHair` 头盖式整块头发）。同样的旋转角,几何越大末端扫得越远。[`BoneKinematics.measure`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/BoneKinematics.java) 算出每根骨骼**支点到几何最远角的力臂**,把偏转角上限按反比压低:
 
 ```text
 该骨骼角度上限 = min(MAX_ANGLE, MAX_TIP_DISPLACEMENT / 力臂)
@@ -47,13 +52,19 @@
 
 1. **模型元数据**：作者显式指定的链与排除项，置信度最高;
 2. **几何 / 拓扑自动发现**：[`PhysicsBoneDiscoverer`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/PhysicsBoneDiscoverer.java) 根据绑定姿态的 pivot、cube AABB、薄度、力臂、链长、分叉和相对 Head / Body 位置评分;
-3. **名称提示**：[`PhysicsBoneClassifier`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/PhysicsBoneClassifier.java) 仅给常见英文/拼音名称加分和选择默认参数，**不再是入选前提**。
+3. **名称提示**：[`PhysicsBoneClassifier`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/PhysicsBoneClassifier.java) 给常见英文、拼音、中文及日文罗马字名称加分并选择默认参数，支持 `TwinTail` 等多词组合；名称仍**不是入选前提**。
 
 具体实现集中在 `client/discovery` 子包：元数据绑定、候选评分、头部/躯干规则、刚性过滤和计划写入彼此独立，入口 [`PhysicsBoneDiscoverer`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/PhysicsBoneDiscoverer.java) 只保留稳定门面。
 
-自动发现采用高置信门槛，低置信节点保持静止，避免把肢体、武器和固定头饰当作软体。空骨骼仍作为层级枢轴参与分析但不直接驱动。`BaseHair` / `TopHair` 这类包围头部、有实体几何且连接发丝的分叉骨会识别为 `HEAD_SHELL`，使用高刚度、低摆幅参数；纯空分叉容器则跳过。
+自动发现采用高置信门槛，低置信节点保持静止，避免把肢体、武器和固定头饰当作软体。空骨骼仍作为层级枢轴参与分析但不直接驱动，其语义会沿连续空锚点传给可见子骨。可见的 `MFrontHair` 不会再被当作空 `M` 枢轴；不在 `Head` 层级内、但名称或空间挂点明确属于头发的骨骼也会参与头部候选评分，同时保留已经高置信识别出的翅膀、裙摆等身体软体类型。`BaseHair` / `TopHair` 这类包围头部、有实体几何且连接发丝的分叉骨会识别为 `HEAD_SHELL`，使用高刚度、低摆幅参数；纯空分叉容器则跳过。
 
-模型计划按 `AnimatedGeoModel` 实例弱缓存，模拟状态按 `AnimatedGeoBone` 实例保存。女仆切换模型或资源重载时会整体重建，不会把上一个同名骨骼的 `null` 判定、方向或力臂带入新模型。
+刘海会额外识别 `Bangs`、`Fringe`、`FrontHair`、`刘海`、`前髪` 等别名；`MBangs`、`LongHair` 这类空锚点即使跨越多级容器或分出多个匿名片段，也会把高置信语义传给所有可见分支。完全匿名的前额薄片、成组小片和连接头发外壳的头顶发束可通过几何与层级关系识别。眉毛、眼、嘴、脸红和表情使用强排除语义，覆盖 `meimao`、`zui`、`xiao`、`saihong`、`lianhong` 等内置模型别名；匿名但呈现为面部下半区对称薄贴片的腮红也会被刚性过滤。即使这些面部组件位于 `Hair` 层级内或名称同时含有 `Hair`，也不会继承头发物理。`Face_Bangs` 这类明确刘海名称仍可正常入选。
+
+仓库内的 [`geckolib_model_reference`](../../geckolib_model_reference/README.md) 保存本体内置的全部 27 个 Gecko 几何模型并参与离线回归。圣女酒狐的匿名 `BaseHair/bone5` 由“前额位置 + 头发外壳直属叶节点”识别；这类旋转多方块刘海的整体 AABB 可能横跨整个额头且看起来不够薄，因此宽度不再被误当成长发长度，直属头发外壳的结构证据也会补偿整体 AABB 的厚度偏差。纸板狐另外固定验证匿名腮红 `bone53` 保持刚性、`LongHair` 空锚下的双马尾链完整入选，以及头发外壳顶部的匿名呆毛 `bone34` 被识别。
+
+昂贵的完整发现结果按不可变 `GeoModel` 身份弱缓存，并按 `modelId` 分区。模板以共享 `GeoBone` 身份保存 `Decision`、路径和静态运动学；同一 `GeoModel` 创建新的 `AnimatedGeoModel` 时只需一次 O(N) live bone 绑定，仍会生成实例隔离的 [`PhysicsBoneSelectionPlan`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/PhysicsBoneSelectionPlan.java)，不会跨实体保存 `AnimatedGeoBone`。
+
+女仆切换模型会重建实体自己的 layout 和 solver runtime；实体离开客户端世界会立即遗忘状态；F3+T 与 TLM 自定义模型包热加载会同时清空 sidecar、实例计划、`GeoModel` 模板和实体 runtime。
 
 ## 模型物理元数据
 
@@ -107,6 +118,21 @@ assets/<namespace>/tlm_companionship/physics/<model-path>.json
 - **帧率**：真实墙钟 `dt`(clamp 0.1s)；刚度/重力/外力按 dt 缩放，阻尼按 60 FPS 基准做指数换算；暂停或长时间断帧冻结该步，避免恢复瞬间跳动;
 - **距离门控**：相机 24 格外跳过并清状态。
 
+## 零分配热路径与性能基准
+
+- 每个活动节点持久复用 rendered quaternion，每个实体持久复用积分方向、四元数和向量 scratch；
+- `AdaptiveMotionFilter`、`MotionNoiseGate`、`MotionSignalSampler` 与 pivot 补偿提供 out 参数路径，热路径不创建 `MotionSignals`、force 向量或滤波输出对象；
+- [`BonePhysicsVerification`](../../src/test/java/com/laixia/maidintelligence/feature/physics/client/BonePhysicsVerification.java) 用测试专用旧递归解算器作为 oracle，对 `winefox` 与匿名模型逐帧比较 rotation、position 和弹簧方向；序列覆盖可变 dt、移动、转身、暂停和 pivot 补偿，容差为 `1e-5`；
+- [`BonePhysicsBenchmark`](../../src/test/java/com/laixia/maidintelligence/feature/physics/client/BonePhysicsBenchmark.java) 是独立非门禁入口，预热后报告每帧解算耗时、访问节点数和当前线程分配量。绝对耗时受 JVM、CPU 和后台负载影响，不参与 `check` 成败。
+
+一次 Windows/JDK 17 开发环境样例（20,000 个测量帧）：
+
+```text
+recursive-full: 37848.7 ns/frame, nodes=181/181, allocation=14560.01 B/frame
+iterative-active: 24776.4 ns/frame, nodes=73/181, allocation=0.00 B/frame
+relative solver speedup: 1.53x
+```
+
 ## 异常枢轴修正
 
 部分 Bedrock 模型的骨骼 pivot 位于网格边缘，甚至离自身 cube 数十像素。解算器会测量烘焙网格 AABB 与体积中心：
@@ -130,7 +156,7 @@ assets/<namespace>/tlm_companionship/physics/<model-path>.json
 
 ## 调参
 
-集中在 [`MaidBonePhysics`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/MaidBonePhysics.java) 顶部:
+解算参数集中在 [`SpringBoneSolver`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/SpringBoneSolver.java) 顶部，时钟、24 格门控和诊断窗口位于 [`MaidBonePhysics`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/MaidBonePhysics.java):
 
 | 参数 | 作用 |
 | --- | --- |
@@ -146,7 +172,7 @@ assets/<namespace>/tlm_companionship/physics/<model-path>.json
 
 ## 已知限制与后续
 
-- **无真实碰撞体**:目前用虚拟枢轴、分类型重力、角度/逐轴/力臂上限约束穿模；尚未实现 VRM 式球形 collider，因此任意第三方网格仍不能保证完全不穿模。
+- **无真实碰撞体**:目前用虚拟枢轴、分类型重力、角度/逐轴/力臂上限约束穿模；尚未实现 VRM 式球形 collider，因此任意第三方网格仍不能保证完全不穿模。后续方案见 [`SECONDARY_MOTION_CONSTRAINTS.md`](SECONDARY_MOTION_CONSTRAINTS.md)。
 - **转动惯量**:力臂归一化压的是幅度;更真实的"大块又慢又沉"可再按力臂缩放驱动力(转动惯量 ∝ 力臂²)。
 - **自动发现是保守启发式**：几何无法无歧义地区分造型相似的发丝、丝带和固定装饰；低置信节点默认不动，复杂模型建议提供 sidecar。
 - **范围**:仅 Gecko;Bedrock(`BedrockPart` + JS 脚本)与 YSM(仅捕获顶点)暂不支持。
@@ -155,7 +181,8 @@ assets/<namespace>/tlm_companionship/physics/<model-path>.json
 
 ```bash
 ./gradlew.bat --offline verifyBonePhysics
-./gradlew.bat --offline check
+./gradlew.bat --offline benchmarkBonePhysics
+./gradlew.bat --offline cleanTest check
 ```
 
-离线校验名称提示、元数据优先级、模型切换缓存、运动坐标系、帧率阻尼、空锚点、locator 后代、异常 pivot 的虚拟枢轴矩阵补偿、真实 `winefox` 回归，以及匿名头盖、发丝、耳朵、尾巴、裙摆、丝带、披风、翅膀与刚性反例；游戏内仍需用调试棒检查第三方模型的最终视觉效果。
+离线校验名称提示、元数据优先级、`GeoModel` 模板绑定与清空、模型 ID 分区、最小活动子树、运动坐标系、帧率阻尼、out 参数等价、空锚点、locator 后代、异常 pivot 的虚拟枢轴矩阵补偿、内置 27 个 Gecko 模型的解析与命名刘海、圣女酒狐匿名前发、匿名模型回归，以及优化前后逐帧 golden 等价；游戏内仍需用调试棒检查第三方模型的最终视觉效果。

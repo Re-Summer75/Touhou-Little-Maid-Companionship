@@ -38,16 +38,32 @@ public final class PhysicsBoneClassifier {
     );
     private static final Set<String> HAIR_TOKENS = Set.of(
             "hair",
+            "hairs",
             "bang",
             "bangs",
             "fringe",
             "ponytail",
+            "twintail",
+            "pigtail",
+            "pigtails",
             "braid",
             "sidehair",
             "backhair",
+            "fronthair",
+            "rearhair",
+            "lefthair",
+            "righthair",
             "longhair",
             "tophair",
             "hairtail",
+            "sideburn",
+            "sideburns",
+            "ahoge",
+            // Japanese romanisation
+            "kami",
+            "maegami",
+            "ushirogami",
+            "yokogami",
             // pinyin: 头发 / 发 / 刘海 / 前发 / 后发 / 马尾 / 双马尾 / 辫子 / 辫
             "toufa",
             "liuhai",
@@ -58,6 +74,11 @@ public final class PhysicsBoneClassifier {
             "danmawei",
             "bianzi",
             "bian"
+    );
+    private static final Set<String> FRINGE_TOKENS = Set.of(
+            "bang", "bangs", "fringe",
+            "fronthair", "frontbang", "frontbangs",
+            "liuhai", "qianfa", "maegami"
     );
     private static final Set<String> EAR_TOKENS = Set.of(
             "ear",
@@ -114,9 +135,9 @@ public final class PhysicsBoneClassifier {
             "chibang",
             "yuyi"
     );
-    // Tokens that stop chain inheritance: facial and expression parts must never
-    // become physics even when they sit under a head/hair anchor.
-    private static final Set<String> BREAKER_TOKENS = Set.of(
+    // Concrete facial features are hard exclusions even when their name also
+    // contains a hair token or they sit below a Hair anchor.
+    private static final Set<String> FACIAL_FEATURE_TOKENS = Set.of(
             "eye",
             "eyes",
             "eyelid",
@@ -131,17 +152,58 @@ public final class PhysicsBoneClassifier {
             "tongue",
             "teeth",
             "tooth",
-            "face",
             "cheek",
             "blush",
             "nose",
             "emoji",
             "expression",
-            // pinyin: 表情 / 吐舌头 / 脸 / 嘴
+            // Pinyin and common model-pack expression aliases.
             "biaoqing",
             "tushetou",
-            "lian",
-            "zui"
+            "zui",
+            "zuiba",
+            "zuibu",
+            "meimao",
+            "mei",
+            "yanbu",
+            "saihong",
+            "lianhong",
+            "hongyun",
+            "xiao",
+            "weixiao",
+            "jingya",
+            "kongju",
+            "yinchang",
+            "maozuixiao",
+            "huyaxiao",
+            "huaixiao",
+            "shaxiao",
+            "luchixiao",
+            "zhangzui",
+            "duzui"
+    );
+    // Generic face containers stop inherited hair semantics, but a deliberately
+    // named child such as Face_Bangs may still provide its own hair hint.
+    private static final Set<String> BREAKER_CONTAINER_TOKENS = Set.of(
+            "face",
+            "lian"
+    );
+    private static final List<String> CJK_HAIR_MARKERS = List.of(
+            "头发", "頭髮", "髮", "髪",
+            "刘海", "瀏海", "前发", "前髮", "前髪",
+            "后发", "後髮", "後髪", "侧发", "側髮", "横髪",
+            "马尾", "馬尾", "双马尾", "雙馬尾",
+            "辫子", "辮子", "呆毛", "アホ毛"
+    );
+    private static final List<String> CJK_FACIAL_FEATURE_MARKERS = List.of(
+            "眼", "眉", "嘴", "口", "表情", "舌", "牙", "鼻", "腮", "瞳",
+            "脸红", "臉紅", "红晕", "紅暈"
+    );
+    private static final List<String> CJK_BREAKER_CONTAINER_MARKERS = List.of(
+            "脸", "臉"
+    );
+    private static final List<String> CJK_FRINGE_MARKERS = List.of(
+            "刘海", "瀏海", "前发", "前髮", "前髪"
     );
 
     private PhysicsBoneClassifier() {
@@ -151,13 +213,83 @@ public final class PhysicsBoneClassifier {
         if (name == null || name.isBlank() || isPivot(name)) {
             return Classification.NONE;
         }
+        return classifyTokens(name);
+    }
 
-        for (String token : parse(name)) {
+    /**
+     * Visible geometry occasionally uses the same leading {@code M} naming
+     * convention as an empty pivot. Once geometry proves that the node itself
+     * is renderable, the prefix may be ignored without turning empty anchors
+     * into simulated bones.
+     */
+    public static Classification classifyVisibleGeometry(String name) {
+        Classification direct = classify(name);
+        if (direct.isPhysical() || !isPivot(name)) {
+            return direct;
+        }
+        return classifyTokens(name.substring(1));
+    }
+
+    public static boolean isFringeHint(String name) {
+        if (name == null || name.isBlank()) {
+            return false;
+        }
+        String candidate = name;
+        if (isPivot(candidate)
+                || (candidate.length() >= 2
+                && candidate.charAt(0) == 'F'
+                && Character.isUpperCase(candidate.charAt(1)))) {
+            candidate = candidate.substring(1);
+        }
+        if (containsAny(candidate, CJK_FRINGE_MARKERS)) {
+            return true;
+        }
+        List<String> tokens = parse(candidate);
+        for (String token : tokens) {
+            if (FRINGE_TOKENS.contains(stripTrailingDigits(token))) {
+                return true;
+            }
+        }
+        for (int index = 0; index + 1 < tokens.size(); index++) {
+            String combined = stripTrailingDigits(tokens.get(index))
+                    + stripTrailingDigits(tokens.get(index + 1));
+            if (FRINGE_TOKENS.contains(combined)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Classification classifyTokens(String name) {
+        if (containsAny(name, CJK_HAIR_MARKERS)) {
+            return new Classification(
+                    ChainType.HAIR,
+                    depthFromTrailingDigits(name)
+            );
+        }
+        List<String> tokens = parse(name);
+        for (int index = 0; index + 1 < tokens.size(); index++) {
+            String first = stripTrailingDigits(tokens.get(index));
+            String second = stripTrailingDigits(tokens.get(index + 1));
+            ChainType combined = chainOf(first + second);
+            if (combined != ChainType.NONE) {
+                return new Classification(
+                        combined,
+                        Math.max(
+                                depthFromToken(tokens.get(index), first),
+                                depthFromToken(tokens.get(index + 1), second)
+                        )
+                );
+            }
+        }
+        for (String token : tokens) {
             String base = stripTrailingDigits(token);
             ChainType chain = chainOf(base);
             if (chain != ChainType.NONE) {
-                int depth = depthFromDigits(token.substring(base.length()));
-                return new Classification(chain, depth);
+                return new Classification(
+                        chain,
+                        depthFromToken(token, base)
+                );
             }
         }
         return Classification.NONE;
@@ -171,12 +303,24 @@ public final class PhysicsBoneClassifier {
     }
 
     public static boolean isBreaker(String name) {
-        for (String token : parse(name)) {
-            if (BREAKER_TOKENS.contains(stripTrailingDigits(token))) {
-                return true;
-            }
+        if (isFacialFeature(name)
+                || containsAny(name, CJK_BREAKER_CONTAINER_MARKERS)) {
+            return true;
         }
-        return false;
+        return containsTokenOrPair(name, BREAKER_CONTAINER_TOKENS);
+    }
+
+    public static boolean isFacialFeature(String name) {
+        if (name == null || name.isBlank()) {
+            return false;
+        }
+        if (containsAny(name, CJK_FACIAL_FEATURE_MARKERS)
+                || containsTokenOrPair(name, FACIAL_FEATURE_TOKENS)) {
+            return true;
+        }
+        return !isFringeHint(name)
+                && (containsAny(name, CJK_BREAKER_CONTAINER_MARKERS)
+                || containsTokenOrPair(name, BREAKER_CONTAINER_TOKENS));
     }
 
     private static ChainType chainOf(String base) {
@@ -223,6 +367,56 @@ public final class PhysicsBoneClassifier {
         } catch (NumberFormatException ignored) {
             return 0;
         }
+    }
+
+    private static int depthFromToken(String token, String base) {
+        return depthFromDigits(token.substring(base.length()));
+    }
+
+    private static int depthFromTrailingDigits(String value) {
+        int start = value.length();
+        while (start > 0 && Character.isDigit(value.charAt(start - 1))) {
+            start--;
+        }
+        return depthFromDigits(value.substring(start));
+    }
+
+    private static boolean containsAny(
+            String value,
+            List<String> markers
+    ) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        for (String marker : markers) {
+            if (value.contains(marker)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsTokenOrPair(
+            String name,
+            Set<String> candidates
+    ) {
+        if (name == null || name.isBlank()) {
+            return false;
+        }
+        List<String> tokens = parse(name);
+        for (int index = 0; index < tokens.size(); index++) {
+            String first = stripTrailingDigits(tokens.get(index));
+            if (candidates.contains(first)) {
+                return true;
+            }
+            if (index + 1 < tokens.size()) {
+                String second = stripTrailingDigits(tokens.get(index + 1));
+                if (candidates.contains(first + second)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static List<String> parse(String name) {

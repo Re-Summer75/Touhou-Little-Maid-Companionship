@@ -1,0 +1,160 @@
+package com.laixia.maidintelligence.feature.physics.client;
+
+import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.MODEL_DIRECTORY;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadGeoModel;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.requireDriven;
+
+final class BundledGeckoModelVerification {
+    private BundledGeckoModelVerification() {
+    }
+
+    static void run() throws Exception {
+        require(
+                Files.isDirectory(MODEL_DIRECTORY),
+                "Bundled Gecko model reference directory is missing"
+        );
+        List<Path> modelPaths;
+        try (var paths = Files.list(MODEL_DIRECTORY)) {
+            modelPaths = paths
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString()
+                            .endsWith(".json"))
+                    .sorted()
+                    .toList();
+        }
+        require(
+                modelPaths.size() == 27,
+                "Expected all 27 bundled Gecko models, found "
+                        + modelPaths.size()
+        );
+
+        int visibleFringeBones = 0;
+        int visibleFacialBones = 0;
+        boolean verifiedSaint = false;
+        boolean verifiedZhiban = false;
+        for (Path modelPath : modelPaths) {
+            String fileName = modelPath.getFileName().toString();
+            String modelName = fileName.substring(0, fileName.length() - 5);
+            AnimatedGeoModel model = new AnimatedGeoModel(
+                    loadGeoModel(modelPath)
+            );
+            PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
+                    "geckolib:" + modelName,
+                    model,
+                    PhysicsMetadata.EMPTY
+            );
+            PhysicsBoneGeometry.Analysis geometry =
+                    PhysicsBoneGeometry.analyze(model);
+            for (PhysicsBoneGeometry.Node node : geometry.nodes()) {
+                if (node.hasGeometry() && isInFacialFeatureSubtree(node)) {
+                    visibleFacialBones++;
+                    require(
+                            !plan.isDriven(node.bone()),
+                            fileName + " incorrectly drove facial bone "
+                                    + node.path()
+                    );
+                    continue;
+                }
+                if (!node.hasGeometry()
+                        || Boolean.TRUE.equals(
+                        node.bone().geoBone().dontRender()
+                )
+                        || !PhysicsBoneClassifier.isFringeHint(
+                        node.bone().getName()
+                )) {
+                    continue;
+                }
+                visibleFringeBones++;
+                requireDriven(
+                        plan,
+                        node.bone(),
+                        PhysicsBoneSelectionPlan.PartType.HAIR,
+                        fileName + " lost visible fringe bone "
+                                + node.bone().getName()
+                );
+            }
+
+            if ("winefox_saint.json".equals(fileName)) {
+                verifiedSaint = true;
+                requireHair(plan, model, "bone5",
+                        "Saint Winefox anonymous front hair was not discovered");
+                requireHair(plan, model, "Bangs",
+                        "Saint Winefox Bangs were not discovered");
+                requireHair(plan, model, "RightSideHair",
+                        "Saint Winefox right front-side hair was not discovered");
+                requireHair(plan, model, "LeftSideHair",
+                        "Saint Winefox left front-side hair was not discovered");
+            }
+            if ("zhiban.json".equals(fileName)) {
+                verifiedZhiban = true;
+                verifyZhiban(plan, model);
+            }
+        }
+        require(verifiedSaint, "Saint Winefox fixture was not verified");
+        require(verifiedZhiban, "Zhiban fixture was not verified");
+        require(
+                visibleFringeBones > 0,
+                "Bundled Gecko models exposed no visible fringe fixtures"
+        );
+        require(
+                visibleFacialBones > 0,
+                "Bundled Gecko models exposed no facial exclusion fixtures"
+        );
+    }
+
+    private static void verifyZhiban(
+            PhysicsBoneSelectionPlan plan,
+            AnimatedGeoModel model
+    ) {
+        require(
+                !plan.isDriven(model.bones().get("bone53")),
+                "Zhiban anonymous blush overlay was physicalized"
+        );
+        requireHair(plan, model, "bone29",
+                "Zhiban left twintail root was not discovered");
+        requireHair(plan, model, "bone30",
+                "Zhiban left twintail continuation was not discovered");
+        requireHair(plan, model, "bone27",
+                "Zhiban right twintail root was not discovered");
+        requireHair(plan, model, "bone31",
+                "Zhiban right twintail continuation was not discovered");
+        requireHair(plan, model, "bone34",
+                "Zhiban anonymous ahoge was not discovered");
+    }
+
+    private static boolean isInFacialFeatureSubtree(
+            PhysicsBoneGeometry.Node node
+    ) {
+        PhysicsBoneGeometry.Node cursor = node;
+        while (cursor != null) {
+            if (PhysicsBoneClassifier.isFacialFeature(
+                    cursor.bone().getName()
+            )) {
+                return true;
+            }
+            cursor = cursor.parent();
+        }
+        return false;
+    }
+
+    private static void requireHair(
+            PhysicsBoneSelectionPlan plan,
+            AnimatedGeoModel model,
+            String boneName,
+            String message
+    ) {
+        requireDriven(
+                plan,
+                model.bones().get(boneName),
+                PhysicsBoneSelectionPlan.PartType.HAIR,
+                message
+        );
+    }
+}

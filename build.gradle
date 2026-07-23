@@ -265,6 +265,14 @@ tasks.register('verifyBonePhysics', JavaExec) {
     mainClass = 'com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerification'
 }
 
+tasks.register('benchmarkBonePhysics', JavaExec) {
+    group = 'verification'
+    description = 'Reports warmed spring-bone frame time, visited nodes, and thread allocation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.laixia.maidintelligence.feature.physics.client.BonePhysicsBenchmark'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('verifyBonePhysics')
 }
