@@ -6,6 +6,7 @@ import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoMe
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.util.RenderUtils;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -18,6 +19,20 @@ import java.util.Optional;
 final class GeckoFaceGeometryAdapter {
     private static final double THIN_RATIO = 0.015D;
     private static final int MIRROR_MASK = 0b1000000;
+    private static final ThreadLocal<PoseStack> SCRATCH_POSE =
+            ThreadLocal.withInitial(PoseStack::new);
+    private static final ThreadLocal<Vector3f> SCRATCH_CORNER =
+            ThreadLocal.withInitial(Vector3f::new);
+    // Corner selection per face, mirroring face(): bit 1 adds dx, bit 2 adds
+    // dy, bit 4 adds dz on top of the cube origin.
+    private static final int[][] FACE_CORNER_MASKS = {
+            {5, 4, 0, 1},
+            {3, 2, 6, 7},
+            {1, 0, 2, 3},
+            {4, 5, 7, 6},
+            {0, 4, 6, 2},
+            {5, 1, 3, 7}
+    };
 
     private GeckoFaceGeometryAdapter() {
     }
@@ -38,22 +53,23 @@ final class GeckoFaceGeometryAdapter {
             if (!isVisible(handle.ownerHierarchy(), handle.owner())) {
                 continue;
             }
-            FaceGeometry.Candidate candidate = captureCandidate(
-                    handle,
-                    basePose,
-                    frame
-            );
-            if (candidate == null) {
+            List<Vec3> facePositions = captureFacePositions(handle, basePose);
+            if (facePositions == null) {
                 continue;
             }
             MaidFacePlane plane = MaidFacePlane
-                    .fromVertices(candidate.vertices(), frame)
+                    .fromVertices(facePositions, frame)
                     .orElse(null);
             if (plane != null) {
                 return Result.success(
                         plane,
                         ranked.confidence(),
-                        candidate.key()
+                        new FaceGeometry.Key(
+                                FaceGeometry.Source.GECKO,
+                                handle.path(),
+                                handle.cubeIndex(),
+                                handle.faceIndex()
+                        )
                 );
             }
         }
@@ -181,27 +197,60 @@ final class GeckoFaceGeometryAdapter {
         }
     }
 
-    private static FaceGeometry.Candidate captureCandidate(
+    /**
+     * Per-frame path: transforms only the four corners of the planned face
+     * instead of rebuilding every candidate of the cube. Returns {@code null}
+     * when the cube or face is no longer present in the mesh.
+     */
+    private static List<Vec3> captureFacePositions(
             Handle handle,
-            PoseStack basePose,
-            FaceGeometry.Frame frame
+            PoseStack basePose
     ) {
-        PoseStack ownerPose = poseFor(basePose, handle.ownerHierarchy());
         GeoMesh mesh = handle.owner().geoBone().cubes();
-        if (handle.cubeIndex() >= mesh.getCubeCount()) {
+        int cubeIndex = handle.cubeIndex();
+        if (cubeIndex >= mesh.getCubeCount()) {
             return null;
         }
-        return captureCube(
-                mesh,
-                handle.path(),
-                handle.role(),
-                handle.cubeIndex(),
-                ownerPose,
-                frame
-        ).stream()
-                .filter(candidate -> candidate.key().faceIndex() == handle.faceIndex())
-                .findFirst()
-                .orElse(null);
+        int faces = mesh.faces(cubeIndex) & ~MIRROR_MASK;
+        if ((faces & (1 << handle.faceIndex())) == 0) {
+            return null;
+        }
+
+        PoseStack ownerPose = scratchPoseFor(basePose, handle.ownerHierarchy());
+        Matrix4f pose = ownerPose.last().pose();
+        Vector3f position = mesh.position(cubeIndex);
+        Vector3f dx = mesh.dx(cubeIndex);
+        Vector3f dy = mesh.dy(cubeIndex);
+        Vector3f dz = mesh.dz(cubeIndex);
+        int[] cornerMasks = FACE_CORNER_MASKS[handle.faceIndex()];
+        return List.of(
+                corner(pose, position, dx, dy, dz, cornerMasks[0]),
+                corner(pose, position, dx, dy, dz, cornerMasks[1]),
+                corner(pose, position, dx, dy, dz, cornerMasks[2]),
+                corner(pose, position, dx, dy, dz, cornerMasks[3])
+        );
+    }
+
+    private static Vec3 corner(
+            Matrix4f pose,
+            Vector3f position,
+            Vector3f dx,
+            Vector3f dy,
+            Vector3f dz,
+            int cornerMask
+    ) {
+        Vector3f corner = SCRATCH_CORNER.get().set(position);
+        if ((cornerMask & 1) != 0) {
+            corner.add(dx);
+        }
+        if ((cornerMask & 2) != 0) {
+            corner.add(dy);
+        }
+        if ((cornerMask & 4) != 0) {
+            corner.add(dz);
+        }
+        corner.mulPosition(pose);
+        return new Vec3(corner.x(), corner.y(), corner.z());
     }
 
     private static List<FaceGeometry.Candidate> captureCube(
@@ -305,13 +354,30 @@ final class GeckoFaceGeometryAdapter {
             PoseStack basePose,
             List<AnimatedGeoBone> anchorHierarchy
     ) {
-        PoseStack pose = poseFor(basePose, anchorHierarchy);
+        PoseStack pose = scratchPoseFor(basePose, anchorHierarchy);
         return new FaceGeometry.Frame(
                 transformedPosition(pose, 0.0F, 0.0F, 0.0F),
                 transformedDirection(pose, -1.0F, 0.0F, 0.0F),
                 transformedDirection(pose, 0.0F, 1.0F, 0.0F),
                 transformedDirection(pose, 0.0F, 0.0F, -1.0F)
         );
+    }
+
+    /**
+     * Reuses one never-pushed PoseStack per thread. Callers must extract what
+     * they need before the next scratch call on the same thread.
+     */
+    private static PoseStack scratchPoseFor(
+            PoseStack basePose,
+            List<AnimatedGeoBone> hierarchy
+    ) {
+        PoseStack pose = SCRATCH_POSE.get();
+        pose.last().pose().set(basePose.last().pose());
+        pose.last().normal().set(basePose.last().normal());
+        for (AnimatedGeoBone bone : hierarchy) {
+            RenderUtils.prepMatrixForBone(pose, bone);
+        }
+        return pose;
     }
 
     private static List<AnimatedGeoBone> hierarchy(

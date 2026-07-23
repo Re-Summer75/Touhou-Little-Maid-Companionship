@@ -27,6 +27,7 @@ public final class FaceTrackingVerification {
         verifiesAmbiguousCandidatesAreRejected();
         verifiesRotatedMirroredOrdering();
         verifiesSkewedPlaneCoordinates();
+        verifiesPrecomputedQuadSelectionMatches();
         System.out.println("Face tracking verification passed.");
     }
 
@@ -316,6 +317,103 @@ public final class FaceTrackingVerification {
                         && Math.abs(hit.v() - MouthTargetRegion.CENTER_V) <= 1.0E-5F,
                 "Gram coordinate solve returned the wrong mouth UV"
         );
+    }
+
+    private static void verifiesPrecomputedQuadSelectionMatches() {
+        List<FaceGeometry.Candidate> plain = List.of(
+                candidate(
+                        "head",
+                        0,
+                        3,
+                        FaceBoneClassifier.Role.HEAD,
+                        frontQuad(1.0D, 1.0D, 0.5D),
+                        new Vec3(0.0D, 0.0D, 1.0D),
+                        1.0D,
+                        1.0D,
+                        1.0D,
+                        false
+                ),
+                candidate(
+                        "head",
+                        0,
+                        2,
+                        FaceBoneClassifier.Role.HEAD,
+                        frontQuad(1.0D, 1.0D, -0.5D),
+                        new Vec3(0.0D, 0.0D, -1.0D),
+                        1.0D,
+                        1.0D,
+                        1.0D,
+                        false
+                ),
+                candidate(
+                        "head",
+                        1,
+                        2,
+                        FaceBoneClassifier.Role.HEAD,
+                        frontQuad(1.15D, 1.15D, -0.575D),
+                        new Vec3(0.0D, 0.0D, -1.0D),
+                        1.15D,
+                        1.15D,
+                        1.15D,
+                        false
+                )
+        );
+        require(
+                plain.get(0).orderedQuad() == null,
+                "Compat candidate constructor should leave the quad cache empty"
+        );
+
+        List<FaceGeometry.Candidate> precomputed = new ArrayList<>();
+        for (FaceGeometry.Candidate candidate : plain) {
+            precomputed.add(new FaceGeometry.Candidate(
+                    candidate.key(),
+                    candidate.role(),
+                    candidate.vertices(),
+                    candidate.outward(),
+                    candidate.groupCenter(),
+                    candidate.groupWidth(),
+                    candidate.groupHeight(),
+                    candidate.groupDepth(),
+                    candidate.thin(),
+                    FaceGeometry.orderQuad(candidate.vertices(), FRAME)
+                            .orElseThrow(() -> new AssertionError(
+                                    "Precomputed quad ordering failed"
+                            ))
+            ));
+        }
+
+        FaceGeometry.Selection expected = FaceCandidateSelector.select(plain, FRAME);
+        FaceGeometry.Selection actual = FaceCandidateSelector.select(
+                precomputed,
+                FRAME
+        );
+        require(
+                expected.isAccepted() && actual.isAccepted(),
+                "Precomputed quad selection acceptance diverged"
+        );
+        require(
+                expected.ranked().size() == actual.ranked().size(),
+                "Precomputed quad ranking size diverged"
+        );
+        for (int index = 0; index < expected.ranked().size(); index++) {
+            FaceGeometry.RankedCandidate expectedRanked = expected.ranked().get(index);
+            FaceGeometry.RankedCandidate actualRanked = actual.ranked().get(index);
+            require(
+                    expectedRanked.candidate().key()
+                            .equals(actualRanked.candidate().key()),
+                    "Precomputed quad ranking order diverged"
+            );
+            require(
+                    expectedRanked.score() == actualRanked.score()
+                            && expectedRanked.confidence() == actualRanked.confidence(),
+                    "Precomputed quad scores diverged"
+            );
+            require(
+                    expectedRanked.quad().vertices()
+                            .equals(actualRanked.quad().vertices()),
+                    "Precomputed quad geometry diverged"
+            );
+        }
     }
 
     private static FaceGeometry.Candidate candidate(

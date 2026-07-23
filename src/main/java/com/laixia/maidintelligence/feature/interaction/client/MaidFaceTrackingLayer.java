@@ -29,7 +29,9 @@ public final class MaidFaceTrackingLayer extends RenderLayer<Mob, BedrockModel<M
             float netHeadYaw,
             float headPitch
     ) {
-        if (!(entity instanceof EntityMaid maid) || !maid.isAddedToWorld()) {
+        if (!(entity instanceof EntityMaid maid)
+                || !maid.isAddedToWorld()
+                || !FaceTrackingDemand.shouldTrack(maid)) {
             return;
         }
 

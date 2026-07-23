@@ -46,13 +46,14 @@ final class FaceCandidateSelector {
             );
         }
 
-        List<ScoredCandidate> scored = measured.stream()
-                .map(candidate -> score(candidate, reference, measured))
-                .sorted(Comparator
-                        .comparingDouble(ScoredCandidate::score)
-                        .reversed()
-                        .thenComparing(candidate -> candidate.measured().candidate().key()))
-                .toList();
+        List<ScoredCandidate> scored = new ArrayList<>(measured.size());
+        for (MeasuredCandidate candidate : measured) {
+            scored.add(score(candidate, reference, measured));
+        }
+        scored.sort(Comparator
+                .comparingDouble(ScoredCandidate::score)
+                .reversed()
+                .thenComparing(candidate -> candidate.measured().candidate().key()));
         List<ScoredCandidate> distinct = deduplicate(scored);
         if (distinct.isEmpty()) {
             return new FaceGeometry.Selection(
@@ -146,9 +147,12 @@ final class FaceCandidateSelector {
             return Optional.empty();
         }
 
-        FaceGeometry.OrderedQuad quad = FaceGeometry
-                .orderQuad(candidate.vertices(), frame)
-                .orElse(null);
+        FaceGeometry.OrderedQuad quad = candidate.orderedQuad();
+        if (quad == null) {
+            quad = FaceGeometry
+                    .orderQuad(candidate.vertices(), frame)
+                    .orElse(null);
+        }
         if (quad == null) {
             return Optional.empty();
         }
@@ -188,45 +192,74 @@ final class FaceCandidateSelector {
     }
 
     private static MeasuredCandidate chooseReference(List<MeasuredCandidate> measured) {
-        List<MeasuredCandidate> solid = measured.stream()
-                .filter(candidate -> !candidate.candidate().thin())
-                .filter(candidate -> candidate.candidate().role()
-                        != FaceBoneClassifier.Role.FEATURE)
-                .toList();
+        List<MeasuredCandidate> solid = new ArrayList<>(measured.size());
+        for (MeasuredCandidate candidate : measured) {
+            if (!candidate.candidate().thin()
+                    && candidate.candidate().role() != FaceBoneClassifier.Role.FEATURE) {
+                solid.add(candidate);
+            }
+        }
         if (!solid.isEmpty()) {
-            double maximumArea = solid.stream()
-                    .mapToDouble(candidate -> candidate.quad().area())
-                    .max()
-                    .orElse(0.0D);
-            return solid.stream()
-                    .filter(candidate -> candidate.quad().area() >= maximumArea * 0.35D)
-                    .max(Comparator
-                            .comparingDouble((MeasuredCandidate candidate) -> referenceScore(
-                                    candidate,
-                                    solid,
-                                    maximumArea
-                            ))
-                            .thenComparing(
-                                    candidate -> candidate.candidate().key(),
-                                    Comparator.reverseOrder()
-                            ))
-                    .orElse(null);
+            double maximumArea = 0.0D;
+            for (MeasuredCandidate candidate : solid) {
+                maximumArea = Math.max(maximumArea, candidate.quad().area());
+            }
+            MeasuredCandidate best = null;
+            double bestScore = 0.0D;
+            for (MeasuredCandidate candidate : solid) {
+                if (candidate.quad().area() < maximumArea * 0.35D) {
+                    continue;
+                }
+                double candidateScore = referenceScore(candidate, solid, maximumArea);
+                if (best == null || isPreferred(
+                        candidateScore,
+                        candidate,
+                        bestScore,
+                        best
+                )) {
+                    best = candidate;
+                    bestScore = candidateScore;
+                }
+            }
+            return best;
         }
 
-        return measured.stream()
-                .filter(candidate -> candidate.candidate().thin())
-                .filter(candidate -> candidate.candidate().role()
-                        == FaceBoneClassifier.Role.FACE
-                        || candidate.candidate().role()
-                        == FaceBoneClassifier.Role.BLINK)
-                .max(Comparator
-                        .comparingDouble((MeasuredCandidate candidate) ->
-                                candidate.quad().area())
-                        .thenComparing(
-                                candidate -> candidate.candidate().key(),
-                                Comparator.reverseOrder()
-                        ))
-                .orElse(null);
+        MeasuredCandidate best = null;
+        for (MeasuredCandidate candidate : measured) {
+            FaceGeometry.Candidate geometry = candidate.candidate();
+            if (!geometry.thin()
+                    || (geometry.role() != FaceBoneClassifier.Role.FACE
+                    && geometry.role() != FaceBoneClassifier.Role.BLINK)) {
+                continue;
+            }
+            if (best == null || isPreferred(
+                    candidate.quad().area(),
+                    candidate,
+                    best.quad().area(),
+                    best
+            )) {
+                best = candidate;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * Mirrors {@code Stream.max} on a score-then-reversed-key comparator: an
+     * incoming candidate replaces the incumbent only when strictly greater.
+     */
+    private static boolean isPreferred(
+            double candidateScore,
+            MeasuredCandidate candidate,
+            double incumbentScore,
+            MeasuredCandidate incumbent
+    ) {
+        int scoreOrder = Double.compare(candidateScore, incumbentScore);
+        if (scoreOrder != 0) {
+            return scoreOrder > 0;
+        }
+        return candidate.candidate().key()
+                .compareTo(incumbent.candidate().key()) < 0;
     }
 
     private static double referenceScore(
@@ -271,7 +304,9 @@ final class FaceCandidateSelector {
                     inner.groupWidth(),
                     Math.max(inner.groupHeight(), inner.groupDepth())
             );
-            if (outer.groupCenter().distanceTo(inner.groupCenter()) > maximumSize * 0.18D) {
+            double contactDistance = maximumSize * 0.18D;
+            if (outer.groupCenter().distanceToSqr(inner.groupCenter())
+                    > contactDistance * contactDistance) {
                 continue;
             }
             if (largerWithin(outer.groupWidth(), inner.groupWidth())
@@ -341,12 +376,16 @@ final class FaceCandidateSelector {
     private static List<ScoredCandidate> deduplicate(List<ScoredCandidate> scored) {
         List<ScoredCandidate> distinct = new ArrayList<>();
         for (ScoredCandidate candidate : scored) {
-            boolean duplicate = distinct.stream().anyMatch(existing ->
-                    geometricallyEquivalent(
-                            candidate.measured().quad(),
-                            existing.measured().quad()
-                    )
-            );
+            boolean duplicate = false;
+            for (ScoredCandidate existing : distinct) {
+                if (geometricallyEquivalent(
+                        candidate.measured().quad(),
+                        existing.measured().quad()
+                )) {
+                    duplicate = true;
+                    break;
+                }
+            }
             if (!duplicate) {
                 distinct.add(candidate);
             }
@@ -362,7 +401,9 @@ final class FaceCandidateSelector {
                 Math.max(first.width(), first.height()),
                 Math.max(second.width(), second.height())
         );
-        return first.center().distanceTo(second.center()) <= scale * 0.03D
+        double mergeDistance = scale * 0.03D;
+        return first.center().distanceToSqr(second.center())
+                <= mergeDistance * mergeDistance
                 && relativeDifference(first.width(), second.width()) <= 0.05D
                 && relativeDifference(first.height(), second.height()) <= 0.05D
                 && first.normal().dot(second.normal()) >= 0.98D;

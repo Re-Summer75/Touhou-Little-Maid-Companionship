@@ -36,7 +36,9 @@ public final class GeckoMaidFaceTrackingLayer<T extends Mob, R extends IGeoEntit
             float netHeadYaw,
             float headPitch
     ) {
-        if (!(entity instanceof EntityMaid maid) || !maid.isAddedToWorld()) {
+        if (!(entity instanceof EntityMaid maid)
+                || !maid.isAddedToWorld()
+                || !FaceTrackingDemand.shouldTrack(maid)) {
             return;
         }
 

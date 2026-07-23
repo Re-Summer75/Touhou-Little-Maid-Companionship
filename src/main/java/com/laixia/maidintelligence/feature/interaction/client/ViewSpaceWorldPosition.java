@@ -7,6 +7,13 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 final class ViewSpaceWorldPosition {
+    // Render-thread-only cache: every tracked maid in a frame shares the same
+    // camera rotation, so the inverse view matrix is built once per rotation
+    // change instead of twice per maid.
+    private static final Matrix4f CACHED_INVERSE_VIEW = new Matrix4f();
+    private static float cachedXRot = Float.NaN;
+    private static float cachedYRot = Float.NaN;
+
     private ViewSpaceWorldPosition() {
     }
 
@@ -40,9 +47,16 @@ final class ViewSpaceWorldPosition {
 
     private static Matrix4f inverseViewMatrix() {
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera();
-        return new Matrix4f()
-                .rotate(Axis.XP.rotationDegrees(camera.getXRot()))
-                .rotate(Axis.YP.rotationDegrees(camera.getYRot() + 180.0F))
-                .invert();
+        float xRot = camera.getXRot();
+        float yRot = camera.getYRot();
+        if (xRot != cachedXRot || yRot != cachedYRot) {
+            CACHED_INVERSE_VIEW.identity()
+                    .rotate(Axis.XP.rotationDegrees(xRot))
+                    .rotate(Axis.YP.rotationDegrees(yRot + 180.0F))
+                    .invert();
+            cachedXRot = xRot;
+            cachedYRot = yRot;
+        }
+        return CACHED_INVERSE_VIEW;
     }
 }

@@ -11,6 +11,7 @@ import org.joml.Matrix3f;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -20,6 +21,13 @@ import java.util.Optional;
 
 final class BedrockFaceGeometryAdapter {
     private static final double THIN_RATIO = 0.015D;
+    private static final ThreadLocal<PoseStack> SCRATCH_POSE =
+            ThreadLocal.withInitial(PoseStack::new);
+    private static final ThreadLocal<FaceWindowConsumer> FACE_WINDOW =
+            ThreadLocal.withInitial(FaceWindowConsumer::new);
+    // compile() only forwards normal values to the consumer, and the window
+    // consumer discards them, so the per-frame path shares one constant array.
+    private static final Vector3f[] UNUSED_NORMALS = createUnusedNormals();
 
     private BedrockFaceGeometryAdapter() {
     }
@@ -42,22 +50,23 @@ final class BedrockFaceGeometryAdapter {
             if (!isUsable(handle.ownerHierarchy(), semanticSurface)) {
                 continue;
             }
-            FaceGeometry.Candidate candidate = captureCandidate(
-                    handle,
-                    basePose,
-                    frame
-            );
-            if (candidate == null) {
+            List<Vec3> facePositions = captureFacePositions(handle, basePose);
+            if (facePositions == null) {
                 continue;
             }
             MaidFacePlane plane = MaidFacePlane
-                    .fromVertices(candidate.vertices(), frame)
+                    .fromVertices(facePositions, frame)
                     .orElse(null);
             if (plane != null) {
                 return Result.success(
                         plane,
                         ranked.confidence(),
-                        candidate.key()
+                        new FaceGeometry.Key(
+                                FaceGeometry.Source.BEDROCK,
+                                handle.path(),
+                                handle.cubeIndex(),
+                                handle.faceOrdinal()
+                        )
                 );
             }
         }
@@ -197,24 +206,31 @@ final class BedrockFaceGeometryAdapter {
         }
     }
 
-    private static FaceGeometry.Candidate captureCandidate(
+    /**
+     * Per-frame path: recompiles the cached cube but keeps only the four
+     * positions of the planned face window, with no per-vertex boxing and no
+     * sibling-face candidates. Returns {@code null} when the cube no longer
+     * emits that window.
+     */
+    private static List<Vec3> captureFacePositions(
             Handle handle,
-            PoseStack basePose,
-            FaceGeometry.Frame frame
+            PoseStack basePose
     ) {
-        PoseStack ownerPose = poseFor(basePose, handle.ownerHierarchy());
-        List<FaceGeometry.Candidate> candidates = captureCube(
-                handle.cube(),
-                handle.path(),
-                handle.role(),
-                handle.cubeIndex(),
-                ownerPose,
-                frame
+        PoseStack ownerPose = scratchPoseFor(basePose, handle.ownerHierarchy());
+        FaceWindowConsumer consumer = FACE_WINDOW.get();
+        consumer.begin(handle.faceOrdinal() * 4);
+        handle.cube().compile(
+                ownerPose.last(),
+                UNUSED_NORMALS,
+                consumer,
+                0,
+                0,
+                1.0F,
+                1.0F,
+                1.0F,
+                1.0F
         );
-        return candidates.stream()
-                .filter(candidate -> candidate.key().faceIndex() == handle.faceOrdinal())
-                .findFirst()
-                .orElse(null);
+        return consumer.finish();
     }
 
     private static List<FaceGeometry.Candidate> captureCube(
@@ -300,7 +316,7 @@ final class BedrockFaceGeometryAdapter {
             PoseStack basePose,
             List<BedrockPart> anchorHierarchy
     ) {
-        PoseStack pose = poseFor(basePose, anchorHierarchy);
+        PoseStack pose = scratchPoseFor(basePose, anchorHierarchy);
         return new FaceGeometry.Frame(
                 transformedPosition(pose, 0.0F, 0.0F, 0.0F),
                 transformedDirection(pose, 1.0F, 0.0F, 0.0F),
@@ -315,6 +331,23 @@ final class BedrockFaceGeometryAdapter {
     ) {
         PoseStack pose = copyPose(basePose);
         hierarchy.forEach(part -> part.translateAndRotateAndScale(pose));
+        return pose;
+    }
+
+    /**
+     * Reuses one never-pushed PoseStack per thread. Callers must extract what
+     * they need before the next scratch call on the same thread.
+     */
+    private static PoseStack scratchPoseFor(
+            PoseStack basePose,
+            List<BedrockPart> hierarchy
+    ) {
+        PoseStack pose = SCRATCH_POSE.get();
+        pose.last().pose().set(basePose.last().pose());
+        pose.last().normal().set(basePose.last().normal());
+        for (BedrockPart part : hierarchy) {
+            part.translateAndRotateAndScale(pose);
+        }
         return pose;
     }
 
@@ -392,6 +425,12 @@ final class BedrockFaceGeometryAdapter {
         };
     }
 
+    private static Vector3f[] createUnusedNormals() {
+        Vector3f[] normals = new Vector3f[BedrockCube.NUM_CUBE_FACES];
+        Arrays.fill(normals, new Vector3f(0.0F, 0.0F, 1.0F));
+        return normals;
+    }
+
     private static Vec3 averageNormal(List<CapturedVertex> vertices) {
         Vec3 normal = Vec3.ZERO;
         for (CapturedVertex vertex : vertices) {
@@ -456,6 +495,114 @@ final class BedrockFaceGeometryAdapter {
     }
 
     private record CapturedVertex(Vec3 position, Vec3 normal) {
+    }
+
+    /**
+     * Reusable consumer that keeps only the positions of one four-vertex face
+     * window out of a cube compilation, dropping everything else unboxed.
+     */
+    private static final class FaceWindowConsumer implements VertexConsumer {
+        private final double[] positions = new double[12];
+        private int windowStart;
+        private int vertexIndex;
+        private double pendingX;
+        private double pendingY;
+        private double pendingZ;
+
+        private void begin(int windowStart) {
+            this.windowStart = windowStart;
+            this.vertexIndex = 0;
+        }
+
+        private List<Vec3> finish() {
+            if (vertexIndex < windowStart + 4) {
+                return null;
+            }
+            return List.of(
+                    new Vec3(positions[0], positions[1], positions[2]),
+                    new Vec3(positions[3], positions[4], positions[5]),
+                    new Vec3(positions[6], positions[7], positions[8]),
+                    new Vec3(positions[9], positions[10], positions[11])
+            );
+        }
+
+        private void store(double x, double y, double z) {
+            int offset = vertexIndex - windowStart;
+            if (offset >= 0 && offset < 4) {
+                positions[offset * 3] = x;
+                positions[offset * 3 + 1] = y;
+                positions[offset * 3 + 2] = z;
+            }
+            vertexIndex++;
+        }
+
+        @Override
+        public VertexConsumer vertex(double x, double y, double z) {
+            pendingX = x;
+            pendingY = y;
+            pendingZ = z;
+            return this;
+        }
+
+        @Override
+        public VertexConsumer color(int red, int green, int blue, int alpha) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer uv(float u, float v) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer overlayCoords(int u, int v) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer uv2(int u, int v) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer normal(float x, float y, float z) {
+            return this;
+        }
+
+        @Override
+        public void endVertex() {
+            store(pendingX, pendingY, pendingZ);
+        }
+
+        // Matches the bulk overload BedrockCube.compile actually calls, so the
+        // seven-call interface default never runs.
+        @Override
+        public void vertex(
+                float x,
+                float y,
+                float z,
+                float red,
+                float green,
+                float blue,
+                float alpha,
+                float u,
+                float v,
+                int overlay,
+                int light,
+                float normalX,
+                float normalY,
+                float normalZ
+        ) {
+            store(x, y, z);
+        }
+
+        @Override
+        public void defaultColor(int red, int green, int blue, int alpha) {
+        }
+
+        @Override
+        public void unsetDefaultColor() {
+        }
     }
 
     private static final class CapturingVertexConsumer implements VertexConsumer {

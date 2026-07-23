@@ -14,11 +14,13 @@ import org.joml.Vector3f;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Deque;
 import java.util.List;
 
 public final class YsmFaceTrackingCapture {
     private static final int MAX_VERTICES_PER_STREAM = 200_000;
+    private static final int INITIAL_STREAM_CAPACITY = 64;
     private static final ThreadLocal<Deque<CaptureSession>> SESSIONS =
             ThreadLocal.withInitial(ArrayDeque::new);
 
@@ -34,7 +36,9 @@ public final class YsmFaceTrackingCapture {
             MultiBufferSource buffers,
             int packedLight
     ) {
-        if (!(entity instanceof EntityMaid maid) || !maid.isAddedToWorld()) {
+        if (!(entity instanceof EntityMaid maid)
+                || !maid.isAddedToWorld()
+                || !FaceTrackingDemand.shouldTrack(maid)) {
             renderer.geoRender(
                     entity,
                     entityYaw,
@@ -185,42 +189,102 @@ public final class YsmFaceTrackingCapture {
         double forwardLimit = entityHeight * 0.55D;
         double minimumUp = -entityHeight * 0.18D;
         double maximumUp = entityHeight * 0.65D;
+        Vec3 origin = frame.origin();
+        Vec3 right = frame.right();
+        Vec3 up = frame.up();
+        Vec3 forward = frame.forward();
 
         List<FaceGeometry.Candidate> candidates = new ArrayList<>();
-        for (int streamIndex = 0; streamIndex < session.streams().size(); streamIndex++) {
-            CapturedStream stream = session.streams().get(streamIndex);
-            List<CapturedVertex> vertices = stream.vertices();
-            int quadCount = vertices.size() / 4;
+        List<CapturedStream> streams = session.streams();
+        for (int streamIndex = 0; streamIndex < streams.size(); streamIndex++) {
+            CapturedStream stream = streams.get(streamIndex);
+            double[] positions = stream.positions();
+            float[] normals = stream.normals();
+            int quadCount = stream.vertexCount() / 4;
             for (int quadIndex = 0; quadIndex < quadCount; quadIndex++) {
-                List<CapturedVertex> captured = vertices.subList(
-                        quadIndex * 4,
-                        quadIndex * 4 + 4
+                int base = quadIndex * 12;
+                // The head-region test only needs the quad centroid, which is
+                // permutation-independent, so it can run on the raw capture
+                // buffer before any quad ordering or Vec3 boxing happens.
+                double centerX = (positions[base]
+                        + positions[base + 3]
+                        + positions[base + 6]
+                        + positions[base + 9]) * 0.25D;
+                double centerY = (positions[base + 1]
+                        + positions[base + 4]
+                        + positions[base + 7]
+                        + positions[base + 10]) * 0.25D;
+                double centerZ = (positions[base + 2]
+                        + positions[base + 5]
+                        + positions[base + 8]
+                        + positions[base + 11]) * 0.25D;
+                double offsetX = centerX - origin.x;
+                double offsetY = centerY - origin.y;
+                double offsetZ = centerZ - origin.z;
+                double horizontal = Math.abs(
+                        offsetX * right.x + offsetY * right.y + offsetZ * right.z
                 );
-                List<Vec3> positions = captured.stream()
-                        .map(CapturedVertex::position)
-                        .toList();
-                FaceGeometry.OrderedQuad quad = FaceGeometry
-                        .orderQuad(positions, frame)
-                        .orElse(null);
-                if (quad == null) {
-                    continue;
-                }
-
-                Vec3 offset = quad.center().subtract(frame.origin());
-                double horizontal = Math.abs(offset.dot(frame.right()));
-                double vertical = offset.dot(frame.up());
-                double forward = Math.abs(offset.dot(frame.forward()));
+                double vertical = offsetX * up.x + offsetY * up.y + offsetZ * up.z;
+                double forwardDistance = Math.abs(
+                        offsetX * forward.x + offsetY * forward.y + offsetZ * forward.z
+                );
                 if (horizontal > horizontalLimit
-                        || forward > forwardLimit
+                        || forwardDistance > forwardLimit
                         || vertical < minimumUp
                         || vertical > maximumUp) {
                     continue;
                 }
 
-                Vec3 outward = averageNormal(captured);
-                if (outward.lengthSqr() <= 1.0E-10D) {
+                double normalSumX = (double) normals[base]
+                        + normals[base + 3]
+                        + normals[base + 6]
+                        + normals[base + 9];
+                double normalSumY = (double) normals[base + 1]
+                        + normals[base + 4]
+                        + normals[base + 7]
+                        + normals[base + 10];
+                double normalSumZ = (double) normals[base + 2]
+                        + normals[base + 5]
+                        + normals[base + 8]
+                        + normals[base + 11];
+                double normalLengthSqr = normalSumX * normalSumX
+                        + normalSumY * normalSumY
+                        + normalSumZ * normalSumZ;
+                if (normalLengthSqr <= 1.0E-10D) {
                     continue;
                 }
+
+                List<Vec3> quadPositions = List.of(
+                        new Vec3(
+                                positions[base],
+                                positions[base + 1],
+                                positions[base + 2]
+                        ),
+                        new Vec3(
+                                positions[base + 3],
+                                positions[base + 4],
+                                positions[base + 5]
+                        ),
+                        new Vec3(
+                                positions[base + 6],
+                                positions[base + 7],
+                                positions[base + 8]
+                        ),
+                        new Vec3(
+                                positions[base + 9],
+                                positions[base + 10],
+                                positions[base + 11]
+                        )
+                );
+                FaceGeometry.OrderedQuad quad = FaceGeometry
+                        .orderQuad(quadPositions, frame)
+                        .orElse(null);
+                if (quad == null) {
+                    continue;
+                }
+
+                Vec3 outward = new Vec3(normalSumX, normalSumY, normalSumZ)
+                        .normalize();
                 double estimatedDepth = Math.max(
                         Math.min(quad.width(), quad.height()),
                         1.0E-4D
@@ -236,13 +300,14 @@ public final class YsmFaceTrackingCapture {
                                 0
                         ),
                         FaceBoneClassifier.Role.HEAD,
-                        positions,
+                        quadPositions,
                         outward,
                         groupCenter,
                         quad.width(),
                         quad.height(),
                         estimatedDepth,
-                        false
+                        false,
+                        quad
                 ));
             }
         }
@@ -261,16 +326,6 @@ public final class YsmFaceTrackingCapture {
                 FaceGeometry.Source.YSM,
                 reason
         );
-    }
-
-    private static Vec3 averageNormal(List<CapturedVertex> vertices) {
-        Vec3 normal = Vec3.ZERO;
-        for (CapturedVertex vertex : vertices) {
-            normal = normal.add(vertex.normal());
-        }
-        return normal.lengthSqr() <= 1.0E-10D
-                ? Vec3.ZERO
-                : normal.normalize();
     }
 
     private static PoseStack copyPose(PoseStack source) {
@@ -321,8 +376,8 @@ public final class YsmFaceTrackingCapture {
             return streams;
         }
 
-        private CapturedStream createStream(RenderType renderType) {
-            CapturedStream stream = new CapturedStream(renderType);
+        private CapturedStream createStream() {
+            CapturedStream stream = new CapturedStream();
             streams.add(stream);
             return stream;
         }
@@ -336,9 +391,11 @@ public final class YsmFaceTrackingCapture {
         }
 
         private int totalVertexCount() {
-            return streams.stream()
-                    .mapToInt(stream -> stream.vertices().size())
-                    .sum();
+            int total = 0;
+            for (CapturedStream stream : streams) {
+                total += stream.vertexCount();
+            }
+            return total;
         }
 
         private boolean isCapturing() {
@@ -350,16 +407,55 @@ public final class YsmFaceTrackingCapture {
         }
     }
 
-    private record CapturedStream(
-            RenderType renderType,
-            List<CapturedVertex> vertices
-    ) {
-        private CapturedStream(RenderType renderType) {
-            this(renderType, new ArrayList<>());
-        }
-    }
+    /**
+     * Flat primitive capture buffer: positions keep the emitted double
+     * precision, normals are always emitted as floats. One entry per vertex.
+     */
+    private static final class CapturedStream {
+        private double[] positions = new double[INITIAL_STREAM_CAPACITY * 3];
+        private float[] normals = new float[INITIAL_STREAM_CAPACITY * 3];
+        private int vertexCount;
 
-    private record CapturedVertex(Vec3 position, Vec3 normal) {
+        private void add(
+                double x,
+                double y,
+                double z,
+                float normalX,
+                float normalY,
+                float normalZ
+        ) {
+            if (vertexCount >= MAX_VERTICES_PER_STREAM) {
+                return;
+            }
+            int base = vertexCount * 3;
+            if (base == positions.length) {
+                int grownVertices = Math.min(
+                        vertexCount * 2,
+                        MAX_VERTICES_PER_STREAM
+                );
+                positions = Arrays.copyOf(positions, grownVertices * 3);
+                normals = Arrays.copyOf(normals, grownVertices * 3);
+            }
+            positions[base] = x;
+            positions[base + 1] = y;
+            positions[base + 2] = z;
+            normals[base] = normalX;
+            normals[base + 1] = normalY;
+            normals[base + 2] = normalZ;
+            vertexCount++;
+        }
+
+        private double[] positions() {
+            return positions;
+        }
+
+        private float[] normals() {
+            return normals;
+        }
+
+        private int vertexCount() {
+            return vertexCount;
+        }
     }
 
     private static final class CapturingMultiBufferSource
@@ -381,7 +477,7 @@ public final class YsmFaceTrackingCapture {
             return new CapturingVertexConsumer(
                     target,
                     session,
-                    session.createStream(renderType)
+                    session.createStream()
             );
         }
     }
@@ -390,8 +486,13 @@ public final class YsmFaceTrackingCapture {
         private final VertexConsumer delegate;
         private final CaptureSession session;
         private final CapturedStream stream;
-        private Vec3 pendingPosition;
-        private Vec3 pendingNormal = Vec3.ZERO;
+        private boolean hasPendingVertex;
+        private double pendingX;
+        private double pendingY;
+        private double pendingZ;
+        private float pendingNormalX;
+        private float pendingNormalY;
+        private float pendingNormalZ;
 
         private CapturingVertexConsumer(
                 VertexConsumer delegate,
@@ -406,8 +507,13 @@ public final class YsmFaceTrackingCapture {
         @Override
         public VertexConsumer vertex(double x, double y, double z) {
             delegate.vertex(x, y, z);
-            pendingPosition = new Vec3(x, y, z);
-            pendingNormal = Vec3.ZERO;
+            pendingX = x;
+            pendingY = y;
+            pendingZ = z;
+            pendingNormalX = 0.0F;
+            pendingNormalY = 0.0F;
+            pendingNormalZ = 0.0F;
+            hasPendingVertex = true;
             return this;
         }
 
@@ -438,27 +544,67 @@ public final class YsmFaceTrackingCapture {
         @Override
         public VertexConsumer normal(float x, float y, float z) {
             delegate.normal(x, y, z);
-            pendingNormal = new Vec3(x, y, z);
+            pendingNormalX = x;
+            pendingNormalY = y;
+            pendingNormalZ = z;
             return this;
         }
 
         @Override
         public void endVertex() {
             delegate.endVertex();
-            if (pendingPosition != null
-                    && streamCaptureEnabled()
-                    && stream.vertices().size() < MAX_VERTICES_PER_STREAM) {
-                stream.vertices().add(new CapturedVertex(
-                        pendingPosition,
-                        pendingNormal
-                ));
+            if (hasPendingVertex && session.isCapturing()) {
+                stream.add(
+                        pendingX,
+                        pendingY,
+                        pendingZ,
+                        pendingNormalX,
+                        pendingNormalY,
+                        pendingNormalZ
+                );
             }
-            pendingPosition = null;
-            pendingNormal = Vec3.ZERO;
+            hasPendingVertex = false;
         }
 
-        private boolean streamCaptureEnabled() {
-            return session.isCapturing();
+        // Bulk-vertex fast path: forwards one call instead of the seven the
+        // interface default would fan out, and captures without going through
+        // the pending-field state machine.
+        @Override
+        public void vertex(
+                float x,
+                float y,
+                float z,
+                float red,
+                float green,
+                float blue,
+                float alpha,
+                float u,
+                float v,
+                int overlay,
+                int light,
+                float normalX,
+                float normalY,
+                float normalZ
+        ) {
+            delegate.vertex(
+                    x,
+                    y,
+                    z,
+                    red,
+                    green,
+                    blue,
+                    alpha,
+                    u,
+                    v,
+                    overlay,
+                    light,
+                    normalX,
+                    normalY,
+                    normalZ
+            );
+            if (session.isCapturing()) {
+                stream.add(x, y, z, normalX, normalY, normalZ);
+            }
         }
 
         @Override

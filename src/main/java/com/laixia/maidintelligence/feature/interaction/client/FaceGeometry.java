@@ -159,6 +159,12 @@ final class FaceGeometry {
         }
     }
 
+    /**
+     * {@code orderedQuad} may carry the result of
+     * {@code orderQuad(vertices, frame)} computed with the same frame later
+     * passed to selection, letting hot paths skip the second ordering pass;
+     * {@code null} means selection orders the quad on demand.
+     */
     record Candidate(
             Key key,
             FaceBoneClassifier.Role role,
@@ -168,10 +174,36 @@ final class FaceGeometry {
             double groupWidth,
             double groupHeight,
             double groupDepth,
-            boolean thin
+            boolean thin,
+            OrderedQuad orderedQuad
     ) {
         Candidate {
             vertices = List.copyOf(vertices);
+        }
+
+        Candidate(
+                Key key,
+                FaceBoneClassifier.Role role,
+                List<Vec3> vertices,
+                Vec3 outward,
+                Vec3 groupCenter,
+                double groupWidth,
+                double groupHeight,
+                double groupDepth,
+                boolean thin
+        ) {
+            this(
+                    key,
+                    role,
+                    vertices,
+                    outward,
+                    groupCenter,
+                    groupWidth,
+                    groupHeight,
+                    groupDepth,
+                    thin,
+                    null
+            );
         }
     }
 

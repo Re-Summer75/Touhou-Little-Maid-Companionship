@@ -113,6 +113,20 @@ public final class MaidEatingParticleEffect {
         PENDING_TRACKED_FACE_EFFECTS.clear();
     }
 
+    static boolean hasPendingTrackedFaceEffect(EntityMaid maid) {
+        if (PENDING_TRACKED_FACE_EFFECTS.isEmpty()) {
+            return false;
+        }
+        int maidEntityId = maid.getId();
+        for (PendingTrackedFaceEffect pending : PENDING_TRACKED_FACE_EFFECTS) {
+            if (pending.maidEntityId == maidEntityId
+                    && pending.level == maid.level()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean trySpawnFromTrackedFace(
             ClientLevel level,
             int maidEntityId,
