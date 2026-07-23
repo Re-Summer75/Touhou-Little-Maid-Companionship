@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.core.feature;
 import com.laixia.maidintelligence.compat.tlm.TlmFeatureModule;
 import com.laixia.maidintelligence.feature.interaction.MaidInteractionFeature;
 import com.laixia.maidintelligence.feature.level.LevelFeature;
+import com.laixia.maidintelligence.feature.physics.MaidPhysicsFeature;
 import com.laixia.maidintelligence.feature.status.StatusFeedbackFeature;
 
 import java.util.List;
@@ -14,6 +15,7 @@ public final class FeatureCatalog {
     private static final List<FeatureModule> FEATURES = List.of(
             LevelFeature.INSTANCE,
             MaidInteractionFeature.INSTANCE,
+            MaidPhysicsFeature.INSTANCE,
             StatusFeedbackFeature.INSTANCE
     );
     private static final List<TlmFeatureModule> TLM_FEATURES = FEATURES.stream()
