@@ -66,6 +66,7 @@ final class BoneClassifierVerification {
         require(
                 PhysicsBoneClassifier.isFringeHint("MBangs")
                         && PhysicsBoneClassifier.isFringeHint("FFrontHair")
+                        && PhysicsBoneClassifier.isFringeHint("HairFront")
                         && PhysicsBoneClassifier.isFringeHint("刘海"),
                 "Fringe aliases were not recognised"
         );

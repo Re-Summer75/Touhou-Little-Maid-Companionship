@@ -55,7 +55,7 @@ final class SolverEquivalenceVerification {
                 new ReferenceSpringBoneSolver(referenceModel, referencePlan);
         PhysicsSolverLayout layout =
                 PhysicsSolverLayout.build(optimizedModel, optimizedPlan);
-        SpringBoneSolver optimized = new SpringBoneSolver(layout);
+        SpringBoneSolver optimized = new SpringBoneSolver(layout, false);
         require(
                 layout.drivenBoneCount() > 0,
                 label + " golden fixture contains no driven bones"

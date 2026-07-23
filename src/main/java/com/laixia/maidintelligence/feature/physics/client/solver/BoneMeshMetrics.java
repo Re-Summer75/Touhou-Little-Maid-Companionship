@@ -3,11 +3,16 @@ package com.laixia.maidintelligence.feature.physics.client.solver;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoMesh;
 import org.joml.Vector3f;
 
+import java.util.ArrayList;
+import java.util.List;
+
 record BoneMeshMetrics(
         Vector3f min,
         Vector3f max,
         Vector3f centroid,
+        MeshSupportBox[] boxes,
         Vector3f[] corners,
+        MeshPrincipalAxis principalAxis,
         boolean empty
 ) {
     private static final float EPSILON = 1.0E-6F;
@@ -24,6 +29,8 @@ record BoneMeshMetrics(
                 Float.NEGATIVE_INFINITY
         );
         Vector3f centroid = new Vector3f();
+        List<Vector3f> points = new ArrayList<>();
+        List<MeshSupportBox> boxes = new ArrayList<>();
         float totalWeight = 0.0F;
         for (int cube = 0; cube < mesh.getCubeCount(); cube++) {
             Vector3f position = mesh.position(cube);
@@ -42,14 +49,17 @@ record BoneMeshMetrics(
                             .mul(weight)
             );
             totalWeight += weight;
-            includeCorners(position, dx, dy, dz, min, max);
+            boxes.add(new MeshSupportBox(position, dx, dy, dz));
+            includeCorners(position, dx, dy, dz, min, max, points);
         }
         if (totalWeight <= 0.0F) {
             return new BoneMeshMetrics(
                     min,
                     max,
                     centroid,
+                    new MeshSupportBox[0],
                     new Vector3f[0],
+                    MeshPrincipalAxis.measure(List.of(), centroid),
                     true
             );
         }
@@ -58,7 +68,9 @@ record BoneMeshMetrics(
                 min,
                 max,
                 centroid,
-                boundsCorners(min, max),
+                boxes.toArray(MeshSupportBox[]::new),
+                points.toArray(Vector3f[]::new),
+                MeshPrincipalAxis.measure(points, centroid),
                 false
         );
     }
@@ -69,7 +81,8 @@ record BoneMeshMetrics(
             Vector3f dy,
             Vector3f dz,
             Vector3f min,
-            Vector3f max
+            Vector3f max,
+            List<Vector3f> points
     ) {
         for (int corner = 0; corner < 8; corner++) {
             Vector3f point = new Vector3f(position);
@@ -84,19 +97,8 @@ record BoneMeshMetrics(
             }
             min.min(point);
             max.max(point);
+            points.add(point);
         }
-    }
-
-    private static Vector3f[] boundsCorners(Vector3f min, Vector3f max) {
-        Vector3f[] result = new Vector3f[8];
-        for (int corner = 0; corner < result.length; corner++) {
-            result[corner] = new Vector3f(
-                    (corner & 1) == 0 ? min.x : max.x,
-                    (corner & 2) == 0 ? min.y : max.y,
-                    (corner & 4) == 0 ? min.z : max.z
-            );
-        }
-        return result;
     }
 
     float diagonal() {
@@ -104,10 +106,33 @@ record BoneMeshMetrics(
     }
 
     float distanceTo(Vector3f point) {
-        return point.distance(closestPoint(point));
+        float minimumSquared = Float.POSITIVE_INFINITY;
+        for (MeshSupportBox box : boxes) {
+            minimumSquared = Math.min(
+                    minimumSquared,
+                    box.distanceSquared(point)
+            );
+        }
+        return minimumSquared == Float.POSITIVE_INFINITY
+                ? point.distance(closestPointInBounds(point))
+                : (float) Math.sqrt(minimumSquared);
     }
 
     Vector3f closestPoint(Vector3f point) {
+        Vector3f closest = null;
+        float minimumSquared = Float.POSITIVE_INFINITY;
+        for (MeshSupportBox box : boxes) {
+            Vector3f candidate = box.closestPoint(point);
+            float distanceSquared = candidate.distanceSquared(point);
+            if (distanceSquared < minimumSquared) {
+                minimumSquared = distanceSquared;
+                closest = candidate;
+            }
+        }
+        return closest == null ? closestPointInBounds(point) : closest;
+    }
+
+    private Vector3f closestPointInBounds(Vector3f point) {
         return new Vector3f(
                 clamp(point.x, min.x, max.x),
                 clamp(point.y, min.y, max.y),
@@ -123,12 +148,85 @@ record BoneMeshMetrics(
         );
     }
 
+    Vector3f bottomCenter() {
+        return new Vector3f(
+                (min.x + max.x) * 0.5F,
+                min.y,
+                (min.z + max.z) * 0.5F
+        );
+    }
+
     float maximumDistanceTo(Vector3f point) {
         float maximum = 0.0F;
         for (Vector3f corner : corners) {
             maximum = Math.max(maximum, point.distance(corner));
         }
         return maximum;
+    }
+
+    MeshAttachmentAxis attachmentAxis(AttachmentSupport support) {
+        MeshAttachmentAxis principal = orient(
+                principalAxis.endA(),
+                principalAxis.endB(),
+                principalAxis.confidence(),
+                principalAxis.length(),
+                support
+        );
+        Vector3f top = topCenter();
+        Vector3f bottom = bottomCenter();
+        float verticalLength = Math.max(0.0F, max.y - min.y);
+        float verticalConfidence = verticalLength
+                / Math.max(EPSILON, diagonal());
+        if (support.gravity() != AttachmentSupport.GravityPreference.NONE) {
+            verticalConfidence = Math.max(0.55F, verticalConfidence);
+        }
+        MeshAttachmentAxis vertical = orient(
+                top,
+                bottom,
+                Math.min(1.0F, verticalConfidence),
+                verticalLength,
+                support
+        );
+        if (principal.length() < EPSILON) {
+            return vertical;
+        }
+        if (vertical.length() < EPSILON) {
+            return principal;
+        }
+        return axisScore(vertical, support) < axisScore(principal, support)
+                ? vertical
+                : principal;
+    }
+
+    private MeshAttachmentAxis orient(
+            Vector3f first,
+            Vector3f second,
+            float confidence,
+            float length,
+            AttachmentSupport support
+    ) {
+        float firstScore = support.score(first, centroid);
+        float secondScore = support.score(second, centroid);
+        boolean firstIsProximal = firstScore <= secondScore;
+        float supportConfidence = Math.min(
+                1.0F,
+                Math.abs(firstScore - secondScore) / 0.45F
+        );
+        return new MeshAttachmentAxis(
+                new Vector3f(firstIsProximal ? first : second),
+                new Vector3f(firstIsProximal ? second : first),
+                confidence,
+                length,
+                supportConfidence
+        );
+    }
+
+    private float axisScore(
+            MeshAttachmentAxis axis,
+            AttachmentSupport support
+    ) {
+        return support.score(axis.proximal(), centroid)
+                + (1.0F - axis.confidence()) * 0.30F;
     }
 
     private static float clamp(float value, float min, float max) {

@@ -258,11 +258,14 @@ final class ReferenceSpringBoneSolver {
         if (cached != null) {
             return cached;
         }
-        BoneKinematics.Metrics kinematics = BoneKinematics.measure(
-                bone,
-                parent,
-                decision.type()
-        );
+        BoneKinematics.Metrics kinematics = plan.kinematics(bone);
+        if (kinematics == null) {
+            kinematics = BoneKinematics.measure(
+                    bone,
+                    parent,
+                    decision.type()
+            );
+        }
         BoneData created = new BoneData(kinematics, decision.profile());
         bones.put(bone, created);
         return created;

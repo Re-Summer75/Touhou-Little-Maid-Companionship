@@ -12,7 +12,6 @@ import org.joml.Vector3f;
 public final class BoneKinematics {
     private static final float PIXELS_PER_BLOCK = 16.0F;
     private static final float MIN_LEVER_PIXELS = 1.0F;
-    private static final float MIN_PIVOT_TOLERANCE = 4.0F / PIXELS_PER_BLOCK;
     private static final float EPSILON = 1.0E-6F;
 
     private BoneKinematics() {
@@ -23,6 +22,19 @@ public final class BoneKinematics {
             AnimatedGeoBone parent,
             PhysicsBoneSelectionPlan.PartType type
     ) {
+        AnimatedGeoBone solidAncestor = parent != null
+                && parent.geoBone().cubes().getCubeCount() > 0
+                ? parent
+                : null;
+        return measure(bone, parent, solidAncestor, type);
+    }
+
+    public static Metrics measure(
+            AnimatedGeoBone bone,
+            AnimatedGeoBone parent,
+            AnimatedGeoBone nearestSolidAncestor,
+            PhysicsBoneSelectionPlan.PartType type
+    ) {
         Vector3f authoredPivot = pivotOf(bone);
         BoneMeshMetrics mesh = BoneMeshMetrics.measure(bone.geoBone().cubes());
         if (mesh.empty()) {
@@ -31,53 +43,28 @@ public final class BoneKinematics {
                     MIN_LEVER_PIXELS,
                     0.8F,
                     authoredPivot,
-                    new Vector3f(authoredPivot)
+                    new Vector3f(authoredPivot),
+                    0.0F
             );
         }
-
-        float tolerance = Math.max(
-                MIN_PIVOT_TOLERANCE,
-                mesh.diagonal() * 0.50F
+        BoneAttachmentFrame frame = BoneAttachmentFrame.resolve(
+                bone,
+                parent,
+                nearestSolidAncestor,
+                type,
+                mesh
         );
-        boolean detached = mesh.distanceTo(authoredPivot) > tolerance;
-        Vector3f effectivePivot;
-        float safeAngle;
-        if (type == PhysicsBoneSelectionPlan.PartType.HEAD_SHELL) {
-            // A skullcap should rock around itself, not orbit an edge pivot.
-            effectivePivot = new Vector3f(mesh.centroid());
-            safeAngle = 0.35F;
-        } else if (detached) {
-            if (hangsVertically(type)) {
-                effectivePivot = mesh.topCenter();
-            } else {
-                Vector3f attachmentHint = parent == null
-                        ? mesh.centroid()
-                        : pivotOf(parent);
-                effectivePivot = mesh.closestPoint(attachmentHint);
-            }
-            safeAngle = 0.30F;
-        } else {
-            effectivePivot = new Vector3f(authoredPivot);
-            safeAngle = 0.8F;
-        }
-
-        Vector3f axis = type == PhysicsBoneSelectionPlan.PartType.HEAD_SHELL
-                ? new Vector3f(0.0F, -1.0F, 0.0F)
-                : new Vector3f(mesh.centroid()).sub(effectivePivot);
-        if (axis.lengthSquared() < EPSILON) {
-            axis.set(0.0F, -1.0F, 0.0F);
-        } else {
-            axis.normalize();
-        }
         return new Metrics(
-                axis,
+                frame.axis(),
                 Math.max(
-                        mesh.maximumDistanceTo(effectivePivot) * PIXELS_PER_BLOCK,
+                        mesh.maximumDistanceTo(frame.effectivePivot())
+                                * PIXELS_PER_BLOCK,
                         MIN_LEVER_PIXELS
                 ),
-                safeAngle,
+                frame.safeAngle(),
                 authoredPivot,
-                effectivePivot
+                frame.effectivePivot(),
+                frame.supportConfidence()
         );
     }
 
@@ -89,14 +76,6 @@ public final class BoneKinematics {
         );
     }
 
-    private static boolean hangsVertically(
-            PhysicsBoneSelectionPlan.PartType type
-    ) {
-        return type == PhysicsBoneSelectionPlan.PartType.HAIR
-                || type == PhysicsBoneSelectionPlan.PartType.SKIRT
-                || type == PhysicsBoneSelectionPlan.PartType.CAPE;
-    }
-
     public static final class Metrics {
         private final Vector3f axis;
         private final float leverArm;
@@ -105,13 +84,15 @@ public final class BoneKinematics {
         private final Vector3f effectivePivot;
         private final Vector3f pivotDelta;
         private final boolean compensatesPivot;
+        private final float supportConfidence;
 
         public Metrics(
                 Vector3f axis,
                 float leverArm,
                 float safeAngle,
                 Vector3f authoredPivot,
-                Vector3f effectivePivot
+                Vector3f effectivePivot,
+                float supportConfidence
         ) {
             this.axis = new Vector3f(axis);
             this.leverArm = leverArm;
@@ -120,6 +101,7 @@ public final class BoneKinematics {
             this.effectivePivot = new Vector3f(effectivePivot);
             this.pivotDelta = new Vector3f(effectivePivot).sub(authoredPivot);
             this.compensatesPivot = pivotDelta.lengthSquared() > EPSILON;
+            this.supportConfidence = supportConfidence;
         }
 
         public Vector3f axis() {
@@ -150,6 +132,10 @@ public final class BoneKinematics {
             return compensatesPivot;
         }
 
+        public float supportConfidence() {
+            return supportConfidence;
+        }
+
         public Vector3f compensationOffset(Quaternionf physicalDelta) {
             return compensationOffsetInto(
                     physicalDelta,
@@ -171,6 +157,57 @@ public final class BoneKinematics {
                     pivotDelta.x - scratch.x,
                     pivotDelta.y - scratch.y,
                     pivotDelta.z - scratch.z
+            );
+        }
+
+        public Vector3f poseCompensationOffsetInto(
+                Quaternionf animationRotation,
+                Quaternionf physicalRotation,
+                Vector3f output,
+                Vector3f scratch
+        ) {
+            return poseCompensationOffsetInto(
+                    animationRotation,
+                    physicalRotation,
+                    1.0F,
+                    1.0F,
+                    1.0F,
+                    output,
+                    scratch
+            );
+        }
+
+        public Vector3f poseCompensationOffsetInto(
+                Quaternionf animationRotation,
+                Quaternionf physicalRotation,
+                float scaleX,
+                float scaleY,
+                float scaleZ,
+                Vector3f output,
+                Vector3f scratch
+        ) {
+            if (!compensatesPivot) {
+                return output.zero();
+            }
+            output.set(
+                    pivotDelta.x * scaleX,
+                    pivotDelta.y * scaleY,
+                    pivotDelta.z * scaleZ
+            );
+            animationRotation.transform(output);
+            float animationX = output.x;
+            float animationY = output.y;
+            float animationZ = output.z;
+            scratch.set(
+                    pivotDelta.x * scaleX,
+                    pivotDelta.y * scaleY,
+                    pivotDelta.z * scaleZ
+            );
+            physicalRotation.transform(scratch);
+            return output.set(
+                    animationX - scratch.x,
+                    animationY - scratch.y,
+                    animationZ - scratch.z
             );
         }
     }

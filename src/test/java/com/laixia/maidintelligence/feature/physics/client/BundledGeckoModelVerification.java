@@ -53,6 +53,9 @@ final class BundledGeckoModelVerification {
             PhysicsBoneGeometry.Analysis geometry =
                     PhysicsBoneGeometry.analyze(model);
             for (PhysicsBoneGeometry.Node node : geometry.nodes()) {
+                if (plan.isDriven(node.bone())) {
+                    verifyKinematics(plan, node, fileName);
+                }
                 if (node.hasGeometry() && isInFacialFeatureSubtree(node)) {
                     visibleFacialBones++;
                     require(
@@ -127,6 +130,35 @@ final class BundledGeckoModelVerification {
                 "Zhiban right twintail continuation was not discovered");
         requireHair(plan, model, "bone34",
                 "Zhiban anonymous ahoge was not discovered");
+        var ahoge = plan.kinematics(model.bones().get("bone34"));
+        require(
+                ahoge != null
+                        && ahoge.compensatesPivot()
+                        && ahoge.axis().y > 0.25F,
+                "Zhiban ahoge attachment frame was reversed"
+        );
+    }
+
+    private static void verifyKinematics(
+            PhysicsBoneSelectionPlan plan,
+            PhysicsBoneGeometry.Node node,
+            String fileName
+    ) {
+        var metrics = plan.kinematics(node.bone());
+        require(metrics != null, fileName + " lost kinematics for " + node.path());
+        var axis = metrics.axis();
+        var pivot = metrics.effectivePivot();
+        require(
+                Float.isFinite(axis.x) && Float.isFinite(axis.y)
+                        && Float.isFinite(axis.z)
+                        && Math.abs(axis.length() - 1.0F) < 1.0E-4F
+                        && Float.isFinite(pivot.x) && Float.isFinite(pivot.y)
+                        && Float.isFinite(pivot.z)
+                        && Float.isFinite(metrics.leverArm())
+                        && metrics.leverArm() > 0.0F,
+                fileName + " produced invalid attachment frame "
+                        + node.path()
+        );
     }
 
     private static boolean isInFacialFeatureSubtree(

@@ -77,7 +77,7 @@ public final class PhysicsBoneClassifier {
     );
     private static final Set<String> FRINGE_TOKENS = Set.of(
             "bang", "bangs", "fringe",
-            "fronthair", "frontbang", "frontbangs",
+            "fronthair", "hairfront", "frontbang", "frontbangs",
             "liuhai", "qianfa", "maegami"
     );
     private static final Set<String> EAR_TOKENS = Set.of(

@@ -94,6 +94,7 @@ final class MetadataPlanApplier {
                             chain.id(),
                             1.0D,
                             profile,
+                            chain.constraints(),
                             "explicit metadata: " + metadata.origin()
                     )
             );

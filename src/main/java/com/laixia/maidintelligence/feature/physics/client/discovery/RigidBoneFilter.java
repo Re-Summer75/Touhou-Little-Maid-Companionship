@@ -7,6 +7,7 @@ import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneGeometry;
 import org.joml.Vector3f;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 final class RigidBoneFilter {
@@ -22,11 +23,20 @@ final class RigidBoneFilter {
     private static final Set<String> FIXED_WEARABLE_TOKENS = Set.of(
             "helmet", "hat", "crown", "mask", "glasses", "goggle"
     );
+    private static final Set<String> FIXED_ATTACHMENT_TOKENS = Set.of(
+            "flower", "clip", "hairclip", "hairpin", "pin",
+            "ornament", "decoration", "accessory", "ball", "balls"
+    );
     private static final List<String> CJK_RIGID_MARKERS = List.of(
             "身体", "身體", "躯干", "軀幹", "头", "頭", "脸", "臉",
             "脖", "颈", "頸", "手", "臂", "胳膊", "腿", "脚", "腳",
             "眼", "眉", "嘴", "鼻", "牙", "武器", "枪", "槍",
             "剑", "劍", "背包"
+    );
+    private static final List<String> FIXED_ATTACHMENT_MARKERS = List.of(
+            "hairclip", "hairpin", "ornament", "decoration",
+            "发夹", "髮夾", "发饰", "髮飾", "髪飾り", "ヘアピン",
+            "머리핀", "머리장식"
     );
 
     private RigidBoneFilter() {
@@ -77,6 +87,9 @@ final class RigidBoneFilter {
                 && !semantic.isPhysical()) {
             return true;
         }
+        if (isRigidHeadAttachment(node, geometry, tokens)) {
+            return true;
+        }
         double modelVolume = Math.max(
                 geometry.modelBounds().volume(),
                 DiscoveryMath.EPSILON
@@ -86,6 +99,55 @@ final class RigidBoneFilter {
                 && !semantic.isPhysical()
                 && !(geometry.isInHeadSubtree(node)
                 && !bone.children().isEmpty());
+    }
+
+    private static boolean isRigidHeadAttachment(
+            PhysicsBoneGeometry.Node node,
+            PhysicsBoneGeometry.Analysis geometry,
+            List<String> tokens
+    ) {
+        String name = node.bone().getName();
+        String lowerName = name.toLowerCase(Locale.ROOT);
+        boolean namedAttachment = tokens.stream()
+                .anyMatch(FIXED_ATTACHMENT_TOKENS::contains)
+                || FIXED_ATTACHMENT_MARKERS.stream().anyMatch(
+                marker -> lowerName.contains(
+                        marker.toLowerCase(Locale.ROOT)
+                )
+        );
+        if (!namedAttachment
+                || !node.hasGeometry()
+                || !geometry.isInHeadSubtree(node)
+                || geometry.headBounds().isEmpty()) {
+            return false;
+        }
+        Vector3f size = node.size();
+        Vector3f headSize = geometry.headBounds().size();
+        double headWidth = Math.max(
+                Math.max(headSize.x, headSize.z),
+                DiscoveryMath.EPSILON
+        );
+        double maximum = Math.max(size.x, Math.max(size.y, size.z));
+        boolean compact = maximum <= headWidth * 0.60D
+                && node.bounds().volume()
+                <= geometry.headBounds().volume() * 0.20D;
+        boolean pairedBall = tokens.contains("ball")
+                || tokens.contains("balls");
+        if (node.bone().children().isEmpty()) {
+            return compact || pairedBall;
+        }
+        if (!compact) {
+            return false;
+        }
+        for (AnimatedGeoBone childBone : node.bone().children()) {
+            PhysicsBoneGeometry.Node child = geometry.node(childBone);
+            if (child != null && (PhysicsBoneClassifier
+                    .classifyVisibleGeometry(childBone.getName())
+                    .isPhysical() || child.maxChainDepth() > 0)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isAnonymousFacialOverlay(

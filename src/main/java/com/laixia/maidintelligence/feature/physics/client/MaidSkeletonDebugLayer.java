@@ -37,9 +37,11 @@ public final class MaidSkeletonDebugLayer<T extends Mob, R extends IGeoEntityRen
     private static final int[] IDLE_ORIGIN = {110, 110, 110};
     private static final int[] AUTO_ORIGIN = {255, 235, 60};
     private static final int[] METADATA_ORIGIN = {220, 90, 255};
+    private static final int[] UNCERTAIN_ORIGIN = {255, 80, 80};
     private static final int[] AXIS_X = {255, 60, 60};
     private static final int[] AXIS_Y = {60, 255, 60};
     private static final int[] AXIS_Z = {70, 130, 255};
+    private static final int[] PHYSICS_AXIS = {255, 145, 30};
     private static final int[] MESH = {40, 230, 230};
 
     public MaidSkeletonDebugLayer(R entityRenderer) {
@@ -97,20 +99,68 @@ public final class MaidSkeletonDebugLayer<T extends Mob, R extends IGeoEntityRen
 
         PhysicsBoneSelectionPlan.Decision decision = plan.decision(bone);
         boolean driven = MaidBonePhysics.isDriven(bone, plan);
+        var metrics = driven ? plan.kinematics(bone) : null;
         float size = driven ? DRIVEN_ORIGIN_SIZE : ORIGIN_SIZE;
         int[] originColor = !driven
                 ? IDLE_ORIGIN
+                : metrics != null && metrics.supportConfidence() < 0.20F
+                ? UNCERTAIN_ORIGIN
                 : decision.source() == PhysicsBoneSelectionPlan.Source.METADATA
                 ? METADATA_ORIGIN
                 : AUTO_ORIGIN;
-        line(lines, pose, -size, 0, 0, size, 0, 0, originColor);
-        line(lines, pose, 0, -size, 0, 0, size, 0, originColor);
-        line(lines, pose, 0, 0, -size, 0, 0, size, originColor);
+        float authoredX = bone.getPivotX() / 16.0F;
+        float authoredY = bone.getPivotY() / 16.0F;
+        float authoredZ = bone.getPivotZ() / 16.0F;
+        if (!driven) {
+            cross(
+                    lines,
+                    pose,
+                    authoredX,
+                    authoredY,
+                    authoredZ,
+                    size,
+                    originColor
+            );
+        }
 
         if (driven) {
-            line(lines, pose, 0, 0, 0, AXIS_LENGTH, 0, 0, AXIS_X);
-            line(lines, pose, 0, 0, 0, 0, AXIS_LENGTH, 0, AXIS_Y);
-            line(lines, pose, 0, 0, 0, 0, 0, AXIS_LENGTH, AXIS_Z);
+            Vector3f pivot = metrics == null
+                    ? new Vector3f(authoredX, authoredY, authoredZ)
+                    : metrics.effectivePivot();
+            if (metrics != null && metrics.compensatesPivot()) {
+                cross(
+                        lines,
+                        pose,
+                        authoredX,
+                        authoredY,
+                        authoredZ,
+                        ORIGIN_SIZE,
+                        IDLE_ORIGIN
+                );
+            }
+            cross(
+                    lines,
+                    pose,
+                    pivot.x,
+                    pivot.y,
+                    pivot.z,
+                    size,
+                    originColor
+            );
+            line(lines, pose, pivot.x, pivot.y, pivot.z,
+                    pivot.x + AXIS_LENGTH, pivot.y, pivot.z, AXIS_X);
+            line(lines, pose, pivot.x, pivot.y, pivot.z,
+                    pivot.x, pivot.y + AXIS_LENGTH, pivot.z, AXIS_Y);
+            line(lines, pose, pivot.x, pivot.y, pivot.z,
+                    pivot.x, pivot.y, pivot.z + AXIS_LENGTH, AXIS_Z);
+            if (metrics != null) {
+                Vector3f axis = metrics.axis();
+                line(lines, pose, pivot.x, pivot.y, pivot.z,
+                        pivot.x + axis.x * AXIS_LENGTH,
+                        pivot.y + axis.y * AXIS_LENGTH,
+                        pivot.z + axis.z * AXIS_LENGTH,
+                        PHYSICS_AXIS);
+            }
             renderMesh(lines, pose, bone);
         }
 
@@ -118,6 +168,20 @@ public final class MaidSkeletonDebugLayer<T extends Mob, R extends IGeoEntityRen
             renderBone(poseStack, lines, child, plan);
         }
         poseStack.popPose();
+    }
+
+    private void cross(
+            VertexConsumer lines,
+            Matrix4f pose,
+            float x,
+            float y,
+            float z,
+            float size,
+            int[] color
+    ) {
+        line(lines, pose, x - size, y, z, x + size, y, z, color);
+        line(lines, pose, x, y - size, z, x, y + size, z, color);
+        line(lines, pose, x, y, z - size, x, y, z + size, color);
     }
 
     private void renderMesh(VertexConsumer lines, Matrix4f pose, AnimatedGeoBone bone) {

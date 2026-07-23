@@ -75,22 +75,31 @@ final class PhysicsDebugSkeletonDump {
         String parentName = parent == null ? "root" : parent.getName();
         String kinematics = "";
         if (driven) {
-            BoneKinematics.Metrics metrics = BoneKinematics.measure(
-                    bone,
-                    parent,
-                    decision.type()
-            );
-            if (metrics.compensatesPivot()) {
-                kinematics = String.format(
-                        Locale.ROOT,
-                        " virtualPivot=(%.2f,%.2f,%.2f) safeAngle=%.1fdeg",
-                        metrics.effectivePivot().x * 16.0F,
-                        metrics.effectivePivot().y * 16.0F,
-                        metrics.effectivePivot().z * 16.0F,
-                        Math.toDegrees(metrics.safeAngle()
-                                * decision.profile().angleScale())
+            BoneKinematics.Metrics metrics = plan.kinematics(bone);
+            if (metrics == null) {
+                metrics = BoneKinematics.measure(
+                        bone,
+                        parent,
+                        decision.type()
                 );
             }
+            kinematics = String.format(
+                    Locale.ROOT,
+                    " effectivePivot=(%.2f,%.2f,%.2f)"
+                            + " physicsAxis=(%.3f,%.3f,%.3f)"
+                            + " pivotCorrected=%s supportConfidence=%.3f"
+                            + " safeAngle=%.1fdeg",
+                    metrics.effectivePivot().x * 16.0F,
+                    metrics.effectivePivot().y * 16.0F,
+                    metrics.effectivePivot().z * 16.0F,
+                    metrics.axis().x,
+                    metrics.axis().y,
+                    metrics.axis().z,
+                    metrics.compensatesPivot(),
+                    metrics.supportConfidence(),
+                    Math.toDegrees(metrics.safeAngle()
+                            * decision.profile().angleScale())
+            );
         }
         int cubes = bone.geoBone().cubes().getCubeCount();
         String detail = String.format(

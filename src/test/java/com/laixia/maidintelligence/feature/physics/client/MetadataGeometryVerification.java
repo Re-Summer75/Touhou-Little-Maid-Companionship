@@ -12,6 +12,7 @@ final class MetadataGeometryVerification {
 
     static void run() {
         verifiesMetadataParsing();
+        verifiesSchemaOneConstraintCompatibility();
         verifiesEmptyAnchorFallback();
     }
 
@@ -30,6 +31,16 @@ final class MetadataGeometryVerification {
                             "profile": {
                               "stiffness_scale": 0.75,
                               "angle_scale": 0.5
+                            },
+                            "constraints": {
+                              "simulation_space": "head_local",
+                              "rotation_inertia_scale": 0.2,
+                              "swing_limits": {
+                                "inward_degrees": 12.0
+                              },
+                              "backstop": true,
+                              "head_collision": false,
+                              "hit_radius_scale": 1.25
                             }
                           }]
                         }
@@ -57,6 +68,59 @@ final class MetadataGeometryVerification {
         require(
                 Math.abs(chain.profile().angleScale() - 0.5F) < 1.0E-5F,
                 "Metadata angle scale was not parsed"
+        );
+        require(
+                chain.constraints().simulationSpace()
+                        == PhysicsBoneSelectionPlan.SimulationSpace.HEAD_LOCAL,
+                "Metadata simulation space was not parsed"
+        );
+        require(
+                Math.abs(chain.constraints().rotationInertiaScale() - 0.2F)
+                        < 1.0E-5F,
+                "Metadata rotation inertia was not parsed"
+        );
+        require(
+                Math.abs(
+                        chain.constraints().swingLimits().inward()
+                                - Math.toRadians(12.0D)
+                ) < 1.0E-5D,
+                "Metadata asymmetric swing limit was not parsed"
+        );
+        require(
+                chain.constraints().backstop()
+                        && !chain.constraints().headCollision(),
+                "Metadata collision switches were not parsed"
+        );
+    }
+
+    private static void verifiesSchemaOneConstraintCompatibility() {
+        PhysicsMetadata legacy = PhysicsMetadata.parse(
+                JsonParser.parseString("""
+                        {
+                          "schema_version":1,
+                          "mode":"explicit",
+                          "chains":[{"id":"old","type":"HAIR","root":"Hair"}]
+                        }
+                        """).getAsJsonObject(),
+                "legacy verification"
+        );
+        PhysicsMetadata current = PhysicsMetadata.parse(
+                JsonParser.parseString("""
+                        {
+                          "schema_version":2,
+                          "mode":"explicit",
+                          "chains":[{"id":"new","type":"HAIR","root":"Hair"}]
+                        }
+                        """).getAsJsonObject(),
+                "current verification"
+        );
+        require(
+                !legacy.chains().get(0).constraints().enabled(),
+                "Schema 1 sidecar silently enabled new constraints"
+        );
+        require(
+                current.chains().get(0).constraints().enabled(),
+                "Schema 2 sidecar did not receive constraint defaults"
         );
     }
 

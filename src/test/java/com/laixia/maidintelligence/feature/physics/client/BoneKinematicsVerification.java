@@ -49,7 +49,8 @@ final class BoneKinematicsVerification {
         );
         require(
                 detached.axis().y < -0.5F,
-                "Remote hair pivot did not produce a downward hanging axis"
+                "Remote hair pivot did not produce a downward hanging axis: "
+                        + detached.axis()
         );
 
         Quaternionf delta = new Quaternionf().rotateZ(0.2F);
@@ -77,6 +78,64 @@ final class BoneKinematicsVerification {
         require(
                 actual.distance(expected) < 1.0E-5F,
                 "Virtual-pivot translation did not preserve the intended rotation"
+        );
+
+        Quaternionf animation = new Quaternionf().rotateX(0.45F);
+        Quaternionf physical = new Quaternionf(animation).rotateZ(0.30F);
+        Vector3f poseOffset = detached.poseCompensationOffsetInto(
+                animation,
+                physical,
+                new Vector3f(),
+                new Vector3f()
+        );
+        Vector3f poseActual = physical.transform(
+                new Vector3f(point).sub(detached.authoredPivot())
+        ).add(detached.authoredPivot()).add(poseOffset);
+        Vector3f animatedEffective = animation.transform(
+                detached.effectivePivot().sub(detached.authoredPivot())
+        ).add(detached.authoredPivot());
+        Vector3f poseExpected = physical.transform(
+                new Vector3f(point).sub(detached.effectivePivot())
+        ).add(animatedEffective);
+        requireVectorNear(
+                poseActual,
+                poseExpected,
+                1.0E-5F,
+                "Animated virtual-pivot compensation mixed coordinate spaces"
+        );
+
+        float scaleX = 1.35F;
+        float scaleY = 0.70F;
+        float scaleZ = 1.15F;
+        Vector3f scaledOffset = detached.poseCompensationOffsetInto(
+                animation,
+                physical,
+                scaleX,
+                scaleY,
+                scaleZ,
+                new Vector3f(),
+                new Vector3f()
+        );
+        Vector3f scaledActual = new Vector3f(point)
+                .sub(detached.authoredPivot())
+                .mul(scaleX, scaleY, scaleZ);
+        physical.transform(scaledActual)
+                .add(detached.authoredPivot())
+                .add(scaledOffset);
+        Vector3f scaledEffective = detached.effectivePivot()
+                .sub(detached.authoredPivot())
+                .mul(scaleX, scaleY, scaleZ);
+        animation.transform(scaledEffective)
+                .add(detached.authoredPivot());
+        Vector3f scaledExpected = new Vector3f(point)
+                .sub(detached.effectivePivot())
+                .mul(scaleX, scaleY, scaleZ);
+        physical.transform(scaledExpected).add(scaledEffective);
+        requireVectorNear(
+                scaledActual,
+                scaledExpected,
+                1.0E-5F,
+                "Virtual-pivot compensation ignored animated bone scale"
         );
     }
 }

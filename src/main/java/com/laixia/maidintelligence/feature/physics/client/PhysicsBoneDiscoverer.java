@@ -26,7 +26,7 @@ final class PhysicsBoneDiscoverer {
         PhysicsBoneSelectionPlan.Builder enriched =
                 PhysicsBoneSelectionPlan.builder(modelId);
         for (AnimatedGeoBone bone : model.topLevelBones()) {
-            copyWithKinematics(bone, null, discovered, enriched);
+            copyWithKinematics(bone, null, null, discovered, enriched);
         }
         return enriched.build();
     }
@@ -34,6 +34,7 @@ final class PhysicsBoneDiscoverer {
     private static void copyWithKinematics(
             AnimatedGeoBone bone,
             AnimatedGeoBone parent,
+            AnimatedGeoBone nearestSolidAncestor,
             PhysicsBoneSelectionPlan discovered,
             PhysicsBoneSelectionPlan.Builder output
     ) {
@@ -44,11 +45,26 @@ final class PhysicsBoneDiscoverer {
         if (decision.driven()) {
             output.kinematics(
                     bone,
-                    BoneKinematics.measure(bone, parent, decision.type())
+                    BoneKinematics.measure(
+                            bone,
+                            parent,
+                            nearestSolidAncestor,
+                            decision.type()
+                    )
             );
         }
+        AnimatedGeoBone nextSolidAncestor =
+                bone.geoBone().cubes().getCubeCount() > 0
+                        ? bone
+                        : nearestSolidAncestor;
         for (AnimatedGeoBone child : bone.children()) {
-            copyWithKinematics(child, bone, discovered, output);
+            copyWithKinematics(
+                    child,
+                    bone,
+                    nextSolidAncestor,
+                    discovered,
+                    output
+            );
         }
     }
 }

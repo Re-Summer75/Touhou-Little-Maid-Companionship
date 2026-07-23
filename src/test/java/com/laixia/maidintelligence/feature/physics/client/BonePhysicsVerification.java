@@ -16,9 +16,15 @@ public final class BonePhysicsVerification {
         AnonymousGeometryVerification.run();
         WinefoxGeometryVerification.run();
         BoneKinematicsVerification.run();
+        BoneAttachmentFrameVerification.run();
+        RigidAttachmentVerification.run();
         BundledGeckoModelVerification.run();
+        BundledAttachmentFrameVerification.run();
+        BundledSupportGeometryVerification.run();
         PhysicsPlanCacheVerification.run();
         SolverEquivalenceVerification.run();
+        SecondaryMotionConstraintVerification.run();
+        SecondaryMotionAllocationVerification.run();
         System.out.println("Bone physics verification passed.");
     }
 }

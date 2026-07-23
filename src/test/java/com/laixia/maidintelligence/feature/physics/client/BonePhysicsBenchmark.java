@@ -33,17 +33,24 @@ public final class BonePhysicsBenchmark {
     public static void main(String[] args) throws Exception {
         GeoModel geoModel = loadWinefoxGeoModel();
         AnimatedGeoModel referenceModel = new AnimatedGeoModel(geoModel);
-        AnimatedGeoModel optimizedModel = new AnimatedGeoModel(geoModel);
+        AnimatedGeoModel legacyModel = new AnimatedGeoModel(geoModel);
+        AnimatedGeoModel constrainedModel = new AnimatedGeoModel(geoModel);
         PhysicsBoneSelectionPlan referencePlan =
                 PhysicsBoneDiscoverer.discover(
                         "geckolib:winefox",
                         referenceModel,
                         PhysicsMetadata.EMPTY
                 );
-        PhysicsBoneSelectionPlan optimizedPlan =
+        PhysicsBoneSelectionPlan legacyPlan =
                 PhysicsBoneDiscoverer.discover(
                         "geckolib:winefox",
-                        optimizedModel,
+                        legacyModel,
+                        PhysicsMetadata.EMPTY
+                );
+        PhysicsBoneSelectionPlan constrainedPlan =
+                PhysicsBoneDiscoverer.discover(
+                        "geckolib:winefox",
+                        constrainedModel,
                         PhysicsMetadata.EMPTY
                 );
         ReferenceSpringBoneSolver reference =
@@ -51,12 +58,21 @@ public final class BonePhysicsBenchmark {
                         referenceModel,
                         referencePlan
                 );
-        PhysicsSolverLayout layout =
-                PhysicsSolverLayout.build(optimizedModel, optimizedPlan);
-        SpringBoneSolver optimized = new SpringBoneSolver(layout);
+        PhysicsSolverLayout legacyLayout =
+                PhysicsSolverLayout.build(legacyModel, legacyPlan);
+        PhysicsSolverLayout constrainedLayout =
+                PhysicsSolverLayout.build(
+                        constrainedModel,
+                        constrainedPlan
+                );
+        SpringBoneSolver legacy =
+                new SpringBoneSolver(legacyLayout, false);
+        SpringBoneSolver constrained =
+                new SpringBoneSolver(constrainedLayout);
 
         warmReference(referenceModel, reference, WARMUP_FRAMES);
-        warmOptimized(optimizedModel, optimized, WARMUP_FRAMES);
+        warmOptimized(legacyModel, legacy, WARMUP_FRAMES);
+        warmOptimized(constrainedModel, constrained, WARMUP_FRAMES);
         AllocationMeter allocations = AllocationMeter.create();
         BenchmarkResult baseline = measureReference(
                 referenceModel,
@@ -64,9 +80,15 @@ public final class BonePhysicsBenchmark {
                 allocations,
                 MEASURED_FRAMES
         );
-        BenchmarkResult active = measureOptimized(
-                optimizedModel,
-                optimized,
+        BenchmarkResult activeLegacy = measureOptimized(
+                legacyModel,
+                legacy,
+                allocations,
+                MEASURED_FRAMES
+        );
+        BenchmarkResult activeConstrained = measureOptimized(
+                constrainedModel,
+                constrained,
                 allocations,
                 MEASURED_FRAMES
         );
@@ -79,20 +101,32 @@ public final class BonePhysicsBenchmark {
         report(
                 "recursive-full",
                 baseline,
-                layout.fullBoneCount(),
-                layout.fullBoneCount()
+                legacyLayout.fullBoneCount(),
+                legacyLayout.fullBoneCount()
         );
         report(
-                "iterative-active",
-                active,
-                layout.activeNodeCount(),
-                layout.fullBoneCount()
+                "iterative-active-legacy",
+                activeLegacy,
+                legacyLayout.activeNodeCount(),
+                legacyLayout.fullBoneCount()
+        );
+        report(
+                "iterative-active-constrained",
+                activeConstrained,
+                constrainedLayout.activeNodeCount(),
+                constrainedLayout.fullBoneCount()
         );
         System.out.printf(
                 Locale.ROOT,
-                "relative solver speedup: %.2fx%n",
+                "legacy-equivalent solver speedup: %.2fx%n",
                 baseline.nanosecondsPerFrame()
-                        / active.nanosecondsPerFrame()
+                        / activeLegacy.nanosecondsPerFrame()
+        );
+        System.out.printf(
+                Locale.ROOT,
+                "constraint-layer cost: %.2fx legacy-active%n",
+                activeConstrained.nanosecondsPerFrame()
+                        / activeLegacy.nanosecondsPerFrame()
         );
     }
 

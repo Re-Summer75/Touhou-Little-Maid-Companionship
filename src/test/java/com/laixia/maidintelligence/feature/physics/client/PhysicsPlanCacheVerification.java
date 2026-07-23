@@ -127,9 +127,27 @@ final class PhysicsPlanCacheVerification {
                 cursor = parents.get(cursor);
             }
         });
+        for (int index = 0; index < layout.activeNodeCount(); index++) {
+            PhysicsSolverLayout.Node node = layout.node(index);
+            if (!node.driven()) {
+                continue;
+            }
+            addReferencePath(
+                    layout,
+                    node.constraint().referenceNodeIndex(),
+                    parents,
+                    expected
+            );
+            addReferencePath(
+                    layout,
+                    node.constraint().collisionReferenceNodeIndex(),
+                    parents,
+                    expected
+            );
+        }
         require(
                 expected.size() == layout.activeNodeCount(),
-                "Active layout is not the exact driven/ancestor union"
+                "Active layout is not the exact driven/reference ancestor union"
         );
         IdentityHashMap<AnimatedGeoBone, Integer> indices =
                 new IdentityHashMap<>();
@@ -155,6 +173,26 @@ final class PhysicsPlanCacheVerification {
                             + node.path()
             );
             indices.put(node.bone(), index);
+        }
+    }
+
+    private static void addReferencePath(
+            PhysicsSolverLayout layout,
+            int referenceIndex,
+            Map<AnimatedGeoBone, AnimatedGeoBone> parents,
+            IdentityHashMap<AnimatedGeoBone, Boolean> expected
+    ) {
+        if (referenceIndex < 0) {
+            return;
+        }
+        require(
+                referenceIndex < layout.activeNodeCount(),
+                "Constraint reference index escaped the active layout"
+        );
+        AnimatedGeoBone cursor = layout.node(referenceIndex).bone();
+        while (cursor != null) {
+            expected.put(cursor, Boolean.TRUE);
+            cursor = parents.get(cursor);
         }
     }
 }

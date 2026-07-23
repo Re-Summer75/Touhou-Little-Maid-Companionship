@@ -62,7 +62,7 @@ public final class PhysicsMetadata {
 
     static PhysicsMetadata parse(JsonObject root, String origin) {
         int schema = integer(root, "schema_version", 1);
-        if (schema != 1) {
+        if (schema != 1 && schema != 2) {
             throw new IllegalArgumentException("Unsupported physics schema_version " + schema);
         }
 
@@ -99,6 +99,8 @@ public final class PhysicsMetadata {
                 boolean includeDescendants = bool(chain, "include_descendants", true);
                 PhysicsBoneSelectionPlan.SpringProfile profile =
                         parseProfile(chain.getAsJsonObject("profile"));
+                PhysicsBoneSelectionPlan.ConstraintProfile constraints =
+                        parseConstraints(chain, type, schema);
                 chains.add(new Chain(
                         id,
                         type,
@@ -106,7 +108,8 @@ public final class PhysicsMetadata {
                         List.copyOf(bones),
                         Set.copyOf(chainExcludes),
                         includeDescendants,
-                        profile
+                        profile,
+                        constraints
                 ));
                 index++;
             }
@@ -129,17 +132,116 @@ public final class PhysicsMetadata {
         );
     }
 
+    private static PhysicsBoneSelectionPlan.ConstraintProfile parseConstraints(
+            JsonObject chain,
+            PhysicsBoneSelectionPlan.PartType type,
+            int schema
+    ) {
+        PhysicsBoneSelectionPlan.ConstraintProfile defaults =
+                PhysicsBoneSelectionPlan.ConstraintProfile.defaults(type);
+        JsonObject constraints = chain.getAsJsonObject("constraints");
+        if (constraints == null) {
+            constraints = chain.getAsJsonObject("constraint");
+        }
+        if (constraints == null) {
+            return schema >= 2
+                    ? defaults
+                    : PhysicsBoneSelectionPlan.ConstraintProfile.legacy();
+        }
+
+        PhysicsBoneSelectionPlan.SimulationSpace simulationSpace =
+                PhysicsBoneSelectionPlan.SimulationSpace.parse(
+                        string(
+                                constraints,
+                                "simulation_space",
+                                defaults.simulationSpace().name()
+                        ),
+                        defaults.simulationSpace()
+                );
+        float rotationInertia = number(
+                constraints,
+                "rotation_inertia_scale",
+                defaults.rotationInertiaScale(),
+                0.0F,
+                1.0F
+        );
+        PhysicsBoneSelectionPlan.SwingLimits swingLimits =
+                parseSwingLimits(
+                        constraints.getAsJsonObject("swing_limits"),
+                        defaults.swingLimits()
+                );
+        return new PhysicsBoneSelectionPlan.ConstraintProfile(
+                simulationSpace,
+                rotationInertia,
+                swingLimits,
+                bool(constraints, "backstop", defaults.backstop()),
+                bool(
+                        constraints,
+                        "head_collision",
+                        defaults.headCollision()
+                ),
+                number(
+                        constraints,
+                        "hit_radius_scale",
+                        defaults.hitRadiusScale(),
+                        0.0F,
+                        4.0F
+                ),
+                true
+        );
+    }
+
+    private static PhysicsBoneSelectionPlan.SwingLimits parseSwingLimits(
+            JsonObject limits,
+            PhysicsBoneSelectionPlan.SwingLimits defaults
+    ) {
+        if (limits == null) {
+            return defaults;
+        }
+        return new PhysicsBoneSelectionPlan.SwingLimits(
+                angle(limits, "left_degrees", defaults.left()),
+                angle(limits, "right_degrees", defaults.right()),
+                angle(limits, "outward_degrees", defaults.outward()),
+                angle(limits, "inward_degrees", defaults.inward())
+        );
+    }
+
+    private static float angle(
+            JsonObject object,
+            String key,
+            float fallbackRadians
+    ) {
+        float degrees = number(
+                object,
+                key,
+                (float) Math.toDegrees(fallbackRadians),
+                0.0F,
+                89.0F
+        );
+        return (float) Math.toRadians(degrees);
+    }
+
     private static float scale(JsonObject object, String key) {
+        return number(object, key, 1.0F, 0.0F, 4.0F);
+    }
+
+    private static float number(
+            JsonObject object,
+            String key,
+            float fallback,
+            float minimum,
+            float maximum
+    ) {
         JsonElement element = object.get(key);
         if (element == null || !element.isJsonPrimitive()
                 || !element.getAsJsonPrimitive().isNumber()) {
-            return 1.0F;
+            return fallback;
         }
         float value = element.getAsFloat();
         if (!Float.isFinite(value)) {
-            return 1.0F;
+            return fallback;
         }
-        return Math.max(0.0F, Math.min(4.0F, value));
+        return Math.max(minimum, Math.min(maximum, value));
     }
 
     private static String string(JsonObject object, String key, String fallback) {
@@ -213,7 +315,8 @@ public final class PhysicsMetadata {
             List<String> bones,
             Set<String> excludes,
             boolean includeDescendants,
-            PhysicsBoneSelectionPlan.SpringProfile profile
+            PhysicsBoneSelectionPlan.SpringProfile profile,
+            PhysicsBoneSelectionPlan.ConstraintProfile constraints
     ) {
     }
 }

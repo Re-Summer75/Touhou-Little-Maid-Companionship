@@ -24,35 +24,77 @@ public final class SpringBoneSolver {
 
     private static final float REFERENCE_DELTA_SECONDS = 1.0F / 60.0F;
     private static final float EPSILON = 1.0E-5F;
+    private static final float MAX_REFERENCE_DELTA =
+            (float) Math.toRadians(75.0D);
 
     private final PhysicsSolverLayout layout;
+    private final boolean constraintsEnabled;
+    private final Quaternionf[] animationOrientations;
     private final Quaternionf[] renderedOrientations;
+    private final Quaternionf[] previousReferenceOrientations;
+    private final Quaternionf[] frameReferenceDeltas;
+    private final boolean[] frameReferenceAbrupt;
+    private final int[] frameReferenceGeneration;
     private final Vector3f[] currentDirections;
     private final Vector3f[] previousDirections;
     private final float[] previousDeltaSeconds;
     private final boolean[] initialized;
+    private final boolean[] referenceInitialized;
 
     private final Quaternionf rootOrientation = new Quaternionf();
     private final Quaternionf localRotation = new Quaternionf();
     private final Quaternionf animationRotation = new Quaternionf();
     private final Quaternionf physicalDelta = new Quaternionf();
+    private final Quaternionf referenceInverse = new Quaternionf();
+    private final Quaternionf referenceTransport = new Quaternionf();
     private final Vector3f restDirection = new Vector3f();
     private final Vector3f nextDirection = new Vector3f();
     private final Vector3f localDirection = new Vector3f();
     private final Vector3f deflectionAxis = new Vector3f();
+    private final Vector3f rotationEuler = new Vector3f();
     private final Vector3f pivotOffset = new Vector3f();
     private final Vector3f pivotScratch = new Vector3f();
+    private final Vector3f constraintRight = new Vector3f();
+    private final Vector3f collisionPivot = new Vector3f();
+    private final Vector3f collisionTip = new Vector3f();
+    private final Vector3f collisionPlanePoint = new Vector3f();
+    private final Vector3f collisionNormal = new Vector3f();
 
     private int lastVisitedNodeCount;
     private float lastPeakDeflection;
+    private int lastConstraintProjectionCount;
+    private int lastCollisionProjectionCount;
+    private int referenceGeneration;
 
     public SpringBoneSolver(PhysicsSolverLayout layout) {
+        this(layout, true);
+    }
+
+    public SpringBoneSolver(
+            PhysicsSolverLayout layout,
+            boolean constraintsEnabled
+    ) {
         this.layout = layout;
+        this.constraintsEnabled = constraintsEnabled;
+        this.animationOrientations =
+                new Quaternionf[layout.activeNodeCount()];
         this.renderedOrientations =
                 new Quaternionf[layout.activeNodeCount()];
         for (int index = 0; index < renderedOrientations.length; index++) {
+            animationOrientations[index] = new Quaternionf();
             renderedOrientations[index] = new Quaternionf();
         }
+        int activeCount = layout.activeNodeCount();
+        this.previousReferenceOrientations =
+                new Quaternionf[activeCount];
+        this.frameReferenceDeltas = new Quaternionf[activeCount];
+        for (int index = 0; index < activeCount; index++) {
+            previousReferenceOrientations[index] = new Quaternionf();
+            frameReferenceDeltas[index] = new Quaternionf();
+        }
+        this.frameReferenceAbrupt = new boolean[activeCount];
+        this.frameReferenceGeneration = new int[activeCount];
+        this.referenceInitialized = new boolean[activeCount];
         int drivenCount = layout.drivenBoneCount();
         this.currentDirections = new Vector3f[drivenCount];
         this.previousDirections = new Vector3f[drivenCount];
@@ -73,6 +115,22 @@ public final class SpringBoneSolver {
         rootOrientation.identity();
         lastVisitedNodeCount = 0;
         lastPeakDeflection = 0.0F;
+        lastConstraintProjectionCount = 0;
+        lastCollisionProjectionCount = 0;
+        if (constraintsEnabled && ++referenceGeneration == 0) {
+            for (int index = 0;
+                 index < frameReferenceGeneration.length;
+                 index++) {
+                frameReferenceGeneration[index] = 0;
+            }
+            referenceGeneration = 1;
+        }
+
+        boolean inlineAnimationOrientations =
+                constraintsEnabled && layout.referencesPreordered();
+        if (constraintsEnabled && !inlineAnimationOrientations) {
+            collectAnimationOrientations();
+        }
 
         for (int index = 0; index < layout.activeNodeCount(); index++) {
             PhysicsSolverLayout.Node node = layout.node(index);
@@ -87,18 +145,49 @@ public final class SpringBoneSolver {
                     ? rootOrientation
                     : renderedOrientations[node.parentIndex()];
             Quaternionf boneBaseOrientation = renderedOrientations[index];
-            composeOrientationInto(
-                    parentOrientation,
-                    rx,
-                    ry,
-                    rz,
-                    boneBaseOrientation
-            );
+            if (inlineAnimationOrientations) {
+                Quaternionf animationParent = node.parentIndex() < 0
+                        ? rootOrientation
+                        : animationOrientations[node.parentIndex()];
+                composeOrientationsInto(
+                        animationParent,
+                        parentOrientation,
+                        rx,
+                        ry,
+                        rz,
+                        animationOrientations[index],
+                        boneBaseOrientation
+                );
+            } else {
+                composeOrientationInto(
+                        parentOrientation,
+                        rx,
+                        ry,
+                        rz,
+                        boneBaseOrientation
+                );
+            }
 
             if (node.driven()) {
+                int referenceIndex =
+                        node.constraint().referenceNodeIndex();
+                Quaternionf referenceOrientation =
+                        !constraintsEnabled || referenceIndex < 0
+                        ? rootOrientation
+                        : animationOrientations[referenceIndex];
+                int collisionReferenceIndex =
+                        node.constraint().collisionReferenceNodeIndex();
+                Quaternionf collisionReferenceOrientation =
+                        !constraintsEnabled || collisionReferenceIndex < 0
+                                ? rootOrientation
+                                : animationOrientations[
+                                        collisionReferenceIndex
+                                ];
                 integrateAndApply(
                         node,
                         boneBaseOrientation,
+                        referenceOrientation,
+                        collisionReferenceOrientation,
                         modelAcceleration,
                         yawRate,
                         dt,
@@ -110,22 +199,40 @@ public final class SpringBoneSolver {
                         py,
                         pz
                 );
+                composeOrientationInto(
+                        parentOrientation,
+                        bone.getRotationX(),
+                        bone.getRotationY(),
+                        bone.getRotationZ(),
+                        boneBaseOrientation
+                );
             }
+            lastVisitedNodeCount++;
+        }
+    }
 
+    private void collectAnimationOrientations() {
+        for (int index = 0; index < layout.activeNodeCount(); index++) {
+            PhysicsSolverLayout.Node node = layout.node(index);
+            AnimatedGeoBone bone = node.bone();
+            Quaternionf parentOrientation = node.parentIndex() < 0
+                    ? rootOrientation
+                    : animationOrientations[node.parentIndex()];
             composeOrientationInto(
                     parentOrientation,
                     bone.getRotationX(),
                     bone.getRotationY(),
                     bone.getRotationZ(),
-                    boneBaseOrientation
+                    animationOrientations[index]
             );
-            lastVisitedNodeCount++;
         }
     }
 
     private void integrateAndApply(
             PhysicsSolverLayout.Node node,
             Quaternionf boneBaseOrientation,
+            Quaternionf referenceOrientation,
+            Quaternionf collisionReferenceOrientation,
             Vector3f modelAcceleration,
             float yawRate,
             float dt,
@@ -145,12 +252,20 @@ public final class SpringBoneSolver {
             previousDirections[slot].set(restDirection);
             initialized[slot] = true;
         }
+        if (constraintsEnabled) {
+            transportReferenceSpace(
+                    node.constraint(),
+                    slot,
+                    referenceOrientation
+            );
+        }
 
         PhysicsBoneSelectionPlan.SpringProfile profile =
                 node.decision().profile();
-        if (!paused && dt > EPSILON) {
-            Vector3f current = currentDirections[slot];
-            Vector3f previous = previousDirections[slot];
+        Vector3f current = currentDirections[slot];
+        Vector3f previous = previousDirections[slot];
+        boolean stepped = !paused && dt > EPSILON;
+        if (stepped) {
             nextDirection.set(current);
             float drag = Mth.clamp(
                     DRAG * profile.dragScale(),
@@ -185,10 +300,32 @@ public final class SpringBoneSolver {
             );
             if (nextDirection.lengthSquared() > EPSILON) {
                 nextDirection.normalize();
-                previous.set(current);
-                current.set(nextDirection);
             }
+        } else {
+            nextDirection.set(current);
+        }
+
+        boolean corrected = false;
+        if (constraintsEnabled
+                && nextDirection.lengthSquared() > EPSILON) {
+            corrected = projectConstraints(
+                    node.constraint(),
+                    boneBaseOrientation,
+                    collisionReferenceOrientation,
+                    nextDirection
+            );
+        }
+        if (stepped && nextDirection.lengthSquared() > EPSILON) {
+            if (corrected) {
+                previous.set(nextDirection);
+            } else {
+                previous.set(current);
+            }
+            current.set(nextDirection);
             previousDeltaSeconds[slot] = dt;
+        } else if (corrected) {
+            current.set(nextDirection);
+            previous.set(nextDirection);
         }
 
         applyDeflection(
@@ -201,6 +338,119 @@ public final class SpringBoneSolver {
                 py,
                 pz
         );
+    }
+
+    private void transportReferenceSpace(
+            SecondaryMotionConstraint constraint,
+            int slot,
+            Quaternionf referenceOrientation
+    ) {
+        int referenceIndex = constraint.referenceNodeIndex();
+        if (!constraint.enabled() || referenceIndex < 0) {
+            return;
+        }
+        prepareReferenceDelta(referenceIndex, referenceOrientation);
+        if (frameReferenceAbrupt[referenceIndex]) {
+            currentDirections[slot].set(restDirection);
+            previousDirections[slot].set(restDirection);
+            previousDeltaSeconds[slot] = 0.0F;
+        } else {
+            float follow = 1.0F - constraint.rotationInertiaScale();
+            Quaternionf delta = frameReferenceDeltas[referenceIndex];
+            if (follow > EPSILON
+                    && delta.x() * delta.x()
+                    + delta.y() * delta.y()
+                    + delta.z() * delta.z() > 1.0E-12F) {
+                referenceTransport.identity().slerp(
+                        delta,
+                        follow
+                );
+                referenceTransport.transform(currentDirections[slot]);
+                referenceTransport.transform(previousDirections[slot]);
+                currentDirections[slot].normalize();
+                previousDirections[slot].normalize();
+            }
+        }
+    }
+
+    private void prepareReferenceDelta(
+            int referenceIndex,
+            Quaternionf referenceOrientation
+    ) {
+        if (frameReferenceGeneration[referenceIndex]
+                == referenceGeneration) {
+            return;
+        }
+        frameReferenceGeneration[referenceIndex] = referenceGeneration;
+        Quaternionf previous =
+                previousReferenceOrientations[referenceIndex];
+        Quaternionf delta = frameReferenceDeltas[referenceIndex];
+        if (!referenceInitialized[referenceIndex]) {
+            previous.set(referenceOrientation);
+            delta.identity();
+            frameReferenceAbrupt[referenceIndex] = false;
+            referenceInitialized[referenceIndex] = true;
+            return;
+        }
+
+        float dot = previous.x() * referenceOrientation.x()
+                + previous.y() * referenceOrientation.y()
+                + previous.z() * referenceOrientation.z()
+                + previous.w() * referenceOrientation.w();
+        if (dot < 0.0F) {
+            delta.set(
+                    -referenceOrientation.x(),
+                    -referenceOrientation.y(),
+                    -referenceOrientation.z(),
+                    -referenceOrientation.w()
+            );
+        } else {
+            delta.set(referenceOrientation);
+        }
+        referenceInverse.set(previous).conjugate();
+        delta.mul(referenceInverse).normalize();
+        float angle = 2.0F * (float) Math.acos(
+                Mth.clamp(Math.abs(delta.w()), 0.0F, 1.0F)
+        );
+        frameReferenceAbrupt[referenceIndex] =
+                !Float.isFinite(angle) || angle > MAX_REFERENCE_DELTA;
+        previous.set(referenceOrientation);
+    }
+
+    private boolean projectConstraints(
+            SecondaryMotionConstraint constraint,
+            Quaternionf boneOrientation,
+            Quaternionf referenceOrientation,
+            Vector3f direction
+    ) {
+        boolean corrected = false;
+        for (int iteration = 0; iteration < 4; iteration++) {
+            boolean swingCorrected = constraint.projectSwing(
+                    direction,
+                    restDirection,
+                    boneOrientation,
+                    constraintRight
+            );
+            if (swingCorrected) {
+                lastConstraintProjectionCount++;
+            }
+            boolean collisionCorrected = constraint.projectCollision(
+                    direction,
+                    referenceOrientation,
+                    collisionPivot,
+                    collisionTip,
+                    collisionPlanePoint,
+                    collisionNormal
+            );
+            if (collisionCorrected) {
+                lastCollisionProjectionCount++;
+            }
+            corrected |= swingCorrected || collisionCorrected;
+            if (!swingCorrected && !collisionCorrected) {
+                break;
+            }
+        }
+        return corrected;
     }
 
     private void applyDeflection(
@@ -223,16 +473,25 @@ public final class SpringBoneSolver {
             return;
         }
         localDirection.normalize();
-        boneAxis.cross(localDirection, deflectionAxis);
-        float sin = deflectionAxis.length();
-        if (sin < EPSILON) {
-            return;
-        }
-        deflectionAxis.div(sin);
         float dot = Math.max(
                 -1.0F,
                 Math.min(1.0F, boneAxis.dot(localDirection))
         );
+        boneAxis.cross(localDirection, deflectionAxis);
+        float sin = deflectionAxis.length();
+        if (sin < EPSILON) {
+            if (dot >= 0.0F) {
+                return;
+            }
+            if (Math.abs(boneAxis.y) < 0.90F) {
+                deflectionAxis.set(0.0F, 1.0F, 0.0F).cross(boneAxis);
+            } else {
+                deflectionAxis.set(1.0F, 0.0F, 0.0F).cross(boneAxis);
+            }
+            deflectionAxis.normalize();
+        } else {
+            deflectionAxis.div(sin);
+        }
         PhysicsBoneSelectionPlan.SpringProfile profile =
                 node.decision().profile();
         BoneKinematics.Metrics kinematics = node.kinematics();
@@ -242,7 +501,38 @@ public final class SpringBoneSolver {
                 MAX_TIP_DISPLACEMENT * profile.tipDisplacementScale()
                         / kinematics.leverArm()
         );
-        float angle = Math.min((float) Math.acos(dot), cap);
+        boolean constrainedOutput =
+                constraintsEnabled && node.constraint().enabled();
+        float angle = constrainedOutput
+                ? (float) Math.acos(dot)
+                : Math.min((float) Math.acos(dot), cap);
+        AnimatedGeoBone bone = node.bone();
+        if (constrainedOutput) {
+            animationRotation.identity().rotateZYX(rz, ry, rx);
+            physicalDelta.identity().rotateAxis(
+                    angle,
+                    deflectionAxis.x,
+                    deflectionAxis.y,
+                    deflectionAxis.z
+            );
+            localRotation.set(animationRotation).mul(physicalDelta);
+            eulerZYXInto(localRotation, rotationEuler);
+            bone.setRotationX(rotationEuler.x);
+            bone.setRotationY(rotationEuler.y);
+            bone.setRotationZ(rotationEuler.z);
+            compensatePivotPose(
+                    bone,
+                    kinematics,
+                    animationRotation,
+                    localRotation,
+                    px,
+                    py,
+                    pz
+            );
+            lastPeakDeflection = Math.max(lastPeakDeflection, angle);
+            return;
+        }
+
         float dRx = clampAbs(
                 deflectionAxis.x() * angle,
                 MAX_DEFLECT_X * profile.angleScale()
@@ -255,7 +545,6 @@ public final class SpringBoneSolver {
                 deflectionAxis.z() * angle,
                 MAX_DEFLECT_Z * profile.angleScale()
         );
-        AnimatedGeoBone bone = node.bone();
         bone.setRotationX(rx + dRx);
         bone.setRotationY(ry + dRy);
         bone.setRotationZ(rz + dRz);
@@ -270,6 +559,30 @@ public final class SpringBoneSolver {
                 pz
         );
         lastPeakDeflection = Math.max(lastPeakDeflection, angle);
+    }
+
+    private void compensatePivotPose(
+            AnimatedGeoBone bone,
+            BoneKinematics.Metrics kinematics,
+            Quaternionf animation,
+            Quaternionf physical,
+            float px,
+            float py,
+            float pz
+    ) {
+        if (!kinematics.compensatesPivot()) {
+            return;
+        }
+        kinematics.poseCompensationOffsetInto(
+                animation,
+                physical,
+                bone.getScaleX(),
+                bone.getScaleY(),
+                bone.getScaleZ(),
+                pivotOffset,
+                pivotScratch
+        );
+        applyPivotOffset(bone, px, py, pz);
     }
 
     private void compensatePivot(
@@ -296,6 +609,15 @@ public final class SpringBoneSolver {
                 pivotOffset,
                 pivotScratch
         );
+        applyPivotOffset(bone, px, py, pz);
+    }
+
+    private void applyPivotOffset(
+            AnimatedGeoBone bone,
+            float px,
+            float py,
+            float pz
+    ) {
         bone.setPositionX(px - pivotOffset.x * 16.0F);
         bone.setPositionY(py + pivotOffset.y * 16.0F);
         bone.setPositionZ(pz + pivotOffset.z * 16.0F);
@@ -316,6 +638,24 @@ public final class SpringBoneSolver {
         output.set(parent).mul(localRotation);
     }
 
+    private void composeOrientationsInto(
+            Quaternionf animationParent,
+            Quaternionf renderedParent,
+            float rotationX,
+            float rotationY,
+            float rotationZ,
+            Quaternionf animationOutput,
+            Quaternionf renderedOutput
+    ) {
+        localRotation.identity().rotateZYX(
+                rotationZ,
+                rotationY,
+                rotationX
+        );
+        animationOutput.set(animationParent).mul(localRotation);
+        renderedOutput.set(renderedParent).mul(localRotation);
+    }
+
     public void reset() {
         for (int slot = 0; slot < currentDirections.length; slot++) {
             currentDirections[slot].zero();
@@ -323,11 +663,26 @@ public final class SpringBoneSolver {
             previousDeltaSeconds[slot] = 0.0F;
             initialized[slot] = false;
         }
+        for (int index = 0;
+             index < previousReferenceOrientations.length;
+             index++) {
+            referenceInitialized[index] = false;
+            previousReferenceOrientations[index].identity();
+            frameReferenceDeltas[index].identity();
+            frameReferenceAbrupt[index] = false;
+            frameReferenceGeneration[index] = 0;
+        }
+        for (Quaternionf orientation : animationOrientations) {
+            orientation.identity();
+        }
         for (Quaternionf orientation : renderedOrientations) {
             orientation.identity();
         }
         lastVisitedNodeCount = 0;
         lastPeakDeflection = 0.0F;
+        lastConstraintProjectionCount = 0;
+        lastCollisionProjectionCount = 0;
+        referenceGeneration = 0;
     }
 
     public PhysicsSolverLayout layout() {
@@ -342,6 +697,14 @@ public final class SpringBoneSolver {
         return lastPeakDeflection;
     }
 
+    public int lastConstraintProjectionCount() {
+        return lastConstraintProjectionCount;
+    }
+
+    public int lastCollisionProjectionCount() {
+        return lastCollisionProjectionCount;
+    }
+
     public boolean copyCurrentDirection(int drivenSlot, Vector3f output) {
         if (drivenSlot < 0
                 || drivenSlot >= currentDirections.length
@@ -350,6 +713,17 @@ public final class SpringBoneSolver {
             return false;
         }
         output.set(currentDirections[drivenSlot]);
+        return true;
+    }
+
+    public boolean copyPreviousDirection(int drivenSlot, Vector3f output) {
+        if (drivenSlot < 0
+                || drivenSlot >= previousDirections.length
+                || !initialized[drivenSlot]) {
+            output.zero();
+            return false;
+        }
+        output.set(previousDirections[drivenSlot]);
         return true;
     }
 
@@ -366,5 +740,30 @@ public final class SpringBoneSolver {
 
     private static float clampAbs(float value, float limit) {
         return Math.max(-limit, Math.min(limit, value));
+    }
+
+    private static void eulerZYXInto(
+            Quaternionf rotation,
+            Vector3f output
+    ) {
+        float x = rotation.x;
+        float y = rotation.y;
+        float z = rotation.z;
+        float w = rotation.w;
+        output.set(
+                (float) Math.atan2(
+                        2.0F * (w * x + y * z),
+                        1.0F - 2.0F * (x * x + y * y)
+                ),
+                (float) Math.asin(Mth.clamp(
+                        2.0F * (w * y - z * x),
+                        -1.0F,
+                        1.0F
+                )),
+                (float) Math.atan2(
+                        2.0F * (w * z + x * y),
+                        1.0F - 2.0F * (y * y + z * z)
+                )
+        );
     }
 }

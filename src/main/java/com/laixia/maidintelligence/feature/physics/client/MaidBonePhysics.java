@@ -33,6 +33,7 @@ public final class MaidBonePhysics {
     private static final double MAX_DELTA_SECONDS = 0.1D;
     private static final double MAX_CLOCK_GAP_SECONDS = 0.25D;
     private static final double MAX_RENDER_DISTANCE_SQR = 24.0D * 24.0D;
+    private static final double TELEPORT_DISTANCE_SQR = 4.0D * 4.0D;
 
     private static final int DIAGNOSTIC_FRAMES = 120;
     private static final int DIAGNOSTIC_WINDOWS = 20;
@@ -174,6 +175,10 @@ public final class MaidBonePhysics {
         private SpringBoneSolver solver;
         private float yawRate;
         private long lastNanos;
+        private double lastX;
+        private double lastY;
+        private double lastZ;
+        private boolean positionInitialized;
 
         private int diagnosticFrames;
         private int diagnosticWindows;
@@ -207,6 +212,7 @@ public final class MaidBonePhysics {
             modelAcceleration.zero();
             yawRate = 0.0F;
             lastNanos = 0L;
+            positionInitialized = false;
             diagnosticFrames = 0;
             diagnosticWindows = 0;
             peakDeflection = 0.0D;
@@ -218,6 +224,22 @@ public final class MaidBonePhysics {
                 Vec3 velocity,
                 float dt
         ) {
+            double x = maid.getX();
+            double y = maid.getY();
+            double z = maid.getZ();
+            if (positionInitialized) {
+                double dx = x - lastX;
+                double dy = y - lastY;
+                double dz = z - lastZ;
+                if (dx * dx + dy * dy + dz * dz
+                        > TELEPORT_DISTANCE_SQR) {
+                    resetTransientMotion();
+                }
+            }
+            lastX = x;
+            lastY = y;
+            lastZ = z;
+            positionInitialized = true;
             yawRate = motionSampler.updateInto(
                     velocity.x,
                     maid.onGround() ? 0.0D : velocity.y,
@@ -245,6 +267,7 @@ public final class MaidBonePhysics {
             double seconds = (now - lastNanos) / 1.0E9D;
             lastNanos = now;
             if (seconds > MAX_CLOCK_GAP_SECONDS) {
+                resetTransientMotion();
                 return 0.0F;
             }
             return (float) Mth.clamp(
@@ -252,6 +275,14 @@ public final class MaidBonePhysics {
                     0.0D,
                     MAX_DELTA_SECONDS
             );
+        }
+
+        private void resetTransientMotion() {
+            solver.reset();
+            motionSampler.reset();
+            worldAcceleration.zero();
+            modelAcceleration.zero();
+            yawRate = 0.0F;
         }
 
         private void recordDiagnostics(

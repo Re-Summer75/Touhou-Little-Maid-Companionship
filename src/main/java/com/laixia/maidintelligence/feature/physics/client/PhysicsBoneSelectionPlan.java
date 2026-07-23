@@ -96,6 +96,126 @@ public final class PhysicsBoneSelectionPlan {
         }
     }
 
+    public enum SimulationSpace {
+        AUTO,
+        HEAD_LOCAL,
+        BODY_LOCAL,
+        MODEL;
+
+        static SimulationSpace parse(
+                String value,
+                SimulationSpace fallback
+        ) {
+            if (value == null || value.isBlank()) {
+                return fallback;
+            }
+            try {
+                return valueOf(value.trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException ignored) {
+                return fallback;
+            }
+        }
+    }
+
+    public record SwingLimits(
+            float left,
+            float right,
+            float outward,
+            float inward
+    ) {
+        private static final float MAX_LIMIT = 1.55F;
+
+        public SwingLimits {
+            left = clampAngle(left);
+            right = clampAngle(right);
+            outward = clampAngle(outward);
+            inward = clampAngle(inward);
+        }
+
+        private static SwingLimits defaults(PartType type) {
+            float inward = switch (type) {
+                case HEAD_SHELL -> 0.08F;
+                case HAIR -> 0.28F;
+                case EAR -> 0.22F;
+                case RIBBON -> 0.45F;
+                default -> 0.80F;
+            };
+            return new SwingLimits(0.80F, 0.80F, 0.80F, inward);
+        }
+
+        private static float clampAngle(float value) {
+            if (!Float.isFinite(value)) {
+                return 0.0F;
+            }
+            return Math.max(0.0F, Math.min(MAX_LIMIT, value));
+        }
+    }
+
+    public record ConstraintProfile(
+            SimulationSpace simulationSpace,
+            float rotationInertiaScale,
+            SwingLimits swingLimits,
+            boolean backstop,
+            boolean headCollision,
+            float hitRadiusScale,
+            boolean enabled
+    ) {
+        public ConstraintProfile {
+            simulationSpace = simulationSpace == null
+                    ? SimulationSpace.AUTO
+                    : simulationSpace;
+            rotationInertiaScale = clamp01(rotationInertiaScale);
+            swingLimits = swingLimits == null
+                    ? SwingLimits.defaults(PartType.GENERIC)
+                    : swingLimits;
+            hitRadiusScale = Float.isFinite(hitRadiusScale)
+                    ? Math.max(0.0F, Math.min(4.0F, hitRadiusScale))
+                    : 1.0F;
+        }
+
+        public static ConstraintProfile defaults(PartType type) {
+            float rotationInertia = switch (type) {
+                case HEAD_SHELL -> 0.05F;
+                case HAIR -> 0.35F;
+                case EAR -> 0.15F;
+                case RIBBON -> 0.45F;
+                case SKIRT, CAPE -> 0.65F;
+                default -> 1.0F;
+            };
+            boolean collideWithHead = type == PartType.HAIR
+                    || type == PartType.EAR
+                    || type == PartType.RIBBON;
+            return new ConstraintProfile(
+                    SimulationSpace.AUTO,
+                    rotationInertia,
+                    SwingLimits.defaults(type),
+                    collideWithHead,
+                    collideWithHead,
+                    1.0F,
+                    true
+            );
+        }
+
+        public static ConstraintProfile legacy() {
+            return new ConstraintProfile(
+                    SimulationSpace.MODEL,
+                    1.0F,
+                    new SwingLimits(1.55F, 1.55F, 1.55F, 1.55F),
+                    false,
+                    false,
+                    1.0F,
+                    false
+            );
+        }
+
+        private static float clamp01(float value) {
+            if (!Float.isFinite(value)) {
+                return 1.0F;
+            }
+            return Math.max(0.0F, Math.min(1.0F, value));
+        }
+    }
+
     /**
      * Multipliers over the solver's global constants. Large roots and wings
      * need much smaller angular motion than a thin tail segment.
@@ -165,6 +285,7 @@ public final class PhysicsBoneSelectionPlan {
             String chainId,
             double confidence,
             SpringProfile profile,
+            ConstraintProfile constraints,
             String reason
     ) {
         private static final Decision REJECTED = new Decision(
@@ -174,6 +295,7 @@ public final class PhysicsBoneSelectionPlan {
                 "",
                 0.0D,
                 SpringProfile.defaults(PartType.GENERIC),
+                ConstraintProfile.defaults(PartType.GENERIC),
                 "not selected"
         );
 
@@ -185,6 +307,26 @@ public final class PhysicsBoneSelectionPlan {
                 SpringProfile profile,
                 String reason
         ) {
+            return driven(
+                    type,
+                    source,
+                    chainId,
+                    confidence,
+                    profile,
+                    ConstraintProfile.defaults(type),
+                    reason
+            );
+        }
+
+        public static Decision driven(
+                PartType type,
+                Source source,
+                String chainId,
+                double confidence,
+                SpringProfile profile,
+                ConstraintProfile constraints,
+                String reason
+        ) {
             return new Decision(
                     true,
                     type,
@@ -192,6 +334,7 @@ public final class PhysicsBoneSelectionPlan {
                     chainId,
                     confidence,
                     profile,
+                    constraints,
                     reason
             );
         }
@@ -209,6 +352,7 @@ public final class PhysicsBoneSelectionPlan {
                     "",
                     confidence,
                     SpringProfile.defaults(type),
+                    ConstraintProfile.defaults(type),
                     reason
             );
         }
