@@ -82,6 +82,11 @@ public final class MaidSkeletonDebugLayer<T extends Mob, R extends IGeoEntityRen
             plan = PhysicsBonePlanCache.getOrCompute(maid.getModelId(), model);
         }
         VertexConsumer lines = bufferSource.getBuffer(RenderType.lines());
+        CollisionDebugRenderer.render(
+                poseStack,
+                lines,
+                MaidBonePhysics.lastSolver(maid)
+        );
         for (AnimatedGeoBone bone : model.topLevelBones()) {
             renderBone(poseStack, lines, bone, plan);
         }

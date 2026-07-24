@@ -1,5 +1,6 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
+import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 
 import java.nio.file.Files;
@@ -120,14 +121,24 @@ final class BundledGeckoModelVerification {
                 !plan.isDriven(model.bones().get("bone53")),
                 "Zhiban anonymous blush overlay was physicalized"
         );
-        requireHair(plan, model, "bone29",
-                "Zhiban left twintail root was not discovered");
-        requireHair(plan, model, "bone30",
-                "Zhiban left twintail continuation was not discovered");
-        requireHair(plan, model, "bone27",
-                "Zhiban right twintail root was not discovered");
-        requireHair(plan, model, "bone31",
-                "Zhiban right twintail continuation was not discovered");
+        requireRigidAttachment(plan, model, "bone29");
+        requireRigidAttachment(plan, model, "bone30");
+        requireRigidAttachment(plan, model, "bone27");
+        requireRigidAttachment(plan, model, "bone31");
+        requireHair(plan, model, "bone3",
+                "Zhiban left long ponytail was not discovered");
+        requireHair(plan, model, "bone9",
+                "Zhiban right long ponytail was not discovered");
+        require(
+                plan.decision(model.bones().get("bone3")).structureRole()
+                        == PhysicsBoneSelectionPlan.StructureRole
+                        .COMPOUND_SINGLE_BONE
+                        && plan.decision(model.bones().get("bone9"))
+                        .structureRole()
+                        == PhysicsBoneSelectionPlan.StructureRole
+                        .COMPOUND_SINGLE_BONE,
+                "Zhiban long ponytails were not marked as single-bone compounds"
+        );
         requireHair(plan, model, "bone34",
                 "Zhiban anonymous ahoge was not discovered");
         var ahoge = plan.kinematics(model.bones().get("bone34"));
@@ -136,6 +147,23 @@ final class BundledGeckoModelVerification {
                         && ahoge.compensatesPivot()
                         && ahoge.axis().y > 0.25F,
                 "Zhiban ahoge attachment frame was reversed"
+        );
+    }
+
+    private static void requireRigidAttachment(
+            PhysicsBoneSelectionPlan plan,
+            AnimatedGeoModel model,
+            String boneName
+    ) {
+        AnimatedGeoBone bone = model.bones().get(boneName);
+        require(
+                bone != null
+                        && !plan.isDriven(bone)
+                        && plan.decision(bone).structureRole()
+                        == PhysicsBoneSelectionPlan.StructureRole
+                        .RIGID_ATTACHMENT_BASE,
+                "Zhiban compact attachment remained physical: "
+                        + boneName + " " + plan.decision(bone)
         );
     }
 

@@ -5,8 +5,11 @@ import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
 
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Immutable, model-local answer to "which bones receive secondary motion".
@@ -96,6 +99,42 @@ public final class PhysicsBoneSelectionPlan {
         }
     }
 
+    public enum StructureRole {
+        NONE,
+        RIGID_ATTACHMENT_BASE,
+        FLEXIBLE_CHAIN_SEGMENT,
+        COMPOUND_SINGLE_BONE
+    }
+
+    public record ChainSegment(
+            String rootPath,
+            int index,
+            int count
+    ) {
+        private static final ChainSegment NONE =
+                new ChainSegment("", 0, 0);
+
+        public ChainSegment {
+            rootPath = rootPath == null ? "" : rootPath;
+            count = Math.max(0, count);
+            index = count == 0
+                    ? 0
+                    : Math.max(0, Math.min(index, count - 1));
+        }
+
+        public static ChainSegment none() {
+            return NONE;
+        }
+
+        public boolean present() {
+            return count > 0;
+        }
+
+        public float normalizedPosition() {
+            return count <= 1 ? 0.0F : (float) index / (count - 1);
+        }
+    }
+
     public enum SimulationSpace {
         AUTO,
         HEAD_LOCAL,
@@ -151,6 +190,129 @@ public final class PhysicsBoneSelectionPlan {
         }
     }
 
+    /**
+     * Author-authored collision coordinates in Gecko pixels. Conversion into
+     * solver units happens when a runtime collision layout is built.
+     */
+    public record CollisionVector(float x, float y, float z) {
+        public CollisionVector {
+            if (!Float.isFinite(x)
+                    || !Float.isFinite(y)
+                    || !Float.isFinite(z)) {
+                throw new IllegalArgumentException(
+                        "Collision vector components must be finite"
+                );
+            }
+        }
+    }
+
+    public sealed interface CollisionShape
+            permits CollisionShape.Plane,
+            CollisionShape.Sphere,
+            CollisionShape.Capsule {
+        record Plane(
+                CollisionVector point,
+                CollisionVector normal
+        ) implements CollisionShape {
+            public Plane {
+                point = Objects.requireNonNull(point, "point");
+                normal = Objects.requireNonNull(normal, "normal");
+                if (normal.x() == 0.0F
+                        && normal.y() == 0.0F
+                        && normal.z() == 0.0F) {
+                    throw new IllegalArgumentException(
+                            "Collision plane normal must be non-zero"
+                    );
+                }
+            }
+        }
+
+        record Sphere(
+                CollisionVector center,
+                float radius
+        ) implements CollisionShape {
+            public Sphere {
+                center = Objects.requireNonNull(center, "center");
+                requireRadius(radius);
+            }
+        }
+
+        record Capsule(
+                CollisionVector start,
+                CollisionVector end,
+                float radius
+        ) implements CollisionShape {
+            public Capsule {
+                start = Objects.requireNonNull(start, "start");
+                end = Objects.requireNonNull(end, "end");
+                requireRadius(radius);
+            }
+        }
+
+        private static void requireRadius(float radius) {
+            if (!Float.isFinite(radius) || radius < 0.0F) {
+                throw new IllegalArgumentException(
+                        "Collision radius must be finite and non-negative"
+                );
+            }
+        }
+    }
+
+    public record CollisionProxySpec(
+            String reference,
+            CollisionShape shape,
+            Optional<Float> hitRadius
+    ) {
+        public CollisionProxySpec {
+            reference = Objects.requireNonNull(reference, "reference").trim();
+            if (reference.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "Collision reference must not be blank"
+                );
+            }
+            shape = Objects.requireNonNull(shape, "shape");
+            hitRadius = hitRadius == null ? Optional.empty() : hitRadius;
+            if (hitRadius.isPresent()) {
+                float radius = hitRadius.get();
+                if (!Float.isFinite(radius) || radius < 0.0F) {
+                    throw new IllegalArgumentException(
+                            "Collision hit radius must be finite and non-negative"
+                    );
+                }
+            }
+        }
+    }
+
+    public record CollisionProfile(
+            boolean auto,
+            boolean segmented,
+            List<CollisionProxySpec> proxies
+    ) {
+        private static final CollisionProfile DEFAULT =
+                new CollisionProfile(true, true, List.of());
+        private static final CollisionProfile LEGACY =
+                new CollisionProfile(true, false, List.of());
+
+        public CollisionProfile(
+                boolean auto,
+                List<CollisionProxySpec> proxies
+        ) {
+            this(auto, true, proxies);
+        }
+
+        public CollisionProfile {
+            proxies = proxies == null ? List.of() : List.copyOf(proxies);
+        }
+
+        public static CollisionProfile defaults() {
+            return DEFAULT;
+        }
+
+        public static CollisionProfile legacyAutomatic() {
+            return LEGACY;
+        }
+    }
+
     public record ConstraintProfile(
             SimulationSpace simulationSpace,
             float rotationInertiaScale,
@@ -158,8 +320,30 @@ public final class PhysicsBoneSelectionPlan {
             boolean backstop,
             boolean headCollision,
             float hitRadiusScale,
+            CollisionProfile collision,
             boolean enabled
     ) {
+        public ConstraintProfile(
+                SimulationSpace simulationSpace,
+                float rotationInertiaScale,
+                SwingLimits swingLimits,
+                boolean backstop,
+                boolean headCollision,
+                float hitRadiusScale,
+                boolean enabled
+        ) {
+            this(
+                    simulationSpace,
+                    rotationInertiaScale,
+                    swingLimits,
+                    backstop,
+                    headCollision,
+                    hitRadiusScale,
+                    CollisionProfile.legacyAutomatic(),
+                    enabled
+            );
+        }
+
         public ConstraintProfile {
             simulationSpace = simulationSpace == null
                     ? SimulationSpace.AUTO
@@ -171,6 +355,9 @@ public final class PhysicsBoneSelectionPlan {
             hitRadiusScale = Float.isFinite(hitRadiusScale)
                     ? Math.max(0.0F, Math.min(4.0F, hitRadiusScale))
                     : 1.0F;
+            collision = collision == null
+                    ? CollisionProfile.defaults()
+                    : collision;
         }
 
         public static ConstraintProfile defaults(PartType type) {
@@ -192,6 +379,7 @@ public final class PhysicsBoneSelectionPlan {
                     collideWithHead,
                     collideWithHead,
                     1.0F,
+                    CollisionProfile.defaults(),
                     true
             );
         }
@@ -204,6 +392,7 @@ public final class PhysicsBoneSelectionPlan {
                     false,
                     false,
                     1.0F,
+                    CollisionProfile.defaults(),
                     false
             );
         }
@@ -286,8 +475,36 @@ public final class PhysicsBoneSelectionPlan {
             double confidence,
             SpringProfile profile,
             ConstraintProfile constraints,
+            StructureRole structureRole,
+            ChainSegment chainSegment,
             String reason
     ) {
+        public Decision(
+                boolean driven,
+                PartType type,
+                Source source,
+                String chainId,
+                double confidence,
+                SpringProfile profile,
+                ConstraintProfile constraints,
+                String reason
+        ) {
+            this(
+                    driven,
+                    type,
+                    source,
+                    chainId,
+                    confidence,
+                    profile,
+                    constraints,
+                    driven
+                            ? StructureRole.FLEXIBLE_CHAIN_SEGMENT
+                            : StructureRole.NONE,
+                    ChainSegment.none(),
+                    reason
+            );
+        }
+
         private static final Decision REJECTED = new Decision(
                 false,
                 PartType.GENERIC,
@@ -296,6 +513,8 @@ public final class PhysicsBoneSelectionPlan {
                 0.0D,
                 SpringProfile.defaults(PartType.GENERIC),
                 ConstraintProfile.defaults(PartType.GENERIC),
+                StructureRole.NONE,
+                ChainSegment.none(),
                 "not selected"
         );
 
@@ -314,6 +533,7 @@ public final class PhysicsBoneSelectionPlan {
                     confidence,
                     profile,
                     ConstraintProfile.defaults(type),
+                    StructureRole.FLEXIBLE_CHAIN_SEGMENT,
                     reason
             );
         }
@@ -327,6 +547,28 @@ public final class PhysicsBoneSelectionPlan {
                 ConstraintProfile constraints,
                 String reason
         ) {
+            return driven(
+                    type,
+                    source,
+                    chainId,
+                    confidence,
+                    profile,
+                    constraints,
+                    StructureRole.FLEXIBLE_CHAIN_SEGMENT,
+                    reason
+            );
+        }
+
+        public static Decision driven(
+                PartType type,
+                Source source,
+                String chainId,
+                double confidence,
+                SpringProfile profile,
+                ConstraintProfile constraints,
+                StructureRole structureRole,
+                String reason
+        ) {
             return new Decision(
                     true,
                     type,
@@ -335,6 +577,10 @@ public final class PhysicsBoneSelectionPlan {
                     confidence,
                     profile,
                     constraints,
+                    structureRole == null
+                            ? StructureRole.FLEXIBLE_CHAIN_SEGMENT
+                            : structureRole,
+                    ChainSegment.none(),
                     reason
             );
         }
@@ -345,6 +591,22 @@ public final class PhysicsBoneSelectionPlan {
                 double confidence,
                 String reason
         ) {
+            return rejected(
+                    type,
+                    source,
+                    confidence,
+                    StructureRole.NONE,
+                    reason
+            );
+        }
+
+        public static Decision rejected(
+                PartType type,
+                Source source,
+                double confidence,
+                StructureRole structureRole,
+                String reason
+        ) {
             return new Decision(
                     false,
                     type,
@@ -353,6 +615,30 @@ public final class PhysicsBoneSelectionPlan {
                     confidence,
                     SpringProfile.defaults(type),
                     ConstraintProfile.defaults(type),
+                    structureRole == null ? StructureRole.NONE : structureRole,
+                    ChainSegment.none(),
+                    reason
+            );
+        }
+
+        public Decision withDynamics(
+                SpringProfile updatedProfile,
+                ConstraintProfile updatedConstraints,
+                StructureRole updatedRole,
+                ChainSegment updatedSegment
+        ) {
+            return new Decision(
+                    driven,
+                    type,
+                    source,
+                    chainId,
+                    confidence,
+                    updatedProfile == null ? profile : updatedProfile,
+                    updatedConstraints == null
+                            ? constraints
+                            : updatedConstraints,
+                    updatedRole == null ? structureRole : updatedRole,
+                    updatedSegment == null ? chainSegment : updatedSegment,
                     reason
             );
         }

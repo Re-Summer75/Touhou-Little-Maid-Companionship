@@ -111,6 +111,8 @@ gradle-app.setting
 .gradletasknamecache
 
 **/build/
+!src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/collision/build/
+!src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/collision/build/*.java
 
 # Common working directory
 run/

@@ -4,6 +4,12 @@ import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedG
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneGeometry;
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneSelectionPlan;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySet;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.build.BodyCollisionGeometry;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.build.BodyCollisionGeometryAnalyzer;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.build.CollisionProxyComposer;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.build.CollisionProxyPlan;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.build.CollisionProxyPlanner;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -20,7 +26,6 @@ import java.util.Set;
  * the rendered orientation to those bones.
  */
 public final class PhysicsSolverLayout {
-    private static final float PIXELS_PER_BLOCK = 16.0F;
     private static final float MAX_ANGLE = 0.8F;
     private static final float MAX_TIP_DISPLACEMENT = 3.0F;
     private static final float EPSILON = 1.0E-6F;
@@ -58,6 +63,16 @@ public final class PhysicsSolverLayout {
         Set<AnimatedGeoBone> active = Collections.newSetFromMap(
                 new IdentityHashMap<>()
         );
+        BodyCollisionGeometry collisionGeometry =
+                BodyCollisionGeometryAnalyzer.analyze(geometry);
+        CollisionProxyPlanner collisionPlanner =
+                new CollisionProxyPlanner(
+                        geometry,
+                        collisionGeometry,
+                        plan
+                );
+        IdentityHashMap<AnimatedGeoBone, CollisionProxyPlan> collisionPlans =
+                new IdentityHashMap<>();
         IdentityHashMap<
                 AnimatedGeoBone,
                 PhysicsBoneSelectionPlan.SimulationSpace
@@ -78,28 +93,59 @@ public final class PhysicsSolverLayout {
             if (reference != null) {
                 addPath(reference, active, parents);
             }
-            PhysicsBoneSelectionPlan.ConstraintProfile constraints =
-                    plan.decision(bone).constraints();
-            if (constraints.enabled()
-                    && (constraints.backstop()
-                    || constraints.headCollision())
-                    && geometry.head() != null) {
-                addPath(geometry.head().bone(), active, parents);
+            CollisionProxyPlan collisionPlan = collisionPlanner.plan(
+                    bone,
+                    plan.decision(bone),
+                    space
+            );
+            collisionPlans.put(bone, collisionPlan);
+            for (AnimatedGeoBone collisionReference
+                    : collisionPlan.referenceBones()) {
+                addPath(collisionReference, active, parents);
             }
         }
 
-        List<Node> flattened = new ArrayList<>(active.size());
+        List<AnimatedGeoBone> activeOrder = orderActive(
+                preorder,
+                active,
+                parents,
+                spaces,
+                collisionPlans,
+                geometry
+        );
+        List<Node> flattened = new ArrayList<>(activeOrder.size());
+        IdentityHashMap<AnimatedGeoBone, Integer> flattenedIndices =
+                new IdentityHashMap<>();
         int[] drivenSlot = {0};
-        for (AnimatedGeoBone bone : model.topLevelBones()) {
-            appendActive(
-                    bone,
-                    -1,
-                    active,
-                    plan,
-                    parents,
-                    flattened,
-                    drivenSlot
+        for (AnimatedGeoBone bone : activeOrder) {
+            PhysicsBoneSelectionPlan.Decision decision = plan.decision(bone);
+            int slot = decision.driven() ? drivenSlot[0]++ : -1;
+            BoneKinematics.Metrics kinematics = decision.driven()
+                    ? plan.kinematics(bone)
+                    : null;
+            if (decision.driven() && kinematics == null) {
+                kinematics = BoneKinematics.measure(
+                        bone,
+                        parents.get(bone),
+                        nearestSolidAncestor(bone, parents),
+                        decision.type(),
+                        decision.structureRole()
+                );
+            }
+            int parentIndex = flattenedIndices.getOrDefault(
+                    parents.get(bone),
+                    -1
             );
+            flattenedIndices.put(bone, flattened.size());
+            flattened.add(new Node(
+                    bone,
+                    parentIndex,
+                    decision.driven() ? Role.DRIVEN : Role.ANCESTOR,
+                    slot,
+                    decision,
+                    plan.path(bone),
+                    kinematics
+            ));
         }
         Node[] nodes = flattened.toArray(Node[]::new);
         IdentityHashMap<AnimatedGeoBone, Integer> indices =
@@ -109,6 +155,13 @@ public final class PhysicsSolverLayout {
         }
         IdentityHashMap<AnimatedGeoBone, BoneRestPose> restPoses =
                 BoneRestPose.collect(model);
+        CollisionProxyComposer collisionComposer =
+                new CollisionProxyComposer(
+                        geometry,
+                        collisionGeometry,
+                        indices,
+                        restPoses
+                );
         for (Node node : nodes) {
             if (!node.driven()) {
                 continue;
@@ -122,33 +175,14 @@ public final class PhysicsSolverLayout {
             int referenceIndex = referenceBone == null
                     ? -1
                     : indices.getOrDefault(referenceBone, -1);
-            PhysicsBoneSelectionPlan.ConstraintProfile constraints =
-                    node.decision().constraints();
-            AnimatedGeoBone collisionReferenceBone =
-                    constraints.enabled()
-                            && (constraints.backstop()
-                            || constraints.headCollision())
-                            && geometry.head() != null
-                            ? geometry.head().bone()
-                            : null;
-            int collisionReferenceIndex =
-                    collisionReferenceBone == null
-                            ? -1
-                            : indices.getOrDefault(
-                                    collisionReferenceBone,
-                                    -1
-                            );
-            boolean drivenParent = node.parentIndex() >= 0
-                    && nodes[node.parentIndex()].driven();
             node.constraint = createConstraint(
                     node,
                     space,
                     referenceIndex,
-                    collisionReferenceIndex,
-                    collisionReferenceBone,
-                    drivenParent,
                     geometry,
-                    restPoses
+                    restPoses,
+                    collisionComposer,
+                    collisionPlans.get(node.bone())
             );
         }
         boolean referencesPreordered = true;
@@ -156,8 +190,8 @@ public final class PhysicsSolverLayout {
             if (nodes[index].driven()
                     && (nodes[index].constraint().referenceNodeIndex()
                     >= index
-                    || nodes[index].constraint()
-                    .collisionReferenceNodeIndex() >= index)) {
+                    || !nodes[index].constraint().collisionProxies()
+                            .referencesBefore(index))) {
                 referencesPreordered = false;
                 break;
             }
@@ -246,11 +280,10 @@ public final class PhysicsSolverLayout {
             Node node,
             PhysicsBoneSelectionPlan.SimulationSpace space,
             int referenceIndex,
-            int collisionReferenceIndex,
-            AnimatedGeoBone collisionReferenceBone,
-            boolean drivenParent,
             PhysicsBoneGeometry.Analysis geometry,
-            IdentityHashMap<AnimatedGeoBone, BoneRestPose> restPoses
+            IdentityHashMap<AnimatedGeoBone, BoneRestPose> restPoses,
+            CollisionProxyComposer collisionComposer,
+            CollisionProxyPlan collisionPlan
     ) {
         PhysicsBoneSelectionPlan.ConstraintProfile profile =
                 node.decision().constraints();
@@ -313,108 +346,23 @@ public final class PhysicsSolverLayout {
         }
         node.axis().cross(rightLocal, outwardLocal).normalize();
 
-        boolean hasHeadCollider = collisionReferenceBone != null
-                && !geometry.headBounds().isEmpty();
-        BoneRestPose collisionReferencePose = hasHeadCollider
-                ? restPoses.get(collisionReferenceBone)
-                : null;
-        Quaternionf collisionReferenceRest =
-                collisionReferencePose == null
-                        ? null
-                        : collisionReferencePose.orientation();
-        if (collisionReferenceRest == null) {
-            collisionReferenceRest = new Quaternionf();
-        }
-        Quaternionf collisionReferenceInverse =
-                new Quaternionf(collisionReferenceRest).conjugate();
-        Vector3f headCenter = geometry.headBounds().center();
-        Vector3f pivotOffsetModel = new Vector3f(pivot).sub(headCenter);
-        Vector3f collisionOutward = new Vector3f(pivotOffsetModel);
-        if (collisionOutward.lengthSquared() < EPSILON
-                && geometryNode != null) {
-            collisionOutward.set(geometryNode.center()).sub(headCenter);
-        }
-        if (collisionOutward.lengthSquared() < EPSILON) {
-            collisionOutward.set(0.0F, 0.0F, -1.0F);
-        } else {
-            collisionOutward.normalize();
-        }
-        Vector3f pivotFromReference =
-                collisionReferenceInverse.transform(
-                pivotOffsetModel,
-                new Vector3f()
-        );
-        Vector3f normalFromReference =
-                collisionReferenceInverse.transform(
-                collisionOutward,
-                new Vector3f()
-        ).normalize();
-
-        Vector3f headSize = geometry.headBounds().size();
-        float headRadius = Math.max(
-                headSize.x,
-                Math.max(headSize.y, headSize.z)
-        ) * 0.5F;
-        float hitRadius = deriveHitRadius(geometryNode, headRadius)
-                * profile.hitRadiusScale();
-        Vector3f planePointModel =
-                new Vector3f(collisionOutward).mul(headRadius);
-        Vector3f planePointFromReference =
-                collisionReferenceInverse.transform(
-                planePointModel,
-                new Vector3f()
-        );
-        float rawLeverArm =
-                node.kinematics().leverArm() / PIXELS_PER_BLOCK;
-        Vector3f rawTip = node.kinematics().effectivePivot()
-                .fma(rawLeverArm, node.axis());
-        Vector3f restTipModel = boneRestPose == null
-                ? boneRest.transform(
-                        node.axis(),
-                        new Vector3f()
-                ).normalize().mul(rawLeverArm).add(pivot)
-                : boneRestPose.transformPosition(rawTip, new Vector3f());
-        float leverArm = Math.max(
-                pivot.distance(restTipModel),
-                1.0F / PIXELS_PER_BLOCK
-        );
-        Vector3f restTip = restTipModel.sub(headCenter);
-        float planeDistance =
-                (restTip.x - planePointModel.x) * collisionOutward.x
-                        + (restTip.y - planePointModel.y)
-                        * collisionOutward.y
-                        + (restTip.z - planePointModel.z)
-                        * collisionOutward.z;
-        float minimumRadius = headRadius + hitRadius;
-        boolean legalBackstop = planeDistance + 0.02F >= hitRadius;
-        boolean legalSphere = restTip.length() + 0.02F >= minimumRadius;
-        boolean collisionType =
-                node.decision().type()
-                        != PhysicsBoneSelectionPlan.PartType.HEAD_SHELL;
-        boolean collisionEligible = profile.enabled()
-                && hasHeadCollider
-                && !drivenParent
-                && collisionType;
+        CollisionProxySet collisionProxies =
+                collisionComposer.compose(
+                        collisionPlan,
+                        node,
+                        boneRestPose,
+                        pivot
+                );
 
         return new SecondaryMotionConstraint(
                 profile.enabled(),
                 space,
                 referenceIndex,
-                collisionReferenceIndex,
                 profile.rotationInertiaScale(),
                 rightLocal,
                 outwardLocal,
                 limits,
-                collisionEligible && profile.backstop()
-                        && legalBackstop,
-                collisionEligible && profile.headCollision()
-                        && legalSphere,
-                pivotFromReference,
-                planePointFromReference,
-                normalFromReference,
-                headRadius,
-                hitRadius,
-                leverArm
+                collisionProxies
         );
     }
 
@@ -429,35 +377,6 @@ public final class PhysicsSolverLayout {
                 * profile.tipDisplacementScale()
                 / node.kinematics().leverArm();
         return Math.max(0.0F, Math.min(geometric, displacement));
-    }
-
-    private static float deriveHitRadius(
-            PhysicsBoneGeometry.Node node,
-            float headRadius
-    ) {
-        if (node == null || !node.hasGeometry()) {
-            return 0.0F;
-        }
-        Vector3f size = node.size();
-        float smallest = smallestPositive(size.x, size.y, size.z);
-        if (smallest <= EPSILON) {
-            return 0.0F;
-        }
-        return Math.min(smallest * 0.5F, headRadius * 0.15F);
-    }
-
-    private static float smallestPositive(float x, float y, float z) {
-        float result = Float.POSITIVE_INFINITY;
-        if (x > EPSILON) {
-            result = x;
-        }
-        if (y > EPSILON) {
-            result = Math.min(result, y);
-        }
-        if (z > EPSILON) {
-            result = Math.min(result, z);
-        }
-        return Float.isFinite(result) ? result : 0.0F;
     }
 
     private static void orthogonalize(Vector3f vector, Vector3f axis) {
@@ -492,51 +411,115 @@ public final class PhysicsSolverLayout {
         }
     }
 
-    private static void appendActive(
+    private static AnimatedGeoBone nearestSolidAncestor(
             AnimatedGeoBone bone,
-            int parentIndex,
-            Set<AnimatedGeoBone> active,
-            PhysicsBoneSelectionPlan plan,
-            Map<AnimatedGeoBone, AnimatedGeoBone> parents,
-            List<Node> output,
-            int[] nextDrivenSlot
+            Map<AnimatedGeoBone, AnimatedGeoBone> parents
     ) {
-        if (!active.contains(bone)) {
-            return;
+        AnimatedGeoBone cursor = parents.get(bone);
+        while (cursor != null) {
+            if (cursor.geoBone().cubes().getCubeCount() > 0) {
+                return cursor;
+            }
+            cursor = parents.get(cursor);
         }
-        PhysicsBoneSelectionPlan.Decision decision = plan.decision(bone);
-        int slot = decision.driven() ? nextDrivenSlot[0]++ : -1;
-        BoneKinematics.Metrics kinematics = null;
-        if (decision.driven()) {
-            kinematics = plan.kinematics(bone);
-            if (kinematics == null) {
-                kinematics = BoneKinematics.measure(
+        return null;
+    }
+
+    private static List<AnimatedGeoBone> orderActive(
+            List<AnimatedGeoBone> preorder,
+            Set<AnimatedGeoBone> active,
+            Map<AnimatedGeoBone, AnimatedGeoBone> parents,
+            Map<AnimatedGeoBone, PhysicsBoneSelectionPlan.SimulationSpace> spaces,
+            Map<AnimatedGeoBone, CollisionProxyPlan> collisionPlans,
+            PhysicsBoneGeometry.Analysis geometry
+    ) {
+        List<AnimatedGeoBone> output = new ArrayList<>(active.size());
+        Set<AnimatedGeoBone> emitted = Collections.newSetFromMap(
+                new IdentityHashMap<>()
+        );
+        while (output.size() < active.size()) {
+            boolean progressed = false;
+            for (AnimatedGeoBone bone : preorder) {
+                if (!active.contains(bone)
+                        || emitted.contains(bone)
+                        || !dependenciesReady(
                         bone,
-                        parents.get(bone),
-                        decision.type()
-                );
+                        active,
+                        emitted,
+                        parents,
+                        spaces,
+                        collisionPlans,
+                        geometry
+                )) {
+                    continue;
+                }
+                emitted.add(bone);
+                output.add(bone);
+                progressed = true;
+            }
+            if (!progressed) {
+                appendRemaining(preorder, active, emitted, output);
             }
         }
-        int index = output.size();
-        output.add(new Node(
+        return output;
+    }
+
+    private static boolean dependenciesReady(
+            AnimatedGeoBone bone,
+            Set<AnimatedGeoBone> active,
+            Set<AnimatedGeoBone> emitted,
+            Map<AnimatedGeoBone, AnimatedGeoBone> parents,
+            Map<AnimatedGeoBone, PhysicsBoneSelectionPlan.SimulationSpace> spaces,
+            Map<AnimatedGeoBone, CollisionProxyPlan> collisionPlans,
+            PhysicsBoneGeometry.Analysis geometry
+    ) {
+        if (!ready(parents.get(bone), bone, active, emitted)) {
+            return false;
+        }
+        PhysicsBoneSelectionPlan.SimulationSpace space = spaces.get(bone);
+        if (space != null
+                && !ready(
+                referenceBone(space, geometry),
                 bone,
-                parentIndex,
-                decision.driven() ? Role.DRIVEN : Role.ANCESTOR,
-                slot,
-                decision,
-                plan.path(bone),
-                kinematics
-        ));
-        for (AnimatedGeoBone child : bone.children()) {
-            appendActive(
-                    child,
-                    index,
-                    active,
-                    plan,
-                    parents,
-                    output,
-                    nextDrivenSlot
-            );
+                active,
+                emitted
+        )) {
+            return false;
+        }
+        CollisionProxyPlan collisionPlan = collisionPlans.get(bone);
+        if (collisionPlan != null) {
+            for (AnimatedGeoBone reference
+                    : collisionPlan.referenceBones()) {
+                if (!ready(reference, bone, active, emitted)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private static boolean ready(
+            AnimatedGeoBone dependency,
+            AnimatedGeoBone bone,
+            Set<AnimatedGeoBone> active,
+            Set<AnimatedGeoBone> emitted
+    ) {
+        return dependency == null
+                || dependency == bone
+                || !active.contains(dependency)
+                || emitted.contains(dependency);
+    }
+
+    private static void appendRemaining(
+            List<AnimatedGeoBone> preorder,
+            Set<AnimatedGeoBone> active,
+            Set<AnimatedGeoBone> emitted,
+            List<AnimatedGeoBone> output
+    ) {
+        for (AnimatedGeoBone bone : preorder) {
+            if (active.contains(bone) && emitted.add(bone)) {
+                output.add(bone);
+            }
         }
     }
 

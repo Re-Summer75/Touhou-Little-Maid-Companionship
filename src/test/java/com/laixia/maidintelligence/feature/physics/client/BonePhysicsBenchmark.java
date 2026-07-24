@@ -7,6 +7,7 @@ import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.raw.pojo.RawGeoMod
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.raw.tree.RawGeometryTree;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.GeoBuilder;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoModel;
+import com.laixia.maidintelligence.feature.physics.client.benchmark.CollisionBreakdownBenchmark;
 import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
 import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
 import org.joml.Vector3f;
@@ -15,6 +16,7 @@ import java.io.InputStream;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.IdentityHashMap;
 import java.util.Locale;
 
 /**
@@ -23,8 +25,10 @@ import java.util.Locale;
  * {@link BonePhysicsVerification}.
  */
 public final class BonePhysicsBenchmark {
-    private static final int WARMUP_FRAMES = 8_000;
+    private static final int WARMUP_FRAMES = 20_000;
     private static final int MEASURED_FRAMES = 20_000;
+    private static final IdentityHashMap<AnimatedGeoBone, Vector3f>
+            INITIAL_ROTATIONS = new IdentityHashMap<>();
     private static volatile double blackhole;
 
     private BonePhysicsBenchmark() {
@@ -128,6 +132,7 @@ public final class BonePhysicsBenchmark {
                 activeConstrained.nanosecondsPerFrame()
                         / activeLegacy.nanosecondsPerFrame()
         );
+        CollisionBreakdownBenchmark.run();
     }
 
     private static void warmReference(
@@ -173,12 +178,13 @@ public final class BonePhysicsBenchmark {
             int frames
     ) {
         Vector3f acceleration = new Vector3f();
-        long allocatedBefore = allocations.currentThreadBytes();
+        long allocatedBytes = allocations.available() ? 0L : -1L;
         long solveNanos = 0L;
         double checksum = 0.0D;
         for (int frame = 0; frame < frames; frame++) {
             resetPose(model, frame);
             motion(frame, acceleration);
+            long allocatedBefore = allocations.currentThreadBytes();
             long start = System.nanoTime();
             solver.solve(
                     acceleration,
@@ -187,14 +193,18 @@ public final class BonePhysicsBenchmark {
                     false
             );
             solveNanos += System.nanoTime() - start;
+            allocatedBytes = allocations.accumulate(
+                    allocatedBytes,
+                    allocatedBefore,
+                    allocations.currentThreadBytes()
+            );
             checksum += model.topLevelBones().get(0).getRotationX();
         }
-        long allocatedAfter = allocations.currentThreadBytes();
         blackhole = checksum;
         return BenchmarkResult.of(
                 solveNanos,
                 frames,
-                allocations.delta(allocatedBefore, allocatedAfter)
+                allocatedBytes
         );
     }
 
@@ -205,12 +215,13 @@ public final class BonePhysicsBenchmark {
             int frames
     ) {
         Vector3f acceleration = new Vector3f();
-        long allocatedBefore = allocations.currentThreadBytes();
+        long allocatedBytes = allocations.available() ? 0L : -1L;
         long solveNanos = 0L;
         double checksum = 0.0D;
         for (int frame = 0; frame < frames; frame++) {
             resetPose(model, frame);
             motion(frame, acceleration);
+            long allocatedBefore = allocations.currentThreadBytes();
             long start = System.nanoTime();
             solver.solve(
                     acceleration,
@@ -219,14 +230,18 @@ public final class BonePhysicsBenchmark {
                     false
             );
             solveNanos += System.nanoTime() - start;
+            allocatedBytes = allocations.accumulate(
+                    allocatedBytes,
+                    allocatedBefore,
+                    allocations.currentThreadBytes()
+            );
             checksum += solver.lastPeakDeflection();
         }
-        long allocatedAfter = allocations.currentThreadBytes();
         blackhole = checksum;
         return BenchmarkResult.of(
                 solveNanos,
                 frames,
-                allocations.delta(allocatedBefore, allocatedAfter)
+                allocatedBytes
         );
     }
 
@@ -242,13 +257,13 @@ public final class BonePhysicsBenchmark {
             int frame,
             int ordinal
     ) {
-        Vector3f base = bone.geoBone().rotation();
+        Vector3f initial = initialRotation(bone);
         float wave = (float) Math.sin(
                 frame * 0.071D + ordinal * 0.193D
         );
-        bone.setRotationX(base.x + wave * 0.018F);
-        bone.setRotationY(base.y - wave * 0.011F);
-        bone.setRotationZ(base.z + wave * 0.009F);
+        bone.setRotationX(initial.x + wave * 0.018F);
+        bone.setRotationY(initial.y - wave * 0.011F);
+        bone.setRotationZ(initial.z + wave * 0.009F);
         bone.setPositionX(0.0F);
         bone.setPositionY(0.0F);
         bone.setPositionZ(0.0F);
@@ -257,6 +272,15 @@ public final class BonePhysicsBenchmark {
             next = resetPose(child, frame, next);
         }
         return next;
+    }
+
+    private static Vector3f initialRotation(AnimatedGeoBone bone) {
+        Vector3f rotation = INITIAL_ROTATIONS.get(bone);
+        if (rotation == null) {
+            rotation = bone.geoBone().rotation();
+            INITIAL_ROTATIONS.put(bone, rotation);
+        }
+        return rotation;
     }
 
     private static void motion(int frame, Vector3f output) {
@@ -372,8 +396,14 @@ public final class BonePhysicsBenchmark {
                     : bean.getThreadAllocatedBytes(threadId);
         }
 
-        private long delta(long before, long after) {
-            return before < 0L || after < 0L ? -1L : after - before;
+        private boolean available() {
+            return bean != null;
+        }
+
+        private long accumulate(long total, long before, long after) {
+            return total < 0L || before < 0L || after < 0L
+                    ? -1L
+                    : total + after - before;
         }
     }
 }

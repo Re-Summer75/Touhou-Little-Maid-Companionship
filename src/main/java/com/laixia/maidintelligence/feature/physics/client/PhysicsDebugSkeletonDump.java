@@ -46,15 +46,27 @@ final class PhysicsDebugSkeletonDump {
 
         int[] counts = new int[2];
         for (AnimatedGeoBone bone : model.topLevelBones()) {
-            dumpBone(player, bone, null, 0, counts, plan);
+            dumpBone(player, bone, null, null, 0, counts, plan);
         }
+        PhysicsCollisionDebugDump.Summary collisions =
+                PhysicsCollisionDebugDump.dump(maid);
 
-        LOGGER.info("=== End dump: {} bones, {} driven ===", counts[0], counts[1]);
+        LOGGER.info(
+                "=== End dump: {} bones, {} driven, {} proxies, "
+                        + "{} penetrating ===",
+                counts[0],
+                counts[1],
+                collisions.proxyCount(),
+                collisions.penetratingCount()
+        );
         chat(player, Component.literal(String.format(
                 Locale.ROOT,
-                "共 %d 骨骼，%d 受物理驱动。完整树见 run/logs/latest.log",
+                "共 %d 骨骼，%d 受物理驱动；碰撞代理 %d，穿透 %d。"
+                        + "完整树见 run/logs/latest.log",
                 counts[0],
-                counts[1]
+                counts[1],
+                collisions.proxyCount(),
+                collisions.penetratingCount()
         )).withStyle(ChatFormatting.GRAY));
     }
 
@@ -62,6 +74,7 @@ final class PhysicsDebugSkeletonDump {
             Player player,
             AnimatedGeoBone bone,
             AnimatedGeoBone parent,
+            AnimatedGeoBone nearestSolidAncestor,
             int depth,
             int[] counts,
             PhysicsBoneSelectionPlan plan
@@ -80,7 +93,9 @@ final class PhysicsDebugSkeletonDump {
                 metrics = BoneKinematics.measure(
                         bone,
                         parent,
-                        decision.type()
+                        nearestSolidAncestor,
+                        decision.type(),
+                        decision.structureRole()
                 );
             }
             kinematics = String.format(
@@ -88,7 +103,8 @@ final class PhysicsDebugSkeletonDump {
                     " effectivePivot=(%.2f,%.2f,%.2f)"
                             + " physicsAxis=(%.3f,%.3f,%.3f)"
                             + " pivotCorrected=%s supportConfidence=%.3f"
-                            + " safeAngle=%.1fdeg",
+                            + " primaryCluster=%s segmentLength=%.2fpx"
+                            + " safetyLever=%.2fpx safeAngle=%.1fdeg",
                     metrics.effectivePivot().x * 16.0F,
                     metrics.effectivePivot().y * 16.0F,
                     metrics.effectivePivot().z * 16.0F,
@@ -97,6 +113,9 @@ final class PhysicsDebugSkeletonDump {
                     metrics.axis().z,
                     metrics.compensatesPivot(),
                     metrics.supportConfidence(),
+                    metrics.usesDominantCluster(),
+                    metrics.segmentLength(),
+                    metrics.leverArm(),
                     Math.toDegrees(metrics.safeAngle()
                             * decision.profile().angleScale())
             );
@@ -108,7 +127,7 @@ final class PhysicsDebugSkeletonDump {
                         + " pivot=(%.2f,%.2f,%.2f)"
                         + " rot=(%.1f,%.1f,%.1f)deg scale=(%.2f,%.2f,%.2f)"
                         + " cubes=%d children=%d decision=%s/%s confidence=%.3f"
-                        + " chain=%s reason=\"%s\"%s%s",
+                        + " chain=%s%s reason=\"%s\"%s%s",
                 "  ".repeat(depth),
                 driven ? "[P] " : "",
                 bone.getName(),
@@ -132,6 +151,7 @@ final class PhysicsDebugSkeletonDump {
                 decision.type(),
                 decision.confidence(),
                 decision.chainId(),
+                PhysicsDecisionDebugText.describe(decision),
                 decision.reason(),
                 kinematics,
                 driven ? " <DRIVEN>" : ""
@@ -158,8 +178,20 @@ final class PhysicsDebugSkeletonDump {
             )).withStyle(ChatFormatting.YELLOW));
         }
 
+        AnimatedGeoBone nextSolidAncestor =
+                bone.geoBone().cubes().getCubeCount() > 0
+                        ? bone
+                        : nearestSolidAncestor;
         for (AnimatedGeoBone child : bone.children()) {
-            dumpBone(player, child, bone, depth + 1, counts, plan);
+            dumpBone(
+                    player,
+                    child,
+                    bone,
+                    nextSolidAncestor,
+                    depth + 1,
+                    counts,
+                    plan
+            );
         }
     }
 

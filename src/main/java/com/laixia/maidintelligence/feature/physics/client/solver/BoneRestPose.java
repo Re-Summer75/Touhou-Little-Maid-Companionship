@@ -12,7 +12,7 @@ import java.util.IdentityHashMap;
 /**
  * Exact bind-pose affine transform matching Gecko's render order.
  */
-final class BoneRestPose {
+public final class BoneRestPose {
     private static final float PIXELS_PER_BLOCK = 16.0F;
 
     private final Quaternionf orientation;
@@ -76,11 +76,11 @@ final class BoneRestPose {
         }
     }
 
-    Quaternionf orientation() {
+    public Quaternionf orientation() {
         return orientation;
     }
 
-    Vector3f transformPosition(Vector3f position, Vector3f output) {
+    public Vector3f transformPosition(Vector3f position, Vector3f output) {
         return transform.transformPosition(position, output);
     }
 }

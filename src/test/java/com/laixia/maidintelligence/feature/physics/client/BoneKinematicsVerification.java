@@ -7,6 +7,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadWinefoxGeoModel;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.requireVectorNear;
 
@@ -136,6 +137,79 @@ final class BoneKinematicsVerification {
                 scaledExpected,
                 1.0E-5F,
                 "Virtual-pivot compensation ignored animated bone scale"
+        );
+        verifiesDominantClusterSafety();
+        verifiesSeparatedThinCubes();
+    }
+
+    private static void verifiesDominantClusterSafety() {
+        AnimatedGeoModel model = modelFromJson("""
+                {"format_version":"1.12.0","minecraft:geometry":[{
+                  "description":{"identifier":"geometry.cluster_kinematics",
+                    "texture_width":32,"texture_height":32},
+                  "bones":[
+                    {"name":"Head","pivot":[0,8,0],
+                     "cubes":[{"origin":[-4,4,-4],"size":[8,8,8],"uv":[0,0]}]},
+                    {"name":"Hair","parent":"Head","pivot":[0,8,0],
+                     "cubes":[
+                       {"origin":[-.5,0,-.5],"size":[1,8,1],"uv":[0,0]},
+                       {"origin":[64,7,0],"size":[.25,.25,.25],"uv":[0,0]}
+                     ]}
+                  ]}]}
+                """);
+        PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
+                "verification:cluster_kinematics",
+                model,
+                PhysicsMetadata.EMPTY
+        );
+        BoneKinematics.Metrics metrics =
+                plan.kinematics(model.bones().get("Hair"));
+        require(
+                metrics != null
+                        && metrics.usesDominantCluster()
+                        && metrics.axis().y < -0.80F,
+                "Detached decoration distorted the primary flexible frame"
+        );
+        require(
+                metrics.leverArm() > 7.5F
+                        && metrics.segmentLength() < metrics.leverArm() * 0.75F,
+                "Dominant-cluster frame did not separate segment length "
+                        + "from the full-mesh safety lever"
+        );
+    }
+
+    private static void verifiesSeparatedThinCubes() {
+        AnimatedGeoModel model = modelFromJson("""
+                {"format_version":"1.12.0","minecraft:geometry":[{
+                  "description":{"identifier":"geometry.thin_cube_partition",
+                    "texture_width":32,"texture_height":32},
+                  "bones":[
+                    {"name":"Head","pivot":[0,8,0],
+                     "cubes":[{"origin":[-4,4,-4],"size":[8,8,8],"uv":[0,0]}]},
+                    {"name":"Hair","parent":"Head","pivot":[0,8,0],
+                     "cubes":[
+                       {"origin":[-.5,0,0],"size":[1,8,0],"uv":[0,0],
+                        "pivot":[0,4,0],"rotation":[0,0,25]},
+                       {"origin":[8,0,0],"size":[.2,8,0],"uv":[0,0],
+                        "pivot":[8,4,0],"rotation":[0,0,-25]},
+                       {"origin":[100,0,0],"size":[1,0,0],"uv":[0,0],
+                        "pivot":[100,0,0],"rotation":[20,30,40]}
+                     ]}
+                  ]}]}
+                """);
+        PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
+                "verification:thin_cube_partition",
+                model,
+                PhysicsMetadata.EMPTY
+        );
+        BoneKinematics.Metrics metrics =
+                plan.kinematics(model.bones().get("Hair"));
+        require(
+                metrics != null
+                        && metrics.usesDominantCluster()
+                        && metrics.leverArm() < 20.0F,
+                "Rotated zero-thickness planes were falsely connected "
+                        + "or a rank-one cube entered the safety envelope"
         );
     }
 }

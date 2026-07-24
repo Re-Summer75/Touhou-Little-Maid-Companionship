@@ -9,6 +9,7 @@ import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolve
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -54,6 +55,11 @@ public final class MaidBonePhysics {
 
     static PhysicsBoneSelectionPlan lastPlan(LivingEntity maid) {
         return LAST_PLANS.get(maid);
+    }
+
+    static SpringBoneSolver lastSolver(Entity maid) {
+        MaidState state = STATES.get(maid);
+        return state == null ? null : state.solver;
     }
 
     public static void apply(LivingEntity maid, AnimatedGeoModel model) {

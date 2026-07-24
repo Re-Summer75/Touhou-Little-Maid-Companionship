@@ -5,6 +5,9 @@ import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedG
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneGeometry;
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneSelectionPlan;
 import com.laixia.maidintelligence.feature.physics.client.PhysicsMetadata;
+import com.laixia.maidintelligence.feature.physics.client.discovery.structure.BoneStructureAnalysis;
+import com.laixia.maidintelligence.feature.physics.client.discovery.structure.BoneStructureAnalyzer;
+import com.laixia.maidintelligence.feature.physics.client.discovery.structure.ChainDynamicsPlanner;
 
 import java.util.Set;
 
@@ -23,6 +26,8 @@ public final class DiscoveryPlanner {
     ) {
         PhysicsBoneGeometry.Analysis geometry =
                 PhysicsBoneGeometry.analyze(model);
+        BoneStructureAnalysis structures =
+                BoneStructureAnalyzer.analyze(geometry);
         PhysicsBoneSelectionPlan.Builder plan =
                 PhysicsBoneSelectionPlan.builder(modelId);
         initialize(plan, geometry);
@@ -42,16 +47,24 @@ public final class DiscoveryPlanner {
                     excluded,
                     metadata.origin()
             );
+            ChainDynamicsPlanner.apply(plan, geometry);
             return plan.build();
         }
 
-        AutomaticPlanSelector.apply(plan, geometry, model, excluded);
+        AutomaticPlanSelector.apply(
+                plan,
+                geometry,
+                model,
+                structures,
+                excluded
+        );
         MetadataRejections.rejectExcluded(
                 plan,
                 geometry,
                 excluded,
                 metadata.origin()
         );
+        ChainDynamicsPlanner.apply(plan, geometry);
         return plan.build();
     }
 

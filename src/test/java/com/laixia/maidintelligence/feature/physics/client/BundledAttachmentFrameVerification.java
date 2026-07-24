@@ -19,10 +19,12 @@ final class BundledAttachmentFrameVerification {
                 zhiban,
                 PhysicsMetadata.EMPTY
         );
-        requireAxisY(zhibanPlan, zhiban, "bone29", -0.25F);
-        requireAxisY(zhibanPlan, zhiban, "bone30", -0.25F);
-        requireAxisY(zhibanPlan, zhiban, "bone27", -0.25F);
-        requireAxisY(zhibanPlan, zhiban, "bone31", -0.25F);
+        requireRigidWithoutFrame(zhibanPlan, zhiban, "bone29");
+        requireRigidWithoutFrame(zhibanPlan, zhiban, "bone30");
+        requireRigidWithoutFrame(zhibanPlan, zhiban, "bone27");
+        requireRigidWithoutFrame(zhibanPlan, zhiban, "bone31");
+        requireAxisY(zhibanPlan, zhiban, "bone3", -0.25F);
+        requireAxisY(zhibanPlan, zhiban, "bone9", -0.25F);
         requireAxisY(zhibanPlan, zhiban, "bone34", 0.25F);
 
         AnimatedGeoModel winefox = new AnimatedGeoModel(loadGeoModel(
@@ -80,6 +82,18 @@ final class BundledAttachmentFrameVerification {
                         && metrics.supportConfidence() >= 0.20F,
                 "Winefox Hanfu " + boneName
                         + " attached at its lower endpoint"
+        );
+    }
+
+    private static void requireRigidWithoutFrame(
+            PhysicsBoneSelectionPlan plan,
+            AnimatedGeoModel model,
+            String boneName
+    ) {
+        require(
+                !plan.isDriven(model.bones().get(boneName))
+                        && plan.kinematics(model.bones().get(boneName)) == null,
+                boneName + " rigid attachment unexpectedly retained physics"
         );
     }
 

@@ -49,7 +49,8 @@ final class PhysicsBoneDiscoverer {
                             bone,
                             parent,
                             nearestSolidAncestor,
-                            decision.type()
+                            decision.type(),
+                            decision.structureRole()
                     )
             );
         }

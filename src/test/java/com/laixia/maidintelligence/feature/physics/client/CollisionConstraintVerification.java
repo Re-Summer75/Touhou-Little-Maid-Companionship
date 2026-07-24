@@ -2,6 +2,8 @@ package com.laixia.maidintelligence.feature.physics.client;
 
 import com.laixia.maidintelligence.feature.physics.client.SecondaryMotionFixture.Fixture;
 import com.laixia.maidintelligence.feature.physics.client.solver.SecondaryMotionConstraint;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionScratch;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -15,6 +17,7 @@ final class CollisionConstraintVerification {
     }
 
     static void run() {
+        CollisionProxyFrameworkVerification.run();
         verifiesBackstopProjection();
         verifiesHeadSphereProjection();
         verifiesConstraintInvariantsAcrossFrameRates();
@@ -30,15 +33,20 @@ final class CollisionConstraintVerification {
         );
         SecondaryMotionConstraint constraint =
                 fixture.hairNode().constraint();
-        require(constraint.hasBackstop(), "Backstop was not generated");
+        require(
+                constraint.collisionProxies().hasKind(
+                        CollisionProxyKind.PLANE
+                ),
+                "Backstop Plane proxy was not generated"
+        );
         int projections = driveInward(fixture);
-        float clearance = constraint.backstopClearance(
+        float clearance = constraint.collisionProxies().clearance(
+                constraint.collisionProxies().firstIndex(
+                        CollisionProxyKind.PLANE
+                ),
                 currentDirection(fixture),
                 new Quaternionf(),
-                new Vector3f(),
-                new Vector3f(),
-                new Vector3f(),
-                new Vector3f()
+                new CollisionScratch()
         );
         require(projections > 0, "Backstop projection never ran");
         require(clearance >= -EPSILON, "Backstop was penetrated");
@@ -54,15 +62,19 @@ final class CollisionConstraintVerification {
         SecondaryMotionConstraint constraint =
                 fixture.hairNode().constraint();
         require(
-                constraint.hasHeadCollision(),
+                constraint.collisionProxies().hasKind(
+                        CollisionProxyKind.SPHERE
+                ),
                 "Head sphere proxy was not generated"
         );
         int projections = driveInward(fixture);
-        float clearance = constraint.headClearance(
+        float clearance = constraint.collisionProxies().clearance(
+                constraint.collisionProxies().firstIndex(
+                        CollisionProxyKind.SPHERE
+                ),
                 currentDirection(fixture),
                 new Quaternionf(),
-                new Vector3f(),
-                new Vector3f()
+                new CollisionScratch()
         );
         require(projections > 0, "Head sphere projection never ran");
         require(clearance >= -EPSILON, "Head sphere was penetrated");
@@ -129,22 +141,24 @@ final class CollisionConstraintVerification {
                 fixture.hairNode().constraint();
         Quaternionf reference = new Quaternionf().rotateZ(headRotation);
         require(
-                constraint.backstopClearance(
+                constraint.collisionProxies().clearance(
+                        constraint.collisionProxies().firstIndex(
+                                CollisionProxyKind.PLANE
+                        ),
                         direction,
                         reference,
-                        new Vector3f(),
-                        new Vector3f(),
-                        new Vector3f(),
-                        new Vector3f()
+                        new CollisionScratch()
                 ) >= -EPSILON,
                 "Combined Backstop was penetrated at " + fps + " FPS"
         );
         require(
-                constraint.headClearance(
+                constraint.collisionProxies().clearance(
+                        constraint.collisionProxies().firstIndex(
+                                CollisionProxyKind.SPHERE
+                        ),
                         direction,
                         reference,
-                        new Vector3f(),
-                        new Vector3f()
+                        new CollisionScratch()
                 ) >= -EPSILON,
                 "Combined head sphere was penetrated at " + fps + " FPS"
         );

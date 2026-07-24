@@ -19,11 +19,17 @@ public final class BonePhysicsVerification {
         BoneAttachmentFrameVerification.run();
         RigidAttachmentVerification.run();
         BundledGeckoModelVerification.run();
+        AccessoryChainIndependenceVerification.run();
         BundledAttachmentFrameVerification.run();
         BundledSupportGeometryVerification.run();
         PhysicsPlanCacheVerification.run();
         SolverEquivalenceVerification.run();
         SecondaryMotionConstraintVerification.run();
+        BodyCollisionGeometryVerification.run();
+        CollisionLayoutVerification.run();
+        RuntimeEndpointHierarchyVerification.run();
+        AffineCollisionScaleVerification.run();
+        CollisionProxyDebugDataVerification.run();
         SecondaryMotionAllocationVerification.run();
         System.out.println("Bone physics verification passed.");
     }

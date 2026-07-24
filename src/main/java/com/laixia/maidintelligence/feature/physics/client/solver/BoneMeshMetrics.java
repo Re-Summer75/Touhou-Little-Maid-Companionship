@@ -13,11 +13,18 @@ record BoneMeshMetrics(
         MeshSupportBox[] boxes,
         Vector3f[] corners,
         MeshPrincipalAxis principalAxis,
+        float totalWeight,
+        int cubeCount,
         boolean empty
 ) {
     private static final float EPSILON = 1.0E-6F;
+    private static final float NOMINAL_SURFACE_THICKNESS = 1.0F / 16.0F;
 
     static BoneMeshMetrics measure(GeoMesh mesh) {
+        return measure(mesh, null);
+    }
+
+    static BoneMeshMetrics measure(GeoMesh mesh, int[] cubeIndices) {
         Vector3f min = new Vector3f(
                 Float.POSITIVE_INFINITY,
                 Float.POSITIVE_INFINITY,
@@ -32,15 +39,21 @@ record BoneMeshMetrics(
         List<Vector3f> points = new ArrayList<>();
         List<MeshSupportBox> boxes = new ArrayList<>();
         float totalWeight = 0.0F;
-        for (int cube = 0; cube < mesh.getCubeCount(); cube++) {
+        int count = cubeIndices == null
+                ? mesh.getCubeCount()
+                : cubeIndices.length;
+        int includedCount = 0;
+        for (int cursor = 0; cursor < count; cursor++) {
+            int cube = cubeIndices == null ? cursor : cubeIndices[cursor];
             Vector3f position = mesh.position(cube);
             Vector3f dx = mesh.dx(cube);
             Vector3f dy = mesh.dy(cube);
             Vector3f dz = mesh.dz(cube);
-            float weight = Math.max(
-                    dx.length() * dy.length() * dz.length(),
-                    EPSILON
-            );
+            if (visibleRank(dx, dy, dz) < 2) {
+                continue;
+            }
+            includedCount++;
+            float weight = cubeWeight(dx, dy, dz);
             centroid.add(
                     new Vector3f(position)
                             .fma(0.5F, dx)
@@ -60,6 +73,8 @@ record BoneMeshMetrics(
                     new MeshSupportBox[0],
                     new Vector3f[0],
                     MeshPrincipalAxis.measure(List.of(), centroid),
+                    0.0F,
+                    0,
                     true
             );
         }
@@ -71,8 +86,41 @@ record BoneMeshMetrics(
                 boxes.toArray(MeshSupportBox[]::new),
                 points.toArray(Vector3f[]::new),
                 MeshPrincipalAxis.measure(points, centroid),
+                totalWeight,
+                includedCount,
                 false
         );
+    }
+
+    private static float cubeWeight(
+            Vector3f dx,
+            Vector3f dy,
+            Vector3f dz
+    ) {
+        float x = dx.length();
+        float y = dy.length();
+        float z = dz.length();
+        float volume = x * y * z;
+        float area = Math.max(x * y, Math.max(x * z, y * z));
+        return Math.max(
+                EPSILON,
+                Math.max(volume, area * NOMINAL_SURFACE_THICKNESS)
+        );
+    }
+
+    private static int visibleRank(
+            Vector3f dx,
+            Vector3f dy,
+            Vector3f dz
+    ) {
+        int rank = dx.lengthSquared() > EPSILON ? 1 : 0;
+        if (dy.lengthSquared() > EPSILON) {
+            rank++;
+        }
+        if (dz.lengthSquared() > EPSILON) {
+            rank++;
+        }
+        return rank;
     }
 
     private static void includeCorners(
@@ -160,6 +208,19 @@ record BoneMeshMetrics(
         float maximum = 0.0F;
         for (Vector3f corner : corners) {
             maximum = Math.max(maximum, point.distance(corner));
+        }
+        return maximum;
+    }
+
+    float maximumProjectionFrom(Vector3f point, Vector3f axis) {
+        float maximum = 0.0F;
+        for (Vector3f corner : corners) {
+            maximum = Math.max(
+                    maximum,
+                    (corner.x - point.x) * axis.x
+                            + (corner.y - point.y) * axis.y
+                            + (corner.z - point.z) * axis.z
+            );
         }
         return maximum;
     }

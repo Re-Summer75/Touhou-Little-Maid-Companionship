@@ -1,15 +1,15 @@
 package com.laixia.maidintelligence.feature.physics.client.solver;
 
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneSelectionPlan;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySet;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 /**
- * Immutable, layout-local constraint data for one driven bone.
+ * Immutable swing and reference-space data for one driven bone.
  *
- * <p>All vectors are stored in either bone-local or reference-bone-local
- * space. The solver transforms them into model space using reusable scratch
- * objects, so the projection path does not allocate per frame.</p>
+ * <p>Collision shapes live in a generic {@link CollisionProxySet}; this class
+ * only owns the animation-relative angular constraint.</p>
  */
 public final class SecondaryMotionConstraint {
     private static final float EPSILON = 1.0E-6F;
@@ -17,7 +17,6 @@ public final class SecondaryMotionConstraint {
     private final boolean enabled;
     private final PhysicsBoneSelectionPlan.SimulationSpace simulationSpace;
     private final int referenceNodeIndex;
-    private final int collisionReferenceNodeIndex;
     private final float rotationInertiaScale;
     private final Vector3f axisLocal;
     private final Vector3f rightLocal;
@@ -27,37 +26,21 @@ public final class SecondaryMotionConstraint {
     private final float tanOutward;
     private final float tanInward;
     private final float cosMinimumSwing;
-    private final boolean backstop;
-    private final boolean headCollision;
-    private final Vector3f pivotFromReference;
-    private final Vector3f backstopPointFromReference;
-    private final Vector3f backstopNormalFromReference;
-    private final float headRadius;
-    private final float hitRadius;
-    private final float leverArm;
+    private final CollisionProxySet collisionProxies;
 
     SecondaryMotionConstraint(
             boolean enabled,
             PhysicsBoneSelectionPlan.SimulationSpace simulationSpace,
             int referenceNodeIndex,
-            int collisionReferenceNodeIndex,
             float rotationInertiaScale,
             Vector3f rightLocal,
             Vector3f outwardLocal,
             PhysicsBoneSelectionPlan.SwingLimits limits,
-            boolean backstop,
-            boolean headCollision,
-            Vector3f pivotFromReference,
-            Vector3f backstopPointFromReference,
-            Vector3f backstopNormalFromReference,
-            float headRadius,
-            float hitRadius,
-            float leverArm
+            CollisionProxySet collisionProxies
     ) {
         this.enabled = enabled;
         this.simulationSpace = simulationSpace;
         this.referenceNodeIndex = referenceNodeIndex;
-        this.collisionReferenceNodeIndex = collisionReferenceNodeIndex;
         this.rotationInertiaScale = rotationInertiaScale;
         this.rightLocal = new Vector3f(rightLocal);
         this.outwardLocal = new Vector3f(outwardLocal);
@@ -73,16 +56,9 @@ public final class SecondaryMotionConstraint {
                 Math.min(limits.left(), limits.right()),
                 Math.min(limits.outward(), limits.inward())
         ));
-        this.backstop = backstop;
-        this.headCollision = headCollision;
-        this.pivotFromReference = new Vector3f(pivotFromReference);
-        this.backstopPointFromReference =
-                new Vector3f(backstopPointFromReference);
-        this.backstopNormalFromReference =
-                new Vector3f(backstopNormalFromReference);
-        this.headRadius = headRadius;
-        this.hitRadius = hitRadius;
-        this.leverArm = leverArm;
+        this.collisionProxies = collisionProxies == null
+                ? CollisionProxySet.EMPTY
+                : collisionProxies;
     }
 
     public PhysicsBoneSelectionPlan.SimulationSpace simulationSpace() {
@@ -101,20 +77,8 @@ public final class SecondaryMotionConstraint {
         return rotationInertiaScale;
     }
 
-    public int collisionReferenceNodeIndex() {
-        return collisionReferenceNodeIndex;
-    }
-
-    public boolean hasBackstop() {
-        return backstop;
-    }
-
-    public boolean hasHeadCollision() {
-        return headCollision;
-    }
-
-    public float hitRadius() {
-        return hitRadius;
+    public CollisionProxySet collisionProxies() {
+        return collisionProxies;
     }
 
     public Vector3f outwardDirection(
@@ -122,47 +86,6 @@ public final class SecondaryMotionConstraint {
             Vector3f output
     ) {
         return boneOrientation.transform(outwardLocal, output).normalize();
-    }
-
-    public float headClearance(
-            Vector3f direction,
-            Quaternionf referenceOrientation,
-            Vector3f pivot,
-            Vector3f tip
-    ) {
-        if (!headCollision) {
-            return Float.POSITIVE_INFINITY;
-        }
-        referenceOrientation.transform(pivotFromReference, pivot);
-        tip.set(direction).mul(leverArm).add(pivot);
-        return tip.length() - headRadius - hitRadius;
-    }
-
-    public float backstopClearance(
-            Vector3f direction,
-            Quaternionf referenceOrientation,
-            Vector3f pivot,
-            Vector3f tip,
-            Vector3f planePoint,
-            Vector3f normal
-    ) {
-        if (!backstop) {
-            return Float.POSITIVE_INFINITY;
-        }
-        referenceOrientation.transform(pivotFromReference, pivot);
-        tip.set(direction).mul(leverArm).add(pivot);
-        referenceOrientation.transform(
-                backstopPointFromReference,
-                planePoint
-        );
-        referenceOrientation.transform(
-                backstopNormalFromReference,
-                normal
-        ).normalize();
-        return (tip.x - planePoint.x) * normal.x
-                + (tip.y - planePoint.y) * normal.y
-                + (tip.z - planePoint.z) * normal.z
-                - hitRadius;
     }
 
     public boolean projectSwing(
@@ -195,13 +118,16 @@ public final class SecondaryMotionConstraint {
         float axial = Math.max(rawAxial, EPSILON);
         float horizontal = rawHorizontal / axial;
         float vertical = rawVertical / axial;
-        float horizontalLimit = horizontal < 0.0F ? tanLeft : tanRight;
-        float verticalLimit = vertical < 0.0F ? tanInward : tanOutward;
-        float normalizedHorizontal = normalizeSlope(
-                horizontal,
-                horizontalLimit
-        );
-        float normalizedVertical = normalizeSlope(vertical, verticalLimit);
+        float horizontalLimit = horizontal < 0.0F
+                ? tanLeft
+                : tanRight;
+        float verticalLimit = vertical < 0.0F
+                ? tanInward
+                : tanOutward;
+        float normalizedHorizontal =
+                normalizeSlope(horizontal, horizontalLimit);
+        float normalizedVertical =
+                normalizeSlope(vertical, verticalLimit);
         float ellipse = normalizedHorizontal * normalizedHorizontal
                 + normalizedVertical * normalizedVertical;
         if (ellipse <= 1.0F) {
@@ -224,108 +150,6 @@ public final class SecondaryMotionConstraint {
                 )
                 .normalize();
         boneOrientation.transform(localDirection, direction).normalize();
-        return true;
-    }
-
-    boolean projectCollision(
-            Vector3f direction,
-            Quaternionf referenceOrientation,
-            Vector3f pivot,
-            Vector3f tip,
-            Vector3f planePoint,
-            Vector3f normal
-    ) {
-        if (!enabled || (!backstop && !headCollision)) {
-            return false;
-        }
-        referenceOrientation.transform(pivotFromReference, pivot);
-        float backstopMinimumDot = -2.0F;
-        if (backstop) {
-            referenceOrientation.transform(
-                    backstopPointFromReference,
-                    planePoint
-            );
-            referenceOrientation.transform(
-                    backstopNormalFromReference,
-                    normal
-            ).normalize();
-            float pivotDistance =
-                    (pivot.x - planePoint.x) * normal.x
-                            + (pivot.y - planePoint.y) * normal.y
-                            + (pivot.z - planePoint.z) * normal.z;
-            backstopMinimumDot =
-                    (hitRadius - pivotDistance) / leverArm;
-            planePoint.set(normal);
-        }
-
-        float sphereMinimumDot = -2.0F;
-        if (headCollision) {
-            float minimumRadius = headRadius + hitRadius;
-            float pivotLength = pivot.length();
-            if (pivotLength > EPSILON) {
-                normal.set(pivot).div(pivotLength);
-                sphereMinimumDot = (
-                        minimumRadius * minimumRadius
-                                - pivotLength * pivotLength
-                                - leverArm * leverArm
-                ) / (2.0F * pivotLength * leverArm);
-            }
-        }
-        boolean corrected = false;
-        int iterations = backstop && headCollision ? 2 : 1;
-        for (int iteration = 0; iteration < iterations; iteration++) {
-            if (backstop) {
-                corrected |= projectMinimumDot(
-                        direction,
-                        planePoint,
-                        backstopMinimumDot,
-                        tip
-                );
-            }
-            if (headCollision && sphereMinimumDot > -2.0F) {
-                corrected |= projectMinimumDot(
-                        direction,
-                        normal,
-                        sphereMinimumDot,
-                        tip
-                );
-            }
-        }
-        return corrected;
-    }
-
-    private static boolean projectMinimumDot(
-            Vector3f direction,
-            Vector3f normal,
-            float minimumDot,
-            Vector3f tangent
-    ) {
-        if (minimumDot <= -1.0F) {
-            return false;
-        }
-        minimumDot = Math.min(minimumDot, 1.0F);
-        float currentDot = direction.dot(normal);
-        if (currentDot + EPSILON >= minimumDot) {
-            return false;
-        }
-        tangent.set(direction).add(
-                -normal.x * currentDot,
-                -normal.y * currentDot,
-                -normal.z * currentDot
-        );
-        if (tangent.lengthSquared() < EPSILON) {
-            if (Math.abs(normal.y) < 0.90F) {
-                tangent.set(0.0F, 1.0F, 0.0F).cross(normal);
-            } else {
-                tangent.set(1.0F, 0.0F, 0.0F).cross(normal);
-            }
-        }
-        tangent.normalize().mul(
-                (float) Math.sqrt(
-                        Math.max(0.0F, 1.0F - minimumDot * minimumDot)
-                )
-        );
-        direction.set(normal).mul(minimumDot).add(tangent).normalize();
         return true;
     }
 

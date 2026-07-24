@@ -4,6 +4,8 @@ import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedG
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneClassifier;
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneGeometry;
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneSelectionPlan;
+import com.laixia.maidintelligence.feature.physics.client.discovery.structure.BoneStructureAnalysis;
+import com.laixia.maidintelligence.feature.physics.client.discovery.structure.BoneStructureMetrics;
 
 final class CandidateScorer {
     private CandidateScorer() {
@@ -12,7 +14,8 @@ final class CandidateScorer {
     static Candidate score(
             PhysicsBoneGeometry.Node node,
             PhysicsBoneGeometry.Analysis geometry,
-            AnimatedGeoModel model
+            AnimatedGeoModel model,
+            BoneStructureAnalysis structures
     ) {
         if (!node.hasGeometry()) {
             return Candidate.reject("no geometry");
@@ -21,6 +24,18 @@ final class CandidateScorer {
             return Candidate.reject("model marks bone as never render");
         }
         SemanticHint semantic = semanticHint(node);
+        BoneStructureMetrics structure = structures.metrics(node.bone());
+        if (HeadAttachmentClassifier.isRigid(
+                node,
+                geometry,
+                structure
+        )) {
+            return Candidate.reject(
+                    PhysicsBoneSelectionPlan.StructureRole
+                            .RIGID_ATTACHMENT_BASE,
+                    HeadAttachmentClassifier.reason(structure)
+            );
+        }
         if (RigidBoneFilter.isCoreBone(
                 node,
                 geometry,
@@ -28,6 +43,15 @@ final class CandidateScorer {
                 semantic.classification()
         )) {
             return Candidate.reject("rigid humanoid or locator bone");
+        }
+        if (structure.anonymousPonytail()) {
+            return Candidate.of(
+                    PhysicsBoneSelectionPlan.PartType.HAIR,
+                    0.88D,
+                    PhysicsBoneSelectionPlan.StructureRole
+                            .COMPOUND_SINGLE_BONE,
+                    "mirrored long single-bone ponytail"
+            );
         }
         PhysicsBoneSelectionPlan.PartType hint =
                 DiscoveryMath.partType(semantic.classification().type());
@@ -38,21 +62,48 @@ final class CandidateScorer {
                 semantic.score(),
                 semantic.strong()
         );
+        Candidate selected;
         if (context.inHead()) {
-            return HeadCandidateScorer.score(context);
+            selected = HeadCandidateScorer.score(context);
+            return withStructure(selected, structure);
         }
         Candidate bodyCandidate = BodyCandidateScorer.score(context);
         if (!isSpatialHeadAppendage(context)) {
-            return bodyCandidate;
+            return withStructure(bodyCandidate, structure);
         }
         if (bodyCandidate.confidence()
                 >= AutomaticPlanSelector.AUTO_THRESHOLD) {
-            return bodyCandidate;
+            return withStructure(bodyCandidate, structure);
         }
         Candidate headCandidate = HeadCandidateScorer.score(context);
-        return headCandidate.confidence() > bodyCandidate.confidence()
+        selected = headCandidate.confidence() > bodyCandidate.confidence()
                 ? headCandidate
                 : bodyCandidate;
+        return withStructure(selected, structure);
+    }
+
+    private static Candidate withStructure(
+            Candidate candidate,
+            BoneStructureMetrics structure
+    ) {
+        if (candidate.structureRole()
+                != PhysicsBoneSelectionPlan.StructureRole.NONE) {
+            return candidate;
+        }
+        PhysicsBoneSelectionPlan.StructureRole role =
+                structure.longLeaf()
+                        && candidate.type()
+                        == PhysicsBoneSelectionPlan.PartType.HAIR
+                        ? PhysicsBoneSelectionPlan.StructureRole
+                        .COMPOUND_SINGLE_BONE
+                        : PhysicsBoneSelectionPlan.StructureRole
+                        .FLEXIBLE_CHAIN_SEGMENT;
+        return Candidate.of(
+                candidate.type(),
+                candidate.confidence(),
+                role,
+                candidate.reason()
+        );
     }
 
     private static boolean isSpatialHeadAppendage(

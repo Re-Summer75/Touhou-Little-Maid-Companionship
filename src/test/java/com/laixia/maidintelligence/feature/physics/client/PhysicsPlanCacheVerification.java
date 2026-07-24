@@ -138,12 +138,19 @@ final class PhysicsPlanCacheVerification {
                     parents,
                     expected
             );
-            addReferencePath(
-                    layout,
-                    node.constraint().collisionReferenceNodeIndex(),
-                    parents,
-                    expected
-            );
+            for (int proxyIndex = 0;
+                 proxyIndex
+                         < node.constraint().collisionProxies().proxyCount();
+                 proxyIndex++) {
+                addReferencePath(
+                        layout,
+                        node.constraint().collisionProxies()
+                                .proxy(proxyIndex)
+                                .referenceNodeIndex(),
+                        parents,
+                        expected
+                );
+            }
         }
         require(
                 expected.size() == layout.activeNodeCount(),

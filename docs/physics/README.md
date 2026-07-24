@@ -1,6 +1,6 @@
 # 女仆骨骼物理（VRM 弹簧骨）
 
-为 Gecko 女仆的尾巴、头发、耳朵等自由摆动骨骼添加一层二级动作物理：跟随身体运动产生真实惯性摆动、带轻微重力下垂，同时**始终收敛回动画姿态、限制过摆和穿模**。实现参考 VRM `VRMC_springBone` 弹簧骨模型。
+为 Gecko 女仆的尾巴、头发、耳朵等自由摆动骨骼添加一层二级动作物理：跟随身体运动产生真实惯性摆动、带轻微重力下垂，同时**收敛回动画姿态，并以非对称摆角和保守碰撞代理减少过摆与常见穿模**。实现参考 VRM `VRMC_springBone` 弹簧骨模型。
 
 ## 分析基准
 
@@ -8,7 +8,7 @@
 - 范围：仅 Gecko 模型（`AnimatedGeoModel`），覆盖头发、尾巴、耳朵、裙摆、丝带、披风、翅膀等软体链；纯客户端。
 - 参考技术：VRM `VRMC_springBone`、Dynamic Bone、t3ssel8r 二阶动力学。
 
-发饰防遮挡、动画姿态相对角限制、Backstop 和碰撞代理的实现与后续阶段见
+发饰防遮挡、动画姿态相对角限制、Backstop 和碰撞代理的实现细节与阶段状态见
 [`SECONDARY_MOTION_CONSTRAINTS.md`](SECONDARY_MOTION_CONSTRAINTS.md)。
 
 ## 核心原则：刚度拉回动画，重力只是小扰动
@@ -36,6 +36,18 @@
 
 生产约束路径把模拟方向 `currentDir` 转回局部，求从休息轴到合法方向的轴角四元数，与动画局部四元数相乘后再转换为 Gecko 的 ZYX 欧拉值；因此渲染方向与投影状态一致。无约束旧行为只保留在 reference 等价基准通道。
 
+### 解算器模块边界
+
+`SpringBoneSolver` 只保留稳定公共 API，实际实现位于独立
+[`solver/spring`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/spring)
+子包；门面和每个内部模块均不超过 200 行：
+
+- `SpringBoneEngine` / `SpringBoneFrameRunner` 负责编排生命周期和活动骨架预序遍历；
+- `SpringBoneState`、`SpringBoneScratch`、`SpringBoneMetrics` 分别拥有持久状态、零分配 scratch 和诊断计数；
+- `SpringOrientationComposer`、`SpringReferenceTransport`、`SpringDirectionIntegrator`、`SpringConstraintProjector` 依次处理姿态、参考空间、积分和投影；
+- `SpringDeflectionApplier` / `SpringPivotCompensator` 写回 Gecko 旋转与虚拟枢轴补偿，`RuntimeBoneEndpoints` 传播最终层级端点；
+- `SpringBoneMath` 统一保存解算常量和无分配数学工具。
+
 ## 力臂归一化（解决大块几何过摆）
 
 有些骨骼支点在几何边缘、几何体很大（如 `BaseHair` 头盖式整块头发）。同样的旋转角,几何越大末端扫得越远。[`BoneKinematics.measure`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/BoneKinematics.java) 算出每根骨骼**支点到几何最远角的力臂**,把偏转角上限按反比压低:
@@ -54,17 +66,25 @@
 2. **几何 / 拓扑自动发现**：[`PhysicsBoneDiscoverer`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/PhysicsBoneDiscoverer.java) 根据绑定姿态的 pivot、cube AABB、薄度、力臂、链长、分叉和相对 Head / Body 位置评分;
 3. **名称提示**：[`PhysicsBoneClassifier`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/PhysicsBoneClassifier.java) 给常见英文、拼音、中文及日文罗马字名称加分并选择默认参数，支持 `TwinTail` 等多词组合；名称仍**不是入选前提**。
 
-具体实现集中在 `client/discovery` 子包：元数据绑定、候选评分、头部/躯干规则、刚性过滤和计划写入彼此独立，入口 [`PhysicsBoneDiscoverer`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/PhysicsBoneDiscoverer.java) 只保留稳定门面。
+具体实现集中在 `client/discovery` 子包：元数据绑定、候选评分、头部/躯干规则、刚性过滤和计划写入彼此独立；`discovery/structure` 另外负责镜像分支、同 pivot 重叠、紧凑底座、长单骨网格和真实链段拓扑。入口 [`PhysicsBoneDiscoverer`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/PhysicsBoneDiscoverer.java) 只保留稳定门面。
 
 自动发现采用高置信门槛，低置信节点保持静止，避免把肢体、武器和固定头饰当作软体。空骨骼仍作为层级枢轴参与分析但不直接驱动，其语义会沿连续空锚点传给可见子骨。可见的 `MFrontHair` 不会再被当作空 `M` 枢轴；不在 `Head` 层级内、但名称或空间挂点明确属于头发的骨骼也会参与头部候选评分，同时保留已经高置信识别出的翅膀、裙摆等身体软体类型。`BaseHair` / `TopHair` 这类包围头部、有实体几何且连接发丝的分叉骨会识别为 `HEAD_SHELL`，使用高刚度、低摆幅参数；纯空分叉容器则跳过。
 
 刘海会额外识别 `Bangs`、`Fringe`、`FrontHair`、`刘海`、`前髪` 等别名；`MBangs`、`LongHair` 这类空锚点即使跨越多级容器或分出多个匿名片段，也会把高置信语义传给所有可见分支。完全匿名的前额薄片、成组小片和连接头发外壳的头顶发束可通过几何与层级关系识别。眉毛、眼、嘴、脸红和表情使用强排除语义，覆盖 `meimao`、`zui`、`xiao`、`saihong`、`lianhong` 等内置模型别名；匿名但呈现为面部下半区对称薄贴片的腮红也会被刚性过滤。即使这些面部组件位于 `Hair` 层级内或名称同时含有 `Hair`，也不会继承头发物理。`Face_Bangs` 这类明确刘海名称仍可正常入选。
 
-仓库内的 [`geckolib_model_reference`](../../geckolib_model_reference/README.md) 保存本体内置的全部 27 个 Gecko 几何模型并参与离线回归。圣女酒狐的匿名 `BaseHair/bone5` 由“前额位置 + 头发外壳直属叶节点”识别；这类旋转多方块刘海的整体 AABB 可能横跨整个额头且看起来不够薄，因此宽度不再被误当成长发长度，直属头发外壳的结构证据也会补偿整体 AABB 的厚度偏差。纸板狐另外固定验证匿名腮红 `bone53` 保持刚性、`LongHair` 空锚下的双马尾链完整入选，以及头发外壳顶部的匿名呆毛 `bone34` 被识别。
+仓库内的 [`geckolib_model_reference`](../../geckolib_model_reference/README.md) 保存本体内置的全部 27 个 Gecko 几何模型并参与离线回归。圣女酒狐的匿名 `BaseHair/bone5` 由“前额位置 + 头发外壳直属叶节点”识别；这类旋转多方块刘海的整体 AABB 可能横跨整个额头且看起来不够薄，因此宽度不再被误当成长发长度，直属头发外壳的结构证据也会补偿整体 AABB 的厚度偏差。基础纸板狐现在固定验证匿名腮红 `bone53` 刚性、同 pivot 重叠的 `bone29/30/27/31` 发饰刚性、镜像长网格 `bone3/bone9` 作为左右单骨马尾入选，以及头发外壳顶部的匿名呆毛 `bone34` 保持柔性。
 
 昂贵的完整发现结果按不可变 `GeoModel` 身份弱缓存，并按 `modelId` 分区。模板以共享 `GeoBone` 身份保存 `Decision`、路径和静态运动学；同一 `GeoModel` 创建新的 `AnimatedGeoModel` 时只需一次 O(N) live bone 绑定，仍会生成实例隔离的 [`PhysicsBoneSelectionPlan`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/PhysicsBoneSelectionPlan.java)，不会跨实体保存 `AnimatedGeoBone`。
 
 女仆切换模型会重建实体自己的 layout 和 solver runtime；实体离开客户端世界会立即遗忘状态；F3+T 与 TLM 自定义模型包热加载会同时清空 sidecar、实例计划、`GeoModel` 模板和实体 runtime。
+
+## 发饰独立与真实链段
+
+- `RIGID_ATTACHMENT_BASE`：命名发夹/发球，以及具有紧凑、同 pivot 重叠或连接远端柔性后代等强结构证据的匿名底座，只跟随动画，不进入 solver；它不会把细长或悬垂后代一起排除。明确的 `Fringe/Hair/Pony` 名称和 metadata 选择优先保留柔性，防止把刘海误判为附件。
+- `FLEXIBLE_CHAIN_SEGMENT`：真实 parent-child driven 链会烘焙链根、段序号和段总数。仅自动发现链使用根到梢曲线：根段刚度/阻尼更高、参考跟随更强、摆角更小；梢端刚度/阻尼更低、移动/转身与旋转惯性更高，从而在父偏转正确传播的同时产生相对相位差，不再像整条刚体。
+- `COMPOUND_SINGLE_BONE`：基础纸板狐 `bone3/bone9`、年糕狐 `LeftPony/RightPony` 这类所有 cube 只绑定一个 bone 的长网格无法产生真实弯折；系统保留整体小幅摆动，但使用更高刚度/阻尼和更严格的角度、末端位移档位，避免连同发扎大幅扫动。真正分段必须由模型提供多个不同 pivot 的父子骨。
+- 运动学会在存在明确主连通 cube 簇时，用 OBB/SAT 连通判定后的主簇推断 attachment pivot/axis 和实际 segment length，同时用全部 cube 计算独立的安全力臂；远离主体的小装饰不会拉偏旋转轴或把碰撞端点拉成虚假长段，也不会从摆幅安全包络中消失。以上全部在模型/layout 构建期完成，不增加逐帧分配。
+- schema sidecar 的显式链和排除继续拥有最高优先级；自动刚性结论不会覆盖作者指定的 driven bone。
 
 ## 模型物理元数据
 
@@ -78,7 +98,7 @@ assets/<namespace>/tlm_companionship/physics/<model-path>.json
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "mode": "auto",
   "exclude": ["Head/Mask", "fixed_decoration*"],
   "chains": [
@@ -108,7 +128,20 @@ assets/<namespace>/tlm_companionship/physics/<model-path>.json
         },
         "backstop": true,
         "head_collision": true,
-        "hit_radius_scale": 1.0
+        "hit_radius_scale": 1.0,
+        "collision": {
+          "auto": true,
+          "proxies": [
+            {
+              "kind": "capsule",
+              "reference": "Body",
+              "start": [0, 8, 0],
+              "end": [0, 16, 0],
+              "radius": 2,
+              "hit_radius": 0.5
+            }
+          ]
+        }
       }
     }
   ]
@@ -123,8 +156,11 @@ assets/<namespace>/tlm_companionship/physics/<model-path>.json
 - `constraints.simulation_space` 支持 `AUTO`、`HEAD_LOCAL`、`BODY_LOCAL`、`MODEL`;
 - `rotation_inertia_scale` 为 `0–1`：`0` 完全跟随参考骨旋转，`1` 保留模型空间旋转惯性;
 - `swing_limits` 使用角度制，分别控制左、右、向外和向内最大摆角;
-- `backstop` / `head_collision` 可独立关闭自动平面或头部球体，`hit_radius_scale` 为自动横截面半径的 `0–4` 倍。
-- `schema_version: 1` 的既有 sidecar 在未声明 `constraints` 时保持旧的无约束语义；新文件应使用版本 `2`，版本 2 省略 `constraints` 时采用对应部件类型的自动约束默认值。
+- `constraints.collision` 是 schema 3 字段。`auto` 默认为 `true`，自动代理与 `proxies` 中的显式代理合并，并应用到相关链的每个受驱动段；设为 `false` 时不生成自动代理，只保留有效的显式代理。显式形状支持 Plane（`point` / `normal`）、Sphere（`center` / `radius`）和 Capsule（`start` / `end` / `radius`）。
+- 显式代理的位置和形状半径都使用 **Gecko / Bedrock 模型空间像素**，`16 px = 1` 个模型空间方块；`normal` 只是无单位方向。可选 `hit_radius` 也是像素，表示受驱动骨末端的碰撞半径；省略时从该骨几何横截面推断，最终仍会乘 `hit_radius_scale`。
+- `reference` 可写 `MODEL`、`ROOT` 或能唯一解析的节点引用。`ROOT` 只在模型恰有一个顶层根时有效；普通引用接受完整路径、唯一的路径后缀或唯一节点名。缺失或歧义引用只跳过对应代理；代理的静止几何按模型空间填写，运行时随所选 reference 的完整仿射变换运动。
+- `backstop` / `head_collision` 是保留兼容的旧开关，分别控制自动 Head Plane 和自动 Head Sphere（高纵横比头部改用短 Capsule）；它们不删除 schema 3 的显式代理。
+- `schema_version: 1` 的既有 sidecar 在未声明 `constraints` 时保持旧的无约束语义；版本 2 省略 `constraints` 时仍采用部件类型的自动约束默认值。版本 1/2 不读取 schema 3 的 `collision` 字段，旧文件和旧开关行为不变；新文件应使用版本 3。
 - F3+T 资源重载及 TLM 直接加载新下载的目录/ZIP 模型包都会刷新 sidecar、选择计划和实体模拟状态。
 
 ## 运动信号与门控
@@ -138,20 +174,38 @@ assets/<namespace>/tlm_companionship/physics/<model-path>.json
 
 ## 零分配热路径与性能基准
 
-- 每个活动节点持久复用 rendered quaternion，每个实体持久复用积分方向、四元数和向量 scratch；
+- 每个活动节点持久复用 rendered quaternion、层级仿射变换和运行时端点，每个实体持久复用积分方向、四元数、碰撞最近点/法线和其它向量 scratch；
 - `AdaptiveMotionFilter`、`MotionNoiseGate`、`MotionSignalSampler` 与 pivot 补偿提供 out 参数路径，热路径不创建 `MotionSignals`、force 向量或滤波输出对象；
 - [`BonePhysicsVerification`](../../src/test/java/com/laixia/maidintelligence/feature/physics/client/BonePhysicsVerification.java) 用测试专用旧递归解算器作为 oracle，对 `winefox` 与匿名模型逐帧比较 rotation、position 和弹簧方向；序列覆盖可变 dt、移动、转身、暂停和 pivot 补偿，容差为 `1e-5`；
-- [`BonePhysicsBenchmark`](../../src/test/java/com/laixia/maidintelligence/feature/physics/client/BonePhysicsBenchmark.java) 是独立非门禁入口，预热后报告每帧解算耗时、访问节点数和当前线程分配量。绝对耗时受 JVM、CPU 和后台负载影响，不参与 `check` 成败。
+- [`BonePhysicsBenchmark`](../../src/test/java/com/laixia/maidintelligence/feature/physics/client/BonePhysicsBenchmark.java) 是独立非门禁入口，充分预热后只围绕 solver 调用报告每帧解算耗时、访问节点数和当前线程分配量，排除测试姿态重置本身的临时对象。绝对耗时受 JVM、CPU 和后台负载影响，不参与 `check` 成败。
 
-一次 Windows/JDK 17 开发环境样例（`winefox`，20,000 个测量帧）：
+最新一次 Windows/JDK 17 开发环境样例（`winefox`，20,000 个测量帧）：
 
 ```text
-recursive-full: 51810.7 ns/frame, nodes=181/181, allocation=14560.01 B/frame
-iterative-active-legacy: 40378.7 ns/frame, nodes=104/181, allocation=0.00 B/frame
-iterative-active-constrained: 60651.2 ns/frame, nodes=104/181, allocation=0.00 B/frame
-legacy-equivalent solver speedup: 1.28x
-constraint-layer cost: 1.50x legacy-active
+recursive-full: 53500.0 ns/frame, nodes=181/181, allocation=14592.00 B/frame
+iterative-active-legacy: 46899.3 ns/frame, nodes=107/181, allocation=0.00 B/frame
+iterative-active-constrained: 84982.0 ns/frame, nodes=107/181, allocation=0.00 B/frame
+legacy-equivalent solver speedup: 1.14x
+constraint-layer cost: 1.81x legacy-active
 ```
+
+## 运行时端点层级
+
+- [`RuntimeBoneEndpoints`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/spring/RuntimeBoneEndpoints.java) 按最小活动骨架的预序顺序，使用与 Gecko 相同的 position → pivot → ZYX rotation → scale → inverse pivot 顺序组合父子仿射变换；
+- 所有活动节点缓存最终模型空间 pivot，驱动节点同时缓存由有效 pivot、骨轴和几何力臂定义的 tip；父骨物理偏转、虚拟枢轴位移补偿和非均匀缩放都会逐层传给后代；
+- [`SpringBoneSolver.copyRuntimePivot`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/SpringBoneSolver.java) 与 `copyRuntimeTip` 通过 out 参数暴露结果，单位为模型空间方块，首次解算前和 `reset()` 后返回无效；
+- 每个受驱动段都独立执行碰撞；其运行时 pivot 包含父骨物理偏转、Gecko position、虚拟枢轴位移补偿和非均匀 scale，最终 pivot/tip 同时供碰撞诊断与调试绘制使用。
+
+## 统一碰撞代理
+
+- [`solver/collision`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/collision) 提供通用 Plane、Sphere、Capsule 及固定骨长投影；原 Backstop 烘焙为 Plane，原头部碰撞烘焙为 Sphere（高纵横比时为短 Capsule），现有效果和 sidecar 开关保持兼容；
+- 每根驱动骨持有有序的不可变 `CollisionProxySet`，可同时关联多个代理；每个代理有独立 `referenceNodeIndex`，因此不同形状可以跟随不同参考骨；
+- 自动代理应用于每个相关受驱动段：`HAIR`、`EAR` 和 `HEAD_LOCAL RIBBON` 使用 Head Plane +（Sphere 或高纵横比时的短 Capsule）；`SKIRT` 使用 Body Capsule 和经可靠性验证的左右腿 Capsule；`CAPE` 使用 Body Capsule + Back Plane；`BODY_LOCAL RIBBON` 使用 Body Capsule。左右腿不能唯一、可靠配对时会跳过腿代理，不猜测骨骼；
+- schema 3 显式代理追加在自动代理之后；`collision.auto:false` 则仅保留有效显式代理。每个代理 reference 及其祖先都会加入最小活动骨架，包含位于受驱动骨之后的 sibling reference；
+- 每帧在任何物理偏转写回前，先捕获带代理段、实际碰撞 reference 及这些节点祖先的动画仿射增量。逐段 runtime pivot 与 segment length 包含父物理、position 补偿及非均匀 scale，碰撞投影使用实际缩放后的段长；全几何 safety lever 另按层级保守 scale 收紧末端位移角限。Plane 法线使用 inverse-transpose，Sphere / Capsule 半径使用仿射变换的保守谱尺度上界，在正交轴缩放时精确、出现剪切时不低估；
+- [`RuntimeCollisionCache`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/collision/runtime/RuntimeCollisionCache.java) 为每个代理预分配准备态：每帧只更新上述碰撞依赖节点，并把静止几何变换到运行时一次；四轮摆角/碰撞交替投影复用同一结果，不在每轮重复矩阵变换。这个准备与逐段代理遍历是约束路径相对 `legacy-active` 达到 `1.80x` 的主要可见代价，但生产热路径仍为 `0 B/frame`；
+- Capsule 使用线段最近点与有限次半空间投影，线段退化为点时走解析 Sphere 路径，端点位于轴线时使用确定性回退法线；两个活动 Plane 形成狭窄可行域时直接求边界交线，避免顺序投影在近切或近反向法线下慢收敛；
+- 自动代理会拒绝受驱动 reference、受驱动祖先及由受驱动分支贡献的拟合边界，避免碰撞体被同一物理链反向拖动；代理对象、准备态和 scratch 均由 solver 持久复用。验证覆盖三种形状、单骨三个代理、胶囊退化、近切/近反向 Plane、准备态与直接投影等价、reset 以及通用多代理路径 `0 B/frame`。
 
 ## 异常枢轴修正
 
@@ -176,12 +230,12 @@ constraint-layer cost: 1.50x legacy-active
 ## 调试工具
 
 - **`/maidphysicsdebug`** → 获得**骨骼调试棒**(带 NBT 的原版木棍,无需注册物品)。
-- **手持** → [`MaidSkeletonDebugLayer`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/MaidSkeletonDebugLayer.java) 在所有女仆身上画骨架：灰色小十字 = authored pivot；黄/紫大十字 = 自动/元数据驱动骨骼的有效 pivot；红色大十字 = 支撑端仍有歧义、已自动收紧摆角；橙线 = 推断后的物理骨轴；RGB 线 = Gecko 模型坐标轴；青线 = cube 线框。
-- **右键女仆** → [`PhysicsDebugSkeletonDump`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/PhysicsDebugSkeletonDump.java) 把完整骨架、模型路径、`META/AUTO` 来源、类型、链 ID、置信度和入选/拒绝原因写入 `run/logs/latest.log`，并把驱动骨骼摘要发到聊天栏；右键只 dump、不触发其它交互。
+- **手持** → [`MaidSkeletonDebugLayer`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/MaidSkeletonDebugLayer.java) 在所有女仆身上画骨架：灰色小十字 = authored pivot；黄/紫大十字 = 自动/元数据驱动骨骼的有效 pivot；红色大十字 = 支撑端仍有歧义、已自动收紧摆角；橙线 = 推断后的物理骨轴；RGB 线 = Gecko 模型坐标轴；青线 = cube 线框。碰撞层另画亮青色 runtime segment、蓝色 Plane、绿色 Sphere、琥珀色 Capsule，以及与代理同色的 reference origin 十字；当前末端对该代理仍为负 clearance 时，整组代理改画红色。
+- **右键女仆** → [`PhysicsDebugSkeletonDump`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/PhysicsDebugSkeletonDump.java) 把完整骨架、模型路径、`META/AUTO` 来源、结构角色、链 ID、段序号/总数、最终 profile、主簇选择、segment length、全几何 safety lever、置信度和入选/拒绝原因写入 `run/logs/latest.log`；同一次 dump 还记录每段 runtime pivot/tip、每个代理的 `AUTOMATIC/EXPLICIT` 来源、reference、运行时几何、形状/末端半径、缩放后力臂、clearance 和穿透标记，并在聊天栏汇总骨骼、代理和穿透数量。右键只 dump、不触发其它交互。
 
 ## 调参
 
-解算参数集中在 [`SpringBoneSolver`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/SpringBoneSolver.java) 顶部，时钟、24 格门控和诊断窗口位于 [`MaidBonePhysics`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/MaidBonePhysics.java):
+解算参数集中在 [`SpringBoneMath`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/spring/SpringBoneMath.java) 顶部，时钟、24 格门控和诊断窗口位于 [`MaidBonePhysics`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/MaidBonePhysics.java):
 
 | 参数 | 作用 |
 | --- | --- |
@@ -195,10 +249,12 @@ constraint-layer cost: 1.50x legacy-active
 
 上述值是全局基准，实际骨骼还会乘以 `HEAD_SHELL` / `HAIR` / `TAIL` / `EAR` / `SKIRT` / `RIBBON` / `CAPE` / `WING` 的默认档位和可选元数据 `profile`。
 
-## 已知限制与后续
+## 已知限制
 
-- **碰撞范围**：现已实现随头部参考骨运动的自动 Backstop 和头部球体，但身体、腿部、头部短胶囊以及模型作者自定义代理尚未落地；任意第三方复杂网格仍不能保证完全不穿模。后续方案见 [`SECONDARY_MOTION_CONSTRAINTS.md`](SECONDARY_MOTION_CONSTRAINTS.md)。
-- **硬约束**：当前摆角、Backstop 和球体使用固定骨长下的硬 PBD 投影；只有出现明确的链间柔性距离需求时才加入 XPBD compliance。
+- **代理不是精确网格碰撞**：自动 Plane / Sphere / Capsule 来自静止 AABB 与拓扑启发式，只约束每段的末端球，不能表达任意第三方网格、凹面或整块渲染几何；它能减少常见穿模，但不保证完全无穿模。复杂模型应使用 schema 3 显式代理校正自动结果。
+- **腿部歧义会保守跳过**：只有左右腿能唯一且可靠配对时，`SKIRT` 才获得双腿 Capsule；双骨架、重名或几何歧义时不猜测，仍保留可用的 Body Capsule。
+- **硬约束而非 XPBD**：当前摆角和三种碰撞代理使用固定骨长下的硬 PBD 投影；只有出现明确的链间柔性距离需求时才按需加入 XPBD compliance。
+- **单骨网格不能真实分段**：同一 Gecko bone 的所有 cube 共享一次 rotation/position 写回。系统可修正主簇枢轴并保守限幅，但不会用渲染劫持伪造与碰撞、端点和 Sodium 路径不一致的局部弯曲。
 - **转动惯量**:力臂归一化压的是幅度;更真实的"大块又慢又沉"可再按力臂缩放驱动力(转动惯量 ∝ 力臂²)。
 - **自动发现是保守启发式**：几何无法无歧义地区分造型相似的发丝、丝带和固定装饰；低置信节点默认不动，复杂模型建议提供 sidecar。
 - **范围**:仅 Gecko;Bedrock(`BedrockPart` + JS 脚本)与 YSM(仅捕获顶点)暂不支持。
@@ -211,4 +267,4 @@ constraint-layer cost: 1.50x legacy-active
 ./gradlew.bat --offline cleanTest check
 ```
 
-离线校验名称提示、元数据优先级、`GeoModel` 模板绑定与清空、模型 ID 分区、最小活动子树、运动坐标系、帧率阻尼、out 参数等价、错误远端/中心 pivot、向上/向下/横向骨轴、错误空锚点、非均匀缩放补偿、locator 后代、碰撞连接点校正、内置 27 个 Gecko 模型与纸板狐呆毛方向、刚性发饰底座、参考空间抬头搬运与突变重置、非对称摆角状态/渲染写回、Backstop、头部球体、20/30/60/120 FPS 不变量、约束热路径 `0 B/frame`，以及无约束优化路径对旧递归解算器的逐帧 golden 等价；游戏内仍需用调试棒检查第三方模型的最终视觉效果。
+离线校验 schema 1/2 的头部根段兼容与 schema 3 解析、三种代理几何和胶囊退化、双骨架/歧义腿排除、自动与显式布局、每个受驱动段的代理、父骨偏转、后序 Leg reference、完整 affine、非均匀 scale/剪切尺度与缩放后碰撞力臂、近切/近反向 Plane、自动 reference 安全、准备态/直接投影等价、reset、20/30/60/120 FPS 不变量及约束路径 `0 B/frame`；同时覆盖纸板狐匿名发饰/镜像单骨马尾、年糕狐发球、真实多骨链段序号与根梢参数单调性、单次冲量相对无输入对照的非零段间响应、OBB/SAT 主簇、旋转零厚度平面、退化线排除、全几何安全力臂、metadata 覆盖、内置 27 模型和旧递归 golden 等价。

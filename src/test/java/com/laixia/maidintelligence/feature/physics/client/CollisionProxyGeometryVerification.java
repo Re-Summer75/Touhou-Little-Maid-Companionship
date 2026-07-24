@@ -5,6 +5,8 @@ import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedG
 import com.google.gson.JsonParser;
 import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
 import com.laixia.maidintelligence.feature.physics.client.solver.SecondaryMotionConstraint;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionScratch;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -63,10 +65,19 @@ final class CollisionProxyGeometryVerification {
                 break;
             }
         }
-        require(constraint != null && constraint.hasHeadCollision(),
+        require(constraint != null
+                        && constraint.collisionProxies().hasKind(
+                        CollisionProxyKind.SPHERE
+                ),
                 "Detached-pivot head collider was not generated");
-        float clearance = constraint.headClearance(
-                axis, new Quaternionf(), new Vector3f(), new Vector3f());
+        float clearance = constraint.collisionProxies().clearance(
+                constraint.collisionProxies().firstIndex(
+                        CollisionProxyKind.SPHERE
+                ),
+                axis,
+                new Quaternionf(),
+                new CollisionScratch()
+        );
         require(
                 clearance > 0.03F && clearance < 0.20F,
                 "Collider did not use the effective pivot: " + clearance

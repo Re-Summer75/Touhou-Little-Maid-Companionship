@@ -2,8 +2,11 @@ package com.laixia.maidintelligence.feature.physics.client.discovery;
 
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneClassifier;
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneGeometry;
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneSelectionPlan;
+import com.laixia.maidintelligence.feature.physics.client.discovery.structure.BoneStructureAnalysis;
+import com.laixia.maidintelligence.feature.physics.client.discovery.structure.BoneStructureMetrics;
 
 import java.util.Set;
 
@@ -17,6 +20,7 @@ final class AutomaticPlanSelector {
             PhysicsBoneSelectionPlan.Builder plan,
             PhysicsBoneGeometry.Analysis geometry,
             AnimatedGeoModel model,
+            BoneStructureAnalysis structures,
             Set<AnimatedGeoBone> excluded
     ) {
         for (PhysicsBoneGeometry.Node node : geometry.nodes()) {
@@ -28,11 +32,45 @@ final class AutomaticPlanSelector {
             if (current != null && current.driven()) {
                 continue;
             }
-            Candidate candidate = CandidateScorer.score(node, geometry, model);
+            Candidate candidate = CandidateScorer.score(
+                    node,
+                    geometry,
+                    model,
+                    structures
+            );
             PhysicsBoneSelectionPlan.Decision parentDecision =
                     node.parent() == null
                             ? null
                             : plan.current(node.parent().bone());
+            BoneStructureMetrics structure =
+                    structures.metrics(node.bone());
+            if (parentDecision != null
+                    && parentDecision.structureRole()
+                    == PhysicsBoneSelectionPlan.StructureRole
+                    .RIGID_ATTACHMENT_BASE
+                    && structure.longLeaf()
+                    && candidate.type()
+                    == PhysicsBoneSelectionPlan.PartType.HAIR
+                    && candidate.confidence() < AUTO_THRESHOLD) {
+                candidate = Candidate.of(
+                        PhysicsBoneSelectionPlan.PartType.HAIR,
+                        0.82D,
+                        PhysicsBoneSelectionPlan.StructureRole
+                                .COMPOUND_SINGLE_BONE,
+                        "long flexible child of rigid attachment"
+                );
+            }
+            if (isRigidAttachmentContinuation(
+                    node,
+                    parentDecision,
+                    candidate
+            )) {
+                candidate = Candidate.reject(
+                        PhysicsBoneSelectionPlan.StructureRole
+                                .RIGID_ATTACHMENT_BASE,
+                        "coincident continuation of rigid attachment"
+                );
+            }
             boolean continuation = isSerialContinuation(
                     node,
                     candidate,
@@ -48,11 +86,36 @@ final class AutomaticPlanSelector {
                                         parentDecision.confidence() - 0.03D
                                 )
                         ),
+                        candidate.structureRole()
+                                == PhysicsBoneSelectionPlan.StructureRole.NONE
+                                ? PhysicsBoneSelectionPlan.StructureRole
+                                .FLEXIBLE_CHAIN_SEGMENT
+                                : candidate.structureRole(),
                         "serial continuation of " + parentDecision.chainId()
                 );
             }
             decide(plan, node, candidate, parentDecision, continuation);
         }
+    }
+
+    private static boolean isRigidAttachmentContinuation(
+            PhysicsBoneGeometry.Node node,
+            PhysicsBoneSelectionPlan.Decision parent,
+            Candidate candidate
+    ) {
+        if (node.parent() == null
+                || parent == null
+                || parent.structureRole()
+                != PhysicsBoneSelectionPlan.StructureRole
+                .RIGID_ATTACHMENT_BASE
+                || PhysicsBoneClassifier.classifyVisibleGeometry(
+                node.bone().getName()
+        ).isPhysical()
+                || candidate.confidence() >= AUTO_THRESHOLD
+        ) {
+            return false;
+        }
+        return node.pivot().distance(node.parent().pivot()) <= 1.0E-4F;
     }
 
     private static boolean isSerialContinuation(
@@ -91,6 +154,14 @@ final class AutomaticPlanSelector {
                             PhysicsBoneSelectionPlan.SpringProfile.defaults(
                                     candidate.type()
                             ),
+                            PhysicsBoneSelectionPlan.ConstraintProfile.defaults(
+                                    candidate.type()
+                            ),
+                            candidate.structureRole()
+                                    == PhysicsBoneSelectionPlan.StructureRole.NONE
+                                    ? PhysicsBoneSelectionPlan.StructureRole
+                                    .FLEXIBLE_CHAIN_SEGMENT
+                                    : candidate.structureRole(),
                             candidate.reason()
                     )
             );
@@ -101,6 +172,7 @@ final class AutomaticPlanSelector {
                             candidate.type(),
                             PhysicsBoneSelectionPlan.Source.AUTO,
                             candidate.confidence(),
+                            candidate.structureRole(),
                             candidate.reason()
                     )
             );
