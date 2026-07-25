@@ -93,7 +93,11 @@ final class BoneAttachmentFrameVerification {
                 !metrics.compensatesPivot()
                         && metrics.supportConfidence() < 0.20F
                         && metrics.safeAngle() <= 0.18F,
-                "Ambiguous support unexpectedly relocated the pivot"
+                "Ambiguous support unexpectedly relocated the pivot: "
+                        + metrics.effectivePivot()
+                        + " contact=" + metrics.contactConfidence()
+                        + " support=" + metrics.supportConfidence()
+                        + " score=" + metrics.pivotScore()
         );
     }
 

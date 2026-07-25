@@ -1,6 +1,6 @@
 # 二级运动防遮挡与约束技术方案
 
-> 状态：阶段 1～9 已落地；仅在出现明确的链间柔性关系需求时按需增加 XPBD。
+> 状态：阶段 1～11 已落地；仅在出现明确的链间柔性关系需求时按需增加 XPBD。
 >
 > 范围：Gecko 女仆的头发、发饰、耳朵、丝带、裙摆、披风等骨骼二级运动。
 
@@ -11,11 +11,13 @@
 - 女仆抬头时，发饰因惯性滞后向头发内部倒并被遮挡；
 - 发夹、饰品底座等刚性连接点被当成整块柔性骨骼驱动；
 - 发丝、丝带、裙摆或披风穿入头部和身体；
+- 预设动画的 position / scale 及安装参考角加速度不能产生独立惯性，快速动作只改变目标姿态而缺少附着点甩动；
+- Gecko 控制器被帧率限制时，硬编码尾巴仍逐渲染帧更新，导致纯动画姿态与物理姿态交替；
 - 低帧率、帧率波动或约束迭代数变化后，限制强度发生明显变化；
 - 为了避免穿模而全局提高刚度，导致所有软体失去自然摆动。
 
-本方案不以继续调整全局常数为主，而是在现有 Verlet 风格积分之后增加
-**参考空间搬运、动画姿态相对角约束和局部碰撞投影**。
+本方案不以继续调整全局常数为主，而是在现有 Verlet 风格积分前后增加
+**预设动画运动采样、参考空间搬运、动画姿态相对角约束和局部碰撞投影**。
 
 ## 调研结论
 
@@ -73,15 +75,18 @@ Plane / Sphere / Capsule 代理，并把合法方向写回当前和历史状态�
 
 每帧按以下顺序处理活动骨架：
 
-1. 在任何物理写回前捕获带代理段、碰撞 reference 及其祖先的动画姿态、层级仿射增量和法线变换；
-2. 将历史方向搬运到本链的参考空间；
-3. 执行现有惯性、刚度、重力积分；
-4. 恢复骨长；
-5. 投影动画姿态相对的非对称摆角约束；
-6. 按顺序投影当前骨骼关联的 Plane / Sphere / Capsule 代理；
-7. 最多交替复查摆角和碰撞四轮；代理内部也按固定上限复查多代理；
-8. 将最终合法方向写回当前和历史状态；
-9. 根据合法方向生成骨骼旋转和虚拟枢轴位移补偿。
+1. 在 `setCustomAnimations` 入口恢复上一帧物理写回前保存的局部 rotation/position；
+2. 让 Gecko 控制器及硬编码动画在无旧物理偏转的姿态上运行；
+3. 在任何新物理写回前保存 driven bone 的动画局部姿态，捕获活动骨架的纯动画 TRS，并另行捕获碰撞依赖节点的 animation affine delta 与法线变换；
+4. 对每个 driven slot 采样动画枢轴线速度/线加速度、安装参考角速度/角加速度及缩放导数，执行突变判定、门控和低通；
+5. 将历史方向搬运到本链的参考空间；
+6. 执行 Verlet 惯性、刚度、重力、实体运动和动画运动积分；
+7. 恢复骨长；
+8. 投影动画姿态相对的非对称摆角约束；
+9. 按顺序投影当前骨骼关联的 Plane / Sphere / Capsule 代理；
+10. 最多交替复查摆角和碰撞四轮；代理内部也按固定上限复查多代理；
+11. 将最终合法方向写回当前和历史状态；
+12. 根据合法方向生成骨骼旋转和虚拟枢轴位移补偿。
 
 碰撞和角约束可能互相破坏。当前实现最多交替投影四轮，并在一轮中
 两类约束都未修正时提前退出；无碰撞、未触边骨骼只执行一轮快速检查，
@@ -122,11 +127,91 @@ previousDirection = q_transport * previousDirection
 饰品的静态重力为零，静止姿态不再偏离作者原位；移动与转身惯性仍然
 生效，模型作者也可用 sidecar 覆盖。
 
+### 预设动画运动驱动
+
+只更新 `restDirection` 可以表达 driven bone 自身关键帧旋转的自然拖尾，
+却不能表达动画附着点平移；直接再注入同一个局部旋转又会重复计入。
+当前实现因此在物理写回前构建一份纯动画层级，并把每段的**有效 pivot**
+作为安装点。与实体速度信号保持同一 20 TPS 单位：
+
+```text
+v_pivot = (p_current - p_previous) / (20 * deltaPoseTime)
+a_pivot = (v_pivot - v_pivot_previous) / deltaPoseTime
+
+q_delta = q_mount_current * inverse(q_mount_previous)
+omega   = quaternionLog(q_delta) / (20 * deltaPoseTime)
+alpha   = (omega - omega_previous) / deltaPoseTime
+```
+
+`deltaPoseTime` 不是固定渲染帧间隔，而是从上一次**实际姿态变化**起累计的
+`tickCount + partialTick` 动画时间。若动画控制器在多个渲染帧间保持同一值，采样器保留上一加速度
+目标并继续低通，不把这些帧写成零速度；下一次姿态更新再以整个累计时间
+求导。这样 20 TPS、帧率限制或不规则更新节奏下的连续动画不会形成
+“保持→脉冲→反向脉冲”。姿态保持 `125 ms` 后加速度目标回零，但上一
+有效姿态与速度基线保留到 `250 ms` 才确认静止，避免低更新率动画的下次
+样本被误除以单个渲染帧间隔。
+
+`q_mount` 使用 driven bone 的动画父级/安装参考，而不是该 driven bone 的
+局部关键帧旋转；后者已通过 `restDirection` 进入系统。当前动画 segment
+向量为 `r`，则额外计算：
+
+```text
+a_angular = alpha × r
+          + 20 * omega × (omega × r)
+          + 40 * omega × radialScaleVelocity
+a_scale   = radialScaleAcceleration
+```
+
+最终信号按部件类型和约束烘焙：
+
+```text
+a_animation =
+    typeGain * (
+        rotationInertiaScale * a_pivot
+      + rotationInertiaScale * (1 - rotationInertiaScale) * a_angular
+      + 0.25 * rotationInertiaScale * a_scale
+    )
+```
+
+积分器再乘已有 `SpringProfile.inertiaScale` 并取反作为滞后力。
+若记 `rotationInertiaScale=s`，角项使用 `s(1-s)`：`s=0` 时参考完全跟随，不应产生旋转惯性；`s=1`
+时旧的模型空间状态已经保留全部旋转惯性，也不应再注入一次。中间值只
+补足参考搬运未表达的角加速度、向心和缩放/旋转耦合。
+
+动画加速度经过径向软死区、`0.5` 软限幅和时间常数 `40 ms` 的指数低通。
+HAIR、TAIL、EAR、SKIRT、RIBBON、CAPE、WING 和 GENERIC 使用独立有界
+类型增益；固定头壳及自动悬垂饰品现有的低 `rotationInertiaScale` 会自然
+压低该信号，不会因加入动画导数重新出现大幅扫动。
+
 ### 突变处理
 
-参考骨旋转增量超过安全阈值、模型切换、实体传送或状态恢复时，
-直接将当前和历史方向重置到动画 `restDirection`，避免把一次不连续
-姿态当成真实角速度。
+首次采样、暂停、非有限动画时间、时间轴间隔超过 `0.25 s`、模型切换、
+实体传送或状态恢复时重建运动历史。相同或乱序的 `tickCount + partialTick`
+视为同一动画样本，整个 solver 使用 `dt=0` 重新写回但不推进状态。单次安装参考旋转超过 `75°`、动画 pivot 跃迁
+超过 `max(0.5 block, 3 × segmentLength)`，或 segment 缩放长度比超过
+`2.5` 时也判定为关键帧切换：动画加速度立即清零；参考骨旋转突变还会
+把当前和历史方向重置到动画 `restDirection`。恢复后的第一帧只建立
+基线，不把不连续姿态当成真实速度或加速度。
+
+### 控制器限流与硬编码尾巴
+
+`AnimatableEntity.setCustomAnimations` 在 Gecko 帧率限制器拒绝更新时返回
+`false`，但 `GeckoMaidEntity` 仍在父类返回后调用硬编码动画。默认
+`tail/default` 会继续按 `tickCount + partialTick` 写尾根 X/Z，因此返回值
+不能表示“本帧骨骼完全没变”。只在 `true` 帧解算会令尾巴在纯动画和
+动画叠加物理之间交替。
+
+当前 `AnimationPoseSnapshot` 在 solver 写回前保存所有 driven bone 的六个
+局部 rotation/position 通道；Mixin 在下一次 `setCustomAnimations` 的
+`HEAD` 先恢复它，并在所有 `RETURN` 上重新解算。这样被限流帧仍能消费
+硬编码尾巴的新姿态，同时旧物理偏转不会叠加为动画输入。快照数组在 solver
+构造期分配，恢复和捕获均不产生逐帧对象。
+
+推进时间不再读取 `System.nanoTime()`。Mixin 传入与 `tail/default` 相同的
+`tickCount + partialTick`，每实体的 `AnimationTimelineClock` 只接受严格
+向前的动画样本。同一姿态因额外渲染阶段进入多次时只首次推进 Verlet，
+后续调用为 `dt=0`；因此微小墙钟子步不会沿 `Tail → Tail7` 的多段局部
+旋转逐级放大。
 
 ## 动画姿态相对的非对称摆角
 
@@ -205,19 +290,67 @@ Sphere 与退化 Capsule 使用固定骨长的解析最小点积边界；普通 
 Body/Back 自动代理及所有显式代理仍从驱动骨几何最小横截面估计
 `hitRadius`。碰撞连接点使用 `BoneKinematics` 校正后的有效 pivot，而非
 可能远离网格、位于中心或处于柔性远端的作者 pivot。
-附着端以父级/最近实体祖先网格作为支撑体，对竖直端点和几何主轴端点
-计算表面距离；距离接近的悬挂件再按重力选择质心上方端点，支撑体明确
-位于部件下方时则选择下端。贴近网格的直接空锚点只作为次级证据，
-不会覆盖明确支撑关系。距离使用每个旋转 cube 的实际表面而非总 AABB；
-主轴端点和总 AABB 上下端会继续吸附到最近的真实旋转 cube，不能停在
-多个 cube 之间的空白区域。两个端点评分仍接近时，贴近网格的 authored
-pivot 保持不动；若它已离开网格，则投影到最近的真实 cube 表面并降低
-该骨骼摆角。静态碰撞连接点通过匹配 Gecko 渲染顺序的绑定姿态仿射矩阵
-变换到碰撞空间。
-`DANGLING_ACCESSORY` 等单骨结构角色不能豁免异常 pivot：只要网格和
-支撑面证据足够，就改用推断附着端并在 Gecko position 写回中补偿。
-只有未明显脱离网格的真实多段 authored chain 保留各自关节；严重脱离
-的链关节仍按同一规则纠正。
+附着端使用加载期接触感知优化：对受驱动主 OBB 簇的六面固定采样，
+在父级/最近实体祖先 OBB union 上求最近点对，并以 `0.5～2 px` 自适应
+带宽形成接触带。样本经过面积/距离加权、离群过滤、空间聚类和沿子件
+主轴的集中度检查；横穿整个支撑体的薄片会降低置信度。
+
+候选枢轴包含接触带中心、主接触簇中心、authored pivot 向接触平面的
+受限投影、全局最近点对中点、旧几何附着端和 authored pivot。候选在两个
+正交轴上离线摆动 `±5°/±10°`，目标函数惩罚接触分离、相对静止姿态新增
+的穿透、偏离接触中心，以及仅对本就靠近接触带的 authored pivot 启用的
+作者先验。最终 pivot 可以位于子件与支撑面的间隙中，不再强制投影到
+child cube 表面。
+
+author pivot 位于自身网格且距可靠接触带不超过 `2 px` 时优先保留；
+低置信结果保持 authored pivot 并收紧摆角，明显远程 pivot 才允许中等
+置信度纠正。`DANGLING_ACCESSORY` 等单骨结构角色不能豁免真正异常 pivot；
+未明显脱离网格的真实多段 authored chain 仍保留各自关节。`HEAD_SHELL`
+优先使用宽面接触的保守阈值，无可靠支撑时回退质心。静态碰撞连接点继续
+通过匹配 Gecko 渲染顺序的绑定姿态仿射矩阵变换到碰撞空间；详细算法见
+[`CONTACT_AWARE_PIVOT_INFERENCE.md`](CONTACT_AWARE_PIVOT_INFERENCE.md)。
+
+所有单骨候选还会检查重力下的支撑稳定性。稳定方向由支点与质量中心的
+相对位置决定，绝对质量和模型尺寸不会改变倒置关系，因此不再使用 cube
+数量、最小跨度或惯性载荷门槛。上下死区按模型尺度计算为
+`clamp(diagonal × 0.025, 0.125 px, 0.5 px)`，候选相对 authored pivot
+所需的最小向上改善量为
+`clamp(diagonal × 0.05, 0.25 px, 1 px)`。
+
+若 authored pivot 落在质量中心下方，而置信度至少 `0.15` 的接触优化
+候选落在质量中心上方并满足改善量，则单 cube 小饰品和大型复合附件都
+采用上方候选。真实多骨链不走该规则。Hair/Skirt 等类型只修正支点并
+保留原动力学；自动 Ribbon/Cape/悬垂饰品改用
+`COMPOUND_SINGLE_BONE` 稳定档，零静态重力并收紧惯性与摆角。
+
+Ribbon/Cape/悬垂饰品同时有反向保护：如果 authored pivot 贴近自身网格
+且尚未低于质量中心，而推断候选会把它明显移到质量中心下方，则保留
+authored pivot 并使用 `supportStabilityPreserved` 标记。华服小蝴蝶结
+`bone101/bone103` 因此不会再被接触优化从约 `Y=41.06` 下移到
+`Y=38.1`。该保护不用于普通 Hair，以免把真正位于根部的上生发束支点
+误判为不稳定。
+
+紧凑复合部件还检查可见质量中心力臂。对于至少三个可见 cube、次长轴
+不小于最长轴 `0.55` 的单骨 Hair/Ribbon/Cape/Generic，如果置信度至少
+`0.20` 的接触候选能按模型对角线显著缩短 authored pivot 的质心半径，
+即使 authored pivot 距某个外围小 cube 不到 `2 px` 也允许纠正。真实
+多骨链以及 Ear/Wing/Tail/Skirt 不使用该规则，细长发束也会被轴比拒绝。
+命中后写入 `attachmentLeverCorrected`，并使用零静态重力、`0.12 rad`
+安全角和低转动惯性的固定饰品档。华服 `bone109` 的可见力臂由约
+`6.17 px` 降到 `2.96 px`，身份 rotation 下 position 补偿保持为零。
+
+只有结构分析已经明确标为 `DANGLING_ACCESSORY`、却没有可信上方接触的
+单骨附件才回退为 `RIGID_ATTACHMENT_BASE`，并写出
+“lacks stable upper support”原因。证据不足的普通上生发束、耳朵、裙摆
+和其它悬臂保留 authored pivot，显式 metadata 仍可覆盖自动回退。
+
+积分器的平移惯性固定为 `-modelAcceleration`，全局符号本身不按模型变化。
+局部模型出现同向前倾时，原因是 axis 指向了可见主体背面：模拟 tip 正确
+向后，但被该 bone 旋转的 cube 主要位于 tip 反侧。单骨和真实链末端因此
+增加最终极性检查；当全部可见 cube 的质量中心距 effective pivot 超过
+`0.5 px`，且沿 axis 明确落在反侧超过 `0.25 px` 时，翻转 axis 并用全几何
+重算 segment length。轻微歧义继续服从刘海/裙摆语义端点；真实链非末段
+仍指向下一 authored joint，不能为极性修正破坏关节连续性。
 投影直接解固定骨长下的最小点积边界，不会先移动端点再以归一化破坏
 碰撞结果。
 
@@ -268,8 +401,9 @@ Sphere 为绿色、Capsule 为琥珀色，代理的 reference origin 以同色�
 
 右键女仆会把实际 `modelId`、裙摆/饰品结构角色与判定原因、链段序号、
 重力倍率、参考空间、四向摆角、碰撞策略、authored/effective pivot、
-`jointSpacing`、逐段 runtime 几何、reference、代理形状、形状/末端半径、
-力臂、`AUTOMATIC/EXPLICIT` 来源、clearance 和穿透标记写入
+`supportStabilityCorrected` / `supportStabilityPreserved` /
+`attachmentLeverCorrected` / `supportStabilityUnsupported`、`jointSpacing`、逐段 runtime 几何、reference、
+代理形状、形状/末端半径、力臂、`AUTOMATIC/EXPLICIT` 来源、clearance 和穿透标记写入
 `run/logs/latest.log`，聊天栏给出代理与穿透数量摘要。
 
 ## 刚性连接点与柔性后代
@@ -305,7 +439,7 @@ sibling 和后代延伸。明确发夹名称或具有强结构证据的紧凑底
 - `qunzi`、内外/前后裙、`Dress` 及中日韩常见裙摆名称提供语义证据；无名称时使用下半身位置、宽薄面板、上缘连接和分支拓扑；
 - `guashi/pendant/tassel`、吊坠和流苏，以及细长、上部附着的身体挂件作为 `RIBBON` 候选；空裙根只向可见子件传递语义，本身不进入 solver；
 - 位于头侧、非包头、从上部悬垂且没有眼嘴/表情后代的 `Mask` 使用零静态重力、保留惯性摆动的 `HEAD_LOCAL RIBBON`；`SHmask/faceplate`、头盔、贴脸面具、带表情子树的面具和手持树保持刚性；
-- 新结构角色 `DANGLING_ACCESSORY` 烘焙高参考跟随、高阻尼、零静态重力、低旋转惯性和小四向摆角。它只响应移动与转身惯性，不会让刚性主体在静止或头部动画姿态下掉到眼睛下；
+- 新结构角色 `DANGLING_ACCESSORY` 烘焙高参考跟随、高阻尼、零静态重力、低旋转惯性和小四向摆角。它响应实体移动、转身和预设动画的有界瞬态惯性，但不会让刚性主体在静止或匀速头部动画下掉到眼睛前；
 - 基础纸板狐 `bone37` 的 cube 分布在头部多处、各自拥有不同 cube pivot/rotation，且不存在占优连通簇；它与 `bone32`、`bone11/38` 及同样无主导簇的 `guashi` 均保持刚性，`qunzi` 继续使用单骨裙摆档位。
 
 单骨 `Dress/qunzi` 使用保守 `COMPOUND_SINGLE_BONE` 裙摆档位。真实
@@ -389,7 +523,11 @@ deltaLambda =
 
 运行时数据由 solver 预分配：
 
+- 每个实体的动画时间轴时钟，合并相同/乱序动画时刻的重复渲染；
 - 每个活动参考骨的上一帧四元数和本帧共享旋转增量；
+- 每个 driven slot 的动画局部 rotation/position 可逆覆盖快照；
+- 每个活动节点的纯动画层级变换；每个 driven slot 的上一动画 pivot、
+  线速度、安装参考四元数、角速度、segment 长度/缩放速度和滤波输出；
 - 碰撞依赖节点在物理写回前捕获的 animation affine delta、
   inverse-transpose 法线矩阵和保守谱尺度上界；
 - 每个活动节点的层级仿射变换与模型空间 pivot；
@@ -400,10 +538,10 @@ deltaLambda =
 - 每个驱动槽的当前/历史方向。
 
 公共入口 `SpringBoneSolver` 仅作为兼容门面；状态、scratch、姿态组合、
-参考空间搬运、积分、约束、偏转写回和端点传播分别位于
+动画姿态捕获/导数采样、参考空间搬运、积分、约束、偏转写回和端点传播分别位于
 `solver/spring` 子包的独立模块；碰撞形状、固定骨长投影、代理集合和
-自动/显式代理烘焙和准备态位于 `solver/collision` 子包，新增模块均不超过
-200 行。
+自动/显式代理烘焙和准备态位于 `solver/collision` 子包；各模块保持
+单一职责。
 
 XPBD 约束乘子按设计不分配，除非以后确有链间柔性关系需求。
 
@@ -418,6 +556,10 @@ XPBD 约束乘子按设计不分配，除非以后确有链间柔性关系需求
 - 最终方向始终位于非对称摆角区域；
 - 碰撞后骨长保持不变；
 - 父骨物理偏转、位置补偿和非均匀缩放会传递到后代 pivot/tip；
+- 静止预设动画的逐骨运动信号严格为零，连续关键帧 position、rotation
+  和 scale 加减速均能产生有界信号；
+- 控制器跨多个渲染帧保持姿态、以不规则间隔更新或发生同帧重复调用时，
+  惯性保持连续；动画切换、暂停和从同一姿态恢复不会注入假冲量；
 - 状态中不残留朝约束内部的速度；
 - 不出现 NaN、零向量归一化或瞬间翻转。
 
@@ -432,8 +574,20 @@ XPBD 约束乘子按设计不分配，除非以后确有链间柔性关系需求
 - Head 自动代理禁用、SKIRT Body-only 与 CAPE Back Plane 布局；
 - 受驱动父子链、父物理偏转、虚拟 pivot position 补偿、非均匀 scale
   与后序显式 sibling Leg reference；
+- 接触感知 pivot 的 `1～2 px` OBB 间隙、宽面 `HEAD_SHELL`、横穿支撑体
+  的低置信接触、远程 authored pivot、有效 authored pivot 保留，以及
+  不再要求 corrected pivot 位于 child surface；
+- 全部 27 个模型的单骨/链末端可见质量轴扫描，覆盖自动极性翻转且禁止
+  `axis · (visibleMassCenter - effectivePivot) < -0.25 px`；
 - animation affine 捕获、非均匀 scale/剪切尺度上界、准备态与直接投影
   等价、reset 和穿透清除；
+- 预设动画枢轴平移、安装参考角加速度和 scale 导数驱动，静止零力，
+  30/60/120 FPS 峰值一致性，以及大角度/大位移/大缩放切换和暂停恢复
+  的导数历史重建；另以 120 FPS 渲染、4/5/7/8 帧不规则 sample-and-hold
+  源验证加速度无高频反向脉冲，并验证 `dt=0` 重复样本不清空历史；
+- TLM `tail/default` 在 Gecko 控制器限流帧仍更新时，上一物理覆盖的六个
+  局部通道可完整恢复；实际 `winefox` 七段 `Tail → Tail7` 以每帧
+  0～2 次重复调用验证相同动画时刻只推进一次，末端输出连续且不累积；
 - 全部 27 个内置模型在 bind pose、首次动画姿态和 solver reset 后的
   `dt=0` 初始化均不改变任何 driven bone 的 rotation/position；
 - 自动 reference 的 self/受驱动边界贡献安全检查，以及近切、近反向
@@ -466,22 +620,22 @@ XPBD 约束乘子按设计不分配，除非以后确有链间柔性关系需求
 最新 Windows/JDK 17、`winefox`、20,000 测量帧样例：
 
 ```text
-recursive-full: 60018.8 ns/frame, nodes=181/181, allocation=14944.00 B/frame
-iterative-active-legacy: 48738.3 ns/frame, nodes=110/181, allocation=0.00 B/frame
-iterative-active-constrained: 93102.4 ns/frame, nodes=110/181, allocation=0.00 B/frame
-legacy-equivalent solver speedup: 1.23x
-constraint-layer cost: 1.91x legacy-active
+recursive-full: 58647.4 ns/frame, nodes=181/181, allocation=14912.00 B/frame
+iterative-active-legacy: 51753.9 ns/frame, nodes=110/181, allocation=0.00 B/frame
+iterative-active-constrained: 106806.0 ns/frame, nodes=110/181, allocation=0.00 B/frame
+legacy-equivalent solver speedup: 1.13x
+constraint-layer cost: 2.06x legacy-active
 
-head/schema2-auto-disabled: 2891.0 ns/frame, proxies=0, allocation=0.00 B/frame
-head/schema3-auto-disabled: 3271.9 ns/frame, proxies=0, allocation=0.00 B/frame
-skirt/schema2-body-disabled: 3403.2 ns/frame, proxies=0, allocation=0.00 B/frame
-skirt/schema3-body-only: 3367.4 ns/frame, proxies=2, allocation=0.00 B/frame
+head/schema2-auto-disabled: 3196.7 ns/frame, proxies=0, allocation=0.00 B/frame
+head/schema3-auto-disabled: 3265.0 ns/frame, proxies=0, allocation=0.00 B/frame
+skirt/schema2-body-disabled: 3080.1 ns/frame, proxies=0, allocation=0.00 B/frame
+skirt/schema3-body-only: 3741.4 ns/frame, proxies=2, allocation=0.00 B/frame
 ```
 
 绝对耗时会随机器波动；稳定门槛是生产约束路径继续保持
 `0 B/frame`，并单独报告旧积分等价路径与约束路径。`constrained` 的
-`1.91x` 代价包含碰撞依赖 affine 捕获、每段代理准备和投影；准备态缓存
-避免四轮交替投影重复变换同一代理。
+`2.06x` 代价包含纯动画层级与逐段导数预采样、碰撞依赖 affine 捕获、
+每段代理准备和投影；准备态缓存避免四轮交替投影重复变换同一代理。
 
 ## 已知限制
 
@@ -515,7 +669,15 @@ skirt/schema3-body-only: 3367.4 ns/frame, proxies=2, allocation=0.00 B/frame
    主 cube 簇运动学及真实多骨链根硬梢软参数；
 9. **已完成—裙摆与悬垂饰品**：裙摆/挂饰结构证据、侧挂面具刚柔拆分、
    单骨裙摆与真实裙链档位、零静态重力饰品和分离链关节；
-10. **按需实施—XPBD 柔性约束**：只在出现链间柔性关系需求时加入。
+10. **已完成—接触感知枢轴**：OBB 接触带、鲁棒聚类、固定候选虚拟摆动、
+    置信度回退、Head Shell 接触优先、尺度无关的单骨支撑稳定性、紧凑
+    部件外围杠杆修正、可见质量轴极性校正，并移除错误的 child-surface
+    强制吸附；
+11. **已完成—预设动画惯性**：纯动画 TRS 预采样、pivot 二阶差分、
+    安装参考角速度/角加速度、scale 耦合、sample-and-hold 时间累计、
+    分类型注入、软限幅、动画切换/暂停/重复渲染突变保护，以及 Gecko
+    控制器限流期间的可逆物理覆盖与动画时间轴重复调用合并；
+12. **按需实施—XPBD 柔性约束**：只在出现链间柔性关系需求时加入。
 
 ## 参考资料
 
@@ -527,3 +689,5 @@ skirt/schema3-body-only: 3367.4 ns/frame, proxies=2, allocation=0.00 B/frame
 - [Position Based Dynamics](https://matthias-research.github.io/pages/publications/posBasedDyn.pdf)
 - [XPBD: Position-Based Simulation of Compliant Constrained Dynamics](https://mmacklin.com/xpbd.pdf)
 - [Unity Cloth](https://docs.unity3d.com/Manual/class-Cloth.html)
+- [Kinematify / DW-CAVL](https://arxiv.org/html/2511.01294v4)
+- [MotionAnyMesh](https://doi.org/10.48550/arxiv.2603.12936)

@@ -12,6 +12,8 @@ final class SpringBoneContext {
     final SpringBoneState state;
     final SpringBoneScratch scratch;
     final SpringBoneMetrics metrics;
+    final AnimationMotionSampler animationMotion;
+    final AnimationPoseSnapshot animationPose;
     final RuntimeBoneEndpoints endpoints;
     final RuntimeCollisionFrames collisionFrames;
     final RuntimeCollisionCache collisionCache;
@@ -25,6 +27,8 @@ final class SpringBoneContext {
         this.state = new SpringBoneState(layout);
         this.scratch = new SpringBoneScratch();
         this.metrics = new SpringBoneMetrics();
+        this.animationMotion = new AnimationMotionSampler(layout);
+        this.animationPose = new AnimationPoseSnapshot(layout);
         this.endpoints = new RuntimeBoneEndpoints(layout);
         this.collisionFrames = new RuntimeCollisionFrames(layout);
         this.collisionCache = new RuntimeCollisionCache(

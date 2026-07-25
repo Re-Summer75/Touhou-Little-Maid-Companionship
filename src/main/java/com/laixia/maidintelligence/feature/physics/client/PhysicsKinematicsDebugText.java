@@ -44,7 +44,13 @@ final class PhysicsKinematicsDebugText {
                 " effectivePivot=(%.2f,%.2f,%.2f)"
                         + " physicsAxis=(%.3f,%.3f,%.3f)"
                         + " pivotCorrected=%s supportConfidence=%.3f"
-                        + " primaryCluster=%s segmentLength=%.2fpx%s"
+                        + " contactConfidence=%.3f pivotScore=%.4f"
+                        + " supportStabilityCorrected=%s"
+                        + " supportStabilityPreserved=%s"
+                        + " attachmentLeverCorrected=%s"
+                        + " supportStabilityUnsupported=%s"
+                        + " axisPolarityCorrected=%s primaryCluster=%s"
+                        + " segmentLength=%.2fpx%s"
                         + " safetyLever=%.2fpx safeAngle=%.1fdeg",
                 metrics.effectivePivot().x * 16.0F,
                 metrics.effectivePivot().y * 16.0F,
@@ -54,6 +60,13 @@ final class PhysicsKinematicsDebugText {
                 metrics.axis().z,
                 metrics.compensatesPivot(),
                 metrics.supportConfidence(),
+                metrics.contactConfidence(),
+                metrics.pivotScore(),
+                metrics.supportStabilityPivotCorrected(),
+                metrics.supportStabilityPivotPreserved(),
+                metrics.attachmentLeverPivotCorrected(),
+                metrics.supportStabilityUnsupported(),
+                metrics.axisPolarityCorrected(),
                 metrics.usesDominantCluster(),
                 metrics.segmentLength(),
                 jointSpacing,

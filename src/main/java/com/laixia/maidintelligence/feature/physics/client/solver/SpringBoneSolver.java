@@ -35,6 +35,13 @@ public final class SpringBoneSolver {
         engine.reset();
     }
 
+    /**
+     * Removes the previous physics overlay before animation edits the bones.
+     */
+    public void restoreAnimationPose() {
+        engine.restoreAnimationPose();
+    }
+
     public PhysicsSolverLayout layout() {
         return engine.layout();
     }
@@ -67,6 +74,16 @@ public final class SpringBoneSolver {
             Vector3f output
     ) {
         return engine.copyPreviousDirection(drivenSlot, output);
+    }
+
+    /**
+     * Copies the latest conditioned animation acceleration in model space.
+     */
+    public boolean copyAnimationAcceleration(
+            int drivenSlot,
+            Vector3f output
+    ) {
+        return engine.copyAnimationAcceleration(drivenSlot, output);
     }
 
     /**

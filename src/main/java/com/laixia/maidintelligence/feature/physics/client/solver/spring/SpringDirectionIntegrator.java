@@ -35,6 +35,7 @@ final class SpringDirectionIntegrator {
     static boolean integrate(
             PhysicsSolverLayout.Node node,
             Vector3f modelAcceleration,
+            Vector3f animationAcceleration,
             float yawRate,
             float dt,
             boolean paused,
@@ -80,11 +81,14 @@ final class SpringDirectionIntegrator {
                 SpringBoneMath.INERTIA_GAIN * profile.inertiaScale();
         float turn = SpringBoneMath.TURN_GAIN * profile.turnScale();
         scratch.nextDirection.add(
-                (modelAcceleration.x() * -inertia + yawRate * turn) * dt,
-                (modelAcceleration.y() * -inertia
+                ((modelAcceleration.x() + animationAcceleration.x())
+                        * -inertia + yawRate * turn) * dt,
+                ((modelAcceleration.y() + animationAcceleration.y())
+                        * -inertia
                         - SpringBoneMath.GRAVITY_POWER
                         * profile.gravityScale()) * dt,
-                modelAcceleration.z() * -inertia * dt
+                (modelAcceleration.z() + animationAcceleration.z())
+                        * -inertia * dt
         );
         if (scratch.nextDirection.lengthSquared()
                 > SpringBoneMath.EPSILON) {

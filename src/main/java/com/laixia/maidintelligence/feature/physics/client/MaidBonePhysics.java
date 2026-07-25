@@ -31,8 +31,6 @@ public final class MaidBonePhysics {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     private static final float MAX_ACCEL = 0.5F;
-    private static final double MAX_DELTA_SECONDS = 0.1D;
-    private static final double MAX_CLOCK_GAP_SECONDS = 0.25D;
     private static final double MAX_RENDER_DISTANCE_SQR = 24.0D * 24.0D;
     private static final double TELEPORT_DISTANCE_SQR = 4.0D * 4.0D;
 
@@ -62,7 +60,11 @@ public final class MaidBonePhysics {
         return state == null ? null : state.solver;
     }
 
-    public static void apply(LivingEntity maid, AnimatedGeoModel model) {
+    public static void apply(
+            LivingEntity maid,
+            AnimatedGeoModel model,
+            double animationTick
+    ) {
         if (maid == null || model == null || !maid.isAlive()) {
             return;
         }
@@ -89,7 +91,7 @@ public final class MaidBonePhysics {
         LAST_PLANS.put(maid, plan);
         state.useModel(modelId, model, plan);
         boolean paused = minecraft.isPaused();
-        float dt = state.advanceClock(paused);
+        float dt = state.advanceClock(animationTick, paused);
         state.sampleMotion(maid, maid.getDeltaMovement(), dt);
         state.solver.solve(
                 state.modelAcceleration,
@@ -102,6 +104,19 @@ public final class MaidBonePhysics {
                 state.modelAcceleration.length(),
                 state.solver.lastPeakDeflection()
         );
+    }
+
+    /**
+     * Restores the animation-only local pose saved before the previous solve.
+     */
+    public static void restoreAnimationPose(
+            LivingEntity maid,
+            AnimatedGeoModel model
+    ) {
+        MaidState state = STATES.get(maid);
+        if (state != null && state.model == model && state.solver != null) {
+            state.solver.restoreAnimationPose();
+        }
     }
 
     public static void forget(LivingEntity maid) {
@@ -171,6 +186,8 @@ public final class MaidBonePhysics {
     private static final class MaidState {
         private final MotionSignalSampler motionSampler =
                 new MotionSignalSampler();
+        private final AnimationTimelineClock animationClock =
+                new AnimationTimelineClock();
         private final Vector3f worldAcceleration = new Vector3f();
         private final Vector3f modelAcceleration = new Vector3f();
 
@@ -180,7 +197,6 @@ public final class MaidBonePhysics {
         private PhysicsSolverLayout layout;
         private SpringBoneSolver solver;
         private float yawRate;
-        private long lastNanos;
         private double lastX;
         private double lastY;
         private double lastZ;
@@ -217,7 +233,7 @@ public final class MaidBonePhysics {
             worldAcceleration.zero();
             modelAcceleration.zero();
             yawRate = 0.0F;
-            lastNanos = 0L;
+            animationClock.reset();
             positionInitialized = false;
             diagnosticFrames = 0;
             diagnosticWindows = 0;
@@ -264,23 +280,15 @@ public final class MaidBonePhysics {
             );
         }
 
-        private float advanceClock(boolean paused) {
-            long now = System.nanoTime();
-            if (lastNanos == 0L || paused) {
-                lastNanos = now;
-                return 0.0F;
-            }
-            double seconds = (now - lastNanos) / 1.0E9D;
-            lastNanos = now;
-            if (seconds > MAX_CLOCK_GAP_SECONDS) {
+        private float advanceClock(
+                double animationTick,
+                boolean paused
+        ) {
+            float dt = animationClock.advance(animationTick, paused);
+            if (animationClock.discontinuous()) {
                 resetTransientMotion();
-                return 0.0F;
             }
-            return (float) Mth.clamp(
-                    seconds,
-                    0.0D,
-                    MAX_DELTA_SECONDS
-            );
+            return dt;
         }
 
         private void resetTransientMotion() {

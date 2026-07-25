@@ -67,21 +67,39 @@ final class PhysicsBoneDiscoverer {
                     "distributed cube clusters lack one safe physical pivot"
             );
         }
+        BoneKinematics.Metrics kinematics = null;
+        if (decision.driven()) {
+            kinematics = BoneKinematics.measure(
+                    bone,
+                    parent,
+                    nearestSolidAncestor,
+                    decision.type(),
+                    decision.structureRole(),
+                    decision.chainSegment(),
+                    nextChainBone(bone, decision, discovered)
+            );
+            if (decision.source() == PhysicsBoneSelectionPlan.Source.AUTO
+                    && kinematics.supportStabilityUnsupported()) {
+                decision = PhysicsBoneSelectionPlan.Decision.rejected(
+                        decision.type(),
+                        decision.source(),
+                        decision.confidence(),
+                        PhysicsBoneSelectionPlan.StructureRole
+                                .RIGID_ATTACHMENT_BASE,
+                        "single-bone attachment lacks stable upper support"
+                );
+                kinematics = null;
+            } else {
+                decision = AttachmentMountStabilizer.apply(
+                        decision,
+                        kinematics
+                );
+            }
+        }
         output.path(bone, discovered.path(bone));
         output.decide(bone, decision);
-        if (decision.driven()) {
-            output.kinematics(
-                    bone,
-                    BoneKinematics.measure(
-                            bone,
-                            parent,
-                            nearestSolidAncestor,
-                            decision.type(),
-                            decision.structureRole(),
-                            decision.chainSegment(),
-                            nextChainBone(bone, decision, discovered)
-                    )
-            );
+        if (kinematics != null) {
+            output.kinematics(bone, kinematics);
         }
         AnimatedGeoBone nextSolidAncestor =
                 bone.geoBone().cubes().getCubeCount() > 0

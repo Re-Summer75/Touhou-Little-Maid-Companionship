@@ -11,33 +11,28 @@ record BoneAttachmentFrame(
         Vector3f effectivePivot,
         Vector3f axis,
         float safeAngle,
-        float supportConfidence
+        float supportConfidence,
+        float contactConfidence,
+        float pivotScore,
+        boolean supportStabilityCorrected,
+        boolean supportStabilityPreserved,
+        boolean attachmentLeverCorrected,
+        boolean supportStabilityUnsupported
 ) {
     private static final float PIXELS_PER_BLOCK = 16.0F;
-    private static final float MIN_PIVOT_TOLERANCE =
-            4.0F / PIXELS_PER_BLOCK;
     private static final float MIN_PRINCIPAL_CONFIDENCE = 0.48F;
-    private static final float MIN_SUPPORT_CONFIDENCE = 0.20F;
-    private static final float EPSILON = 1.0E-6F;
 
     static BoneAttachmentFrame resolve(
             AnimatedGeoBone bone,
             AnimatedGeoBone parent,
             AnimatedGeoBone nearestSolidAncestor,
             PhysicsBoneSelectionPlan.PartType type,
+            PhysicsBoneSelectionPlan.StructureRole structureRole,
             PhysicsBoneSelectionPlan.ChainSegment chainSegment,
-            BoneMeshMetrics mesh
+            BoneMeshMetrics mesh,
+            BoneMeshMetrics loadMesh
     ) {
         Vector3f authoredPivot = pivotOf(bone);
-        if (type == PhysicsBoneSelectionPlan.PartType.HEAD_SHELL) {
-            return new BoneAttachmentFrame(
-                    new Vector3f(mesh.centroid()),
-                    new Vector3f(0.0F, -1.0F, 0.0F),
-                    0.35F,
-                    1.0F
-            );
-        }
-
         AttachmentSupport support = AttachmentSupport.resolve(
                 bone,
                 parent,
@@ -61,121 +56,98 @@ record BoneAttachmentFrame(
         }
         proximal.set(mesh.closestPoint(proximal));
         distal.set(mesh.closestPoint(distal));
-
-        float tolerance = Math.max(
-                MIN_PIVOT_TOLERANCE,
-                mesh.diagonal() * 0.50F
-        );
-        boolean reversed = pointsFromDistalEnd(
+        PivotInferenceResult inference = inferPivot(
                 authoredPivot,
                 proximal,
-                distal,
-                endpoints.confidence(),
-                endpoints.length(),
+                mesh,
+                support,
                 endpoints.supportConfidence()
         );
-        boolean misplaced = originFarFromAttachment(
-                authoredPivot,
-                proximal,
-                endpoints.confidence(),
-                endpoints.length(),
+        float contactConfidence = inference.contactBased()
+                ? inference.confidence()
+                : 0.0F;
+        float pivotConfidence = inference.contactBased()
+                ? contactConfidence
+                : endpoints.supportConfidence();
+        float supportConfidence = Math.max(
                 endpoints.supportConfidence(),
-                mesh,
-                support
+                contactConfidence
         );
-        AttachmentPivotPolicy.Result pivot = AttachmentPivotPolicy.resolve(
-                authoredPivot,
-                proximal,
-                mesh,
-                chainSegment,
-                endpoints.supportConfidence(),
-                tolerance,
-                reversed,
-                misplaced
-        );
-        boolean corrected = pivot.corrected();
-        Vector3f effectivePivot = pivot.pivot();
+        if (type == PhysicsBoneSelectionPlan.PartType.HEAD_SHELL) {
+            return HeadShellAttachmentFrame.resolve(
+                    mesh,
+                    inference,
+                    supportConfidence,
+                    contactConfidence
+            );
+        }
 
-        Vector3f directedAxis = new Vector3f(distal).sub(proximal);
-        Vector3f axis = new Vector3f(mesh.centroid())
-                .sub(effectivePivot);
-        float minimumAxis = Math.max(
-                0.02F,
-                endpoints.length() * 0.08F
+        AttachmentPivotResolution pivot =
+                AttachmentPivotResolution.resolve(
+                        type,
+                        structureRole,
+                        chainSegment,
+                authoredPivot,
+                        inference,
+                        mesh,
+                        loadMesh,
+                        endpoints,
+                        support,
+                        pivotConfidence,
+                        contactConfidence
+                );
+        Vector3f effectivePivot = pivot.pivot();
+        Vector3f axis = AttachmentFrameGeometry.axis(
+                mesh,
+                endpoints,
+                proximal,
+                distal,
+                effectivePivot
         );
-        if (axis.lengthSquared() < minimumAxis * minimumAxis) {
-            axis.set(directedAxis);
-        } else if (endpoints.supportConfidence()
-                >= MIN_SUPPORT_CONFIDENCE
-                && directedAxis.lengthSquared() > EPSILON
-                && axis.dot(directedAxis) < 0.0F) {
-            axis.negate();
-        }
-        if (axis.lengthSquared() < EPSILON) {
-            axis.set(0.0F, -1.0F, 0.0F);
-        } else {
-            axis.normalize();
-        }
-        float safeAngle = corrected ? 0.30F : 0.80F;
-        if (endpoints.confidence() < MIN_PRINCIPAL_CONFIDENCE) {
-            safeAngle = Math.min(safeAngle, 0.25F);
-        }
-        if (endpoints.supportConfidence() < MIN_SUPPORT_CONFIDENCE) {
-            safeAngle = Math.min(safeAngle, 0.18F);
-        }
+        float safeAngle = AttachmentFrameGeometry.safeAngle(
+                pivot.corrected(),
+                endpoints.confidence(),
+                pivotConfidence,
+                pivot.strictAngleLimit()
+        );
         return new BoneAttachmentFrame(
                 effectivePivot,
                 axis,
                 safeAngle,
-                endpoints.supportConfidence()
+                supportConfidence,
+                contactConfidence,
+                inference.score(),
+                pivot.supportStabilityCorrected(),
+                pivot.supportStabilityPreserved(),
+                pivot.attachmentLeverCorrected(),
+                pivot.supportStabilityUnsupported()
         );
     }
 
-    private static boolean pointsFromDistalEnd(
+    private static PivotInferenceResult inferPivot(
             Vector3f authoredPivot,
-            Vector3f proximal,
-            Vector3f distal,
-            float confidence,
-            float axisLength,
-            float supportConfidence
-    ) {
-        if (confidence < MIN_PRINCIPAL_CONFIDENCE
-                || supportConfidence < MIN_SUPPORT_CONFIDENCE) {
-            return false;
-        }
-        float margin = Math.max(
-                0.04F,
-                axisLength * 0.12F
-        );
-        return authoredPivot.distance(distal) + margin
-                < authoredPivot.distance(proximal);
-    }
-
-    private static boolean originFarFromAttachment(
-            Vector3f authoredPivot,
-            Vector3f proximal,
-            float confidence,
-            float axisLength,
-            float supportConfidence,
+            Vector3f fallbackPivot,
             BoneMeshMetrics mesh,
-            AttachmentSupport support
+            AttachmentSupport support,
+            float fallbackConfidence
     ) {
-        if (confidence < MIN_PRINCIPAL_CONFIDENCE
-                || supportConfidence < MIN_SUPPORT_CONFIDENCE) {
-            return false;
+        if (support.body() == null) {
+            return PivotInferenceResult.fallback(
+                    fallbackPivot,
+                    fallbackConfidence
+            );
         }
-        float diagonal = mesh.diagonal();
-        float tolerance = Math.max(
-                0.5F / PIXELS_PER_BLOCK,
-                Math.min(diagonal * 0.12F, axisLength * 0.20F)
+        AttachmentContactPatch patch = AttachmentContactAnalyzer.analyze(
+                mesh,
+                support.body()
         );
-        float scoreMargin = Math.max(
-                0.03F,
-                tolerance / Math.max(0.05F, diagonal) * 0.25F
+        return VirtualPivotOptimizer.optimize(
+                authoredPivot,
+                fallbackPivot,
+                mesh,
+                support.body(),
+                patch
         );
-        return authoredPivot.distance(proximal) > tolerance
-                && support.score(proximal, mesh.centroid()) + scoreMargin
-                < support.score(authoredPivot, mesh.centroid());
     }
 
     private static Vector3f pivotOf(AnimatedGeoBone bone) {

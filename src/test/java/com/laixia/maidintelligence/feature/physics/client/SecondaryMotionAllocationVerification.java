@@ -36,14 +36,20 @@ final class SecondaryMotionAllocationVerification {
                 true
         );
         Vector3f acceleration = new Vector3f(2.5F, 0.0F, 0.0F);
+        AnimationTimelineClock timeline = new AnimationTimelineClock();
         for (int frame = 0; frame < WARMUP_FRAMES; frame++) {
-            solveFrame(fixture, acceleration);
+            solveFrame(fixture, acceleration, timeline, frame);
         }
         long threadId = Thread.currentThread().getId();
         bean.getThreadAllocatedBytes(threadId);
         long before = bean.getThreadAllocatedBytes(threadId);
         for (int frame = 0; frame < MEASURED_FRAMES; frame++) {
-            solveFrame(fixture, acceleration);
+            solveFrame(
+                    fixture,
+                    acceleration,
+                    timeline,
+                    WARMUP_FRAMES + frame
+            );
         }
         long allocated = bean.getThreadAllocatedBytes(threadId) - before;
         require(
@@ -56,13 +62,23 @@ final class SecondaryMotionAllocationVerification {
 
     private static void solveFrame(
             Fixture fixture,
-            Vector3f acceleration
+            Vector3f acceleration,
+            AnimationTimelineClock timeline,
+            int frame
     ) {
+        fixture.solver().restoreAnimationPose();
+        float phase = frame * (2.0F * (float) Math.PI / 120.0F);
         fixture.head().setRotationX(0.0F);
         fixture.head().setRotationY(0.0F);
-        fixture.head().setRotationZ(0.0F);
-        fixture.head().setPositionX(0.5F);
-        fixture.head().setScaleX(1.15F);
+        fixture.head().setRotationZ(
+                0.15F * (float) Math.sin(phase)
+        );
+        fixture.head().setPositionX(
+                0.5F + 0.25F * (float) Math.cos(phase)
+        );
+        fixture.head().setScaleX(
+                1.15F + 0.05F * (float) Math.sin(phase)
+        );
         fixture.head().setScaleY(0.85F);
         fixture.head().setScaleZ(1.05F);
         fixture.hair().setRotationX(0.0F);
@@ -77,7 +93,7 @@ final class SecondaryMotionAllocationVerification {
         fixture.solver().solve(
                 acceleration,
                 0.15F,
-                1.0F / 60.0F,
+                timeline.advance(frame / 3.0D, false),
                 false
         );
     }

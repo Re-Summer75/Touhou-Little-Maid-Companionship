@@ -13,15 +13,30 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Applies the weighted secondary-motion layer right after Touhou Little Maid
- * finishes posing a Gecko maid for the frame. {@code setCustomAnimations}
- * already runs every animation controller, the head tracker, and the hardcoded
- * animations before returning, so injecting at its tail gives the physics the
- * final animated pose to add onto, and the bones are still read afterwards by
- * {@code renderRecursively}.
+ * Wraps Touhou Little Maid's Gecko pose with a reversible secondary-motion
+ * overlay. The previous overlay is removed before animations run and a fresh
+ * one is applied after both controller and hardcoded animation updates.
  */
 @Mixin(value = GeckoMaidEntity.class, remap = false)
 public abstract class GeckoMaidEntityBonePhysicsMixin {
+    @Inject(
+            method = "setCustomAnimations",
+            at = @At("HEAD"),
+            remap = false,
+            require = 0
+    )
+    private void maidIntelligence$restoreAnimationPose(
+            AnimationContext<?> context,
+            AnimationEvent<?> event,
+            CallbackInfoReturnable<Boolean> callback
+    ) {
+        AnimatableEntity<?> self = (AnimatableEntity<?>) (Object) this;
+        AnimatedGeoModel model = self.getCurrentModel();
+        if (model != null && self.getEntity() instanceof LivingEntity maid) {
+            MaidBonePhysics.restoreAnimationPose(maid, model);
+        }
+    }
+
     // RETURN, not TAIL: setCustomAnimations returns from two branches (the
     // normal render path carries EntityModelData and returns early), and TAIL
     // would only catch the last one, so physics never ran on rendered maids.
@@ -36,14 +51,13 @@ public abstract class GeckoMaidEntityBonePhysicsMixin {
             AnimationEvent<?> event,
             CallbackInfoReturnable<Boolean> callback
     ) {
-        // Only run when the animation actually re-posed the bones this frame.
-        // setCustomAnimations is frame-rate limited and returns false early on
-        // skipped frames without resetting the bones; since @At("RETURN")
-        // catches those early returns too, applying physics there would stack
-        // onto the already-deflected pose and wind the chain up without bound.
-        if (!Boolean.TRUE.equals(callback.getReturnValue())) {
-            return;
-        }
+        /*
+         * Do not gate this on the return value. Gecko returns false when its
+         * controller rate limiter skips a tick, but GeckoMaidEntity still runs
+         * hardcoded animations afterwards. In particular, tail/default writes
+         * the tail root on every render call. The HEAD restore makes applying
+         * physics on these skipped controller frames safe and non-cumulative.
+         */
         // getCurrentModel/getEntity are public on the AnimatableEntity
         // supertype; cast through Object so no @Shadow binding is needed for
         // inherited members. A live GeckoMaidEntity is always an
@@ -56,7 +70,10 @@ public abstract class GeckoMaidEntityBonePhysicsMixin {
         // A real Gecko model means this is not the YSM path; only living maids
         // carry the body-rotation history the springs read for motion.
         if (self.getEntity() instanceof LivingEntity maid) {
-            MaidBonePhysics.apply(maid, model);
+            double animationTick = (double) (
+                    (float) maid.tickCount + event.getPartialTick()
+            );
+            MaidBonePhysics.apply(maid, model, animationTick);
         }
     }
 }

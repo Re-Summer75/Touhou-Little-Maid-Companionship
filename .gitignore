@@ -128,3 +128,4 @@ _reference/
 .vscode/launch.json
 .vscode/tasks.json
 .vscode/settings.json
+logs/

@@ -30,7 +30,7 @@ final class AnonymousGoldenFixture {
                        "cubes":[{"origin":[-4,16,-4],"size":[8,8,8],"uv":[0,0]}]},
                       {"name":"bone17","parent":"Body","pivot":[0,9,2],
                        "cubes":[{"origin":[-1,2,7],"size":[2,7,2],"uv":[0,0]}]},
-                      {"name":"bone18","parent":"bone17","pivot":[0,4,8],
+                      {"name":"bone18","parent":"bone17","pivot":[20,4,-20],
                        "cubes":[{"origin":[-0.8,-2,9],"size":[1.6,6,1.5],"uv":[0,0]}]},
                       {"name":"RigidDecoration","parent":"Head","pivot":[0,22,0],
                        "cubes":[{"origin":[-1,22,-1],"size":[2,2,2],"uv":[0,0]}]}

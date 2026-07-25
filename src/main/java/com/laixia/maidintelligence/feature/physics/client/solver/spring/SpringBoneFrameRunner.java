@@ -23,16 +23,8 @@ final class SpringBoneFrameRunner {
         context.metrics.beginFrame();
         SpringCollisionCoordinator.beginFrame(context);
         state.beginReferenceFrame(context.constraintsEnabled);
-        boolean inlineAnimationOrientations =
-                context.constraintsEnabled
-                        && layout.referencesPreordered();
-        if (context.constraintsEnabled
-                && !inlineAnimationOrientations) {
-            SpringOrientationComposer.collectAnimationOrientations(
-                    layout,
-                    state,
-                    scratch
-            );
+        if (context.constraintsEnabled) {
+            context.animationMotion.sample(state, dt, paused);
         }
         for (int index = 0; index < layout.activeNodeCount(); index++) {
             PhysicsSolverLayout.Node node = layout.node(index);
@@ -48,30 +40,14 @@ final class SpringBoneFrameRunner {
                     : state.renderedOrientations[node.parentIndex()];
             Quaternionf boneBaseOrientation =
                     state.renderedOrientations[index];
-            if (inlineAnimationOrientations) {
-                Quaternionf animationParent = node.parentIndex() < 0
-                        ? scratch.rootOrientation
-                        : state.animationOrientations[node.parentIndex()];
-                SpringOrientationComposer.composeBoth(
-                        animationParent,
-                        parentOrientation,
-                        rx,
-                        ry,
-                        rz,
-                        state.animationOrientations[index],
-                        boneBaseOrientation,
-                        scratch
-                );
-            } else {
-                SpringOrientationComposer.compose(
-                        parentOrientation,
-                        rx,
-                        ry,
-                        rz,
-                        boneBaseOrientation,
-                        scratch
-                );
-            }
+            SpringOrientationComposer.compose(
+                    parentOrientation,
+                    rx,
+                    ry,
+                    rz,
+                    boneBaseOrientation,
+                    scratch
+            );
 
             if (node.driven()) {
                 integrateAndApply(
@@ -122,6 +98,15 @@ final class SpringBoneFrameRunner {
     ) {
         SpringBoneState state = context.state;
         SpringBoneScratch scratch = context.scratch;
+        context.animationPose.capture(
+                node,
+                rx,
+                ry,
+                rz,
+                px,
+                py,
+                pz
+        );
         int referenceIndex =
                 node.constraint().referenceNodeIndex();
         Quaternionf referenceOrientation =
@@ -147,6 +132,7 @@ final class SpringBoneFrameRunner {
         boolean stepped = SpringDirectionIntegrator.integrate(
                 node,
                 modelAcceleration,
+                context.animationMotion.acceleration(node.drivenSlot()),
                 yawRate,
                 dt,
                 paused,

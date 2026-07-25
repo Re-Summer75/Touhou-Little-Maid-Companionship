@@ -92,6 +92,13 @@ public final class BoneKinematics {
                     authoredPivot,
                     new Vector3f(authoredPivot),
                     0.0F,
+                    0.0F,
+                    Float.POSITIVE_INFINITY,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
                     false
             );
         }
@@ -110,8 +117,10 @@ public final class BoneKinematics {
                 parent,
                 nearestSolidAncestor,
                 type,
+                structureRole,
                 chainSegment,
-                frameMesh
+                frameMesh,
+                fullMesh
         );
         float leverArm = Math.max(
                 fullMesh.maximumDistanceTo(frame.effectivePivot())
@@ -119,13 +128,24 @@ public final class BoneKinematics {
                 MIN_LEVER_PIXELS
         );
         Vector3f axis = frame.axis();
+        boolean polarityFlipped = false;
+        if (nextChainBone == null) {
+            polarityFlipped = BoneAxisPolarity.alignWithVisibleMass(
+                    axis,
+                    fullMesh,
+                    frame.effectivePivot()
+            );
+        }
+        BoneMeshMetrics segmentMesh = polarityFlipped
+                ? fullMesh
+                : frameMesh;
         float segmentLength =
                 type == PhysicsBoneSelectionPlan.PartType.HEAD_SHELL
                         ? leverArm
                         : Math.max(
-                        frameMesh.maximumProjectionFrom(
+                        segmentMesh.maximumProjectionFrom(
                                 frame.effectivePivot(),
-                                frame.axis()
+                                axis
                         ) * PIXELS_PER_BLOCK,
                         MIN_LEVER_PIXELS
                 );
@@ -149,6 +169,13 @@ public final class BoneKinematics {
                 authoredPivot,
                 frame.effectivePivot(),
                 frame.supportConfidence(),
+                frame.contactConfidence(),
+                frame.pivotScore(),
+                frame.supportStabilityCorrected(),
+                frame.supportStabilityPreserved(),
+                frame.attachmentLeverCorrected(),
+                frame.supportStabilityUnsupported(),
+                polarityFlipped,
                 partition.usesDominantCluster()
                         && frameMesh == partition.frame()
         );
@@ -172,6 +199,13 @@ public final class BoneKinematics {
         private final Vector3f pivotDelta;
         private final boolean compensatesPivot;
         private final float supportConfidence;
+        private final float contactConfidence;
+        private final float pivotScore;
+        private final boolean supportStabilityPivotCorrected;
+        private final boolean supportStabilityPivotPreserved;
+        private final boolean attachmentLeverPivotCorrected;
+        private final boolean supportStabilityUnsupported;
+        private final boolean axisPolarityCorrected;
         private final boolean usesDominantCluster;
 
         public Metrics(
@@ -182,6 +216,13 @@ public final class BoneKinematics {
                 Vector3f authoredPivot,
                 Vector3f effectivePivot,
                 float supportConfidence,
+                float contactConfidence,
+                float pivotScore,
+                boolean supportStabilityPivotCorrected,
+                boolean supportStabilityPivotPreserved,
+                boolean attachmentLeverPivotCorrected,
+                boolean supportStabilityUnsupported,
+                boolean axisPolarityCorrected,
                 boolean usesDominantCluster
         ) {
             this.axis = new Vector3f(axis);
@@ -193,6 +234,17 @@ public final class BoneKinematics {
             this.pivotDelta = new Vector3f(effectivePivot).sub(authoredPivot);
             this.compensatesPivot = pivotDelta.lengthSquared() > EPSILON;
             this.supportConfidence = supportConfidence;
+            this.contactConfidence = contactConfidence;
+            this.pivotScore = pivotScore;
+            this.supportStabilityPivotCorrected =
+                    supportStabilityPivotCorrected;
+            this.supportStabilityPivotPreserved =
+                    supportStabilityPivotPreserved;
+            this.attachmentLeverPivotCorrected =
+                    attachmentLeverPivotCorrected;
+            this.supportStabilityUnsupported =
+                    supportStabilityUnsupported;
+            this.axisPolarityCorrected = axisPolarityCorrected;
             this.usesDominantCluster = usesDominantCluster;
         }
 
@@ -230,6 +282,34 @@ public final class BoneKinematics {
 
         public float supportConfidence() {
             return supportConfidence;
+        }
+
+        public float contactConfidence() {
+            return contactConfidence;
+        }
+
+        public float pivotScore() {
+            return pivotScore;
+        }
+
+        public boolean supportStabilityPivotCorrected() {
+            return supportStabilityPivotCorrected;
+        }
+
+        public boolean supportStabilityPivotPreserved() {
+            return supportStabilityPivotPreserved;
+        }
+
+        public boolean attachmentLeverPivotCorrected() {
+            return attachmentLeverPivotCorrected;
+        }
+
+        public boolean supportStabilityUnsupported() {
+            return supportStabilityUnsupported;
+        }
+
+        public boolean axisPolarityCorrected() {
+            return axisPolarityCorrected;
         }
 
         public boolean usesDominantCluster() {

@@ -1,0 +1,52 @@
+package com.laixia.maidintelligence.feature.physics.client;
+
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
+
+final class AnimationTimelineClockVerification {
+    private static final float EPSILON = 1.0E-6F;
+
+    private AnimationTimelineClockVerification() {
+    }
+
+    static void run() {
+        AnimationTimelineClock clock = new AnimationTimelineClock();
+        requireNear(clock.advance(100.25D, false), 0.0F, "initial");
+        requireNear(clock.advance(100.50D, false), 0.0125F, "advance");
+        requireNear(clock.advance(100.50D, false), 0.0F, "duplicate");
+        requireNear(clock.advance(100.40D, false), 0.0F, "out of order");
+        requireNear(clock.advance(100.75D, false), 0.0125F, "recovery");
+
+        requireNear(clock.advance(101.0D, true), 0.0F, "pause");
+        requireNear(clock.advance(101.0D, false), 0.0F, "resume duplicate");
+        requireNear(clock.advance(101.20D, false), 0.01F, "resume advance");
+
+        requireNear(clock.advance(104.20D, false), 0.10F, "clamp");
+        require(
+                !clock.discontinuous(),
+                "A finite clamped animation step was treated as a cut"
+        );
+        requireNear(clock.advance(110.0D, false), 0.0F, "large gap");
+        require(clock.discontinuous(), "Large animation gap was not detected");
+        requireNear(clock.advance(110.20D, false), 0.01F, "gap recovery");
+
+        requireNear(
+                clock.advance(Double.NaN, false),
+                0.0F,
+                "non-finite"
+        );
+        require(clock.discontinuous(), "Non-finite animation time survived");
+        requireNear(clock.advance(120.0D, false), 0.0F, "reset baseline");
+    }
+
+    private static void requireNear(
+            float actual,
+            float expected,
+            String label
+    ) {
+        require(
+                Math.abs(actual - expected) < EPSILON,
+                "Animation timeline " + label + " step was "
+                        + actual + " instead of " + expected
+        );
+    }
+}

@@ -144,9 +144,13 @@ final class BundledGeckoModelVerification {
         var ahoge = plan.kinematics(model.bones().get("bone34"));
         require(
                 ahoge != null
-                        && ahoge.compensatesPivot()
-                        && ahoge.axis().y > 0.25F,
-                "Zhiban ahoge attachment frame was reversed"
+                        && ahoge.axis().y > 0.25F
+                        && ahoge.contactConfidence() >= 0.20F,
+                "Zhiban ahoge attachment frame was reversed: "
+                        + (ahoge == null ? "missing"
+                        : ahoge.effectivePivot() + " / " + ahoge.axis()
+                        + " / contact=" + ahoge.contactConfidence()
+                        + " / support=" + ahoge.supportConfidence())
         );
     }
 

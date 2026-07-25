@@ -134,9 +134,14 @@ final class RuntimeEndpointHierarchyVerification {
                 new CollisionScratch()
         );
         prepared.prepare(pivot, new Matrix4f(), new Matrix3f(), 1.0F);
-        require(prepared.clearance(direction, new CollisionScratch())
-                        >= -2.0E-4F,
-                "Child segment retained illegal runtime clearance");
+        float clearance = prepared.clearance(
+                direction,
+                new CollisionScratch()
+        );
+        require(clearance >= -2.0E-4F,
+                "Child segment retained illegal runtime clearance: "
+                        + clearance + ", pivot=" + pivot
+                        + ", direction=" + direction);
 
         solver.reset();
         require(!solver.copyRuntimePivot(childIndex, pivot),

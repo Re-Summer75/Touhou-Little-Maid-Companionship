@@ -10,6 +10,9 @@ public final class BonePhysicsVerification {
     public static void main(String[] args) throws Exception {
         BoneClassifierVerification.run();
         MotionDynamicsVerification.run();
+        AnimationTimelineClockVerification.run();
+        AnimationInertiaVerification.run();
+        TailAnimationContinuityVerification.run();
         MotionAllocationVerification.run();
         MetadataGeometryVerification.run();
         HairDiscoveryVerification.run();
@@ -19,12 +22,16 @@ public final class BonePhysicsVerification {
         BoneAttachmentFrameVerification.run();
         PivotRolePolicyVerification.run();
         DistributedBoneRigidityVerification.run();
-        BundledPivotSurfaceVerification.run();
+        ContactAwarePivotVerification.run();
+        SupportStabilityPivotVerification.run();
+        SmallSupportStabilityVerification.run();
+        BundledAttachmentPivotVerification.run();
         RigidAttachmentVerification.run();
         ClothAccessoryDiscoveryVerification.run();
         InitialPoseStabilityVerification.run();
         DanglingAccessoryStabilityVerification.run();
         BundledGeckoModelVerification.run();
+        BundledAxisPolarityVerification.run();
         AccessoryChainIndependenceVerification.run();
         BundledChainJointVerification.run();
         BundledAttachmentFrameVerification.run();

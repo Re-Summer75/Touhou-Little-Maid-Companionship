@@ -77,6 +77,7 @@ final class BundledAttachmentFrameVerification {
         var metrics = plan.kinematics(model.bones().get(boneName));
         require(
                 metrics != null
+                        && !metrics.attachmentLeverPivotCorrected()
                         && metrics.effectivePivot().y > minimumY
                         && metrics.axis().y < -0.50F
                         && metrics.supportConfidence() >= 0.20F,

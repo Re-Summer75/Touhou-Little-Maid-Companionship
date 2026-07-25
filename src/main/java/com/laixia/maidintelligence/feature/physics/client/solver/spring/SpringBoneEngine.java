@@ -35,10 +35,16 @@ public final class SpringBoneEngine {
 
     public void reset() {
         context.state.reset();
+        context.animationMotion.reset();
+        context.animationPose.reset();
         context.endpoints.reset();
         context.collisionFrames.reset();
         context.collisionCache.reset();
         context.metrics.reset();
+    }
+
+    public void restoreAnimationPose() {
+        context.animationPose.restore();
     }
 
     public PhysicsSolverLayout layout() {
@@ -73,6 +79,16 @@ public final class SpringBoneEngine {
             Vector3f output
     ) {
         return context.state.copyPreviousDirection(drivenSlot, output);
+    }
+
+    public boolean copyAnimationAcceleration(
+            int drivenSlot,
+            Vector3f output
+    ) {
+        return context.animationMotion.copyAcceleration(
+                drivenSlot,
+                output
+        );
     }
 
     public boolean copyRuntimePivot(
