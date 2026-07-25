@@ -10,20 +10,11 @@ import java.util.Optional;
  * same block units as {@link PhysicsBoneGeometry.Analysis}.
  */
 public record BodyCollisionGeometry(
-        PhysicsBoneGeometry.Node head,
-        PhysicsBoneGeometry.Bounds headBounds,
         PhysicsBoneGeometry.Node body,
-        PhysicsBoneGeometry.Bounds bodyBounds,
-        Optional<LegPair> legs
+        PhysicsBoneGeometry.Bounds bodyBounds
 ) {
     public BodyCollisionGeometry {
-        headBounds = Objects.requireNonNull(headBounds, "headBounds");
         bodyBounds = Objects.requireNonNull(bodyBounds, "bodyBounds");
-        legs = Objects.requireNonNull(legs, "legs");
-    }
-
-    public boolean hasHead() {
-        return head != null && !headBounds.isEmpty();
     }
 
     public boolean hasBody() {
@@ -46,23 +37,6 @@ public record BodyCollisionGeometry(
                 0.0D,
                 1.0D
         ));
-    }
-
-    public record Leg(
-            PhysicsBoneGeometry.Node node,
-            PhysicsBoneGeometry.Bounds bounds
-    ) {
-        public Leg {
-            Objects.requireNonNull(node, "node");
-            Objects.requireNonNull(bounds, "bounds");
-        }
-    }
-
-    public record LegPair(Leg left, Leg right) {
-        public LegPair {
-            Objects.requireNonNull(left, "left");
-            Objects.requireNonNull(right, "right");
-        }
     }
 
     public record BackPlane(

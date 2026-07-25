@@ -25,11 +25,11 @@ final class CollisionBenchmarkFixture {
         CollisionBenchmarkAssertions.verify(kind, schema, layout);
         String label = switch (kind) {
             case HEAD -> schema == 2
-                    ? "head/schema2-legacy-chain-root"
-                    : "head/schema3-per-segment";
+                    ? "head/schema2-auto-disabled"
+                    : "head/schema3-auto-disabled";
             case SKIRT -> schema == 2
                     ? "skirt/schema2-body-disabled"
-                    : "skirt/schema3-body-and-reliable-legs";
+                    : "skirt/schema3-body-only";
         };
         return new Scenario(
                 label,

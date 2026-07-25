@@ -30,8 +30,8 @@ final class BoneKinematicsVerification {
         require(
                 PhysicsBoneSelectionPlan.SpringProfile.defaults(
                         PhysicsBoneSelectionPlan.PartType.HEAD_SHELL
-                ).gravityScale() <= 0.03F,
-                "Head shell still receives enough gravity to fold on head pitch"
+                ).gravityScale() == 0.0F,
+                "Head shell gravity can offset rigid descendants at rest"
         );
 
         BoneKinematics.Metrics detached = BoneKinematics.measure(

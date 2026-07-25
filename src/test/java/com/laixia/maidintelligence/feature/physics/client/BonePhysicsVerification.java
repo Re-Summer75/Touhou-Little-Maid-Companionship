@@ -17,9 +17,16 @@ public final class BonePhysicsVerification {
         WinefoxGeometryVerification.run();
         BoneKinematicsVerification.run();
         BoneAttachmentFrameVerification.run();
+        PivotRolePolicyVerification.run();
+        DistributedBoneRigidityVerification.run();
+        BundledPivotSurfaceVerification.run();
         RigidAttachmentVerification.run();
+        ClothAccessoryDiscoveryVerification.run();
+        InitialPoseStabilityVerification.run();
+        DanglingAccessoryStabilityVerification.run();
         BundledGeckoModelVerification.run();
         AccessoryChainIndependenceVerification.run();
+        BundledChainJointVerification.run();
         BundledAttachmentFrameVerification.run();
         BundledSupportGeometryVerification.run();
         PhysicsPlanCacheVerification.run();

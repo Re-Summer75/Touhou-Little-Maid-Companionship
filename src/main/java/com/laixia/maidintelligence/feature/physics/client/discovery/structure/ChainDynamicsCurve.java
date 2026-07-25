@@ -23,8 +23,17 @@ final class ChainDynamicsCurve {
         }
         if (decision.structureRole()
                 == PhysicsBoneSelectionPlan.StructureRole
+                .DANGLING_ACCESSORY) {
+            return ClothAccessoryDynamics.dangling(decision, segment);
+        }
+        if (decision.structureRole()
+                == PhysicsBoneSelectionPlan.StructureRole
                 .COMPOUND_SINGLE_BONE) {
             return compound(decision, segment);
+        }
+        if (decision.type() == PhysicsBoneSelectionPlan.PartType.SKIRT
+                && segment.count() > 1) {
+            return ClothAccessoryDynamics.skirt(decision, segment);
         }
         if (segment.count() <= 1 || !supportsGradient(decision.type())) {
             return decision.withDynamics(
@@ -70,16 +79,15 @@ final class ChainDynamicsCurve {
             PhysicsBoneSelectionPlan.Decision decision,
             PhysicsBoneSelectionPlan.ChainSegment segment
     ) {
+        boolean skirt =
+                decision.type() == PhysicsBoneSelectionPlan.PartType.SKIRT;
+        if (skirt) {
+            return ClothAccessoryDynamics.compoundSkirt(decision, segment);
+        }
         PhysicsBoneSelectionPlan.SpringProfile conservative =
                 new PhysicsBoneSelectionPlan.SpringProfile(
-                        1.35F,
-                        0.65F,
-                        1.25F,
-                        0.65F,
-                        0.65F,
-                        0.42F,
-                        0.48F
-                );
+                1.35F, 0.65F, 1.25F, 0.65F, 0.65F, 0.42F, 0.48F
+        );
         return decision.withDynamics(
                 decision.profile().multiply(conservative),
                 withRotationInertia(

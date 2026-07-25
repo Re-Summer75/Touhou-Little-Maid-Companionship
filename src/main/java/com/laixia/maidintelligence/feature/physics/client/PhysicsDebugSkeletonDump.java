@@ -3,7 +3,6 @@ package com.laixia.maidintelligence.feature.physics.client;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
 import com.mojang.logging.LogUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -86,40 +85,15 @@ final class PhysicsDebugSkeletonDump {
             counts[1]++;
         }
         String parentName = parent == null ? "root" : parent.getName();
-        String kinematics = "";
-        if (driven) {
-            BoneKinematics.Metrics metrics = plan.kinematics(bone);
-            if (metrics == null) {
-                metrics = BoneKinematics.measure(
-                        bone,
-                        parent,
-                        nearestSolidAncestor,
-                        decision.type(),
-                        decision.structureRole()
-                );
-            }
-            kinematics = String.format(
-                    Locale.ROOT,
-                    " effectivePivot=(%.2f,%.2f,%.2f)"
-                            + " physicsAxis=(%.3f,%.3f,%.3f)"
-                            + " pivotCorrected=%s supportConfidence=%.3f"
-                            + " primaryCluster=%s segmentLength=%.2fpx"
-                            + " safetyLever=%.2fpx safeAngle=%.1fdeg",
-                    metrics.effectivePivot().x * 16.0F,
-                    metrics.effectivePivot().y * 16.0F,
-                    metrics.effectivePivot().z * 16.0F,
-                    metrics.axis().x,
-                    metrics.axis().y,
-                    metrics.axis().z,
-                    metrics.compensatesPivot(),
-                    metrics.supportConfidence(),
-                    metrics.usesDominantCluster(),
-                    metrics.segmentLength(),
-                    metrics.leverArm(),
-                    Math.toDegrees(metrics.safeAngle()
-                            * decision.profile().angleScale())
-            );
-        }
+        String kinematics = driven
+                ? PhysicsKinematicsDebugText.describe(
+                bone,
+                parent,
+                nearestSolidAncestor,
+                decision,
+                plan
+        )
+                : "";
         int cubes = bone.geoBone().cubes().getCubeCount();
         String detail = String.format(
                 Locale.ROOT,

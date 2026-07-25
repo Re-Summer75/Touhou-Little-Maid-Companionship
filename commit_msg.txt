@@ -1,0 +1,25 @@
+feat(physics): 完善碰撞代理生成与织物饰品结构分析
+
+本次提交进一步增强了自动碰撞系统和物理模型的结构发现能力，为服饰、配饰等复杂结构提供了精准的自动代理配置和稳定性保障。
+
+✨ 核心特性 (Features):
+- **服饰与配饰分析管线 (Cloth & Accessory)**：
+  - 新增 `ClothAccessoryAnalyzer` 和 `ClothStructureTopology` 模块，用于自动解析长裙、披风、饰带等宽薄网格的结构连接性。
+  - 引入 `ClothAccessoryMetrics` 和 `ClothAccessoryDynamics`，为悬垂织物计算安全的受力面积并自动配置低频高阻尼的衰减动力学曲线。
+  - 实现 `WearableAttachmentClassifier` 和 `RigidAttachmentContinuation`，强化头饰、徽章等刚性附着物的识别，防止在剧烈运动时脱离支撑几何体发生扭曲。
+- **碰撞约束与余量优化 (Collision Rest Allowance)**：
+  - 新增 `PreparedCollisionRestAllowance` 并在运行期应用该约束，解决代理过大导致骨骼永远无法归位（弹簧无法收敛）的假性穿模卡顿问题。
+  - 改进了 `BodyCollisionGeometry` 与 `AutomaticCollisionProxyBaker` 的自动烘焙逻辑，根据骨架高度更精准地分配头、胸、骨盆的代理胶囊。
+- **枢轴与附着策略 (Attachment Pivot Policy)**：
+  - 新增 `AttachmentPivotPolicy` 显式控制从任意候选网格的哪个位置提取虚拟枢轴，为不同绑定规范的模型适配平滑约束效果。
+- **增强调试文本与验证**：
+  - 新增 `PhysicsKinematicsDebugText`，扩充运动学约束和碰撞相交的屏幕内渲染调试信息。
+  - 增加大量针对特殊骨架的验证测试：如 `ClothAccessoryDiscoveryVerification`, `DanglingAccessoryStabilityVerification`, `BundledChainJointVerification` 和 `InitialPoseStabilityVerification`，全面验证新型分析器和策略。
+
+♻️ 重构与优化 (Refactoring & Optimization):
+- **移除旧版专用构建器**：
+  - 彻底删除了硬编码的旧版 `HeadCollisionProxyBuilder`、`HeadColliderShapeBuilder` 和 `LegPairValidator`，全部替换为更通用的基于包围盒体积比重与关联组件评分的新流程。
+- **碰撞组件结构调整**：
+  - 修改 `PhysicsBoneDiscoverer`、`AutomaticCollisionPolicy`、`CollisionProxyPlan` 与 `SpringCollisionCoordinator` 以对接新的分析与静息容差 (Rest Allowance) 架构。
+- **文档更新**：
+  - 同步更新了 `docs/physics/README.md` 与 `docs/physics/SECONDARY_MOTION_CONSTRAINTS.md`，反映了在最小活动骨架上进行织物附件识别与碰撞几何改进的技术细节。

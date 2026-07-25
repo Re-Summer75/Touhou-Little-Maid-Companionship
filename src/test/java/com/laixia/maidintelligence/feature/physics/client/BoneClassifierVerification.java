@@ -164,8 +164,15 @@ final class BoneClassifierVerification {
         requireChain("BackCape3", ChainType.CAPE, 2);
         requireChain("LeftWing4", ChainType.WING, 3);
         requireChain("weiqun", ChainType.SKIRT, 0);
+        requireChain("qunzi", ChainType.SKIRT, 0);
+        requireChain("前裙2", ChainType.SKIRT, 1);
         requireChain("hudiejie", ChainType.RIBBON, 0);
+        requireChain("guashi", ChainType.RIBBON, 0);
+        requireChain("挂饰3", ChainType.RIBBON, 2);
+        requireChain("pendant", ChainType.RIBBON, 0);
         requireChain("chibang2", ChainType.WING, 1);
         requireNone("MRibbon");
+        requireNone("SHmask");
+        requireNone("faceplate");
     }
 }

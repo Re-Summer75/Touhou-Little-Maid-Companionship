@@ -3,7 +3,6 @@ package com.laixia.maidintelligence.feature.physics.client;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.google.gson.JsonParser;
 import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
 import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySet;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
@@ -53,9 +52,8 @@ final class HeadCapsuleLayoutVerification {
         }
         require(
                 proxies != null
-                        && proxies.hasKind(CollisionProxyKind.CAPSULE)
-                        && !proxies.hasKind(CollisionProxyKind.SPHERE),
-                "Elongated Head did not replace Sphere with a short Capsule"
+                        && proxies.proxyCount() == 0,
+                "Elongated Head unexpectedly generated automatic collision"
         );
     }
 }

@@ -96,6 +96,12 @@ public final class PhysicsBoneClassifier {
             "cloth",
             "clothe",
             "robe",
+            "qunzi",
+            "frontskirt",
+            "backskirt",
+            "innerskirt",
+            "outerskirt",
+            "longerskirt",
             // pinyin: 裙 / 裙摆 / 围裙
             "qun",
             "qunbai",
@@ -109,6 +115,11 @@ public final class PhysicsBoneClassifier {
             "streamer",
             "tie",
             "band",
+            "pendant",
+            "tassel",
+            "charm",
+            "guashi",
+            "liusu",
             // pinyin: 丝带 / 缎带 / 蝴蝶结 / 领带
             "sidai",
             "duandai",
@@ -195,6 +206,13 @@ public final class PhysicsBoneClassifier {
             "马尾", "馬尾", "双马尾", "雙馬尾",
             "辫子", "辮子", "呆毛", "アホ毛"
     );
+    private static final List<String> CJK_SKIRT_MARKERS = List.of(
+            "裙", "裙摆", "裙擺", "围裙", "圍裙", "スカート", "치마"
+    );
+    private static final List<String> CJK_RIBBON_MARKERS = List.of(
+            "挂饰", "掛飾", "吊坠", "吊墜", "流苏", "流蘇",
+            "丝带", "絲帶", "蝴蝶结", "蝴蝶結", "リボン", "태슬"
+    );
     private static final List<String> CJK_FACIAL_FEATURE_MARKERS = List.of(
             "眼", "眉", "嘴", "口", "表情", "舌", "牙", "鼻", "腮", "瞳",
             "脸红", "臉紅", "红晕", "紅暈"
@@ -264,6 +282,18 @@ public final class PhysicsBoneClassifier {
         if (containsAny(name, CJK_HAIR_MARKERS)) {
             return new Classification(
                     ChainType.HAIR,
+                    depthFromTrailingDigits(name)
+            );
+        }
+        if (containsAny(name, CJK_SKIRT_MARKERS)) {
+            return new Classification(
+                    ChainType.SKIRT,
+                    depthFromTrailingDigits(name)
+            );
+        }
+        if (containsAny(name, CJK_RIBBON_MARKERS)) {
+            return new Classification(
+                    ChainType.RIBBON,
                     depthFromTrailingDigits(name)
             );
         }

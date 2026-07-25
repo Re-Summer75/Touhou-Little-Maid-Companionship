@@ -54,7 +54,6 @@ public final class CollisionProxyComposer {
         AutomaticCollisionProxyBaker.append(
                 plan,
                 context,
-                geometry,
                 bodyGeometry,
                 proxies
         );

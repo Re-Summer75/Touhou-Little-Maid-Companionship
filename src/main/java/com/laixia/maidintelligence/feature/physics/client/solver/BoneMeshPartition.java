@@ -8,7 +8,8 @@ import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoMe
  */
 record BoneMeshPartition(
         BoneMeshMetrics full,
-        BoneMeshMetrics frame
+        BoneMeshMetrics frame,
+        boolean distributedWithoutDominantCluster
 ) {
     private static final float JOIN_MARGIN = 0.08F;
     private static final float MIN_WEIGHT_SHARE = 0.58F;
@@ -17,7 +18,7 @@ record BoneMeshPartition(
         BoneMeshMetrics full = BoneMeshMetrics.measure(mesh);
         int count = mesh.getCubeCount();
         if (count < 2 || full.empty()) {
-            return new BoneMeshPartition(full, full);
+            return new BoneMeshPartition(full, full, false);
         }
         int[] parent = new int[count];
         OrientedCubeBounds[] bounds = new OrientedCubeBounds[count];
@@ -37,15 +38,27 @@ record BoneMeshPartition(
                 }
             }
         }
+        int componentCount = componentCount(parent);
         BoneMeshMetrics dominant = dominant(mesh, parent, full);
         return new BoneMeshPartition(
                 full,
-                dominant == null ? full : dominant
+                dominant == null ? full : dominant,
+                componentCount > 1 && dominant == null
         );
     }
 
     boolean usesDominantCluster() {
         return frame != full;
+    }
+
+    private static int componentCount(int[] parent) {
+        int count = 0;
+        for (int cube = 0; cube < parent.length; cube++) {
+            if (find(parent, cube) == cube) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private static BoneMeshMetrics dominant(

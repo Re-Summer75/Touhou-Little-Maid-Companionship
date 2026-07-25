@@ -42,10 +42,16 @@ final class AutomaticPlanSelector {
                     node.parent() == null
                             ? null
                             : plan.current(node.parent().bone());
+            PhysicsBoneGeometry.Node rigidAncestor =
+                    RigidAttachmentContinuation.ancestor(node, plan);
+            PhysicsBoneSelectionPlan.Decision rigidDecision =
+                    rigidAncestor == null
+                            ? null
+                            : plan.current(rigidAncestor.bone());
             BoneStructureMetrics structure =
                     structures.metrics(node.bone());
-            if (parentDecision != null
-                    && parentDecision.structureRole()
+            if (rigidDecision != null
+                    && rigidDecision.structureRole()
                     == PhysicsBoneSelectionPlan.StructureRole
                     .RIGID_ATTACHMENT_BASE
                     && structure.longLeaf()
@@ -60,10 +66,11 @@ final class AutomaticPlanSelector {
                         "long flexible child of rigid attachment"
                 );
             }
-            if (isRigidAttachmentContinuation(
+            if (RigidAttachmentContinuation.shouldRemainRigid(
                     node,
-                    parentDecision,
-                    candidate
+                    rigidAncestor,
+                    candidate,
+                    structure
             )) {
                 candidate = Candidate.reject(
                         PhysicsBoneSelectionPlan.StructureRole
@@ -98,26 +105,6 @@ final class AutomaticPlanSelector {
         }
     }
 
-    private static boolean isRigidAttachmentContinuation(
-            PhysicsBoneGeometry.Node node,
-            PhysicsBoneSelectionPlan.Decision parent,
-            Candidate candidate
-    ) {
-        if (node.parent() == null
-                || parent == null
-                || parent.structureRole()
-                != PhysicsBoneSelectionPlan.StructureRole
-                .RIGID_ATTACHMENT_BASE
-                || PhysicsBoneClassifier.classifyVisibleGeometry(
-                node.bone().getName()
-        ).isPhysical()
-                || candidate.confidence() >= AUTO_THRESHOLD
-        ) {
-            return false;
-        }
-        return node.pivot().distance(node.parent().pivot()) <= 1.0E-4F;
-    }
-
     private static boolean isSerialContinuation(
             PhysicsBoneGeometry.Node node,
             Candidate candidate,
@@ -128,6 +115,10 @@ final class AutomaticPlanSelector {
                 && parent.source() == PhysicsBoneSelectionPlan.Source.AUTO
                 && parent.type() != PhysicsBoneSelectionPlan.PartType.HEAD_SHELL
                 && node.parent().bone().children().size() == 1
+                && (candidate.type() == parent.type()
+                || !PhysicsBoneClassifier.classifyVisibleGeometry(
+                        node.bone().getName()
+                ).isPhysical())
                 && candidate.confidence() >= 0.35D;
     }
 

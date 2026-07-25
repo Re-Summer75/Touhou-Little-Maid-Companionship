@@ -103,6 +103,7 @@ public final class PhysicsBoneSelectionPlan {
         NONE,
         RIGID_ATTACHMENT_BASE,
         FLEXIBLE_CHAIN_SEGMENT,
+        DANGLING_ACCESSORY,
         COMPOUND_SINGLE_BONE
     }
 
@@ -421,7 +422,7 @@ public final class PhysicsBoneSelectionPlan {
         public static SpringProfile defaults(PartType type) {
             return switch (type) {
                 case HEAD_SHELL -> new SpringProfile(
-                        2.20F, 0.03F, 1.50F, 0.25F, 0.25F, 0.28F, 0.45F
+                        2.20F, 0.0F, 1.50F, 0.25F, 0.25F, 0.28F, 0.45F
                 );
                 case HAIR -> new SpringProfile(
                         1.00F, 1.00F, 1.00F, 1.00F, 1.00F, 1.00F, 1.00F

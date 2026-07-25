@@ -89,7 +89,7 @@ final class PreparedPlanePairProjector {
         float distance = (pivot.x - point.x) * normal.x
                 + (pivot.y - point.y) * normal.y
                 + (pivot.z - point.z) * normal.z;
-        return (proxy.preparedHitRadius() - distance)
+        return (proxy.projectionHitRadius() - distance)
                 / proxy.preparedLeverArm();
     }
 }

@@ -1,7 +1,5 @@
 package com.laixia.maidintelligence.feature.physics.client.discovery.structure;
 
-import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneSelectionPlan;
-
 /**
  * Model-load-time evidence for rigid mounts and flexible hair structures.
  */
@@ -12,8 +10,7 @@ public record BoneStructureMetrics(
         boolean mirroredSibling,
         boolean coincidentFamily,
         boolean distalDescendant,
-        int cubeCount,
-        PhysicsBoneSelectionPlan.StructureRole suggestedRole
+        int cubeCount
 ) {
     public static final BoneStructureMetrics NONE =
             new BoneStructureMetrics(
@@ -23,8 +20,7 @@ public record BoneStructureMetrics(
                     false,
                     false,
                     false,
-                    0,
-                    PhysicsBoneSelectionPlan.StructureRole.NONE
+                    0
             );
 
     public boolean structurallyRigidAttachment() {

@@ -2,7 +2,6 @@ package com.laixia.maidintelligence.feature.physics.client.discovery.structure;
 
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneGeometry;
-import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneSelectionPlan;
 import org.joml.Vector3f;
 
 import java.util.IdentityHashMap;
@@ -41,7 +40,10 @@ public final class BoneStructureAnalyzer {
                     )
             );
         }
-        return new BoneStructureAnalysis(result);
+        return new BoneStructureAnalysis(
+                result,
+                ClothAccessoryAnalyzer.analyze(geometry)
+        );
     }
 
     private static BoneStructureMetrics measure(
@@ -89,11 +91,6 @@ public final class BoneStructureAnalyzer {
                 && headCenter.y - node.center().y >= headHeight * 0.25D
                 && Math.abs(node.pivot().y - headCenter.y)
                 <= headHeight * 1.10D;
-        PhysicsBoneSelectionPlan.StructureRole role =
-                longLeaf && mirrored
-                        ? PhysicsBoneSelectionPlan.StructureRole
-                        .COMPOUND_SINGLE_BONE
-                        : PhysicsBoneSelectionPlan.StructureRole.NONE;
         return new BoneStructureMetrics(
                 compact,
                 elongated,
@@ -101,8 +98,7 @@ public final class BoneStructureAnalyzer {
                 mirrored,
                 coincident,
                 distalDescendant,
-                cubeCount,
-                role
+                cubeCount
         );
     }
 

@@ -43,18 +43,8 @@ public final class CollisionProxyPlanner {
         CollisionProxyPlan.Automatic automatic =
                 AutomaticCollisionPolicy.select(
                 decision,
-                space,
-                drivenNode,
-                selectionPlan
+                space
         );
-        CollisionReference head = automatic
-                == CollisionProxyPlan.Automatic.HEAD
-                && bodyGeometry.hasHead()
-                ? CollisionReference.of(
-                bodyGeometry.head(),
-                bodyGeometry.headBounds()
-        ) : null;
-        head = safeAutomatic(head, drivenNode) ? head : null;
         CollisionReference body = needsBody(automatic)
                 && bodyGeometry.hasBody()
                 ? CollisionReference.of(
@@ -62,23 +52,6 @@ public final class CollisionProxyPlanner {
                 bodyGeometry.bodyBounds()
         ) : null;
         body = safeAutomatic(body, drivenNode) ? body : null;
-        CollisionReference left = null;
-        CollisionReference right = null;
-        if (automatic == CollisionProxyPlan.Automatic.SKIRT
-                && bodyGeometry.legs().isPresent()) {
-            BodyCollisionGeometry.LegPair pair =
-                    bodyGeometry.legs().orElseThrow();
-            left = CollisionReference.of(
-                    pair.left().node(),
-                    pair.left().bounds()
-            );
-            right = CollisionReference.of(
-                    pair.right().node(),
-                    pair.right().bounds()
-            );
-            left = safeAutomatic(left, drivenNode) ? left : null;
-            right = safeAutomatic(right, drivenNode) ? right : null;
-        }
 
         List<CollisionProxyPlan.Explicit> explicit = new ArrayList<>();
         for (PhysicsBoneSelectionPlan.CollisionProxySpec spec
@@ -91,10 +64,7 @@ public final class CollisionProxyPlanner {
         }
         return new CollisionProxyPlan(
                 automatic,
-                head,
                 body,
-                left,
-                right,
                 explicit
         );
     }
@@ -150,7 +120,6 @@ public final class CollisionProxyPlanner {
             CollisionProxyPlan.Automatic automatic
     ) {
         return automatic == CollisionProxyPlan.Automatic.BODY
-                || automatic == CollisionProxyPlan.Automatic.SKIRT
                 || automatic == CollisionProxyPlan.Automatic.CAPE;
     }
 

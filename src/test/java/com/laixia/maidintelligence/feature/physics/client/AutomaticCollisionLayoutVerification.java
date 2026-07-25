@@ -14,11 +14,11 @@ final class AutomaticCollisionLayoutVerification {
     }
 
     static void run() {
-        verifiesEveryHeadSegment();
+        verifiesHeadCollisionDisabled();
         verifiesBodyStrategies();
     }
 
-    private static void verifiesEveryHeadSegment() {
+    private static void verifiesHeadCollisionDisabled() {
         AnimatedGeoModel model = modelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.head_chain",
@@ -44,19 +44,14 @@ final class AutomaticCollisionLayoutVerification {
             CollisionProxySet proxies = node(layout, name)
                     .constraint().collisionProxies();
             require(
-                    proxies.hasKind(CollisionProxyKind.PLANE)
-                            && proxies.hasKind(CollisionProxyKind.SPHERE),
-                    name + " did not receive the legacy Head Plane + Sphere"
-            );
-            require(
-                    !proxies.hasKind(CollisionProxyKind.CAPSULE),
-                    name + " received duplicate Sphere and Capsule colliders"
+                    proxies.proxyCount() == 0,
+                    name + " unexpectedly received automatic Head collision"
             );
         }
         require(
                 layout.referencesPreordered()
                         && indexOf(layout, "Head") < indexOf(layout, "HairA"),
-                "Head reference was not active before every driven segment"
+                "HEAD_LOCAL orientation reference was not retained"
         );
     }
 
@@ -65,9 +60,9 @@ final class AutomaticCollisionLayoutVerification {
         CollisionProxySet skirtProxies = node(skirt, "Soft")
                 .constraint().collisionProxies();
         require(
-                skirtProxies.proxyCount() == 3
-                        && count(skirtProxies, CollisionProxyKind.CAPSULE) == 3,
-                "SKIRT did not receive Body and two Leg Capsules"
+                skirtProxies.proxyCount() == 1
+                        && count(skirtProxies, CollisionProxyKind.CAPSULE) == 1,
+                "SKIRT did not retain only its Body Capsule"
         );
         int skirtIndex = indexOf(skirt, "Soft");
         for (int proxy = 0; proxy < skirtProxies.proxyCount(); proxy++) {
@@ -78,10 +73,10 @@ final class AutomaticCollisionLayoutVerification {
         }
         require(
                 indexOf(skirt, "Body") >= 0
-                        && indexOf(skirt, "LeftLeg") >= 0
-                        && indexOf(skirt, "RightLeg") >= 0
+                        && indexOf(skirt, "LeftLeg") < 0
+                        && indexOf(skirt, "RightLeg") < 0
                         && skirt.referencesPreordered(),
-                "SKIRT body/leg references were absent from the active layout"
+                "Disabled Leg references leaked into the active layout"
         );
 
         CollisionProxySet cape = node(

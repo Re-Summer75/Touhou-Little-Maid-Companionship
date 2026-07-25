@@ -15,9 +15,7 @@ import java.util.Set;
 public final class CollisionProxyPlan {
     enum Automatic {
         NONE,
-        HEAD,
         BODY,
-        SKIRT,
         CAPE
     }
 
@@ -28,26 +26,17 @@ public final class CollisionProxyPlan {
     }
 
     private final Automatic automatic;
-    private final CollisionReference head;
     private final CollisionReference body;
-    private final CollisionReference leftLeg;
-    private final CollisionReference rightLeg;
     private final List<Explicit> explicit;
     private final List<AnimatedGeoBone> referenceBones;
 
     CollisionProxyPlan(
             Automatic automatic,
-            CollisionReference head,
             CollisionReference body,
-            CollisionReference leftLeg,
-            CollisionReference rightLeg,
             List<Explicit> explicit
     ) {
         this.automatic = automatic;
-        this.head = head;
         this.body = body;
-        this.leftLeg = leftLeg;
-        this.rightLeg = rightLeg;
         this.explicit = List.copyOf(explicit);
         this.referenceBones = collectReferences();
     }
@@ -56,20 +45,8 @@ public final class CollisionProxyPlan {
         return automatic;
     }
 
-    CollisionReference head() {
-        return head;
-    }
-
     CollisionReference body() {
         return body;
-    }
-
-    CollisionReference leftLeg() {
-        return leftLeg;
-    }
-
-    CollisionReference rightLeg() {
-        return rightLeg;
     }
 
     List<Explicit> explicit() {
@@ -85,10 +62,7 @@ public final class CollisionProxyPlan {
         Set<AnimatedGeoBone> seen = Collections.newSetFromMap(
                 new IdentityHashMap<>()
         );
-        add(head, output, seen);
         add(body, output, seen);
-        add(leftLeg, output, seen);
-        add(rightLeg, output, seen);
         for (Explicit entry : explicit) {
             add(entry.reference(), output, seen);
         }

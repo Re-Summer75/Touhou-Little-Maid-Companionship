@@ -99,6 +99,8 @@ public final class RuntimeCollisionCache {
             int nodeIndex,
             Vector3f runtimePivotModel,
             float runtimeSegmentLength,
+            Vector3f restDirection,
+            CollisionScratch scratch,
             RuntimeCollisionFrames frames
     ) {
         if (!hasProxies(nodeIndex)) {
@@ -121,6 +123,7 @@ public final class RuntimeCollisionCache {
                     frames.maxBasisScale(nodeIndex),
                     runtimeSegmentLength
             );
+            proxy.allowInitialRestPose(restDirection, scratch);
         }
         preparedGenerations[nodeIndex] = generation;
         return set;
@@ -129,6 +132,12 @@ public final class RuntimeCollisionCache {
     public void reset() {
         for (int index = 0; index < preparedGenerations.length; index++) {
             preparedGenerations[index] = 0;
+            PreparedCollisionProxySet set = nodeSets[index];
+            for (int proxyIndex = 0;
+                 proxyIndex < set.proxyCount();
+                 proxyIndex++) {
+                set.proxy(proxyIndex).resetRestAllowance();
+            }
         }
         generation = 0;
     }

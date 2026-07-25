@@ -2,8 +2,6 @@ package com.laixia.maidintelligence.feature.physics.client;
 
 import com.laixia.maidintelligence.feature.physics.client.SecondaryMotionFixture.Fixture;
 import com.laixia.maidintelligence.feature.physics.client.solver.SecondaryMotionConstraint;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionScratch;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -11,73 +9,34 @@ import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVeri
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.requireNear;
 
 final class CollisionConstraintVerification {
-    private static final float EPSILON = 1.0E-4F;
-
     private CollisionConstraintVerification() {
     }
 
     static void run() {
         CollisionProxyFrameworkVerification.run();
-        verifiesBackstopProjection();
-        verifiesHeadSphereProjection();
+        verifiesAutomaticHeadCollisionDisabled();
         verifiesConstraintInvariantsAcrossFrameRates();
         CollisionProxyGeometryVerification.run();
     }
 
-    private static void verifiesBackstopProjection() {
-        Fixture fixture = SecondaryMotionFixture.create(
-                60.0F,
-                0.0F,
-                true,
-                false
-        );
-        SecondaryMotionConstraint constraint =
-                fixture.hairNode().constraint();
-        require(
-                constraint.collisionProxies().hasKind(
-                        CollisionProxyKind.PLANE
-                ),
-                "Backstop Plane proxy was not generated"
-        );
-        int projections = driveInward(fixture);
-        float clearance = constraint.collisionProxies().clearance(
-                constraint.collisionProxies().firstIndex(
-                        CollisionProxyKind.PLANE
-                ),
-                currentDirection(fixture),
-                new Quaternionf(),
-                new CollisionScratch()
-        );
-        require(projections > 0, "Backstop projection never ran");
-        require(clearance >= -EPSILON, "Backstop was penetrated");
-    }
-
-    private static void verifiesHeadSphereProjection() {
-        Fixture fixture = SecondaryMotionFixture.create(
-                60.0F,
-                0.0F,
-                false,
-                true
-        );
-        SecondaryMotionConstraint constraint =
-                fixture.hairNode().constraint();
-        require(
-                constraint.collisionProxies().hasKind(
-                        CollisionProxyKind.SPHERE
-                ),
-                "Head sphere proxy was not generated"
-        );
-        int projections = driveInward(fixture);
-        float clearance = constraint.collisionProxies().clearance(
-                constraint.collisionProxies().firstIndex(
-                        CollisionProxyKind.SPHERE
-                ),
-                currentDirection(fixture),
-                new Quaternionf(),
-                new CollisionScratch()
-        );
-        require(projections > 0, "Head sphere projection never ran");
-        require(clearance >= -EPSILON, "Head sphere was penetrated");
+    private static void verifiesAutomaticHeadCollisionDisabled() {
+        for (boolean[] flags : new boolean[][]{
+                {true, false},
+                {false, true},
+                {true, true}
+        }) {
+            Fixture fixture = SecondaryMotionFixture.create(
+                    60.0F,
+                    0.0F,
+                    flags[0],
+                    flags[1]
+            );
+            require(
+                    fixture.hairNode().constraint()
+                            .collisionProxies().proxyCount() == 0,
+                    "Legacy Head collision flags generated a proxy"
+            );
+        }
     }
 
     private static void verifiesConstraintInvariantsAcrossFrameRates() {
@@ -122,7 +81,7 @@ final class CollisionConstraintVerification {
                             && Float.isFinite(direction.z),
                     "Constraint direction became non-finite at " + fps + " FPS"
             );
-            requireCombinedConstraints(
+            requireSwingConstraint(
                     fixture,
                     direction,
                     finalHeadRotation,
@@ -131,7 +90,7 @@ final class CollisionConstraintVerification {
         }
     }
 
-    private static void requireCombinedConstraints(
+    private static void requireSwingConstraint(
             Fixture fixture,
             Vector3f direction,
             float headRotation,
@@ -139,29 +98,11 @@ final class CollisionConstraintVerification {
     ) {
         SecondaryMotionConstraint constraint =
                 fixture.hairNode().constraint();
+        require(
+                fixture.solver().lastCollisionProjectionCount() == 0,
+                "Disabled Head collision projected at " + fps + " FPS"
+        );
         Quaternionf reference = new Quaternionf().rotateZ(headRotation);
-        require(
-                constraint.collisionProxies().clearance(
-                        constraint.collisionProxies().firstIndex(
-                                CollisionProxyKind.PLANE
-                        ),
-                        direction,
-                        reference,
-                        new CollisionScratch()
-                ) >= -EPSILON,
-                "Combined Backstop was penetrated at " + fps + " FPS"
-        );
-        require(
-                constraint.collisionProxies().clearance(
-                        constraint.collisionProxies().firstIndex(
-                                CollisionProxyKind.SPHERE
-                        ),
-                        direction,
-                        reference,
-                        new CollisionScratch()
-                ) >= -EPSILON,
-                "Combined head sphere was penetrated at " + fps + " FPS"
-        );
         Vector3f rest = reference.transform(
                 new Vector3f(0.0F, -1.0F, 0.0F)
         );
@@ -178,24 +119,6 @@ final class CollisionConstraintVerification {
         );
     }
 
-    private static int driveInward(Fixture fixture) {
-        Vector3f acceleration = fixture.hairNode().constraint()
-                .outwardDirection(new Quaternionf(), new Vector3f())
-                .mul(4.0F);
-        int projections = 0;
-        for (int frame = 0; frame < 180; frame++) {
-            SecondaryMotionFixture.resetPose(fixture, 0.0F);
-            fixture.solver().solve(
-                    acceleration,
-                    0.0F,
-                    1.0F / 60.0F,
-                    false
-            );
-            projections += fixture.solver().lastCollisionProjectionCount();
-        }
-        return projections;
-    }
-
     private static Vector3f currentDirection(Fixture fixture) {
         Vector3f output = new Vector3f();
         require(
@@ -207,4 +130,5 @@ final class CollisionConstraintVerification {
         );
         return output;
     }
+
 }

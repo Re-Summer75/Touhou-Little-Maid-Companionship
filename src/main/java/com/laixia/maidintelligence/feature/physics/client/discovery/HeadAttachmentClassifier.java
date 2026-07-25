@@ -38,7 +38,7 @@ final class HeadAttachmentClassifier {
             return false;
         }
         List<String> tokens = DiscoveryMath.tokens(node.bone().getName());
-        boolean named = isNamed(node.bone().getName(), tokens);
+        boolean named = isNamed(node.bone().getName());
         if (!named) {
             boolean directlyFlexible = PhysicsBoneClassifier
                     .classifyVisibleGeometry(node.bone().getName())
@@ -78,7 +78,8 @@ final class HeadAttachmentClassifier {
                 : "named rigid head attachment";
     }
 
-    private static boolean isNamed(String name, List<String> tokens) {
+    static boolean isNamed(String name) {
+        List<String> tokens = DiscoveryMath.tokens(name);
         String lowerName = name.toLowerCase(Locale.ROOT);
         return tokens.stream().anyMatch(FIXED_TOKENS::contains)
                 || FIXED_MARKERS.stream().anyMatch(

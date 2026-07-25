@@ -34,35 +34,14 @@ final class CollisionBenchmarkAssertions {
         CollisionProxySet secondSet = proxies(layout, second);
         require(head >= 0 && head < first,
                 "Head fixture lost its ordered Head reference");
-        requireHeadPair(firstSet, head, "HairA");
-        if (schema == 2) {
-            require(secondSet.proxyCount() == 0,
-                    "schema2 Head child unexpectedly received proxies");
-            require(proxySegments(layout) == 1 && totalProxies(layout) == 2,
-                    "schema2 Head no longer uses only its chain root");
-        } else {
-            requireHeadPair(secondSet, head, "HairB");
-            require(proxySegments(layout) == 2 && totalProxies(layout) == 4,
-                    "schema3 Head did not retain per-segment proxies");
-        }
-    }
-
-    private static void requireHeadPair(
-            CollisionProxySet proxies,
-            int headIndex,
-            String segment
-    ) {
         require(
-                proxies.proxyCount() == 2
-                        && count(proxies, CollisionProxyKind.PLANE) == 1
-                        && count(proxies, CollisionProxyKind.SPHERE) == 1
-                        && count(proxies, CollisionProxyKind.CAPSULE) == 0,
-                segment + " does not have exactly one Head Plane and Sphere"
+                firstSet.proxyCount() == 0
+                        && secondSet.proxyCount() == 0
+                        && proxySegments(layout) == 0
+                        && totalProxies(layout) == 0,
+                "Automatic Head collision remained enabled for schema "
+                        + schema
         );
-        for (int index = 0; index < proxies.proxyCount(); index++) {
-            require(proxies.proxy(index).referenceNodeIndex() == headIndex,
-                    segment + " proxy does not reference Head");
-        }
     }
 
     private static void verifySkirt(
@@ -81,35 +60,24 @@ final class CollisionBenchmarkAssertions {
         int body = indexOf(layout, "Body");
         int left = indexOf(layout, "LeftLeg");
         int right = indexOf(layout, "RightLeg");
-        require(body >= 0 && left >= 0 && right >= 0,
-                "schema3 SKIRT lost Body or reliable Leg references");
-        requireSkirtSet(proxies(layout, first), body, left, right, "SkirtA");
-        requireSkirtSet(proxies(layout, second), body, left, right, "SkirtB");
-        require(proxySegments(layout) == 2 && totalProxies(layout) == 6,
-                "schema3 SKIRT did not retain segmented Body/Leg proxies");
+        require(body >= 0 && left < 0 && right < 0,
+                "schema3 SKIRT retained disabled Leg references");
+        requireBodySet(proxies(layout, first), body, "SkirtA");
+        requireBodySet(proxies(layout, second), body, "SkirtB");
+        require(proxySegments(layout) == 2 && totalProxies(layout) == 2,
+                "schema3 SKIRT did not retain Body-only proxies");
     }
 
-    private static void requireSkirtSet(
+    private static void requireBodySet(
             CollisionProxySet proxies,
             int body,
-            int left,
-            int right,
             String segment
     ) {
-        require(proxies.proxyCount() == 3
-                        && count(proxies, CollisionProxyKind.CAPSULE) == 3,
-                segment + " does not have three Body/Leg Capsules");
-        boolean bodySeen = false;
-        boolean leftSeen = false;
-        boolean rightSeen = false;
-        for (int index = 0; index < proxies.proxyCount(); index++) {
-            int reference = proxies.proxy(index).referenceNodeIndex();
-            bodySeen |= reference == body;
-            leftSeen |= reference == left;
-            rightSeen |= reference == right;
-        }
-        require(bodySeen && leftSeen && rightSeen,
-                segment + " does not reference Body and both Legs");
+        require(proxies.proxyCount() == 1
+                        && proxies.proxy(0).kind()
+                        == CollisionProxyKind.CAPSULE
+                        && proxies.proxy(0).referenceNodeIndex() == body,
+                segment + " does not have exactly one Body Capsule");
     }
 
     private static int drivenIndex(
@@ -134,17 +102,6 @@ final class CollisionBenchmarkAssertions {
             int index
     ) {
         return layout.node(index).constraint().collisionProxies();
-    }
-
-    private static int count(
-            CollisionProxySet proxies,
-            CollisionProxyKind kind
-    ) {
-        int count = 0;
-        for (int index = 0; index < proxies.proxyCount(); index++) {
-            if (proxies.proxy(index).kind() == kind) count++;
-        }
-        return count;
     }
 
     private static int proxySegments(PhysicsSolverLayout layout) {

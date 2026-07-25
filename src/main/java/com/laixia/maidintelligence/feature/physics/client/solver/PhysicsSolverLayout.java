@@ -129,7 +129,9 @@ public final class PhysicsSolverLayout {
                         parents.get(bone),
                         nearestSolidAncestor(bone, parents),
                         decision.type(),
-                        decision.structureRole()
+                        decision.structureRole(),
+                        decision.chainSegment(),
+                        nextChainBone(bone, decision, plan)
                 );
             }
             int parentIndex = flattenedIndices.getOrDefault(
@@ -421,6 +423,36 @@ public final class PhysicsSolverLayout {
                 return cursor;
             }
             cursor = parents.get(cursor);
+        }
+        return null;
+    }
+
+    private static AnimatedGeoBone nextChainBone(
+            AnimatedGeoBone bone,
+            PhysicsBoneSelectionPlan.Decision decision,
+            PhysicsBoneSelectionPlan plan
+    ) {
+        if (!decision.chainSegment().present()
+                || decision.chainSegment().index()
+                >= decision.chainSegment().count() - 1) {
+            return null;
+        }
+        for (AnimatedGeoBone child : bone.children()) {
+            PhysicsBoneSelectionPlan.Decision childDecision =
+                    plan.decision(child);
+            if (childDecision.driven()
+                    && childDecision.chainId().equals(decision.chainId())
+                    && childDecision.chainSegment().index()
+                    == decision.chainSegment().index() + 1) {
+                return child;
+            }
+            if (child.geoBone().cubes().getCubeCount() == 0) {
+                AnimatedGeoBone nested =
+                        nextChainBone(child, decision, plan);
+                if (nested != null) {
+                    return nested;
+                }
+            }
         }
         return null;
     }

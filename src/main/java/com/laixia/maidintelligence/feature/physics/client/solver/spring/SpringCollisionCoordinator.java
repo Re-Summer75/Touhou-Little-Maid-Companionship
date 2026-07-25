@@ -52,6 +52,8 @@ final class SpringCollisionCoordinator {
                 nodeIndex,
                 scratch.pivotScratch,
                 runtimeSegmentLength,
+                scratch.restDirection,
+                scratch.collision,
                 context.collisionFrames
         );
     }

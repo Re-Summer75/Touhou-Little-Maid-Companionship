@@ -25,6 +25,7 @@ record BoneAttachmentFrame(
             AnimatedGeoBone parent,
             AnimatedGeoBone nearestSolidAncestor,
             PhysicsBoneSelectionPlan.PartType type,
+            PhysicsBoneSelectionPlan.ChainSegment chainSegment,
             BoneMeshMetrics mesh
     ) {
         Vector3f authoredPivot = pivotOf(bone);
@@ -58,12 +59,13 @@ record BoneAttachmentFrame(
                 proximal.set(closest);
             }
         }
+        proximal.set(mesh.closestPoint(proximal));
+        distal.set(mesh.closestPoint(distal));
 
         float tolerance = Math.max(
                 MIN_PIVOT_TOLERANCE,
                 mesh.diagonal() * 0.50F
         );
-        boolean detached = mesh.distanceTo(authoredPivot) > tolerance;
         boolean reversed = pointsFromDistalEnd(
                 authoredPivot,
                 proximal,
@@ -81,10 +83,18 @@ record BoneAttachmentFrame(
                 mesh,
                 support
         );
-        boolean corrected = detached || reversed || misplaced;
-        Vector3f effectivePivot = corrected
-                ? proximal
-                : new Vector3f(authoredPivot);
+        AttachmentPivotPolicy.Result pivot = AttachmentPivotPolicy.resolve(
+                authoredPivot,
+                proximal,
+                mesh,
+                chainSegment,
+                endpoints.supportConfidence(),
+                tolerance,
+                reversed,
+                misplaced
+        );
+        boolean corrected = pivot.corrected();
+        Vector3f effectivePivot = pivot.pivot();
 
         Vector3f directedAxis = new Vector3f(distal).sub(proximal);
         Vector3f axis = new Vector3f(mesh.centroid())

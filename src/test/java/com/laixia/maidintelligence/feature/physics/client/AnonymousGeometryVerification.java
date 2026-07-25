@@ -125,8 +125,11 @@ final class AnonymousGeometryVerification {
         requirePart(plan, model, "bone80",
                 PhysicsBoneSelectionPlan.PartType.RIBBON,
                 "Anonymous narrow cloth was not discovered as a ribbon");
-        require(!plan.isDriven(model.bones().get("bone60")),
-                "Anonymous rigid arm-like chain was selected");
+        require(
+                !plan.isDriven(model.bones().get("bone60")),
+                "Anonymous rigid arm-like chain was selected: "
+                        + plan.decision(model.bones().get("bone60"))
+        );
         require(!plan.isDriven(model.bones().get("bone100")),
                 "Visible child below a hand locator was selected");
     }

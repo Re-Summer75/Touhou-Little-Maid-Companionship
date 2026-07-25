@@ -28,6 +28,10 @@ public final class PreparedCollisionProxy {
     private float preparedLeverArm = 1.0F;
     private float preparedRadius;
     private float preparedHitRadius;
+    private float projectionRadius;
+    private float projectionHitRadius;
+    private final PreparedCollisionRestAllowance restAllowance =
+            new PreparedCollisionRestAllowance();
 
     public void setPlane(
             int referenceIndex,
@@ -130,20 +134,38 @@ public final class PreparedCollisionProxy {
         preparedLeverArm = Float.isFinite(runtimeLeverArm)
                 ? Math.max(1.0E-6F, runtimeLeverArm)
                 : leverArm;
+        restAllowance.prepare(
+                shapeScale,
+                hitScale,
+                preparedLeverArm,
+                leverArm
+        );
+        applyRestAllowance();
+    }
+
+    void allowInitialRestPose(
+            Vector3f restDirection,
+            CollisionScratch scratch
+    ) {
+        if (!restAllowance.needsCalibration(source)) {
+            return;
+        }
+        restAllowance.calibrate(unadjustedClearance(restDirection, scratch));
+        applyRestAllowance();
     }
 
     public boolean project(Vector3f direction, CollisionScratch scratch) {
         return switch (kind) {
             case PLANE -> CollisionProjector.projectPlane(
                     direction, pivot, pointA, normal,
-                    preparedHitRadius, preparedLeverArm, scratch
+                    projectionHitRadius, preparedLeverArm, scratch
             );
             case SPHERE -> CollisionProjector.projectSphere(
-                    direction, pivot, pointA, preparedRadius,
+                    direction, pivot, pointA, projectionRadius,
                     preparedLeverArm, scratch
             );
             case CAPSULE -> CollisionProjector.projectCapsule(
-                    direction, pivot, pointA, pointB, preparedRadius,
+                    direction, pivot, pointA, pointB, projectionRadius,
                     preparedLeverArm, scratch
             );
         };
@@ -153,14 +175,14 @@ public final class PreparedCollisionProxy {
         return switch (kind) {
             case PLANE -> CollisionProjector.planeClearance(
                     direction, pivot, pointA, normal,
-                    preparedHitRadius, preparedLeverArm, scratch
+                    projectionHitRadius, preparedLeverArm, scratch
             );
             case SPHERE -> CollisionProjector.sphereClearance(
-                    direction, pivot, pointA, preparedRadius,
+                    direction, pivot, pointA, projectionRadius,
                     preparedLeverArm, scratch
             );
             case CAPSULE -> CollisionProjector.capsuleClearance(
-                    direction, pivot, pointA, pointB, preparedRadius,
+                    direction, pivot, pointA, pointB, projectionRadius,
                     preparedLeverArm, scratch
             );
         };
@@ -193,7 +215,13 @@ public final class PreparedCollisionProxy {
     Vector3f normal() { return normal; }
     float preparedRadius() { return preparedRadius; }
     float preparedHitRadius() { return preparedHitRadius; }
+    float projectionHitRadius() { return projectionHitRadius; }
     float preparedLeverArm() { return preparedLeverArm; }
+
+    void resetRestAllowance() {
+        restAllowance.reset();
+        applyRestAllowance();
+    }
 
     private static float finiteScale(float scale) {
         return Float.isFinite(scale) ? Math.max(0.0F, scale) : 1.0F;
@@ -216,5 +244,35 @@ public final class PreparedCollisionProxy {
         hitRadius = Math.max(0.0F, endpointRadius);
         leverArm = Math.max(1.0E-6F, fixedLeverArm);
         preparedLeverArm = leverArm;
+        restAllowance.reset();
+        applyRestAllowance();
+    }
+
+    private float unadjustedClearance(
+            Vector3f direction,
+            CollisionScratch scratch
+    ) {
+        return switch (kind) {
+            case PLANE -> CollisionProjector.planeClearance(
+                    direction, pivot, pointA, normal,
+                    preparedHitRadius, preparedLeverArm, scratch
+            );
+            case SPHERE -> CollisionProjector.sphereClearance(
+                    direction, pivot, pointA, preparedRadius,
+                    preparedLeverArm, scratch
+            );
+            case CAPSULE -> CollisionProjector.capsuleClearance(
+                    direction, pivot, pointA, pointB, preparedRadius,
+                    preparedLeverArm, scratch
+            );
+        };
+    }
+
+    private void applyRestAllowance() {
+        projectionHitRadius = restAllowance.threshold(preparedHitRadius);
+        projectionRadius = Math.max(
+                0.0F,
+                restAllowance.threshold(preparedRadius)
+        );
     }
 }

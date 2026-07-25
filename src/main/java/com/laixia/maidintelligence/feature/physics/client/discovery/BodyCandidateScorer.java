@@ -1,13 +1,20 @@
 package com.laixia.maidintelligence.feature.physics.client.discovery;
 
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneSelectionPlan;
+import com.laixia.maidintelligence.feature.physics.client.discovery.structure.ClothAccessoryMetrics;
 
 final class BodyCandidateScorer {
     private BodyCandidateScorer() {
     }
 
-    static Candidate score(ScoringContext context) {
-        Candidate semantic = semanticCandidate(context);
+    static Candidate score(
+            ScoringContext context,
+            ClothAccessoryMetrics structure
+    ) {
+        Candidate semantic = BodySemanticCandidate.score(
+                context,
+                structure
+        );
         if (semantic != null) {
             return semantic;
         }
@@ -36,6 +43,29 @@ final class BodyCandidateScorer {
                             context.behindBody() * 2.0D
                     ),
                     "broad rear upper-body cloth"
+            );
+        }
+        if (structure.lowerBodyPanel()) {
+            return Candidate.of(
+                    PhysicsBoneSelectionPlan.PartType.SKIRT,
+                    structure.singleBoneCloth() ? 0.84D : 0.78D,
+                    structure.singleBoneCloth()
+                            ? PhysicsBoneSelectionPlan.StructureRole
+                            .COMPOUND_SINGLE_BONE
+                            : PhysicsBoneSelectionPlan.StructureRole
+                            .FLEXIBLE_CHAIN_SEGMENT,
+                    structure.singleBoneCloth()
+                            ? "single-bone lower cloth shell"
+                            : "lower-body cloth panel structure"
+            );
+        }
+        if (structure.narrowBodyPendant()) {
+            return Candidate.of(
+                    PhysicsBoneSelectionPlan.PartType.RIBBON,
+                    0.79D,
+                    PhysicsBoneSelectionPlan.StructureRole
+                            .DANGLING_ACCESSORY,
+                    "narrow upper-attached body pendant"
             );
         }
         if (context.yRatio() < 0.58D
@@ -103,42 +133,6 @@ final class BodyCandidateScorer {
                                 + 0.10D * context.chainScore()
                 ),
                 "geometry is not a high-confidence soft appendage"
-        );
-    }
-
-    private static Candidate semanticCandidate(ScoringContext context) {
-        double base = switch (context.hint()) {
-            case HAIR -> 0.60D + 0.10D * context.thinScore()
-                    + 0.08D * context.chainScore();
-            case EAR -> 0.60D + 0.08D * context.thinScore()
-                    + 0.08D * context.chainScore();
-            case TAIL -> 0.60D + 0.10D * context.chainScore()
-                    + 0.08D * context.lengthScore();
-            case SKIRT, CAPE -> 0.56D + 0.12D * context.thinScore()
-                    + 0.08D * context.chainScore();
-            case WING -> 0.58D + 0.10D * context.thinScore()
-                    + 0.08D * context.chainScore();
-            case RIBBON -> 0.54D + 0.12D * context.thinScore()
-                    + 0.10D * context.chainScore();
-            default -> -1.0D;
-        };
-        if (base < 0.0D) {
-            return null;
-        }
-        String reason = switch (context.hint()) {
-            case HAIR -> "soft appendage with hair semantic hint";
-            case EAR -> "soft appendage with ear semantic hint";
-            case TAIL -> "rear body appendage with tail semantic hint";
-            case SKIRT -> "lower-body cloth with skirt semantic hint";
-            case CAPE -> "rear cloth with cape semantic hint";
-            case WING -> "lateral appendage with wing semantic hint";
-            case RIBBON -> "thin ornament with ribbon semantic hint";
-            default -> "";
-        };
-        return Candidate.of(
-                context.hint(),
-                base + context.semanticScore(),
-                reason
         );
     }
 

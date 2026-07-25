@@ -6,6 +6,7 @@ import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneGeometry;
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneSelectionPlan;
 import com.laixia.maidintelligence.feature.physics.client.discovery.structure.BoneStructureAnalysis;
 import com.laixia.maidintelligence.feature.physics.client.discovery.structure.BoneStructureMetrics;
+import com.laixia.maidintelligence.feature.physics.client.discovery.structure.ClothAccessoryMetrics;
 
 final class CandidateScorer {
     private CandidateScorer() {
@@ -25,6 +26,32 @@ final class CandidateScorer {
         }
         SemanticHint semantic = semanticHint(node);
         BoneStructureMetrics structure = structures.metrics(node.bone());
+        ClothAccessoryMetrics clothAccessory =
+                structures.clothAccessory(node.bone());
+        WearableAttachmentClassifier.Result wearable =
+                WearableAttachmentClassifier.classify(
+                        node,
+                        geometry,
+                        structures
+                );
+        if (wearable.kind()
+                == WearableAttachmentClassifier.Kind.RIGID) {
+            return Candidate.reject(
+                    PhysicsBoneSelectionPlan.StructureRole
+                            .RIGID_ATTACHMENT_BASE,
+                    wearable.reason()
+            );
+        }
+        if (wearable.kind()
+                == WearableAttachmentClassifier.Kind.DANGLING) {
+            return Candidate.of(
+                    PhysicsBoneSelectionPlan.PartType.RIBBON,
+                    0.90D,
+                    PhysicsBoneSelectionPlan.StructureRole
+                            .DANGLING_ACCESSORY,
+                    wearable.reason()
+            );
+        }
         if (HeadAttachmentClassifier.isRigid(
                 node,
                 geometry,
@@ -40,7 +67,9 @@ final class CandidateScorer {
                 node,
                 geometry,
                 model,
-                semantic.classification()
+                semantic.classification(),
+                clothAccessory.lowerBodyPanel()
+                        || clothAccessory.narrowBodyPendant()
         )) {
             return Candidate.reject("rigid humanoid or locator bone");
         }
@@ -67,7 +96,10 @@ final class CandidateScorer {
             selected = HeadCandidateScorer.score(context);
             return withStructure(selected, structure);
         }
-        Candidate bodyCandidate = BodyCandidateScorer.score(context);
+        Candidate bodyCandidate = BodyCandidateScorer.score(
+                context,
+                clothAccessory
+        );
         if (!isSpatialHeadAppendage(context)) {
             return withStructure(bodyCandidate, structure);
         }

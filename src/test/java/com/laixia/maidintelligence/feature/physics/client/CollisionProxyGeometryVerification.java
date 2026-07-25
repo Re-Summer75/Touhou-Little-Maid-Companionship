@@ -6,6 +6,7 @@ import com.google.gson.JsonParser;
 import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
 import com.laixia.maidintelligence.feature.physics.client.solver.SecondaryMotionConstraint;
 import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySource;
 import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionScratch;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -38,11 +39,14 @@ final class CollisionProxyGeometryVerification {
                 """);
         PhysicsMetadata metadata = PhysicsMetadata.parse(
                 JsonParser.parseString("""
-                        {"mode":"explicit","chains":[{
+                        {"schema_version":3,"mode":"explicit","chains":[{
                           "id":"detached","type":"HAIR",
                           "root":"Root/Body/Head/HairTip",
                           "constraints":{"simulation_space":"HEAD_LOCAL",
-                            "backstop":true,"head_collision":true}
+                            "collision":{"auto":false,"proxies":[{
+                              "kind":"sphere","reference":"Head",
+                              "center":[0,20,0],"radius":4,"hit_radius":0
+                            }]}}
                         }]}
                         """).getAsJsonObject(),
                 "detached pivot verification"
@@ -68,8 +72,10 @@ final class CollisionProxyGeometryVerification {
         require(constraint != null
                         && constraint.collisionProxies().hasKind(
                         CollisionProxyKind.SPHERE
-                ),
-                "Detached-pivot head collider was not generated");
+                )
+                        && constraint.collisionProxies().proxy(0).source()
+                        == CollisionProxySource.EXPLICIT,
+                "Detached-pivot explicit collider was not generated");
         float clearance = constraint.collisionProxies().clearance(
                 constraint.collisionProxies().firstIndex(
                         CollisionProxyKind.SPHERE
@@ -80,7 +86,8 @@ final class CollisionProxyGeometryVerification {
         );
         require(
                 clearance > 0.03F && clearance < 0.20F,
-                "Collider did not use the effective pivot: " + clearance
+                "Explicit collider did not use the effective pivot: "
+                        + clearance
         );
     }
 }

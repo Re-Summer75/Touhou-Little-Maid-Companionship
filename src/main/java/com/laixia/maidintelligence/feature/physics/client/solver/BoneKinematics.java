@@ -17,6 +17,12 @@ public final class BoneKinematics {
     private BoneKinematics() {
     }
 
+    public static boolean hasDistributedGeometry(AnimatedGeoBone bone) {
+        return BoneMeshPartition.measure(
+                bone.geoBone().cubes()
+        ).distributedWithoutDominantCluster();
+    }
+
     public static Metrics measure(
             AnimatedGeoBone bone,
             AnimatedGeoBone parent,
@@ -40,7 +46,9 @@ public final class BoneKinematics {
                 parent,
                 nearestSolidAncestor,
                 type,
-                PhysicsBoneSelectionPlan.StructureRole.NONE
+                PhysicsBoneSelectionPlan.StructureRole.NONE,
+                PhysicsBoneSelectionPlan.ChainSegment.none(),
+                null
         );
     }
 
@@ -50,6 +58,26 @@ public final class BoneKinematics {
             AnimatedGeoBone nearestSolidAncestor,
             PhysicsBoneSelectionPlan.PartType type,
             PhysicsBoneSelectionPlan.StructureRole structureRole
+    ) {
+        return measure(
+                bone,
+                parent,
+                nearestSolidAncestor,
+                type,
+                structureRole,
+                PhysicsBoneSelectionPlan.ChainSegment.none(),
+                null
+        );
+    }
+
+    public static Metrics measure(
+            AnimatedGeoBone bone,
+            AnimatedGeoBone parent,
+            AnimatedGeoBone nearestSolidAncestor,
+            PhysicsBoneSelectionPlan.PartType type,
+            PhysicsBoneSelectionPlan.StructureRole structureRole,
+            PhysicsBoneSelectionPlan.ChainSegment chainSegment,
+            AnimatedGeoBone nextChainBone
     ) {
         Vector3f authoredPivot = pivotOf(bone);
         BoneMeshPartition partition =
@@ -69,6 +97,10 @@ public final class BoneKinematics {
         }
         BoneMeshMetrics frameMesh =
                 type == PhysicsBoneSelectionPlan.PartType.HEAD_SHELL
+                        || chainSegment.count() > 1
+                        || structureRole
+                        == PhysicsBoneSelectionPlan.StructureRole
+                        .DANGLING_ACCESSORY
                         || structureRole
                         == PhysicsBoneSelectionPlan.StructureRole.NONE
                         ? fullMesh
@@ -78,6 +110,7 @@ public final class BoneKinematics {
                 parent,
                 nearestSolidAncestor,
                 type,
+                chainSegment,
                 frameMesh
         );
         float leverArm = Math.max(
@@ -85,6 +118,7 @@ public final class BoneKinematics {
                         * PIXELS_PER_BLOCK,
                 MIN_LEVER_PIXELS
         );
+        Vector3f axis = frame.axis();
         float segmentLength =
                 type == PhysicsBoneSelectionPlan.PartType.HEAD_SHELL
                         ? leverArm
@@ -95,8 +129,20 @@ public final class BoneKinematics {
                         ) * PIXELS_PER_BLOCK,
                         MIN_LEVER_PIXELS
                 );
+        if (nextChainBone != null) {
+            Vector3f joint = pivotOf(nextChainBone)
+                    .sub(frame.effectivePivot());
+            float jointLength = joint.length();
+            if (jointLength > EPSILON) {
+                axis.set(joint).mul(1.0F / jointLength);
+                segmentLength = Math.max(
+                        jointLength * PIXELS_PER_BLOCK,
+                        MIN_LEVER_PIXELS
+                );
+            }
+        }
         return new Metrics(
-                frame.axis(),
+                axis,
                 leverArm,
                 segmentLength,
                 frame.safeAngle(),

@@ -11,16 +11,29 @@ import java.util.Map;
  */
 public final class BoneStructureAnalysis {
     private final Map<AnimatedGeoBone, BoneStructureMetrics> metrics;
+    private final Map<AnimatedGeoBone, ClothAccessoryMetrics> clothAccessories;
 
     BoneStructureAnalysis(
-            IdentityHashMap<AnimatedGeoBone, BoneStructureMetrics> metrics
+            IdentityHashMap<AnimatedGeoBone, BoneStructureMetrics> metrics,
+            IdentityHashMap<AnimatedGeoBone, ClothAccessoryMetrics>
+                    clothAccessories
     ) {
         this.metrics = Collections.unmodifiableMap(
                 new IdentityHashMap<>(metrics)
+        );
+        this.clothAccessories = Collections.unmodifiableMap(
+                new IdentityHashMap<>(clothAccessories)
         );
     }
 
     public BoneStructureMetrics metrics(AnimatedGeoBone bone) {
         return metrics.getOrDefault(bone, BoneStructureMetrics.NONE);
+    }
+
+    public ClothAccessoryMetrics clothAccessory(AnimatedGeoBone bone) {
+        return clothAccessories.getOrDefault(
+                bone,
+                ClothAccessoryMetrics.NONE
+        );
     }
 }

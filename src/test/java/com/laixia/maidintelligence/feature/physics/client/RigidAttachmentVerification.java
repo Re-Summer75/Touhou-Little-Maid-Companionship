@@ -114,7 +114,10 @@ final class RigidAttachmentVerification {
     ) {
         AnimatedGeoBone bone = fixture.model().bones().get(boneName);
         require(bone != null, message + " (bone missing)");
-        require(!fixture.plan().isDriven(bone), message);
+        require(
+                !fixture.plan().isDriven(bone),
+                message + ": " + fixture.plan().decision(bone)
+        );
     }
 
     private static void requireCompoundPony(

@@ -36,7 +36,8 @@ final class RigidBoneFilter {
             PhysicsBoneGeometry.Node node,
             PhysicsBoneGeometry.Analysis geometry,
             AnimatedGeoModel model,
-            PhysicsBoneClassifier.Classification semantic
+            PhysicsBoneClassifier.Classification semantic,
+            boolean structuralSoftPart
     ) {
         AnimatedGeoBone bone = node.bone();
         if (bone == model.head() || bone == model.leftArm() || bone == model.rightArm()) {
@@ -84,6 +85,7 @@ final class RigidBoneFilter {
         return node.bounds().volume() > modelVolume * 0.16D
                 && node.thinRatio() > 0.32D
                 && !semantic.isPhysical()
+                && !structuralSoftPart
                 && !(geometry.isInHeadSubtree(node)
                 && !bone.children().isEmpty());
     }
