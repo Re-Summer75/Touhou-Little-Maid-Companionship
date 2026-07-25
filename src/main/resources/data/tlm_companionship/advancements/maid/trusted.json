@@ -1,0 +1,28 @@
+{
+  "parent": "tlm_companionship:maid/acquainted",
+  "display": {
+    "icon": {
+      "item": "minecraft:allium"
+    },
+    "title": {
+      "translate": "achievement.tlm_companionship.trusted.title"
+    },
+    "description": {
+      "translate": "achievement.tlm_companionship.trusted.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "favorability": {
+      "trigger": "tlm_companionship:maid_favorability_level",
+      "conditions": {
+        "level": {
+          "min": 2
+        }
+      }
+    }
+  }
+}

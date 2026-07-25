@@ -1,0 +1,28 @@
+{
+  "parent": "tlm_companionship:maid/root",
+  "display": {
+    "icon": {
+      "item": "minecraft:iron_ingot"
+    },
+    "title": {
+      "translate": "achievement.tlm_companionship.apprentice.title"
+    },
+    "description": {
+      "translate": "achievement.tlm_companionship.apprentice.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "level": {
+      "trigger": "tlm_companionship:maid_level",
+      "conditions": {
+        "level": {
+          "min": 5
+        }
+      }
+    }
+  }
+}

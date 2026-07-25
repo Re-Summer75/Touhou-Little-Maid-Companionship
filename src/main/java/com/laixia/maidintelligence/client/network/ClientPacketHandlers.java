@@ -1,8 +1,10 @@
 package com.laixia.maidintelligence.client.network;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.advancement.client.ClientMaidAdvancements;
 import com.laixia.maidintelligence.feature.interaction.client.MaidEatingParticleEffect;
 import com.laixia.maidintelligence.platform.network.packet.ClientboundLevelUpPacket;
+import com.laixia.maidintelligence.platform.network.packet.ClientboundMaidAdvancementsPacket;
 import com.laixia.maidintelligence.platform.network.packet.ClientboundMaidEatingParticlesPacket;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.client.Minecraft;
@@ -31,6 +33,10 @@ public final class ClientPacketHandlers {
                     packet.newLevel()
             ), false);
         }
+    }
+
+    public static void handleMaidAdvancements(ClientboundMaidAdvancementsPacket packet) {
+        ClientMaidAdvancements.accept(packet.maidEntityId(), packet.update());
     }
 
     public static void handleMaidEatingParticles(

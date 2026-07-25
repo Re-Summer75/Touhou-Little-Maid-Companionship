@@ -5,6 +5,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.meal.DefaultMaidWorkMeal;
 import com.github.tartaricacid.touhoulittlemaid.init.InitSounds;
 import com.github.tartaricacid.touhoulittlemaid.init.InitTrigger;
+import com.laixia.maidintelligence.feature.advancement.server.MaidCriteria;
 import com.laixia.maidintelligence.feature.status.StatusFeedbackFeature;
 import com.laixia.maidintelligence.feature.status.domain.DefaultHungerPolicy;
 import com.laixia.maidintelligence.platform.network.ModNetwork;
@@ -86,6 +87,7 @@ public final class MaidFeedingService {
         if (food == Foods.ENCHANTED_GOLDEN_APPLE) {
             InitTrigger.MAID_EVENT.trigger(player, TriggerType.EAT_ENCHANTED_GOLDEN_APPLE);
         }
+        MaidCriteria.fed(maid, particleFood);
         return true;
     }
 

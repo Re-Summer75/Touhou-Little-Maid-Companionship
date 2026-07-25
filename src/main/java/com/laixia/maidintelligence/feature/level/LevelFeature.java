@@ -1,9 +1,11 @@
 package com.laixia.maidintelligence.feature.level;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.data.TaskDataRegister;
+import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.compat.tlm.TlmFeatureModule;
 import com.laixia.maidintelligence.core.feature.FeatureContext;
 import com.laixia.maidintelligence.core.feature.FeatureModule;
+import com.laixia.maidintelligence.feature.advancement.server.MaidCriteria;
 import com.laixia.maidintelligence.feature.level.api.MaidLevelApi;
 import com.laixia.maidintelligence.feature.level.client.LevelGuiHandler;
 import com.laixia.maidintelligence.feature.level.command.LevelCommands;
@@ -22,7 +24,7 @@ public final class LevelFeature implements FeatureModule, TlmFeatureModule {
     private final MaidLevelApi levelApi = new DefaultMaidLevelService(
             new TlmMaidLevelStore(),
             DefaultLevelCurve.INSTANCE,
-            ModNetwork::sendLevelUp
+            LevelFeature::onLevelUp
     );
     private boolean initialized;
 
@@ -51,5 +53,10 @@ public final class LevelFeature implements FeatureModule, TlmFeatureModule {
 
     public MaidLevelApi api() {
         return levelApi;
+    }
+
+    private static void onLevelUp(EntityMaid maid, int oldLevel, int newLevel) {
+        ModNetwork.sendLevelUp(maid, oldLevel, newLevel);
+        MaidCriteria.level(maid, newLevel);
     }
 }

@@ -249,6 +249,14 @@ tasks.register('verifyStatusDomain', JavaExec) {
     mainClass = 'com.laixia.maidintelligence.feature.status.StatusDomainVerification'
 }
 
+tasks.register('verifyAdvancementDomain', JavaExec) {
+    group = 'verification'
+    description = 'Runs verification for maid statistics, bundled advancement data, and progress UI layout.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.laixia.maidintelligence.feature.advancement.AdvancementDomainVerification'
+}
+
 tasks.register('verifyFaceTracking', JavaExec) {
     group = 'verification'
     description = 'Runs verification for generalized maid face geometry selection.'
@@ -275,6 +283,7 @@ tasks.register('benchmarkBonePhysics', JavaExec) {
 
 tasks.named('check') {
     dependsOn tasks.named('verifyBonePhysics')
+    dependsOn tasks.named('verifyAdvancementDomain')
 }
 
 tasks.register('prepareGameTestStructures', Copy) {

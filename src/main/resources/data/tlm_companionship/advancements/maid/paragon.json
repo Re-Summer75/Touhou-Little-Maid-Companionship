@@ -1,0 +1,28 @@
+{
+  "parent": "tlm_companionship:maid/veteran",
+  "display": {
+    "icon": {
+      "item": "minecraft:diamond"
+    },
+    "title": {
+      "translate": "achievement.tlm_companionship.paragon.title"
+    },
+    "description": {
+      "translate": "achievement.tlm_companionship.paragon.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "level": {
+      "trigger": "tlm_companionship:maid_level",
+      "conditions": {
+        "level": {
+          "min": 30
+        }
+      }
+    }
+  }
+}

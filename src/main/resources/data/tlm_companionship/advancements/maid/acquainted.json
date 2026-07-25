@@ -1,0 +1,28 @@
+{
+  "parent": "tlm_companionship:maid/root",
+  "display": {
+    "icon": {
+      "item": "minecraft:poppy"
+    },
+    "title": {
+      "translate": "achievement.tlm_companionship.acquainted.title"
+    },
+    "description": {
+      "translate": "achievement.tlm_companionship.acquainted.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "favorability": {
+      "trigger": "tlm_companionship:maid_favorability_level",
+      "conditions": {
+        "level": {
+          "min": 1
+        }
+      }
+    }
+  }
+}

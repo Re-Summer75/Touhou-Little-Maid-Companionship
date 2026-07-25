@@ -1,0 +1,36 @@
+{
+  "parent": "tlm_companionship:maid/first_feed",
+  "display": {
+    "icon": {
+      "item": "minecraft:sugar"
+    },
+    "title": {
+      "translate": "achievement.tlm_companionship.sweet_tooth.title"
+    },
+    "description": {
+      "translate": "achievement.tlm_companionship.sweet_tooth.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "fed_cake": {
+      "trigger": "tlm_companionship:maid_fed",
+      "conditions": {
+        "item": {
+          "items": [
+            "minecraft:cake"
+          ]
+        },
+        "count": {
+          "min": 8
+        }
+      }
+    }
+  },
+  "rewards": {
+    "experience": 20
+  }
+}

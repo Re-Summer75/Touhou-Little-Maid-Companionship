@@ -1,9 +1,13 @@
 package com.laixia.maidintelligence.platform.network;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.advancement.server.MaidAdvancementSnapshot;
 import com.laixia.maidintelligence.platform.network.packet.ClientboundLevelUpPacket;
+import com.laixia.maidintelligence.platform.network.packet.ClientboundMaidAdvancementsPacket;
 import com.laixia.maidintelligence.platform.network.packet.ClientboundMaidEatingParticlesPacket;
 import com.laixia.maidintelligence.platform.network.packet.ServerboundMouthFeedPacket;
+import com.laixia.maidintelligence.platform.network.packet.ServerboundOpenMaidAdvancementPagePacket;
+import com.laixia.maidintelligence.platform.network.packet.ServerboundRequestMaidAdvancementsPacket;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -13,7 +17,7 @@ import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class ModNetwork {
-    private static final String PROTOCOL_VERSION = "9";
+    private static final String PROTOCOL_VERSION = "13";
     private static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
             .named(ModResources.id("main"))
             .networkProtocolVersion(() -> PROTOCOL_VERSION)
@@ -50,6 +54,24 @@ public final class ModNetwork {
                 ServerboundMouthFeedPacket::decode,
                 ServerboundMouthFeedPacket::handle
         );
+        registrar.registerClientbound(
+                ClientboundMaidAdvancementsPacket.class,
+                ClientboundMaidAdvancementsPacket::encode,
+                ClientboundMaidAdvancementsPacket::decode,
+                ClientboundMaidAdvancementsPacket::handle
+        );
+        registrar.registerServerbound(
+                ServerboundOpenMaidAdvancementPagePacket.class,
+                ServerboundOpenMaidAdvancementPagePacket::encode,
+                ServerboundOpenMaidAdvancementPagePacket::decode,
+                ServerboundOpenMaidAdvancementPagePacket::handle
+        );
+        registrar.registerServerbound(
+                ServerboundRequestMaidAdvancementsPacket.class,
+                ServerboundRequestMaidAdvancementsPacket::encode,
+                ServerboundRequestMaidAdvancementsPacket::decode,
+                ServerboundRequestMaidAdvancementsPacket::handle
+        );
     }
 
     public static void sendLevelUp(EntityMaid maid, int oldLevel, int newLevel) {
@@ -59,6 +81,25 @@ public final class ModNetwork {
                     new ClientboundLevelUpPacket(maid.getId(), oldLevel, newLevel)
             );
         }
+    }
+
+    public static void sendOpenMaidAdvancementPage(int maidEntityId) {
+        CHANNEL.sendToServer(new ServerboundOpenMaidAdvancementPagePacket(maidEntityId));
+    }
+
+    public static void sendRequestMaidAdvancements(int maidEntityId) {
+        CHANNEL.sendToServer(new ServerboundRequestMaidAdvancementsPacket(maidEntityId));
+    }
+
+    public static void sendMaidAdvancements(
+            ServerPlayer player,
+            int maidEntityId,
+            MaidAdvancementSnapshot snapshot
+    ) {
+        CHANNEL.send(
+                PacketDistributor.PLAYER.with(() -> player),
+                ClientboundMaidAdvancementsPacket.of(maidEntityId, snapshot)
+        );
     }
 
     public static void sendMouthFeed(

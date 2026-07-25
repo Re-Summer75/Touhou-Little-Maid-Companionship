@@ -1,0 +1,28 @@
+{
+  "display": {
+    "icon": {
+      "item": "minecraft:pink_tulip"
+    },
+    "title": {
+      "translate": "advancement.tlm_companionship.maid.root.title"
+    },
+    "description": {
+      "translate": "advancement.tlm_companionship.maid.root.description"
+    },
+    "background": "minecraft:textures/block/pink_wool.png",
+    "frame": "task",
+    "show_toast": false,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "is_maid": {
+      "trigger": "tlm_companionship:maid_level",
+      "conditions": {
+        "level": {
+          "min": 1
+        }
+      }
+    }
+  }
+}

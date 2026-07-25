@@ -1,0 +1,28 @@
+{
+  "parent": "tlm_companionship:maid/apprentice",
+  "display": {
+    "icon": {
+      "item": "minecraft:gold_ingot"
+    },
+    "title": {
+      "translate": "achievement.tlm_companionship.veteran.title"
+    },
+    "description": {
+      "translate": "achievement.tlm_companionship.veteran.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "level": {
+      "trigger": "tlm_companionship:maid_level",
+      "conditions": {
+        "level": {
+          "min": 15
+        }
+      }
+    }
+  }
+}

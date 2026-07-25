@@ -1,0 +1,31 @@
+{
+  "parent": "tlm_companionship:maid/first_feed",
+  "display": {
+    "icon": {
+      "item": "minecraft:bread"
+    },
+    "title": {
+      "translate": "achievement.tlm_companionship.regular_meals.title"
+    },
+    "description": {
+      "translate": "achievement.tlm_companionship.regular_meals.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "fed": {
+      "trigger": "tlm_companionship:maid_fed",
+      "conditions": {
+        "count": {
+          "min": 32
+        }
+      }
+    }
+  },
+  "rewards": {
+    "experience": 20
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "parent": "tlm_companionship:maid/root",
+  "display": {
+    "icon": {
+      "item": "minecraft:cake"
+    },
+    "title": {
+      "translate": "achievement.tlm_companionship.first_feed.title"
+    },
+    "description": {
+      "translate": "achievement.tlm_companionship.first_feed.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "fed": {
+      "trigger": "tlm_companionship:maid_fed",
+      "conditions": {
+        "count": {
+          "min": 1
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "parent": "tlm_companionship:maid/trusted",
+  "display": {
+    "icon": {
+      "item": "minecraft:heart_of_the_sea"
+    },
+    "title": {
+      "translate": "achievement.tlm_companionship.devoted.title"
+    },
+    "description": {
+      "translate": "achievement.tlm_companionship.devoted.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "favorability": {
+      "trigger": "tlm_companionship:maid_favorability_level",
+      "conditions": {
+        "level": {
+          "min": 3
+        }
+      }
+    }
+  },
+  "rewards": {
+    "experience": 50
+  }
+}

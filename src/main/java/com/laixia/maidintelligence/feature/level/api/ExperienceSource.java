@@ -4,5 +4,6 @@ public enum ExperienceSource {
     EXPERIENCE_ORB,
     COMMAND,
     WORK_MODE,
-    INTERACTION
+    INTERACTION,
+    ADVANCEMENT
 }

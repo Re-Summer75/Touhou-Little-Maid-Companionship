@@ -1,0 +1,31 @@
+{
+  "parent": "tlm_companionship:maid/apprentice",
+  "display": {
+    "icon": {
+      "item": "minecraft:experience_bottle"
+    },
+    "title": {
+      "translate": "achievement.tlm_companionship.diligent_study.title"
+    },
+    "description": {
+      "translate": "achievement.tlm_companionship.diligent_study.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "experience": {
+      "trigger": "tlm_companionship:maid_experience",
+      "conditions": {
+        "experience": {
+          "min": 1000
+        }
+      }
+    }
+  },
+  "rewards": {
+    "experience": 50
+  }
+}

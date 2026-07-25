@@ -1,0 +1,31 @@
+{
+  "parent": "tlm_companionship:maid/paragon",
+  "display": {
+    "icon": {
+      "item": "minecraft:nether_star"
+    },
+    "title": {
+      "translate": "achievement.tlm_companionship.perfect_maid.title"
+    },
+    "description": {
+      "translate": "achievement.tlm_companionship.perfect_maid.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "level": {
+      "trigger": "tlm_companionship:maid_level",
+      "conditions": {
+        "level": {
+          "min": 50
+        }
+      }
+    }
+  },
+  "rewards": {
+    "experience": 100
+  }
+}
