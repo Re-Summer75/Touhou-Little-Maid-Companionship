@@ -70,11 +70,11 @@
 
 具体实现集中在 `client/discovery` 子包：元数据绑定、候选评分、头部/躯干规则、刚性过滤和计划写入彼此独立；`discovery/structure` 另外负责镜像分支、同 pivot 重叠、紧凑底座、下装面板、细长挂饰、侧挂/包头穿戴物、长单骨网格和真实链段拓扑。入口 [`PhysicsBoneDiscoverer`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/PhysicsBoneDiscoverer.java) 只保留稳定门面。
 
-自动发现采用高置信门槛，低置信节点保持静止，避免把肢体、武器和固定头饰当作软体。空骨骼仍作为层级枢轴参与分析但不直接驱动，其语义会沿连续空锚点传给可见子骨。可见的 `MFrontHair` 不会再被当作空 `M` 枢轴；不在 `Head` 层级内、但名称或空间挂点明确属于头发的骨骼也会参与头部候选评分，同时保留已经高置信识别出的翅膀、裙摆等身体软体类型。`BaseHair` / `TopHair` 这类包围头部、有实体几何且连接发丝的分叉骨会识别为 `HEAD_SHELL`，使用高刚度、低摆幅参数；纯空分叉容器则跳过。
+自动发现采用高置信门槛，低置信节点保持静止，避免把肢体、武器和固定头饰当作软体。空骨骼仍作为层级枢轴参与分析但不直接驱动，其语义会沿连续空锚点传给可见子骨。可见的 `MFrontHair` 不会再被当作空 `M` 枢轴；不在 `Head` 层级内、但名称或空间挂点明确属于头发的骨骼也会参与头部候选评分，同时保留已经高置信识别出的翅膀、裙摆等身体软体类型。`BaseHair` / `TopHair` 这类包围头部、有实体几何且连接发丝的分叉骨会识别为 `HEAD_SHELL`。没有子骨但 AABB 在左右、前后覆盖 Head 核心且与头部保持足够纵向重叠的语义头发也按单骨包头壳层处理；这类骨骼同时承载枢轴前后的网格，普通发丝旋转无法让正面保持贴合又让背面自由拖尾，因此使用零静态重力、高刚度、低惯性和低摆幅参数。纯空分叉容器仍跳过。
 
 刘海会额外识别 `Bangs`、`Fringe`、`FrontHair`、`刘海`、`前髪` 等别名；`MBangs`、`LongHair` 这类空锚点即使跨越多级容器或分出多个匿名片段，也会把高置信语义传给所有可见分支。完全匿名的前额薄片、成组小片和连接头发外壳的头顶发束可通过几何与层级关系识别。眉毛、眼、嘴、脸红和表情使用强排除语义，覆盖 `meimao`、`zui`、`xiao`、`saihong`、`lianhong` 等内置模型别名；匿名但呈现为面部下半区对称薄贴片的腮红也会被刚性过滤。即使这些面部组件位于 `Hair` 层级内或名称同时含有 `Hair`，也不会继承头发物理。`Face_Bangs` 这类明确刘海名称仍可正常入选。
 
-仓库内的 [`geckolib_model_reference`](../../geckolib_model_reference/README.md) 保存本体内置的全部 27 个 Gecko 几何模型并参与离线回归。圣女酒狐的匿名 `BaseHair/bone5` 由“前额位置 + 头发外壳直属叶节点”识别；这类旋转多方块刘海的整体 AABB 可能横跨整个额头且看起来不够薄，因此宽度不再被误当成长发长度，直属头发外壳的结构证据也会补偿整体 AABB 的厚度偏差。基础纸板狐现在固定验证匿名腮红 `bone53` 刚性、同 pivot 重叠的 `bone29/30/27/31` 发饰刚性、镜像长网格 `bone3/bone9` 作为左右单骨马尾入选，以及 `bone32`、`bone37`、`bone11/38` 保持刚性。`bone37` 把头部多处互不连通、各自带 cube pivot/rotation 的饰件绑在同一 bone 上，`guashi` 也没有占优的连通主体；骨骼级自动物理无法为它们提供唯一安全转轴，因此不会再驱动。`qunzi` 仍使用单骨裙摆档位。
+仓库内的 [`geckolib_model_reference`](../../geckolib_model_reference/README.md) 保存本体内置的全部 27 个 Gecko 几何模型并参与离线回归。圣女酒狐的匿名 `BaseHair/bone5` 由“前额位置 + 头发外壳直属叶节点”识别；这类旋转多方块刘海的整体 AABB 可能横跨整个额头且看起来不够薄，因此宽度不再被误当成长发长度，直属头发外壳的结构证据也会补偿整体 AABB 的厚度偏差。年糕狐的 `HairFemaleK_Matching` 会作为单骨包头 `HEAD_SHELL`，而独立 `HairFront` 与左右马尾仍保持普通头发动力学。基础纸板狐现在固定验证匿名腮红 `bone53` 刚性、同 pivot 重叠的 `bone29/30/27/31` 发饰刚性、镜像长网格 `bone3/bone9` 作为左右单骨马尾入选，以及 `bone32`、`bone37`、`bone11/38` 保持刚性。`bone37` 把头部多处互不连通、各自带 cube pivot/rotation 的饰件绑在同一 bone 上，`guashi` 也没有占优的连通主体；骨骼级自动物理无法为它们提供唯一安全转轴，因此不会再驱动。`qunzi` 仍使用单骨裙摆档位。
 
 昂贵的完整发现结果按不可变 `GeoModel` 身份弱缓存，并按 `modelId` 分区。模板以共享 `GeoBone` 身份保存 `Decision`、路径和静态运动学；同一 `GeoModel` 创建新的 `AnimatedGeoModel` 时只需一次 O(N) live bone 绑定，仍会生成实例隔离的 [`PhysicsBoneSelectionPlan`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/PhysicsBoneSelectionPlan.java)，不会跨实体保存 `AnimatedGeoBone`。
 
@@ -255,6 +255,8 @@ skirt/schema3-body-only: 3741.4 ns/frame, proxies=2, allocation=0.00 B/frame
 
 Mixin 同时把与 `tail/default` 完全相同的 `tickCount + partialTick` 传给 `AnimationTimelineClock`。同一姿态若因轮廓、额外渲染阶段或其它重复调用进入多次，首次调用按动画时间差推进，后续调用使用 `dt=0`；不再把 0.1～1 ms 的墙钟间隔误当成额外物理子步。该误差在单骨上很小，但会沿 `Tail → Tail7` 的父子变换累积并主要暴露在末端。
 
+慢速动画还会暴露与速度无关的姿态量化：若用 `acos(rest · current)` 提取物理偏角，两个近乎平行的 `float` 单位向量会把点积舍入为 `1`，导致真实偏转连续增长时画面先保持零、跨过精度台阶后再突然跳变。写回现在直接使用同时包含一阶小角信息的 `atan2(|rest × current|, rest · current)` 计算姿态误差；约 `10^-5～10^-4 rad` 的微小偏转也能连续生成局部旋转，不再依赖速度阈值或等待误差累积。该修正逐段生效，因此也阻止了年糕狐 `FoxTailA → Body_Tail6` 六段尾巴把局部量化放大到末端。
+
 ## 调试工具
 
 - **`/maidphysicsdebug`** → 获得**骨骼调试棒**(带 NBT 的原版木棍,无需注册物品)。
@@ -283,7 +285,7 @@ Mixin 同时把与 `tail/default` 完全相同的 `tickCount + partialTick` 传�
 - **代理不是精确网格碰撞**：自动 Plane / Sphere / Capsule 来自静止 AABB 与拓扑启发式，只约束每段的末端球，不能表达任意第三方网格、凹面或整块渲染几何；它能减少常见穿模，但不保证完全无穿模。复杂模型应使用 schema 3 显式代理校正自动结果。
 - **头部与腿部默认无碰撞**：为避免自动拟合造成原位偏移，系统不再生成 Head Plane/Sphere/Capsule 或左右腿 Capsule；复杂模型可用 schema 3 显式代理恢复指定区域。
 - **硬约束而非 XPBD**：当前摆角和三种碰撞代理使用固定骨长下的硬 PBD 投影；只有出现明确的链间柔性距离需求时才按需加入 XPBD compliance。
-- **单骨网格不能真实分段**：同一 Gecko bone 的所有 cube 共享一次 rotation/position 写回。系统可修正具有主导连通簇的枢轴并保守限幅；若多个分离簇势均力敌，则自动保持刚性，而不会任选原点或用渲染劫持伪造与碰撞、端点和 Sodium 路径不一致的局部弯曲。
+- **单骨网格不能真实分段**：同一 Gecko bone 的所有 cube 共享一次 rotation/position 写回。若一个骨骼同时覆盖头部前后，任何刚体旋转都不可能让前发保持贴合、同时保留后发的完整拖尾；自动发现只能把它降为保守 `HEAD_SHELL`，保留很轻的整体响应。需要两侧真正独立运动时，模型必须把前部壳层和后发拆到不同 bone。系统仍可修正具有主导连通簇的枢轴并保守限幅；若多个分离簇势均力敌，则自动保持刚性，而不会任选原点或用渲染劫持伪造与碰撞、端点和 Sodium 路径不一致的局部弯曲。
 - **静态几何不能反演真实铰链**：支撑稳定性可以判断“接触候选是否比倒置底支点更合理”，但模型没有材质、胶接强度或运动观测。非 `DANGLING_ACCESSORY` 的歧义悬臂在没有可靠接触时保留作者关节；需要强制刚性或特殊动力学时仍应提供 sidecar。
 - **自动发现是保守启发式**：几何无法无歧义地区分造型相似的发丝、丝带和固定装饰；低置信节点默认不动，复杂模型建议提供 sidecar。
 - **范围**:仅 Gecko;Bedrock(`BedrockPart` + JS 脚本)与 YSM(仅捕获顶点)暂不支持。
@@ -296,4 +298,4 @@ Mixin 同时把与 `tail/default` 完全相同的 `tickCount + partialTick` 传�
 ./gradlew.bat --offline cleanTest check
 ```
 
-离线校验 schema 1/2 不生成自动 Head 代理、schema 3 裙摆只生成 Body 代理、显式 Head/Leg 引用仍可用、三种代理几何和胶囊退化、自动与显式布局、父骨偏转、后序显式 Leg reference、完整 affine、非均匀 scale/剪切尺度与缩放后碰撞力臂、近切/近反向 Plane、自动 reference 安全、准备态/直接投影等价、reset、20/30/60/120 FPS 不变量及约束路径 `0 B/frame`。动画惯性另覆盖静止姿态严格零力、关键帧 position/rotation/scale 均能产生有界信号、30/60/120 FPS 峰值一致性、动画切换/暂停/恢复零假冲量，以及 TLM `tail/default` 在控制器限流期间继续更新时的六通道姿态恢复和连续物理覆盖；实际 `winefox` 七段 `Tail → Tail7` 还会用每帧 0～2 次重复渲染验证相同动画时间只推进一次、末端位移与局部旋转无累计跳变。同时覆盖接触枢轴的 `1～2 px` 间隙、宽面 Head Shell、横穿支撑体的歧义接触、远程 authored pivot、真实多骨链、OBB 主簇、微型单 cube 支撑修正、匿名复合单骨附件、歧义上生悬臂、纸板狐华服 `HUDIEJIE` 上移、`bone101/bone103` 的稳定 authored pivot 保护，以及 `bone109` 的紧凑外围支点和身份补偿。全部 27 个内置模型还会扫描每个单骨/链末端的 `axis · (visibleMassCenter - effectivePivot)`，禁止物理轴明确背离可见主体，并验证 bind pose、首次动画姿态及 reset 后的 `dt=0` rotation/position 完全不变。无主导连通簇的自动候选保持刚性、显式 metadata 可覆盖；裙摆、面具和汉服/新年左右 `MWX` 三段继续验证 authored/effective/runtime 关节分离、端点重合和单次冲量相对响应。
+离线校验 schema 1/2 不生成自动 Head 代理、schema 3 裙摆只生成 Body 代理、显式 Head/Leg 引用仍可用、三种代理几何和胶囊退化、自动与显式布局、父骨偏转、后序显式 Leg reference、完整 affine、非均匀 scale/剪切尺度与缩放后碰撞力臂、近切/近反向 Plane、自动 reference 安全、准备态/直接投影等价、reset、20/30/60/120 FPS 不变量及约束路径 `0 B/frame`。动画惯性另覆盖静止姿态严格零力、关键帧 position/rotation/scale 均能产生有界信号、30/60/120 FPS 峰值一致性、动画切换/暂停/恢复零假冲量，以及 TLM `tail/default` 在控制器限流期间继续更新时的六通道姿态恢复和连续物理覆盖；实际 `winefox` 七段 `Tail → Tail7` 还会用每帧 0～2 次重复渲染验证相同动画时间只推进一次、末端位移与局部旋转无累计跳变，年糕狐 `FoxTailA → Body_Tail6` 则以慢速正弦目标验证微小姿态误差无零值台阶、局部旋转步长及步长变化有界。同时覆盖接触枢轴的 `1～2 px` 间隙、宽面与单骨包头 Head Shell、年糕狐 `HairFemaleK_Matching` 的零重力低惯性档及独立刘海/马尾保留、横穿支撑体的歧义接触、远程 authored pivot、真实多骨链、OBB 主簇、微型单 cube 支撑修正、匿名复合单骨附件、歧义上生悬臂、纸板狐华服 `HUDIEJIE` 上移、`bone101/bone103` 的稳定 authored pivot 保护，以及 `bone109` 的紧凑外围支点和身份补偿。全部 27 个内置模型还会扫描每个单骨/链末端的 `axis · (visibleMassCenter - effectivePivot)`，禁止物理轴明确背离可见主体，并验证 bind pose、首次动画姿态及 reset 后的 `dt=0` rotation/position 完全不变。无主导连通簇的自动候选保持刚性、显式 metadata 可覆盖；裙摆、面具和汉服/新年左右 `MWX` 三段继续验证 authored/effective/runtime 关节分离、端点重合和单次冲量相对响应。

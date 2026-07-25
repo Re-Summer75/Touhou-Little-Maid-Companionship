@@ -8,6 +8,8 @@ import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolve
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.MODEL_DIRECTORY;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadGeoModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadWinefoxGeoModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
@@ -27,8 +29,10 @@ final class TailAnimationContinuityVerification {
 
     static void run() throws Exception {
         verifiesSnapshotRestoresEveryLocalChannel();
+        verifiesSmallPoseErrorsRemainContinuous();
         verifiesRateLimitedTailAnimationRemainsContinuous();
         verifiesBundledTailCoalescesDuplicateRenders();
+        verifiesRiceCakeSlowTailRemainsContinuous();
     }
 
     private static void verifiesSnapshotRestoresEveryLocalChannel() {
@@ -56,6 +60,40 @@ final class TailAnimationContinuityVerification {
         requireNear(tail.getPositionX(), 1.25F, "position X");
         requireNear(tail.getPositionY(), -2.50F, "position Y");
         requireNear(tail.getPositionZ(), 3.75F, "position Z");
+    }
+
+    private static void verifiesSmallPoseErrorsRemainContinuous() {
+        Fixture fixture = createFixture();
+        AnimatedGeoBone tail = fixture.tail();
+        Quaternionf animation = new Quaternionf().rotateZYX(
+                tail.getRotationZ(),
+                tail.getRotationY(),
+                tail.getRotationX()
+        );
+        fixture.solver().solve(
+                NO_ENTITY_ACCELERATION,
+                0.0F,
+                0.0F,
+                false
+        );
+        fixture.solver().restoreAnimationPose();
+        fixture.solver().solve(
+                new Vector3f(0.001F, 0.0F, 0.0F),
+                0.0F,
+                1.0F / 120.0F,
+                false
+        );
+        Quaternionf rendered = new Quaternionf().rotateZYX(
+                tail.getRotationZ(),
+                tail.getRotationY(),
+                tail.getRotationX()
+        );
+        float physicalAngle = angularDistance(animation, rendered);
+        require(
+                physicalAngle > 1.0E-5F && physicalAngle < 2.0E-4F,
+                "Sub-degree pose error was quantized away: "
+                        + physicalAngle
+        );
     }
 
     private static void verifiesRateLimitedTailAnimationRemainsContinuous() {
@@ -140,8 +178,13 @@ final class TailAnimationContinuityVerification {
             Quaternionf first,
             Quaternionf second
     ) {
-        float dot = Math.abs(first.dot(second));
-        return 2.0F * (float) Math.acos(Math.min(dot, 1.0F));
+        Quaternionf delta = new Quaternionf(first).conjugate().mul(second);
+        float sine = (float) Math.sqrt(
+                delta.x() * delta.x()
+                        + delta.y() * delta.y()
+                        + delta.z() * delta.z()
+        );
+        return 2.0F * (float) Math.atan2(sine, Math.abs(delta.w()));
     }
 
     private static void verifiesBundledTailCoalescesDuplicateRenders()
@@ -243,6 +286,91 @@ final class TailAnimationContinuityVerification {
                         + "tipStep=" + maximumTipStep
                         + ", tipAcceleration=" + maximumTipAcceleration
                         + ", localRotationStep=" + maximumLocalRotationStep
+        );
+    }
+
+    private static void verifiesRiceCakeSlowTailRemainsContinuous()
+            throws Exception {
+        AnimatedGeoModel model = new AnimatedGeoModel(loadGeoModel(
+                MODEL_DIRECTORY.resolve("rice_cake_fox.json")
+        ));
+        PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
+                "verification:rice_cake_slow_tail",
+                model,
+                PhysicsMetadata.EMPTY
+        );
+        PhysicsSolverLayout layout = PhysicsSolverLayout.build(model, plan);
+        SpringBoneSolver solver = new SpringBoneSolver(layout);
+        AnimationTimelineClock clock = new AnimationTimelineClock();
+        AnimatedGeoBone root = model.bones().get("Tail");
+        AnimatedGeoBone terminal = model.bones().get("Body_Tail6");
+        int terminalIndex = -1;
+        for (int index = 0; index < layout.activeNodeCount(); index++) {
+            if (layout.node(index).bone() == terminal) {
+                terminalIndex = index;
+                break;
+            }
+        }
+        require(
+                root != null && terminal != null && terminalIndex >= 0
+                        && layout.node(terminalIndex).driven(),
+                "Rice Cake Fox six-segment tail was not driven"
+        );
+
+        float initialX = root.getRotationX();
+        float initialZ = root.getRotationZ();
+        Quaternionf rotation = new Quaternionf();
+        Quaternionf previousRotation = new Quaternionf();
+        float previousStep = 0.0F;
+        float maximumStep = 0.0F;
+        float maximumStepChange = 0.0F;
+        int quantizedFrames = 0;
+        boolean previousAvailable = false;
+        for (int frame = 0; frame < 2400; frame++) {
+            float ageInTicks = frame / RENDER_FRAMES_PER_TICK;
+            float phase = ageInTicks * 0.025F;
+            solver.restoreAnimationPose();
+            root.setRotationX(
+                    initialX + 0.02F * (float) Math.sin(phase)
+            );
+            root.setRotationZ(
+                    initialZ + 0.04F * (float) Math.cos(phase)
+            );
+            solver.solve(
+                    NO_ENTITY_ACCELERATION,
+                    0.0F,
+                    clock.advance(ageInTicks, false),
+                    false
+            );
+            rotation.identity().rotateZYX(
+                    terminal.getRotationZ(),
+                    terminal.getRotationY(),
+                    terminal.getRotationX()
+            );
+            if (previousAvailable && frame >= 240) {
+                float step = angularDistance(previousRotation, rotation);
+                maximumStep = Math.max(maximumStep, step);
+                maximumStepChange = Math.max(
+                        maximumStepChange,
+                        Math.abs(step - previousStep)
+                );
+                if (step <= 1.0E-7F
+                        && Math.abs(Math.cos(phase)) > 0.25D) {
+                    quantizedFrames++;
+                }
+                previousStep = step;
+            }
+            previousRotation.set(rotation);
+            previousAvailable = true;
+        }
+        require(
+                quantizedFrames == 0
+                        && maximumStep < 0.003F
+                        && maximumStepChange < 0.001F,
+                "Rice Cake Fox slow tail contained pose quantization: "
+                        + "zeroFrames=" + quantizedFrames
+                        + ", step=" + maximumStep
+                        + ", stepChange=" + maximumStepChange
         );
     }
 

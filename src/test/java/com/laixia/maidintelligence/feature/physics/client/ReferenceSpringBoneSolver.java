@@ -197,7 +197,7 @@ final class ReferenceSpringBoneSolver {
                         * data.profile.tipDisplacementScale()
                         / data.leverArm
         );
-        float angle = Math.min((float) Math.acos(dot), cap);
+        float angle = Math.min((float) Math.atan2(sin, dot), cap);
         float dRx = clampAbs(
                 axis.x() * angle,
                 MAX_DEFLECT_X * data.profile.angleScale()

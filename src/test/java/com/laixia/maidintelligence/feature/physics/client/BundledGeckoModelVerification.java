@@ -100,6 +100,9 @@ final class BundledGeckoModelVerification {
                 verifiedZhiban = true;
                 verifyZhiban(plan, model);
             }
+            if ("rice_cake_fox.json".equals(fileName)) {
+                verifyRiceCakeHeadShell(plan, model);
+            }
         }
         require(verifiedSaint, "Saint Winefox fixture was not verified");
         require(verifiedZhiban, "Zhiban fixture was not verified");
@@ -152,6 +155,34 @@ final class BundledGeckoModelVerification {
                         + " / contact=" + ahoge.contactConfidence()
                         + " / support=" + ahoge.supportConfidence())
         );
+    }
+
+    private static void verifyRiceCakeHeadShell(
+            PhysicsBoneSelectionPlan plan,
+            AnimatedGeoModel model
+    ) {
+        AnimatedGeoBone shell = model.bones().get("HairFemaleK_Matching");
+        requireDriven(
+                plan,
+                shell,
+                PhysicsBoneSelectionPlan.PartType.HEAD_SHELL,
+                "Rice Cake Fox enclosing single-bone hair shell was treated "
+                        + "as a freely hanging strand: " + plan.decision(shell)
+        );
+        PhysicsBoneSelectionPlan.Decision decision = plan.decision(shell);
+        require(
+                decision.profile().gravityScale() == 0.0F
+                        && decision.profile().angleScale() <= 0.30F
+                        && decision.constraints().rotationInertiaScale()
+                        <= 0.05F,
+                "Rice Cake Fox head shell retained strand-scale inertia"
+        );
+        requireHair(plan, model, "HairFront",
+                "Rice Cake Fox separate front fringe lost flexible physics");
+        requireHair(plan, model, "LeftPony",
+                "Rice Cake Fox left ponytail lost flexible physics");
+        requireHair(plan, model, "RightPony",
+                "Rice Cake Fox right ponytail lost flexible physics");
     }
 
     private static void requireRigidAttachment(

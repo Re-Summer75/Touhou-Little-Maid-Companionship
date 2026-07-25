@@ -1,23 +1,5 @@
-feat(physics): 彻底重写零分配物理解算器，引入动画惯性与接触感知枢轴
+fix(physics): 修复慢速动画姿态误差量化并优化包头软体识别
 
-在本次更新中，依据等价物理性能优化计划，将原有的女仆骨骼物理（VRM 弹簧骨）解算彻底改写为零分配（Zero-Allocation）的热路径迭代架构，大幅提升了多实体同屏时的性能并消除了由物理计算造成的 GC 开销。同时，我们增强了次级运动的保真度与稳定性。
-
-✨ 核心特性 (Features):
-- **零分配热路径解算 (Zero-Allocation Solver)**：
-  - 重构了 `SpringBoneSolver` 和底层物理引擎（`SpringBoneEngine`、`SpringBoneFrameRunner` 等）。
-  - 通过预构建最小活动骨架、完全就地更新数据、复用内存与暂存区（Scratch），成功实现了热路径上的零对象分配。
-- **接触感知枢轴推断 (Contact-Aware Pivot Inference)**：
-  - 针对非标准化模型常有的不合理绑定锚点问题，引入了接触感知的虚拟枢轴系统。
-  - 通过 `AttachmentContactAnalyzer`、`VirtualPivotOptimizer` 和 `MeshDistanceField` 分析网格表面的支撑稳定性，自动计算并分配最佳支撑点（Pivot），有效根除了头饰等附着物的非自然拉伸与漂移。
-- **动画惯性与运动采样 (Animation Inertia)**：
-  - 新增 `AnimationTimelineClock` 和 `AnimationMotionSampler`。
-  - 实现基于核心动画关键帧速度的非线性运动惯性传播，使女仆的位移、转身及特殊动画带来的布料/头发物理反馈更加自然连贯。
-
-♻️ 重构与优化 (Refactoring & Optimization):
-- **模块化解算组件**：将弹簧方向积分 (`SpringDirectionIntegrator`)、姿态构建 (`SpringOrientationComposer`) 与骨架运动学信息提取完全解耦。
-- **文档与元数据**：新增和更新了相关文档 (`SECONDARY_MOTION_CONSTRAINTS.md`, `CONTACT_AWARE_PIVOT_INFERENCE.md`)，详细说明了枢轴推断管线与次级运动约束设计。
-- **清理日志数据**：将 `logs/` 目录加入 `.gitignore` 并移除已追踪的冗余压缩日志文件，净化代码仓库。
-
-🔧 测试与验证 (Testing & Verification):
-- 移除了无效的旧版枢轴测试。
-- 大量补充生命周期与场景行为验证套件：包括 `AnimationInertiaVerification`、`ContactAwarePivotVerification`、`TailAnimationContinuityVerification`、`SecondaryMotionAllocationVerification`，全面覆盖动画惯性衰减、大角度转弯、以及接触式枢轴的稳定性决策树。
+- **修复姿态误差量化跳变**：使用 `atan2(|rest × current|, rest · current)` 替代 `acos` 计算物理姿态的局部偏角。修复了在极慢速动画（如年糕狐的尾巴）下，近乎平行的单位向量点积被单精度浮点舍入为 1，导致极小偏转在累积跨过精度台阶时发生突然跳变（动画抽搐）的问题。
+- **优化单骨包头壳层识别**：在 `HeadCandidateScorer` 头部候选评分逻辑中，新增对无子骨（叶节点）的单骨包头壳层结构的识别（如年糕狐的 `HairFemaleK_Matching`），为其分配正确的零静态重力、低惯性与低摆幅参数，同时确保不影响其独立的刘海与马尾的柔性物理行为。
+- **完善测试与文档**：更新了物理系统文档 (`docs/physics/README.md`)，并新增了对应的离线回归测试（包括 `verifyRiceCakeHeadShell`、`verifiesSmallPoseErrorsRemainContinuous` 和 `verifiesRiceCakeSlowTailRemainsContinuous`）。

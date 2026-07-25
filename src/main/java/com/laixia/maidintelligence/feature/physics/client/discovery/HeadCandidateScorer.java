@@ -18,10 +18,15 @@ final class HeadCandidateScorer {
                             + 0.10D * context.lengthScore()
                             + context.semanticScore()
             );
+            boolean enclosingLeaf =
+                    context.node().bone().children().isEmpty();
             return new Candidate(
                     PhysicsBoneSelectionPlan.PartType.HEAD_SHELL,
                     confidence,
-                    "visible head shell with attached flexible descendants"
+                    enclosingLeaf
+                            ? "head-enclosing single-bone hair shell"
+                            : "visible head shell with attached flexible "
+                            + "descendants"
             );
         }
         if (context.hint() == PhysicsBoneSelectionPlan.PartType.EAR) {
@@ -270,7 +275,7 @@ final class HeadCandidateScorer {
             double headHeight,
             PhysicsBoneSelectionPlan.PartType hint
     ) {
-        if (!geometry.isInHeadSubtree(node) || node.bone().children().isEmpty()) {
+        if (!geometry.isInHeadSubtree(node)) {
             return false;
         }
         Vector3f center = node.center();
@@ -283,9 +288,38 @@ final class HeadCandidateScorer {
         boolean headSized = size.x >= headWidth * 0.65D
                 && size.z >= headWidth * 0.55D
                 && size.y >= headHeight * 0.18D;
-        return headSized && distance <= 1.15D
+        boolean branchingShell = !node.bone().children().isEmpty()
                 && (node.bone().children().size() >= 2
                 || hint == PhysicsBoneSelectionPlan.PartType.HAIR);
+        boolean enclosingLeafShell = node.bone().children().isEmpty()
+                && hint == PhysicsBoneSelectionPlan.PartType.HAIR
+                && enclosesHeadCore(
+                node.bounds(),
+                geometry.headBounds(),
+                headWidth,
+                headHeight
+        );
+        return headSized && distance <= 1.15D
+                && (branchingShell || enclosingLeafShell);
+    }
+
+    private static boolean enclosesHeadCore(
+            PhysicsBoneGeometry.Bounds shell,
+            PhysicsBoneGeometry.Bounds head,
+            double headWidth,
+            double headHeight
+    ) {
+        if (shell.isEmpty() || head.isEmpty()) {
+            return false;
+        }
+        double horizontalMargin = headWidth * 0.20D;
+        double overlapY = Math.min(shell.maxY(), head.maxY())
+                - Math.max(shell.minY(), head.minY());
+        return shell.minX() <= head.minX() + horizontalMargin
+                && shell.maxX() >= head.maxX() - horizontalMargin
+                && shell.minZ() <= head.minZ() + horizontalMargin
+                && shell.maxZ() >= head.maxZ() - horizontalMargin
+                && overlapY >= headHeight * 0.35D;
     }
 
     private static boolean hasMirroredSibling(ScoringContext context) {

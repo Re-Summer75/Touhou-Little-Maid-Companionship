@@ -65,6 +65,16 @@ final class SpringDeflectionApplier {
         } else {
             scratch.deflectionAxis.div(sin);
         }
+        /*
+         * acos(dot) loses all resolution when a slow animation keeps the
+         * physical error near zero: the float dot rounds to exactly one until
+         * enough error accumulates, then the rendered rotation jumps by one
+         * representable step. The cross magnitude retains first-order
+         * precision, so atan2(sin, dot) tracks the pose error continuously.
+         * This matters especially at the tip of multi-segment tails where
+         * several tiny local quantization steps compound.
+         */
+        float poseError = (float) Math.atan2(sin, dot);
 
         PhysicsBoneSelectionPlan.SpringProfile profile =
                 node.decision().profile();
@@ -81,8 +91,8 @@ final class SpringDeflectionApplier {
         boolean constrainedOutput =
                 constraintsEnabled && node.constraint().enabled();
         float angle = constrainedOutput
-                ? (float) Math.acos(dot)
-                : Math.min((float) Math.acos(dot), cap);
+                ? poseError
+                : Math.min(poseError, cap);
         AnimatedGeoBone bone = node.bone();
         if (constrainedOutput) {
             applyConstrained(
