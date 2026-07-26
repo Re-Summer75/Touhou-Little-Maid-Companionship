@@ -10,6 +10,8 @@ import org.joml.Quaternionf;
  * Converts the simulated direction into Gecko rotation and pivot offsets.
  */
 final class SpringDeflectionApplier {
+    private static final float DEGENERATE_AXIS_SQUARED = 1.0E-20F;
+
     private SpringDeflectionApplier() {
     }
 
@@ -49,11 +51,20 @@ final class SpringDeflectionApplier {
                 scratch.localDirection,
                 scratch.deflectionAxis
         );
-        float sin = scratch.deflectionAxis.length();
-        if (sin < SpringBoneMath.EPSILON) {
+        float sinSquared = scratch.deflectionAxis.lengthSquared();
+        float sin;
+        /*
+         * SpringBoneMath.EPSILON is appropriate for simulation vectors, but
+         * using it as an angular dead zone turns slow pose changes into
+         * several zero frames followed by one visible step. Only an actually
+         * degenerate cross product needs the fallback.
+         */
+        if (!Float.isFinite(sinSquared)
+                || sinSquared <= DEGENERATE_AXIS_SQUARED) {
             if (dot >= 0.0F) {
                 return;
             }
+            sin = 0.0F;
             if (Math.abs(scratch.boneAxis.y) < 0.90F) {
                 scratch.deflectionAxis.set(0.0F, 1.0F, 0.0F)
                         .cross(scratch.boneAxis);
@@ -63,6 +74,7 @@ final class SpringDeflectionApplier {
             }
             scratch.deflectionAxis.normalize();
         } else {
+            sin = (float) Math.sqrt(sinSquared);
             scratch.deflectionAxis.div(sin);
         }
         /*

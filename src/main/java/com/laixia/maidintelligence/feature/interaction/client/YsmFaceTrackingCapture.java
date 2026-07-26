@@ -4,6 +4,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.core.processor.ILocationBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.IGeoEntityRenderer;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.util.RenderUtils;
+import com.laixia.maidintelligence.feature.shading.client.ShadowPassDetector;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -36,7 +37,8 @@ public final class YsmFaceTrackingCapture {
             MultiBufferSource buffers,
             int packedLight
     ) {
-        if (!(entity instanceof EntityMaid maid)
+        if (ShadowPassDetector.isActive()
+                || !(entity instanceof EntityMaid maid)
                 || !maid.isAddedToWorld()
                 || !FaceTrackingDemand.shouldTrack(maid)) {
             renderer.geoRender(
@@ -87,12 +89,12 @@ public final class YsmFaceTrackingCapture {
 
         PoseStack headPose = copyPose(layerPose);
         RenderUtils.prepMatrixForLocator(headPose, headBones);
-        session.setFrame(new FaceGeometry.Frame(
+        FaceGeometry.Frame.tryCreate(
                 transformedPosition(headPose, 0.0F, 0.0F, 0.0F),
                 transformedDirection(headPose, -1.0F, 0.0F, 0.0F),
                 transformedDirection(headPose, 0.0F, 1.0F, 0.0F),
                 transformedDirection(headPose, 0.0F, 0.0F, -1.0F)
-        ));
+        ).ifPresent(session::setFrame);
     }
 
     public static void beginLayerSection(EntityMaid maid) {

@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.mixin;
 
 import com.github.tartaricacid.touhoulittlemaid.client.resource.CustomPackLoader;
 import com.laixia.maidintelligence.feature.physics.client.ClientPhysicsSetup;
+import com.laixia.maidintelligence.feature.shading.client.ShadingClientSetup;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -11,7 +12,7 @@ import java.io.File;
 
 /**
  * TLM can load downloaded custom packs without a Minecraft resource reload.
- * Refresh the matching physics sidecars after either direct pack load path.
+ * Refresh geometry-derived caches after either direct pack load path.
  */
 @Mixin(value = CustomPackLoader.class, remap = false)
 public abstract class CustomPackPhysicsMetadataMixin {
@@ -26,5 +27,6 @@ public abstract class CustomPackPhysicsMetadataMixin {
             CallbackInfo callback
     ) {
         ClientPhysicsSetup.refreshAfterCustomPackLoad();
+        ShadingClientSetup.refreshAfterCustomPackLoad();
     }
 }

@@ -37,17 +37,34 @@ final class GeckoFaceGeometryAdapter {
     private GeckoFaceGeometryAdapter() {
     }
 
-    static Result resolve(AnimatedGeoModel model, PoseStack basePose) {
+    static Result resolve(
+            AnimatedGeoModel model,
+            PoseStack basePose,
+            String variantKey
+    ) {
         Plan plan = FaceTrackingGeometryCache.getOrCompute(
                 model,
+                variantKey,
                 Plan.class,
                 () -> discover(model, basePose)
         );
         if (plan.failureReason() != null) {
+            if (plan.failureReason()
+                    == FaceGeometry.FailureReason.INVALID_FRAME) {
+                FaceTrackingGeometryCache.invalidatePlan(model);
+            }
             return Result.failure(plan.failureReason());
         }
 
-        FaceGeometry.Frame frame = createFrame(basePose, plan.anchorHierarchy());
+        FaceGeometry.Frame frame = createFrame(
+                basePose,
+                plan.anchorHierarchy()
+        ).orElse(null);
+        if (frame == null) {
+            FaceTrackingGeometryCache.invalidatePlan(model);
+            return Result.failure(FaceGeometry.FailureReason.INVALID_FRAME);
+        }
+        boolean stalePlan = false;
         for (RankedHandle ranked : plan.rankedHandles()) {
             Handle handle = ranked.handle();
             if (!isVisible(handle.ownerHierarchy(), handle.owner())) {
@@ -55,6 +72,7 @@ final class GeckoFaceGeometryAdapter {
             }
             List<Vec3> facePositions = captureFacePositions(handle, basePose);
             if (facePositions == null) {
+                stalePlan = true;
                 continue;
             }
             MaidFacePlane plane = MaidFacePlane
@@ -72,6 +90,9 @@ final class GeckoFaceGeometryAdapter {
                         )
                 );
             }
+        }
+        if (stalePlan) {
+            FaceTrackingGeometryCache.invalidatePlan(model);
         }
         return Result.failure(FaceGeometry.FailureReason.NO_GEOMETRY);
     }
@@ -95,7 +116,14 @@ final class GeckoFaceGeometryAdapter {
                 FaceGeometry.FailureReason.NO_GEOMETRY;
         for (AnimatedGeoBone anchor : anchors) {
             List<AnimatedGeoBone> anchorHierarchy = hierarchy(model, anchor);
-            FaceGeometry.Frame frame = createFrame(basePose, anchorHierarchy);
+            FaceGeometry.Frame frame = createFrame(
+                    basePose,
+                    anchorHierarchy
+            ).orElse(null);
+            if (frame == null) {
+                lastFailure = FaceGeometry.FailureReason.INVALID_FRAME;
+                continue;
+            }
             Map<FaceGeometry.Key, Handle> handles = new LinkedHashMap<>();
             List<FaceGeometry.Candidate> candidates = new ArrayList<>();
             collect(
@@ -350,12 +378,12 @@ final class GeckoFaceGeometryAdapter {
         };
     }
 
-    private static FaceGeometry.Frame createFrame(
+    private static Optional<FaceGeometry.Frame> createFrame(
             PoseStack basePose,
             List<AnimatedGeoBone> anchorHierarchy
     ) {
         PoseStack pose = scratchPoseFor(basePose, anchorHierarchy);
-        return new FaceGeometry.Frame(
+        return FaceGeometry.Frame.tryCreate(
                 transformedPosition(pose, 0.0F, 0.0F, 0.0F),
                 transformedDirection(pose, -1.0F, 0.0F, 0.0F),
                 transformedDirection(pose, 0.0F, 1.0F, 0.0F),

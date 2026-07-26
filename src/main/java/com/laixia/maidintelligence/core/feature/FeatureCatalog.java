@@ -5,6 +5,7 @@ import com.laixia.maidintelligence.feature.advancement.MaidAdvancementFeature;
 import com.laixia.maidintelligence.feature.interaction.MaidInteractionFeature;
 import com.laixia.maidintelligence.feature.level.LevelFeature;
 import com.laixia.maidintelligence.feature.physics.MaidPhysicsFeature;
+import com.laixia.maidintelligence.feature.shading.MaidModelShadingFeature;
 import com.laixia.maidintelligence.feature.status.StatusFeedbackFeature;
 
 import java.util.List;
@@ -17,6 +18,7 @@ public final class FeatureCatalog {
             LevelFeature.INSTANCE,
             MaidAdvancementFeature.INSTANCE,
             MaidInteractionFeature.INSTANCE,
+            MaidModelShadingFeature.INSTANCE,
             MaidPhysicsFeature.INSTANCE,
             StatusFeedbackFeature.INSTANCE
     );

@@ -273,6 +273,14 @@ tasks.register('verifyBonePhysics', JavaExec) {
     mainClass = 'com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerification'
 }
 
+tasks.register('verifyModelShading', JavaExec) {
+    group = 'verification'
+    description = 'Verifies Gecko outside face normals and winding.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.laixia.maidintelligence.feature.shading.client.ModelShadingVerification'
+}
+
 tasks.register('benchmarkBonePhysics', JavaExec) {
     group = 'verification'
     description = 'Reports warmed spring-bone frame time, visited nodes, and thread allocation.'
@@ -284,6 +292,7 @@ tasks.register('benchmarkBonePhysics', JavaExec) {
 tasks.named('check') {
     dependsOn tasks.named('verifyBonePhysics')
     dependsOn tasks.named('verifyAdvancementDomain')
+    dependsOn tasks.named('verifyModelShading')
 }
 
 tasks.register('prepareGameTestStructures', Copy) {

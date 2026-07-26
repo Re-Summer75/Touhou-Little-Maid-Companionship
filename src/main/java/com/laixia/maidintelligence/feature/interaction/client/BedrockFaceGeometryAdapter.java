@@ -32,17 +32,34 @@ final class BedrockFaceGeometryAdapter {
     private BedrockFaceGeometryAdapter() {
     }
 
-    static Result resolve(BedrockModel<Mob> model, PoseStack basePose) {
+    static Result resolve(
+            BedrockModel<Mob> model,
+            PoseStack basePose,
+            String variantKey
+    ) {
         Plan plan = FaceTrackingGeometryCache.getOrCompute(
                 model,
+                variantKey,
                 Plan.class,
                 () -> discover(model, basePose)
         );
         if (plan.failureReason() != null) {
+            if (plan.failureReason()
+                    == FaceGeometry.FailureReason.INVALID_FRAME) {
+                FaceTrackingGeometryCache.invalidatePlan(model);
+            }
             return Result.failure(plan.failureReason());
         }
 
-        FaceGeometry.Frame frame = createFrame(basePose, plan.anchorHierarchy());
+        FaceGeometry.Frame frame = createFrame(
+                basePose,
+                plan.anchorHierarchy()
+        ).orElse(null);
+        if (frame == null) {
+            FaceTrackingGeometryCache.invalidatePlan(model);
+            return Result.failure(FaceGeometry.FailureReason.INVALID_FRAME);
+        }
+        boolean stalePlan = false;
         for (RankedHandle ranked : plan.rankedHandles()) {
             Handle handle = ranked.handle();
             boolean semanticSurface = handle.role() == FaceBoneClassifier.Role.FACE
@@ -52,6 +69,7 @@ final class BedrockFaceGeometryAdapter {
             }
             List<Vec3> facePositions = captureFacePositions(handle, basePose);
             if (facePositions == null) {
+                stalePlan = true;
                 continue;
             }
             MaidFacePlane plane = MaidFacePlane
@@ -69,6 +87,9 @@ final class BedrockFaceGeometryAdapter {
                         )
                 );
             }
+        }
+        if (stalePlan) {
+            FaceTrackingGeometryCache.invalidatePlan(model);
         }
         return Result.failure(FaceGeometry.FailureReason.NO_GEOMETRY);
     }
@@ -96,7 +117,14 @@ final class BedrockFaceGeometryAdapter {
         for (Map.Entry<String, BedrockPart> anchorEntry : anchors) {
             BedrockPart anchor = anchorEntry.getValue();
             List<BedrockPart> anchorHierarchy = hierarchy(anchor);
-            FaceGeometry.Frame frame = createFrame(basePose, anchorHierarchy);
+            FaceGeometry.Frame frame = createFrame(
+                    basePose,
+                    anchorHierarchy
+            ).orElse(null);
+            if (frame == null) {
+                lastFailure = FaceGeometry.FailureReason.INVALID_FRAME;
+                continue;
+            }
             Map<FaceGeometry.Key, Handle> handles = new LinkedHashMap<>();
             List<FaceGeometry.Candidate> candidates = new ArrayList<>();
             FaceBoneClassifier.Role anchorRole = FaceBoneClassifier.classify(
@@ -312,12 +340,12 @@ final class BedrockFaceGeometryAdapter {
         return candidates;
     }
 
-    private static FaceGeometry.Frame createFrame(
+    private static Optional<FaceGeometry.Frame> createFrame(
             PoseStack basePose,
             List<BedrockPart> anchorHierarchy
     ) {
         PoseStack pose = scratchPoseFor(basePose, anchorHierarchy);
-        return new FaceGeometry.Frame(
+        return FaceGeometry.Frame.tryCreate(
                 transformedPosition(pose, 0.0F, 0.0F, 0.0F),
                 transformedDirection(pose, 1.0F, 0.0F, 0.0F),
                 transformedDirection(pose, 0.0F, -1.0F, 0.0F),

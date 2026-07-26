@@ -8,6 +8,8 @@ import org.joml.Quaternionf;
  * Transports Verlet history through reference-bone frame changes.
  */
 final class SpringReferenceTransport {
+    private static final float DEGENERATE_DELTA_SQUARED = 1.0E-20F;
+
     private SpringReferenceTransport() {
     }
 
@@ -32,10 +34,15 @@ final class SpringReferenceTransport {
 
         float follow = 1.0F - constraint.rotationInertiaScale();
         Quaternionf delta = state.frameReferenceDeltas[referenceIndex];
+        /*
+         * The reference baseline advances after every sample. A visible
+         * epsilon here would permanently discard slow per-frame rotation
+         * instead of allowing it to accumulate.
+         */
         if (follow <= SpringBoneMath.EPSILON
                 || delta.x() * delta.x()
                 + delta.y() * delta.y()
-                + delta.z() * delta.z() <= 1.0E-12F) {
+                + delta.z() * delta.z() <= DEGENERATE_DELTA_SQUARED) {
             return;
         }
         scratch.referenceTransport.identity().slerp(delta, follow);

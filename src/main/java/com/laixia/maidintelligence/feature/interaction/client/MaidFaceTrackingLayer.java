@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.feature.interaction.client;
 import com.github.tartaricacid.touhoulittlemaid.client.model.bedrock.BedrockModel;
 import com.github.tartaricacid.touhoulittlemaid.client.renderer.entity.EntityMaidRenderer;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.shading.client.ShadowPassDetector;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
@@ -29,15 +30,22 @@ public final class MaidFaceTrackingLayer extends RenderLayer<Mob, BedrockModel<M
             float netHeadYaw,
             float headPitch
     ) {
-        if (!(entity instanceof EntityMaid maid)
+        // 屏幕空间交互只允许主相机 pass 更新，阴影 pass 不得覆盖追踪平面。
+        if (ShadowPassDetector.isActive()
+                || !(entity instanceof EntityMaid maid)
                 || !maid.isAddedToWorld()
                 || !FaceTrackingDemand.shouldTrack(maid)) {
             return;
         }
 
         BedrockModel<Mob> model = getParentModel();
+        String modelId = maid.getModelId();
         BedrockFaceGeometryAdapter.Result result =
-                BedrockFaceGeometryAdapter.resolve(model, poseStack);
+                BedrockFaceGeometryAdapter.resolve(
+                        model,
+                        poseStack,
+                        modelId
+                );
         result.plane().ifPresentOrElse(
                 plane -> {
                     DynamicMaidFaceTracker.update(maid, plane);
@@ -49,7 +57,7 @@ public final class MaidFaceTrackingLayer extends RenderLayer<Mob, BedrockModel<M
                     );
                     FaceTrackingGeometryCache.reportSuccessOnce(
                             model,
-                            maid.getModelId(),
+                            modelId,
                             FaceGeometry.Source.BEDROCK,
                             result.key(),
                             result.confidence()
@@ -59,7 +67,7 @@ public final class MaidFaceTrackingLayer extends RenderLayer<Mob, BedrockModel<M
                     DynamicMaidFaceTracker.invalidate(maid);
                     FaceTrackingGeometryCache.reportFailureOnce(
                             model,
-                            maid.getModelId(),
+                            modelId,
                             FaceGeometry.Source.BEDROCK,
                             result.failureReason()
                     );

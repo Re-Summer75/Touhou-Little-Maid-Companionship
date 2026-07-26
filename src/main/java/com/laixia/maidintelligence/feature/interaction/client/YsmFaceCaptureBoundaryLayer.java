@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.feature.interaction.client;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.GeoLayerRenderer;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.IGeoEntityRenderer;
+import com.laixia.maidintelligence.feature.shading.client.ShadowPassDetector;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.world.entity.Mob;
@@ -36,7 +37,9 @@ public final class YsmFaceCaptureBoundaryLayer<
             float netHeadYaw,
             float headPitch
     ) {
-        if (entity instanceof EntityMaid maid && maid.isYsmModel()) {
+        if (!ShadowPassDetector.isActive()
+                && entity instanceof EntityMaid maid
+                && maid.isYsmModel()) {
             YsmFaceTrackingCapture.beginLayerSection(maid);
         }
     }

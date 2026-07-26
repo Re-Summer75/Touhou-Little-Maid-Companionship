@@ -70,9 +70,10 @@ public abstract class GeckoMaidEntityBonePhysicsMixin {
         // A real Gecko model means this is not the YSM path; only living maids
         // carry the body-rotation history the springs read for motion.
         if (self.getEntity() instanceof LivingEntity maid) {
-            double animationTick = (double) (
-                    (float) maid.tickCount + event.getPartialTick()
-            );
+            // Keep the integer age exact so long-lived entities do not lose
+            // render-frame partial ticks to float mantissa quantization.
+            double animationTick =
+                    (double) maid.tickCount + event.getPartialTick();
             MaidBonePhysics.apply(maid, model, animationTick);
         }
     }

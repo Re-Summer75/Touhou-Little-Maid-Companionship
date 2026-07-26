@@ -16,6 +16,7 @@ final class ReferenceSpaceConstraintVerification {
     static void run() {
         verifiesReferenceSpaceTransportAndReset();
         verifiesSlowReferenceRotationAccumulates();
+        verifiesMicroscopicReferenceRotationAccumulates();
         verifiesAsymmetricSwingAndVelocityWriteBack();
         verifiesRenderedRotationMatchesProjectedDirection();
     }
@@ -86,6 +87,33 @@ final class ReferenceSpaceConstraintVerification {
                 expected,
                 EPSILON,
                 "Sub-degree reference rotations were discarded"
+        );
+    }
+
+    private static void verifiesMicroscopicReferenceRotationAccumulates() {
+        Fixture fixture = SecondaryMotionFixture.create(
+                8.0F, 0.0F, false, false
+        );
+        Vector3f initial = new Vector3f();
+        Vector3f actual = new Vector3f();
+        Vector3f expected = new Vector3f();
+        solvePaused(fixture, 0.0F);
+        copyCurrent(fixture, initial);
+
+        float step = (float) Math.toRadians(0.00005D);
+        int frames = 1_000;
+        for (int frame = 1; frame <= frames; frame++) {
+            solvePaused(fixture, step * frame);
+        }
+        new Quaternionf()
+                .rotateX(step * frames)
+                .transform(initial, expected);
+        copyCurrent(fixture, actual);
+        requireVectorNear(
+                actual,
+                expected,
+                1.0E-5F,
+                "Microscopic reference rotations were discarded"
         );
     }
 

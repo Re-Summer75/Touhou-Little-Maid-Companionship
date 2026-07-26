@@ -18,6 +18,8 @@ public final class FaceTrackingVerification {
     }
 
     public static void main(String[] args) {
+        verifiesInvalidFramesAreRejected();
+        verifiesVariantAwarePlanCache();
         verifiesBoneAliasesAndExclusions();
         verifiesStableQuadOrdering();
         verifiesFrontFaceSelection();
@@ -29,6 +31,85 @@ public final class FaceTrackingVerification {
         verifiesSkewedPlaneCoordinates();
         verifiesPrecomputedQuadSelectionMatches();
         System.out.println("Face tracking verification passed.");
+    }
+
+    private static void verifiesInvalidFramesAreRejected() {
+        require(
+                FaceGeometry.Frame.tryCreate(
+                        Vec3.ZERO,
+                        new Vec3(1.0D, 0.0D, 0.0D),
+                        new Vec3(0.0D, 1.0D, 0.0D),
+                        new Vec3(0.0D, 0.0D, -1.0D)
+                ).isPresent(),
+                "Valid face frame was rejected"
+        );
+        require(
+                FaceGeometry.Frame.tryCreate(
+                        Vec3.ZERO,
+                        Vec3.ZERO,
+                        new Vec3(0.0D, 1.0D, 0.0D),
+                        new Vec3(0.0D, 0.0D, -1.0D)
+                ).isEmpty(),
+                "Zero-length face axis was accepted"
+        );
+        require(
+                FaceGeometry.Frame.tryCreate(
+                        Vec3.ZERO,
+                        new Vec3(Double.NaN, 0.0D, 0.0D),
+                        new Vec3(0.0D, 1.0D, 0.0D),
+                        new Vec3(0.0D, 0.0D, -1.0D)
+                ).isEmpty(),
+                "Non-finite face axis was accepted"
+        );
+        require(
+                FaceGeometry.Frame.tryCreate(
+                        Vec3.ZERO,
+                        new Vec3(1.0D, 0.0D, 0.0D),
+                        new Vec3(2.0D, 0.0D, 0.0D),
+                        new Vec3(0.0D, 0.0D, -1.0D)
+                ).isEmpty(),
+                "Singular face basis was accepted"
+        );
+    }
+
+    private static void verifiesVariantAwarePlanCache() {
+        FaceTrackingGeometryCache.clear();
+        Object model = new Object();
+        int[] builds = {0};
+        String first = FaceTrackingGeometryCache.getOrCompute(
+                model,
+                "form_a",
+                String.class,
+                () -> "plan_" + ++builds[0]
+        );
+        String reused = FaceTrackingGeometryCache.getOrCompute(
+                model,
+                "form_a",
+                String.class,
+                () -> "plan_" + ++builds[0]
+        );
+        String switched = FaceTrackingGeometryCache.getOrCompute(
+                model,
+                "form_b",
+                String.class,
+                () -> "plan_" + ++builds[0]
+        );
+        require(
+                first.equals(reused) && !first.equals(switched),
+                "Form change reused a stale face geometry plan"
+        );
+        FaceTrackingGeometryCache.invalidatePlan(model);
+        String rebuilt = FaceTrackingGeometryCache.getOrCompute(
+                model,
+                "form_b",
+                String.class,
+                () -> "plan_" + ++builds[0]
+        );
+        require(
+                !switched.equals(rebuilt) && builds[0] == 3,
+                "Explicit plan invalidation did not rebuild geometry"
+        );
+        FaceTrackingGeometryCache.clear();
     }
 
     private static void verifiesBoneAliasesAndExclusions() {

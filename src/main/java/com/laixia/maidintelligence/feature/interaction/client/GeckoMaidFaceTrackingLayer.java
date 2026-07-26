@@ -5,6 +5,7 @@ import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.GeoLayerRenderer;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.IGeoEntityRenderer;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.ILocationModel;
+import com.laixia.maidintelligence.feature.shading.client.ShadowPassDetector;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.world.entity.Mob;
@@ -36,7 +37,9 @@ public final class GeckoMaidFaceTrackingLayer<T extends Mob, R extends IGeoEntit
             float netHeadYaw,
             float headPitch
     ) {
-        if (!(entity instanceof EntityMaid maid)
+        // 面部追踪使用玩家视图坐标，不能消费 Oculus 的太阳视图矩阵。
+        if (ShadowPassDetector.isActive()
+                || !(entity instanceof EntityMaid maid)
                 || !maid.isAddedToWorld()
                 || !FaceTrackingDemand.shouldTrack(maid)) {
             return;
@@ -71,8 +74,11 @@ public final class GeckoMaidFaceTrackingLayer<T extends Mob, R extends IGeoEntit
         FaceGeometry.Source source = maid.isYsmModel()
                 ? FaceGeometry.Source.YSM
                 : FaceGeometry.Source.GECKO;
+        String modelId = maid.isYsmModel()
+                ? maid.getYsmModelId()
+                : maid.getModelId();
         GeckoFaceGeometryAdapter.Result result =
-                GeckoFaceGeometryAdapter.resolve(model, poseStack);
+                GeckoFaceGeometryAdapter.resolve(model, poseStack, modelId);
         result.plane().ifPresentOrElse(
                 plane -> {
                     DynamicMaidFaceTracker.update(maid, plane);
@@ -84,9 +90,7 @@ public final class GeckoMaidFaceTrackingLayer<T extends Mob, R extends IGeoEntit
                     );
                     FaceTrackingGeometryCache.reportSuccessOnce(
                             model,
-                            maid.isYsmModel()
-                                    ? maid.getYsmModelId()
-                                    : maid.getModelId(),
+                            modelId,
                             source,
                             result.key(),
                             result.confidence()
@@ -96,9 +100,7 @@ public final class GeckoMaidFaceTrackingLayer<T extends Mob, R extends IGeoEntit
                     DynamicMaidFaceTracker.invalidate(maid);
                     FaceTrackingGeometryCache.reportFailureOnce(
                             model,
-                            maid.isYsmModel()
-                                    ? maid.getYsmModelId()
-                                    : maid.getModelId(),
+                            modelId,
                             source,
                             result.failureReason()
                     );

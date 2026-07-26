@@ -253,9 +253,9 @@ skirt/schema3-body-only: 3741.4 ns/frame, proxies=2, allocation=0.00 B/frame
 
 `AnimationPoseSnapshot` 在每次 solver 写回前保存所有 driven bone 的六个局部 rotation/position 通道。下一次入口先恢复快照，再让控制器和硬编码动画更新，最后重新覆盖物理，因此限流帧和正常帧都使用同一条动画→物理流水线，且恢复/捕获均为 `0 B/frame`。
 
-Mixin 同时把与 `tail/default` 完全相同的 `tickCount + partialTick` 传给 `AnimationTimelineClock`。同一姿态若因轮廓、额外渲染阶段或其它重复调用进入多次，首次调用按动画时间差推进，后续调用使用 `dt=0`；不再把 0.1～1 ms 的墙钟间隔误当成额外物理子步。该误差在单骨上很小，但会沿 `Tail → Tail7` 的父子变换累积并主要暴露在末端。
+Mixin 同时把 `tail/default` 使用的 `tickCount + partialTick` 时间源传给 `AnimationTimelineClock`，但在相加前保留整数 tick 的 `double` 精度，避免长时间存活实体因 `float` 尾数不足丢失渲染帧。同一姿态若因轮廓、额外渲染阶段或其它重复调用进入多次，首次调用按动画时间差推进，后续调用使用 `dt=0`；不再把 0.1～1 ms 的墙钟间隔误当成额外物理子步。该误差在单骨上很小，但会沿 `Tail → Tail7` 的父子变换累积并主要暴露在末端。
 
-慢速动画还会暴露与速度无关的姿态量化：若用 `acos(rest · current)` 提取物理偏角，两个近乎平行的 `float` 单位向量会把点积舍入为 `1`，导致真实偏转连续增长时画面先保持零、跨过精度台阶后再突然跳变。写回现在直接使用同时包含一阶小角信息的 `atan2(|rest × current|, rest · current)` 计算姿态误差；约 `10^-5～10^-4 rad` 的微小偏转也能连续生成局部旋转，不再依赖速度阈值或等待误差累积。该修正逐段生效，因此也阻止了年糕狐 `FoxTailA → Body_Tail6` 六段尾巴把局部量化放大到末端。
+慢速动画还会暴露与速度无关的姿态量化：若用 `acos(rest · current)` 提取物理偏角，两个近乎平行的 `float` 单位向量会把点积舍入为 `1`，导致真实偏转连续增长时画面先保持零、跨过精度台阶后再突然跳变。写回现在直接使用同时包含一阶小角信息的 `atan2(|rest × current|, rest · current)` 计算姿态误差；偏角轴和参考骨旋转只过滤接近浮点退化范围的零量，不再用仿真级 `epsilon` 截断真实微角度。输入侧的移动与动画加速度仍由噪声门和低通滤波器调理，因此不会把数值抖动重新注入姿态。该修正逐段生效，也避免年糕狐 `FoxTailA → Body_Tail6` 六段尾巴把局部量化放大到末端。
 
 ## 调试工具
 

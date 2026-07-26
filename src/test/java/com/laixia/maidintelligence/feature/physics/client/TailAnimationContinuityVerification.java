@@ -30,6 +30,7 @@ final class TailAnimationContinuityVerification {
     static void run() throws Exception {
         verifiesSnapshotRestoresEveryLocalChannel();
         verifiesSmallPoseErrorsRemainContinuous();
+        verifiesMicroscopicPoseErrorsRemainContinuous();
         verifiesRateLimitedTailAnimationRemainsContinuous();
         verifiesBundledTailCoalescesDuplicateRenders();
         verifiesRiceCakeSlowTailRemainsContinuous();
@@ -92,6 +93,40 @@ final class TailAnimationContinuityVerification {
         require(
                 physicalAngle > 1.0E-5F && physicalAngle < 2.0E-4F,
                 "Sub-degree pose error was quantized away: "
+                        + physicalAngle
+        );
+    }
+
+    private static void verifiesMicroscopicPoseErrorsRemainContinuous() {
+        Fixture fixture = createFixture();
+        AnimatedGeoBone tail = fixture.tail();
+        Quaternionf animation = new Quaternionf().rotateZYX(
+                tail.getRotationZ(),
+                tail.getRotationY(),
+                tail.getRotationX()
+        );
+        fixture.solver().solve(
+                NO_ENTITY_ACCELERATION,
+                0.0F,
+                0.0F,
+                false
+        );
+        fixture.solver().restoreAnimationPose();
+        fixture.solver().solve(
+                new Vector3f(0.0001F, 0.0F, 0.0F),
+                0.0F,
+                1.0F / 120.0F,
+                false
+        );
+        Quaternionf rendered = new Quaternionf().rotateZYX(
+                tail.getRotationZ(),
+                tail.getRotationY(),
+                tail.getRotationX()
+        );
+        float physicalAngle = angularDistance(animation, rendered);
+        require(
+                physicalAngle > 5.0E-7F && physicalAngle < 1.0E-5F,
+                "Microscopic pose error was quantized away: "
                         + physicalAngle
         );
     }

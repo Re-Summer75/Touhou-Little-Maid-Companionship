@@ -14,8 +14,11 @@
     "EntityMaidClientRandomHealingMixin",
     "EntityMaidRendererYsmCaptureMixin",
     "GeckoMaidEntityBonePhysicsMixin",
+    "GeoRendererOutsideNormalMixin",
     "LivingEntityRendererAccessor",
-    "LivingEntityEatingParticleMixin"
+    "LivingEntityEatingParticleMixin",
+    "SodiumOutsideNormalFallbackMixin",
+    "SodiumDownNormalPackingMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -110,6 +110,7 @@ final class FaceGeometry {
     enum FailureReason {
         NO_HEAD_ANCHOR,
         NO_GEOMETRY,
+        INVALID_FRAME,
         LOW_CONFIDENCE,
         UNSUPPORTED_GEOMETRY_SOURCE
     }
@@ -121,18 +122,50 @@ final class FaceGeometry {
             Vec3 forward
     ) {
         Frame {
-            if (!isFinite(origin)
-                    || !isFinite(right)
-                    || !isFinite(up)
-                    || !isFinite(forward)
-                    || right.lengthSqr() <= 1.0E-10D
-                    || up.lengthSqr() <= 1.0E-10D
-                    || forward.lengthSqr() <= 1.0E-10D) {
-                throw new IllegalArgumentException("Face frame axes must be finite and non-zero");
+            if (!isValid(origin, right, up, forward)) {
+                throw new IllegalArgumentException(
+                        "Face frame basis must be finite and non-singular"
+                );
             }
             right = right.normalize();
             up = up.normalize();
             forward = forward.normalize();
+        }
+
+        static Optional<Frame> tryCreate(
+                Vec3 origin,
+                Vec3 right,
+                Vec3 up,
+                Vec3 forward
+        ) {
+            return isValid(origin, right, up, forward)
+                    ? Optional.of(new Frame(origin, right, up, forward))
+                    : Optional.empty();
+        }
+
+        private static boolean isValid(
+                Vec3 origin,
+                Vec3 right,
+                Vec3 up,
+                Vec3 forward
+        ) {
+            if (!isFinite(origin)
+                    || !isFinite(right)
+                    || !isFinite(up)
+                    || !isFinite(forward)) {
+                return false;
+            }
+            double rightLength = right.lengthSqr();
+            double upLength = up.lengthSqr();
+            double forwardLength = forward.lengthSqr();
+            if (rightLength <= 1.0E-10D
+                    || upLength <= 1.0E-10D
+                    || forwardLength <= 1.0E-10D) {
+                return false;
+            }
+            double determinant = right.cross(up).dot(forward);
+            return determinant * determinant
+                    > rightLength * upLength * forwardLength * 1.0E-10D;
         }
     }
 
