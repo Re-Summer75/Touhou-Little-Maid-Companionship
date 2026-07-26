@@ -36,6 +36,23 @@ final class MotionDynamicsVerification {
                 "Inertial force did not lag behind forward acceleration"
         );
 
+        Vector3f worldWind = new Vector3f(1.0F, 0.0F, 0.0F);
+        Vector3f modelWind = MaidBonePhysics.worldAccelerationToModelInto(
+                worldWind,
+                0.0F,
+                new Vector3f()
+        );
+        requireNear(
+                modelWind.x,
+                -1.0F,
+                "World wind was not rotated into model space"
+        );
+        requireNear(
+                worldWind.x,
+                1.0F,
+                "World-to-model conversion mutated cached world wind"
+        );
+
         Vector3f facingWest = MaidBonePhysics.worldAccelerationToModel(
                 new Vec3(-1.0D, 0.0D, 0.0D),
                 90.0F

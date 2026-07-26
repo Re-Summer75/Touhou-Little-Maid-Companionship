@@ -15,7 +15,8 @@ final class ClothAccessoryDynamics {
     ) {
         PhysicsBoneSelectionPlan.SpringProfile stable =
                 new PhysicsBoneSelectionPlan.SpringProfile(
-                        1.55F, 0.0F, 1.45F, 0.45F, 0.55F, 0.28F, 0.40F
+                        1.55F, 0.0F, 0.18F, 1.45F,
+                        0.45F, 0.55F, 0.28F, 0.40F
                 );
         PhysicsBoneSelectionPlan.ConstraintProfile source =
                 decision.constraints();
@@ -51,7 +52,9 @@ final class ClothAccessoryDynamics {
         PhysicsBoneSelectionPlan.SpringProfile curve =
                 new PhysicsBoneSelectionPlan.SpringProfile(
                         lerp(1.35F, 0.82F, t),
-                        lerp(0.62F, 0.95F, t),
+                        lerp(0.85F, 1.20F, t),
+                        lerp(0.45F, 1.20F, t),
+                        lerp(1.15F, 0.75F, t),
                         lerp(1.24F, 0.96F, t),
                         lerp(0.58F, 1.05F, t),
                         lerp(0.68F, 1.02F, t),
@@ -81,7 +84,8 @@ final class ClothAccessoryDynamics {
     ) {
         PhysicsBoneSelectionPlan.SpringProfile conservative =
                 new PhysicsBoneSelectionPlan.SpringProfile(
-                        1.28F, 0.58F, 1.22F, 0.62F, 0.70F, 0.55F, 0.72F
+                        1.28F, 0.85F, 0.30F, 1.30F, 1.22F,
+                        0.62F, 0.70F, 0.55F, 0.72F
                 );
         return decision.withDynamics(
                 decision.profile().multiply(conservative),

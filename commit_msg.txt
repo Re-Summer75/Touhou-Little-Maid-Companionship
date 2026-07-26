@@ -1,5 +1,23 @@
-fix(physics): 修复慢速动画姿态误差量化并优化包头软体识别
+﻿feat(physics): 引入环境风场模拟与二级动作受风响应
 
-- **修复姿态误差量化跳变**：使用 `atan2(|rest × current|, rest · current)` 替代 `acos` 计算物理姿态的局部偏角。修复了在极慢速动画（如年糕狐的尾巴）下，近乎平行的单位向量点积被单精度浮点舍入为 1，导致极小偏转在累积跨过精度台阶时发生突然跳变（动画抽搐）的问题。
-- **优化单骨包头壳层识别**：在 `HeadCandidateScorer` 头部候选评分逻辑中，新增对无子骨（叶节点）的单骨包头壳层结构的识别（如年糕狐的 `HairFemaleK_Matching`），为其分配正确的零静态重力、低惯性与低摆幅参数，同时确保不影响其独立的刘海与马尾的柔性物理行为。
-- **完善测试与文档**：更新了物理系统文档 (`docs/physics/README.md`)，并新增了对应的离线回归测试（包括 `verifyRiceCakeHeadShell`、`verifiesSmallPoseErrorsRemainContinuous` 和 `verifiesRiceCakeSlowTailRemainsContinuous`）。
+本次更新为女仆骨骼物理（VRM 弹簧骨）引入了完整的环境风场（Environmental Wind）模拟与响应系统。结合当前维度、天气（雨/雷暴）、海拔、室内暴露度及浸水状态等因素，生成空间一致且具备自然脉动感的风场，驱动女仆头发、尾巴、裙摆等进行生动的随风飘动。
+
+✨ 核心特性 (Features):
+- 程序化风场生成系统 (Environmental Wind Field):
+  - 新增 EnvironmentalWindFeature 模块，基于 Taylor 冻结湍流近似构建可完全重现的 3D 风场。
+  - 利用无周期二维梯度噪声和分层 fBm（分形布朗运动）合成宏观风向、阵风与微观湍流层。
+  - 实现逐实体与逐骨骼的随机抖振（Micro-turbulence），确保不同女仆、同一模型不同骨骼能产生去相关脉动，并避免跨级同步摆动。
+- 弹簧骨程序化驱动 (Procedural Pose Driver):
+  - 新增 WorldPoseDriverSource 扩展点，将环境风作为独立的程序化姿态目标注入弹簧解算器，而不作为直接物理外力。
+  - 确保风致偏移不会突破原设定的最大摆角与防穿透安全边界。
+- 新增物理配置参数:
+  - 骨骼元数据 (Schema 3) 新增 wind_scale (受风强度倍率) 和 mass_scale (质量倍率)。
+  - 不同的质量缩放会正确影响风场滤波的响应频率和重力垂坠姿态，而不影响整体向下加速度。
+
+♻️ 架构与性能优化 (Performance):
+- 零分配热路径: 所有噪声计算、风向平流和驱动源积分全程 0 B/frame，不依赖 Random 实例化或数组分配。
+- 时间轴复用: 相同的 tick + partialTick 的渲染通道重复调用时，风场与抖振状态不再错误累进。
+
+🔧 测试与文档 (Testing & Documentation):
+- 新增 EnvironmentalWindVerification，全覆盖测试风场各维度的不变量、衰减系数以及内存分配。
+- 更新 docs/physics/README.md 和 docs/README.md，记录风场计算管线、调度方式及调参指南。

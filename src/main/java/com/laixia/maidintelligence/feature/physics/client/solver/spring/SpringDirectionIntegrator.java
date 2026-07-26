@@ -16,6 +16,8 @@ final class SpringDirectionIntegrator {
     static void prepareRestDirection(
             PhysicsSolverLayout.Node node,
             Quaternionf boneBaseOrientation,
+            Vector3f modelPoseDrive,
+            float turbulenceStep,
             SpringBoneState state,
             SpringBoneScratch scratch
     ) {
@@ -23,8 +25,17 @@ final class SpringDirectionIntegrator {
         node.axisInto(scratch.boneAxis);
         boneBaseOrientation.transform(
                 scratch.boneAxis,
-                scratch.restDirection
+                scratch.authoredRestDirection
         ).normalize();
+        // Wind moves the spring target, never the collision/constraint frame.
+        scratch.restDirection.set(scratch.authoredRestDirection);
+        SpringProceduralPoseDriver.apply(
+                node,
+                modelPoseDrive,
+                turbulenceStep,
+                state,
+                scratch
+        );
         if (!state.initialized[slot]) {
             state.currentDirections[slot].set(scratch.restDirection);
             state.previousDirections[slot].set(scratch.restDirection);
@@ -69,8 +80,18 @@ final class SpringDirectionIntegrator {
                 (current.y() - previous.y()) * retention * stepRatio,
                 (current.z() - previous.z()) * retention * stepRatio
         );
+        /*
+         * Mass enters through k/m; gravity and frame acceleration stay
+         * accelerations and must not be multiplied by mass. Only added mass
+         * slows the restoring pull: letting a light part pull harder than the
+         * authored baseline would overshoot the collision projection between
+         * frames instead of looking livelier.
+         */
         float stiffness = (float) (
-                SpringBoneMath.STIFFNESS * profile.stiffnessScale() * dt
+                SpringBoneMath.STIFFNESS
+                        * profile.stiffnessScale()
+                        / Math.max(1.0F, profile.massScale())
+                        * dt
         );
         scratch.nextDirection.add(
                 scratch.restDirection.x() * stiffness,

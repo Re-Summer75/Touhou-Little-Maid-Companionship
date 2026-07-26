@@ -111,7 +111,10 @@ final class ReferenceSpringBoneSolver {
                                 * retention * stepRatio
                 );
                 float stiffness = (float) (
-                        STIFFNESS * profile.stiffnessScale() * dt
+                        STIFFNESS
+                                * profile.stiffnessScale()
+                                / Math.max(1.0F, profile.massScale())
+                                * dt
                 );
                 next.add(
                         restDir.x() * stiffness,

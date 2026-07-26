@@ -111,8 +111,15 @@ final class ClothAccessoryDiscoveryVerification {
                         && tip.chainSegment().count() >= 2
                         && root.profile().stiffnessScale()
                         > tip.profile().stiffnessScale()
+                        && root.profile().gravityScale() > 0.90F
+                        && tip.profile().gravityScale()
+                        > root.profile().gravityScale()
+                        && root.profile().massScale()
+                        > tip.profile().massScale()
                         && root.profile().angleScale()
-                        < tip.profile().angleScale(),
+                        < tip.profile().angleScale()
+                        && root.constraints().swingLimits().inward()
+                        <= Math.toRadians(8.1D),
                 "Winefox skirt chain did not receive segmented dynamics"
         );
         PhysicsSolverLayout.Node node = layoutNode(

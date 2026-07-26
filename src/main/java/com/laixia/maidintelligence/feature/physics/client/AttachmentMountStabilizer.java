@@ -26,7 +26,8 @@ final class AttachmentMountStabilizer {
         }
         PhysicsBoneSelectionPlan.SpringProfile stable =
                 new PhysicsBoneSelectionPlan.SpringProfile(
-                        1.35F, 0.0F, 1.35F, 0.45F, 0.55F, 0.45F, 0.50F
+                        1.35F, 0.0F, 0.15F, 1.35F,
+                        0.45F, 0.55F, 0.45F, 0.50F
                 );
         PhysicsBoneSelectionPlan.ConstraintProfile source =
                 decision.constraints();

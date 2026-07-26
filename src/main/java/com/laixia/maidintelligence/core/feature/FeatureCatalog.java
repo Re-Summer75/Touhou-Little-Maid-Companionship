@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.core.feature;
 
 import com.laixia.maidintelligence.compat.tlm.TlmFeatureModule;
 import com.laixia.maidintelligence.feature.advancement.MaidAdvancementFeature;
+import com.laixia.maidintelligence.feature.atmosphere.EnvironmentalWindFeature;
 import com.laixia.maidintelligence.feature.interaction.MaidInteractionFeature;
 import com.laixia.maidintelligence.feature.level.LevelFeature;
 import com.laixia.maidintelligence.feature.physics.MaidPhysicsFeature;
@@ -20,6 +21,7 @@ public final class FeatureCatalog {
             MaidInteractionFeature.INSTANCE,
             MaidModelShadingFeature.INSTANCE,
             MaidPhysicsFeature.INSTANCE,
+            EnvironmentalWindFeature.INSTANCE,
             StatusFeedbackFeature.INSTANCE
     );
     private static final List<TlmFeatureModule> TLM_FEATURES = FEATURES.stream()

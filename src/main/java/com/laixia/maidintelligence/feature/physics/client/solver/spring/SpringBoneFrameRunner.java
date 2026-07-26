@@ -12,6 +12,7 @@ final class SpringBoneFrameRunner {
     static void solve(
             SpringBoneContext context,
             Vector3f modelAcceleration,
+            Vector3f modelPoseDrive,
             float yawRate,
             float dt,
             boolean paused
@@ -20,6 +21,9 @@ final class SpringBoneFrameRunner {
         SpringBoneState state = context.state;
         SpringBoneScratch scratch = context.scratch;
         scratch.rootOrientation.identity();
+        float turbulenceStep = !paused && dt > SpringBoneMath.EPSILON
+                ? dt
+                : 0.0F;
         context.metrics.beginFrame();
         SpringCollisionCoordinator.beginFrame(context);
         state.beginReferenceFrame(context.constraintsEnabled);
@@ -56,6 +60,8 @@ final class SpringBoneFrameRunner {
                         node,
                         boneBaseOrientation,
                         modelAcceleration,
+                        modelPoseDrive,
+                        turbulenceStep,
                         yawRate,
                         dt,
                         paused,
@@ -86,6 +92,8 @@ final class SpringBoneFrameRunner {
             PhysicsSolverLayout.Node node,
             Quaternionf boneBaseOrientation,
             Vector3f modelAcceleration,
+            Vector3f modelPoseDrive,
+            float turbulenceStep,
             float yawRate,
             float dt,
             boolean paused,
@@ -117,6 +125,8 @@ final class SpringBoneFrameRunner {
         SpringDirectionIntegrator.prepareRestDirection(
                 node,
                 boneBaseOrientation,
+                modelPoseDrive,
+                turbulenceStep,
                 state,
                 scratch
         );

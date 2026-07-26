@@ -10,6 +10,7 @@ public final class BonePhysicsVerification {
     public static void main(String[] args) throws Exception {
         BoneClassifierVerification.run();
         MotionDynamicsVerification.run();
+        EnvironmentalWindVerification.run();
         AnimationTimelineClockVerification.run();
         AnimationInertiaVerification.run();
         TailAnimationContinuityVerification.run();

@@ -3,6 +3,8 @@ package com.laixia.maidintelligence.feature.physics.client;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.physics.client.pose.WorldPoseDriverSource;
+import com.laixia.maidintelligence.feature.physics.client.pose.WorldPoseDriverSources;
 import com.laixia.maidintelligence.feature.physics.client.solver.MotionSignalSampler;
 import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
 import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
@@ -93,15 +95,18 @@ public final class MaidBonePhysics {
         boolean paused = minecraft.isPaused();
         float dt = state.advanceClock(animationTick, paused);
         state.sampleMotion(maid, maid.getDeltaMovement(), dt);
+        state.samplePoseDrive(maid, animationTick, dt, paused);
         state.solver.solve(
                 state.modelAcceleration,
+                state.modelPoseDrive,
                 state.yawRate,
                 dt,
                 paused
         );
         state.recordDiagnostics(
                 maid,
-                state.modelAcceleration.length(),
+                state.modelAcceleration,
+                state.modelPoseDrive,
                 state.solver.lastPeakDeflection()
         );
     }
@@ -188,8 +193,12 @@ public final class MaidBonePhysics {
                 new MotionSignalSampler();
         private final AnimationTimelineClock animationClock =
                 new AnimationTimelineClock();
+        private final WorldPoseDriverSource poseDriverSource =
+                WorldPoseDriverSources.create();
         private final Vector3f worldAcceleration = new Vector3f();
         private final Vector3f modelAcceleration = new Vector3f();
+        private final Vector3f worldPoseDrive = new Vector3f();
+        private final Vector3f modelPoseDrive = new Vector3f();
 
         private AnimatedGeoModel model;
         private String modelId;
@@ -206,6 +215,7 @@ public final class MaidBonePhysics {
         private int diagnosticWindows;
         private double peakDeflection;
         private double peakAcceleration;
+        private double peakPoseDrive;
 
         private boolean matches(
                 AnimatedGeoModel currentModel,
@@ -230,8 +240,11 @@ public final class MaidBonePhysics {
             layout = PhysicsSolverLayout.build(currentModel, currentPlan);
             solver = new SpringBoneSolver(layout);
             motionSampler.reset();
+            poseDriverSource.reset();
             worldAcceleration.zero();
             modelAcceleration.zero();
+            worldPoseDrive.zero();
+            modelPoseDrive.zero();
             yawRate = 0.0F;
             animationClock.reset();
             positionInitialized = false;
@@ -239,6 +252,7 @@ public final class MaidBonePhysics {
             diagnosticWindows = 0;
             peakDeflection = 0.0D;
             peakAcceleration = 0.0D;
+            peakPoseDrive = 0.0D;
         }
 
         private void sampleMotion(
@@ -280,6 +294,26 @@ public final class MaidBonePhysics {
             );
         }
 
+        private void samplePoseDrive(
+                LivingEntity maid,
+                double animationTick,
+                float dt,
+                boolean paused
+        ) {
+            poseDriverSource.sampleInto(
+                    maid,
+                    animationTick,
+                    dt,
+                    paused,
+                    worldPoseDrive
+            );
+            worldAccelerationToModelInto(
+                    worldPoseDrive,
+                    maid.yBodyRot,
+                    modelPoseDrive
+            );
+        }
+
         private float advanceClock(
                 double animationTick,
                 boolean paused
@@ -294,21 +328,32 @@ public final class MaidBonePhysics {
         private void resetTransientMotion() {
             solver.reset();
             motionSampler.reset();
+            poseDriverSource.reset();
             worldAcceleration.zero();
             modelAcceleration.zero();
+            worldPoseDrive.zero();
+            modelPoseDrive.zero();
             yawRate = 0.0F;
         }
 
         private void recordDiagnostics(
                 LivingEntity maid,
-                double acceleration,
+                Vector3f acceleration,
+                Vector3f poseDrive,
                 double deflection
         ) {
             if (!LOGGER.isDebugEnabled()
                     || diagnosticWindows >= DIAGNOSTIC_WINDOWS) {
                 return;
             }
-            peakAcceleration = Math.max(peakAcceleration, acceleration);
+            peakAcceleration = Math.max(
+                    peakAcceleration,
+                    acceleration.length()
+            );
+            peakPoseDrive = Math.max(
+                    peakPoseDrive,
+                    poseDrive.length()
+            );
             peakDeflection = Math.max(peakDeflection, deflection);
             if (++diagnosticFrames < DIAGNOSTIC_FRAMES) {
                 return;
@@ -316,7 +361,8 @@ public final class MaidBonePhysics {
             diagnosticWindows++;
             LOGGER.debug(
                     "Maid bone physics [{}]: activeNodes={}/{} drivenBones={} "
-                            + "peakDeflectionDeg={} peakAccel={}",
+                            + "peakDeflectionDeg={} peakAccel={} "
+                            + "peakPoseDrive={}",
                     maid.getName().getString(),
                     layout.activeNodeCount(),
                     layout.fullBoneCount(),
@@ -330,11 +376,17 @@ public final class MaidBonePhysics {
                             java.util.Locale.ROOT,
                             "%.4f",
                             peakAcceleration
+                    ),
+                    String.format(
+                            java.util.Locale.ROOT,
+                            "%.4f",
+                            peakPoseDrive
                     )
             );
             diagnosticFrames = 0;
             peakDeflection = 0.0D;
             peakAcceleration = 0.0D;
+            peakPoseDrive = 0.0D;
         }
     }
 }

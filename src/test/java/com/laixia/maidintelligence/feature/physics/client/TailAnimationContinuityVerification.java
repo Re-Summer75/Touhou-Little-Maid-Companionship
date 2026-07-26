@@ -23,6 +23,8 @@ final class TailAnimationContinuityVerification {
     private static final Vector3f MOTION =
             new Vector3f(0.35F, 0.0F, 0.20F);
     private static final Vector3f NO_ENTITY_ACCELERATION = new Vector3f();
+    private static final Vector3f ENVIRONMENT_WIND =
+            new Vector3f(0.045F, 0.0F, -0.015F);
 
     private TailAnimationContinuityVerification() {
     }
@@ -175,6 +177,7 @@ final class TailAnimationContinuityVerification {
 
             fixture.solver().solve(
                     MOTION,
+                    ENVIRONMENT_WIND,
                     0.0F,
                     1.0F / 120.0F,
                     false
@@ -247,13 +250,21 @@ final class TailAnimationContinuityVerification {
                         && layout.node(terminalIndex).driven(),
                 "Bundled seven-segment tail was not driven"
         );
+        require(
+                plan.decision(terminal).profile().windScale()
+                        > plan.decision(root).profile().windScale(),
+                "Automatic tail wind response did not increase root-to-tip"
+        );
 
         float initialX = root.getRotationX();
         float initialZ = root.getRotationZ();
+        int terminalSlot = layout.node(terminalIndex).drivenSlot();
         Vector3f tip = new Vector3f();
         Vector3f previousTip = new Vector3f();
         Vector3f velocity = new Vector3f();
         Vector3f previousVelocity = new Vector3f();
+        Vector3f advancedDirection = new Vector3f();
+        Vector3f duplicateDirection = new Vector3f();
         Quaternionf rotation = new Quaternionf();
         Quaternionf previousRotation = new Quaternionf();
         float maximumTipStep = 0.0F;
@@ -279,10 +290,33 @@ final class TailAnimationContinuityVerification {
                 float dt = clock.advance(ageInTicks, false);
                 solver.solve(
                         NO_ENTITY_ACCELERATION,
+                        ENVIRONMENT_WIND,
                         0.0F,
                         dt,
                         false
                 );
+                if (pass == 0) {
+                    require(
+                            solver.copyCurrentDirection(
+                                    terminalSlot,
+                                    advancedDirection
+                            ),
+                            "Bundled tail wind direction unavailable"
+                    );
+                } else {
+                    require(
+                            solver.copyCurrentDirection(
+                                    terminalSlot,
+                                    duplicateDirection
+                            ),
+                            "Duplicate-render tail direction unavailable"
+                    );
+                    require(
+                            duplicateDirection.distance(advancedDirection)
+                                    < 1.0E-7F,
+                            "Duplicate render advanced environmental wind"
+                    );
+                }
             }
             require(
                     solver.copyRuntimeTip(terminalIndex, tip),
@@ -373,6 +407,7 @@ final class TailAnimationContinuityVerification {
             );
             solver.solve(
                     NO_ENTITY_ACCELERATION,
+                    ENVIRONMENT_WIND,
                     0.0F,
                     clock.advance(ageInTicks, false),
                     false

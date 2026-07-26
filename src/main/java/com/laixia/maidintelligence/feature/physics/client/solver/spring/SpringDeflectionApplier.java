@@ -30,9 +30,20 @@ final class SpringDeflectionApplier {
             SpringBoneMetrics metrics
     ) {
         int slot = node.drivenSlot();
+        var currentDirection = state.currentDirections[slot];
+        /*
+         * Exact equality occurs on initialization or exact convergence. Avoid
+         * an unnecessary quaternion-to-Euler round trip at gimbal poses while
+         * retaining every non-zero physical or procedural deflection.
+         */
+        if (currentDirection.x == scratch.authoredRestDirection.x
+                && currentDirection.y == scratch.authoredRestDirection.y
+                && currentDirection.z == scratch.authoredRestDirection.z) {
+            return;
+        }
         node.axisInto(scratch.boneAxis);
         boneAnimationOrientation.transformInverse(
-                state.currentDirections[slot],
+                currentDirection,
                 scratch.localDirection
         );
         if (scratch.localDirection.lengthSquared()

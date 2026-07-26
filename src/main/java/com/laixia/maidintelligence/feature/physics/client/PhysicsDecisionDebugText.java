@@ -29,7 +29,8 @@ final class PhysicsDecisionDebugText {
         return String.format(
                 Locale.ROOT,
                 " structure=%s segment=%s"
-                        + " profile=(stiff=%.2f,gravity=%.3f,drag=%.2f,"
+                        + " profile=(stiff=%.2f,gravity=%.3f,wind=%.2f,"
+                        + "mass=%.2f,drag=%.2f,"
                         + "inertia=%.2f,"
                         + "turn=%.2f,angle=%.2f,tip=%.2f)"
                         + " constraints=(space=%s,rotationInertia=%.2f,"
@@ -39,6 +40,8 @@ final class PhysicsDecisionDebugText {
                 segmentText,
                 profile.stiffnessScale(),
                 profile.gravityScale(),
+                profile.windScale(),
+                profile.massScale(),
                 profile.dragScale(),
                 profile.inertiaScale(),
                 profile.turnScale(),

@@ -1,6 +1,6 @@
 # 女仆骨骼物理（VRM 弹簧骨）
 
-为 Gecko 女仆的尾巴、头发、耳朵等自由摆动骨骼添加一层二级动作物理：跟随身体运动和预设骨骼动画产生真实惯性摆动、带轻微重力下垂，同时**收敛回动画姿态，并以非对称摆角和保守碰撞代理减少过摆与常见穿模**。实现参考 VRM `VRMC_springBone` 弹簧骨模型。
+为 Gecko 女仆的尾巴、头发、耳朵等自由摆动骨骼添加一层二级动作物理：跟随身体运动、预设骨骼动画和环境风场产生真实摆动、带轻微重力下垂，同时**收敛回动画姿态，并以非对称摆角和保守碰撞代理减少过摆与常见穿模**。实现参考 VRM `VRMC_springBone` 弹簧骨模型。
 
 ## 分析基准
 
@@ -18,13 +18,13 @@
 - 每根骨骼维护其尾端方向的模拟值 `currentDir`；
 - 每帧用 **Verlet 积分**更新:
   1. **惯性**：`(currentDir − prevDir) × (1 − drag)`，保留上一帧摆动动量；
-  2. **刚度**：朝**动画休息方向** `restDir` 拉回 × `stiffness × dt`（`restDir` = 骨骼动画姿态下的尾端朝向，**逐帧跟随动画**）；
+  2. **刚度**：朝**动画休息方向** `restDir` 拉回 × `stiffness / max(1, mass) × dt`（`restDir` = 作者动画姿态叠加程序化风动画后的尾端朝向，**逐帧跟随目标**）；
   3. **外力**：`(小重力 + 实体移动惯性 + 预设动画惯性 + 转身伪力) × dt`；
   4. 归一化到单位长度。
 
 因为刚度目标是**动画姿态**而非世界下方、重力只是小外力，所以:
 
-- **静止只微垂**：平衡在"刚度 = 重力"处，垂量 ≈ `GRAVITY_POWER / STIFFNESS`（约 8°），有界不发散；
+- **静止只微垂**：平衡在"刚度 = 重力"处，垂量近似正比于 `max(1, mass) × GRAVITY_POWER / STIFFNESS`，有界不发散。质量不改变重力加速度，只降低重物的 `k/m` 拉回速度；轻物不会比作者基准拉得更硬，否则单帧步长会越过碰撞投影、把末端顶进代理；
 - **抬头头发跟随**：`restDir` 随头骨动画一起抬，参考空间搬运先同步历史方向，非对称摆角负责限制向内倒；默认不再生成头部碰撞；
 - **运动才甩**：转身/起步/急停/跳跃以及预设动画中的快速位移、缩放和旋转加减速会驱动瞬态摆动，然后弹回动画姿态。
 
@@ -49,6 +49,7 @@
 - `SpringOrientationComposer`、`SpringReferenceTransport`、`SpringDirectionIntegrator`、`SpringConstraintProjector` 依次处理姿态、参考空间、积分和投影；
 - `SpringDeflectionApplier` / `SpringPivotCompensator` 写回 Gecko 旋转与虚拟枢轴补偿，`RuntimeBoneEndpoints` 传播最终层级端点；
 - `SpringBoneMath` 统一保存解算常量和无分配数学工具。
+- `WorldPoseDriverSource` / `WorldPoseDriverSources` 是可选氛围动画的注册边界；物理核心只汇总世界空间姿态信号、转换到模型空间并生成移动的 `restDirection`，不依赖具体风场实现。
 
 ## 力臂归一化（解决大块几何过摆）
 
@@ -83,7 +84,7 @@
 ## 发饰独立与真实链段
 
 - `RIGID_ATTACHMENT_BASE`：命名发夹/发球，以及具有紧凑、同 pivot 重叠或连接远端柔性后代等强结构证据的匿名底座，只跟随动画，不进入 solver；它不会把细长或悬垂后代一起排除。明确的 `Fringe/Hair/Pony` 名称和 metadata 选择优先保留柔性，防止把刘海误判为附件。
-- `FLEXIBLE_CHAIN_SEGMENT`：真实 parent-child driven 链会烘焙链根、段序号和段总数。仅自动发现链使用根到梢曲线：根段刚度/阻尼更高、参考跟随更强、摆角更小；梢端刚度/阻尼更低、移动/转身与旋转惯性更高，从而在父偏转正确传播的同时产生相对相位差，不再像整条刚体。
+- `FLEXIBLE_CHAIN_SEGMENT`：真实 parent-child driven 链会烘焙链根、段序号和段总数。仅自动发现链使用根到梢曲线：根段质量、刚度和阻尼更高，参考跟随更强、摆角和受风倍率更小；梢端更轻、更软，移动/转身与旋转惯性及受风倍率更高，从而在父偏转正确传播的同时产生相对相位差，不再像整条刚体。
 - `COMPOUND_SINGLE_BONE`：基础纸板狐 `bone3/bone9`、年糕狐 `LeftPony/RightPony` 这类所有 cube 只绑定一个 bone 的长网格无法产生真实弯折；系统保留整体小幅摆动，但使用更高刚度/阻尼和更严格的角度、末端位移档位，避免连同发扎大幅扫动。真正分段必须由模型提供多个不同 pivot 的父子骨。
 - 运动学会在存在明确主连通 cube 簇时，用 OBB/SAT 连通判定后的主簇推断 attachment pivot/axis 和实际 segment length，同时用全部 cube 计算独立的安全力臂；远离主体的小装饰不会拉偏旋转轴或把碰撞端点拉成虚假长段，也不会从摆幅安全包络中消失。若一个自动候选由多个互不连通且没有任何簇占优的 cube 组构成，则不存在能安全代表全部几何的单一 pivot，整个自动 chain 保持刚性；schema sidecar 显式驱动仍可覆盖。以上全部在模型/layout 构建期完成，不增加逐帧分配。
 - schema sidecar 的显式链和排除继续拥有最高优先级；自动刚性结论不会覆盖作者指定的 driven bone。
@@ -121,6 +122,8 @@ assets/<namespace>/tlm_companionship/physics/<model-path>.json
       "profile": {
         "stiffness_scale": 0.9,
         "gravity_scale": 0.8,
+        "wind_scale": 1.25,
+        "mass_scale": 1.2,
         "drag_scale": 1.1,
         "inertia_scale": 1.0,
         "turn_scale": 1.0,
@@ -160,7 +163,7 @@ assets/<namespace>/tlm_companionship/physics/<model-path>.json
 - `mode: "explicit"`：只驱动元数据列出的链;
 - `root` / `bones` 接受完整路径或能唯一定位的路径后缀；名称唯一时也可直接写名称；`*` / `?` 可用于排除匹配;
 - `type` 支持 `HEAD_SHELL`、`HAIR`、`TAIL`、`EAR`、`SKIRT`、`RIBBON`、`CAPE`、`WING`、`GENERIC`;
-- `profile` 全部是默认参数的 `0–4` 倍率，省略字段等于 `1`。
+- `profile` 省略字段等于 `1`。普通倍率限制为 `0–4`；`mass_scale` 限制为 `0.25–4`。`wind_scale` 表示迎风面积/气动耦合，可单独关闭或增强受风目标；`mass_scale` 进入弹簧的 `k/m`：质量越大，跟随阵风越慢、下垂和低频惯性越明显，2 Hz 阵风的跟随幅度明显低于轻部件，但不会错误改变重力加速度。
 - `constraints.simulation_space` 支持 `AUTO`、`HEAD_LOCAL`、`BODY_LOCAL`、`MODEL`;
 - `rotation_inertia_scale` 为 `0–1`：`0` 完全跟随参考骨旋转并忽略其动画运动外力，`1` 保留模型空间旋转惯性；中间值同时控制动画枢轴线加速度及补充角加速度的注入强度;
 - `swing_limits` 使用角度制，分别控制左、右、向外和向内最大摆角;
@@ -171,20 +174,32 @@ assets/<namespace>/tlm_companionship/physics/<model-path>.json
 - `schema_version: 1` 的既有 sidecar 在未声明 `constraints` 时保持旧的无约束语义；版本 2 省略 `constraints` 时仍采用部件类型的角度约束默认值。版本 1/2 不读取 schema 3 的 `collision` 字段；新文件应使用版本 3。
 - F3+T 资源重载及 TLM 直接加载新下载的目录/ZIP 模型包都会刷新 sidecar、选择计划和实体模拟状态。
 
+## 环境风场
+
+- [`EnvironmentalWindFeature`](../../src/main/java/com/laixia/maidintelligence/feature/atmosphere/EnvironmentalWindFeature.java) 是独立氛围增强模块，通过通用 `WorldPoseDriverSource` 扩展点注册 [`EnvironmentalWindSampler`](../../src/main/java/com/laixia/maidintelligence/feature/atmosphere/client/wind/EnvironmentalWindSampler.java)。移除该 feature 只会让扩展点回退为空姿态驱动，不需要修改 `MaidBonePhysics` 或弹簧解算器。
+- 宏观风向、阵风包络和波浪前沿只由维度标识、世界坐标与 `gameTime` 生成，因此相邻女仆仍处于同一片连续风场。小尺度在现实中本来就空间去相关，所以快速层、暴风层和飑风层按实体稳定 UUID 哈希取各自的涡旋偏移（最大约 `±640 block`，暴风层取一半），再叠加约 `0.70～1.32` 的扰动增益、`±0.12 rad` 的平均风向偏置和 `0.78～1.22` 的气动响应时间差。结果是同一阵风扫过全场，但每个模型的抖动相位、幅度和迟滞都不同。该过程不创建 `Random`、不依赖墙钟，重复渲染和资源重载仍可复现。
+- 单个模型内部同样不同步：每根驱动骨骼按骨名哈希得到自己的涡旋身份，在弹簧内以 `0.32 + 5.5 × 风强` 的 Strouhal 式频率积分独立抖振相位，对受风目标施加 `±42%` 的幅度调制和 `±0.46 rad` 的摆动方位偏移。相位按 `dt` 积分而非乘以经过时间，因此阵风改变频率时不会跳相；`dt = 0` 的重复渲染沿用同一相位。摆角上限、位移上限与碰撞投影仍作用在结果之上，抖振只改变方向不放宽安全边界。
+- 环境强度综合维度基础值、插值雨量/雷暴、相对海平面高度和浸水状态。每个实体每 `15 tick` 或移动超过一格时，复用一个 `MutableBlockPos` 检查中心与四个水平偏移点的 `canSeeSky`；室内保留约 `6%` 的弱气流，浸水后仅保留约 `8%`。
+- 风场采用 [Taylor 冻结湍流近似](https://courses.ems.psu.edu/meteo300/node/737)：无周期二维梯度噪声构成约 `220 / 58 / 28 block` 的平均风向、宏观阵风和局部湍流尺度，再沿主风向平流经过实体。各层使用 `2～3` 个旋转 fBm octave，幅度按近似 Kolmogorov 速度谱的 `2^(-1/3)` 衰减。基础层始终共享，快速层仅按稳定实体哈希错开微观相位；强风再按强度平方混入共享的约 `24 block`、`14 block/s` 暴风层。接近最大风力时，额外非线性混入约 `10 block`、`42 block/s` 且与主风偏转 `25°` 的逐实体飑风层，显著提高横向抖动频率；微风不会被同步增频。另有沿主风传播、横向拉宽到约 `160 block` 的非周期阵风前沿，以 `10 block/s` 调制顺风压力和横向湍流，形成成片经过模型的波浪脉冲，而非单点随机抖动。所有层使用固定平流速度，天气渐变不会在长时间世界中跳相。最终矢量使用 `tanh` 软限幅到 `0.45`，滤波响应从平静时约 `0.38 s`、强风时约 `0.14 s` 连续缩短到最大风时约 `0.055 s`。暂停、`dt=0` 和同一动画时刻的额外 render pass 只复用当前风，不推进滤波。
+- 方案遵循 [GPU Gems 的实时随机风动画](https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-6-gpu-generated-procedural-wind-animations-trees)与低成本 [fBm 风场合成](https://doi.org/10.20870/ijvr.2011.10.1.2802)思路。Von Kármán / Dryden 更适合飞行动力学中的速度扰动谱，但需要有状态随机整形滤波；当前目标是给多实体骨骼提供共享、可复现的空间风场，因此不采用该路径。
+- 世界风使用与移动信号相同的 body-yaw 逆变换进入模型空间，然后按逐骨 `windScale`、逐骨抖振和几何安全角生成程序化动画目标；弹簧再按逐骨 `massScale` 形成不同的跟随延迟和波浪滤波。风不进入重力/惯性外力积分。摆角、总位移安全限和碰撞静止宽限始终以未受风修改的作者姿态为基准，风不能移动安全边界或把初始风致穿透登记为合法重叠。模型切换、传送、维度变化和时间轴断层会同时清空采样器与姿态信号。
+- 默认受风强度按部件区分：`HEAD_SHELL` 为零，头发、尾巴、丝带和披风较高，耳朵与裙摆适中，翅膀及通用附件保守；自动链的梢端比根部更易受风，固定式单骨附件会进一步衰减。风致目标角使用 `tanh` 软饱和，而非贴住上限的硬截断；部件安全上限约为裙摆/翅膀 `7.4°`、耳朵 `9.7°`、披风/通用部件 `11.5°`、头发/丝带 `14.9°`、尾巴 `17.2°`。裙摆同时保留更高重力倍率和约 `8°` 的向内总摆角限制，优先保持垂坠感并减少穿过身体。
+
 ## 运动信号与门控
 
 - **重力**：模型空间 `(0, −GRAVITY_POWER, 0)`；悬垂部件使用分类型倍率，`HEAD_SHELL` 仅保留近乎为零的重力，避免抬头时整块头盖向后翻;
+- **环境风**：缓存环境只低频探测，连续风向和阵风按世界时间每帧采样；世界→模型转换后乘逐骨 `windScale`，将与骨轴正交的分量转换为有安全角上限的程序化动画目标，不作为物理外力;
 - **移动惯性**：实体 `getDeltaMovement` 按 20 TPS 游戏 tick 差分并在两个 tick 之间保持，不再向渲染帧插入“尖峰后归零”的假信号；按渲染器 `180° − bodyYaw` 的逆变换转进模型空间，再取反作为滞后力；**着地时丢弃垂直分量**(避免重力/地面钳位每 tick 抖动);
 - **预设动画惯性**：在任何物理写回前按 Gecko 的 position → pivot → ZYX rotation → scale → inverse pivot 顺序构建纯动画层级。每个 driven bone 对动画枢轴位置做二阶差分，并对安装参考的四元数增量取对数得到角速度/角加速度；`α × r`、`ω × (ω × r)`、缩放径向加速度和缩放/旋转耦合项共同形成模型空间末端运动信号。相同姿态的连续渲染样本被视为动画 sample-and-hold：累计真实时间、保持上一加速度目标，只在姿态实际变化时重新求导，避免 20 TPS/不规则控制器更新被误算成“零速度→瞬时高速→零速度”脉冲。直接写在 driven bone 上的关键帧旋转仍由逐帧 `restDirection` 自然产生拖尾，显式角导数只采样其安装参考，避免同一局部旋转重复计入;
 - **分类型注入**：动画信号继续乘 `HAIR/TAIL/EAR/SKIRT/RIBBON/CAPE/WING` 类型增益和现有 `SpringProfile.inertiaScale`。枢轴平移使用 `rotationInertiaScale`，补充角项使用 `rotationInertiaScale × (1 − rotationInertiaScale)`，因此完全跟随和完全保留模型空间惯性的两个端点都不会重复注入参考旋转;
 - **转身伪力**：`wrapDegrees(yBodyRot − yBodyRotO)` × 增益,补足纯模型空间捕捉不到的转身惯性;
 - **非线性降噪**：实体移动和转身信号使用软死区、`tanh` 软限幅与 One Euro 式自适应低通；逐骨动画加速度使用同类径向软门控、`0.5` 软上限和 `40 ms` 指数低通，既保留快速甩动又抑制关键帧插值噪声;
-- **帧率与突变**：`dt` 来自 TLM 硬编码动画使用的 `tickCount + partialTick` 时间轴并 clamp 到 `0.1s`；刚度/重力/外力按 dt 缩放，阻尼和动画低通均按时间指数换算。同一动画时刻的重复或乱序渲染返回 `dt=0`，只重新覆盖当前骨骼而不再次推进 Verlet，避免多段链把不稳定的墙钟微步逐级放大。姿态保持 `125 ms` 后加速度目标开始回到零，但导数基线保留到 `250 ms`，兼容低更新率动画。首次采样、暂停、时间轴大间隔、单帧参考旋转超过 `75°`、枢轴跃迁超过 `max(0.5 block, 3 × segmentLength)` 或缩放长度比超过 `2.5` 时重建导数历史并输出零力，避免动画切换/恢复瞬间爆甩;
+- **帧率与突变**：`dt` 来自 TLM 硬编码动画使用的 `tickCount + partialTick` 时间轴并 clamp 到 `0.1s`；刚度/重力/外力按 dt 缩放，阻尼、动画低通和风场过渡均按时间指数换算。同一动画时刻的重复或乱序渲染返回 `dt=0`，只重新覆盖当前骨骼而不再次推进 Verlet 或风场，避免多段链把不稳定的墙钟微步逐级放大。姿态保持 `125 ms` 后加速度目标开始回到零，但导数基线保留到 `250 ms`，兼容低更新率动画。首次采样、暂停、时间轴大间隔、单帧参考旋转超过 `75°`、枢轴跃迁超过 `max(0.5 block, 3 × segmentLength)` 或缩放长度比超过 `2.5` 时重建导数历史并输出零力，避免动画切换/恢复瞬间爆甩;
 - **距离门控**：相机 24 格外跳过并清状态。
 
 ## 零分配热路径与性能基准
 
-- 每个活动节点持久复用 animation/rendered quaternion、纯动画与渲染层级仿射变换和运行时端点；每个 driven slot 还预分配动画局部 rotation/position 快照，并持久保存上一动画枢轴、线速度、安装参考四元数、角速度、缩放速度及滤波输出；每个实体持有零分配 `AnimationTimelineClock`，并继续复用积分方向、碰撞最近点/法线和其它向量 scratch；
+- 每个活动节点持久复用 animation/rendered quaternion、纯动画与渲染层级仿射变换和运行时端点；每个 driven slot 还预分配动画局部 rotation/position 快照，并持久保存上一动画枢轴、线速度、安装参考四元数、角速度、缩放速度及滤波输出；每个实体持有零分配 `AnimationTimelineClock`、通用姿态驱动源及世界/模型姿态向量，风模块内部再独立复用风矢量和天空探针。程序化噪声每次采样通常执行 `64` 个格点哈希，仅进入飑风区间时增至 `76` 个；不创建随机对象、数组或纹理，并继续复用积分方向、程序化目标切线、碰撞最近点/法线和其它向量 scratch；
 - `AdaptiveMotionFilter`、`MotionNoiseGate`、`MotionSignalSampler` 与 pivot 补偿提供 out 参数路径，热路径不创建 `MotionSignals`、force 向量或滤波输出对象；
 - [`BonePhysicsVerification`](../../src/test/java/com/laixia/maidintelligence/feature/physics/client/BonePhysicsVerification.java) 用测试专用旧递归解算器作为 oracle，对 `winefox` 与匿名模型逐帧比较 rotation、position 和弹簧方向；序列覆盖可变 dt、移动、转身、暂停和 pivot 补偿，容差为 `1e-5`；
 - [`BonePhysicsBenchmark`](../../src/test/java/com/laixia/maidintelligence/feature/physics/client/BonePhysicsBenchmark.java) 是独立非门禁入口，充分预热后只围绕 solver 调用报告每帧解算耗时、访问节点数和当前线程分配量，排除测试姿态重置本身的临时对象。绝对耗时受 JVM、CPU 和后台负载影响，不参与 `check` 成败。
@@ -216,7 +231,7 @@ skirt/schema3-body-only: 3741.4 ns/frame, proxies=2, allocation=0.00 B/frame
 - [`solver/collision`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/collision) 提供通用 Plane、Sphere、Capsule 及固定骨长投影；三种形状继续供 Body/Back 自动策略和 schema 3 显式代理使用；
 - 每根驱动骨持有有序的不可变 `CollisionProxySet`，可同时关联多个代理；每个代理有独立 `referenceNodeIndex`，因此不同形状可以跟随不同参考骨；
 - 自动代理仅保留躯干策略：`SKIRT` 与 `BODY_LOCAL RIBBON` 使用 Body Capsule，`CAPE` 使用 Body Capsule + Back Plane。`HAIR`、`EAR`、`HEAD_LOCAL RIBBON` 不生成头部代理，`SKIRT` 也不生成左右腿代理；schema 3 显式代理仍可按模型需要引用 Head 或 Leg；
-- 自动拟合不可把作者原始姿态当成待修复穿透：solver 首次准备或 reset 后会零分配记录每个自动代理已有的静止交叠，只阻止物理方向进一步深入。这样 `dt=0` 的首次写回保持当前动画 rotation/position 完全不变；schema 3 显式代理不使用这项宽限，仍严格服从作者边界；
+- 自动拟合不可把作者原始姿态当成待修复穿透：solver 首次准备或 reset 后会零分配记录每个自动代理已有的静止交叠，只阻止物理方向进一步深入；校准输入固定为未叠加风动画的作者方向，风致穿透不会被吸收到静止宽限。这样 `dt=0` 的首次写回保持当前动画 rotation/position 完全不变；schema 3 显式代理不使用这项宽限，仍严格服从作者边界；
 - schema 3 显式代理追加在自动代理之后；`collision.auto:false` 则仅保留有效显式代理。每个代理 reference 及其祖先都会加入最小活动骨架，包含位于受驱动骨之后的 sibling reference；
 - 每帧在任何物理偏转写回前，先捕获带代理段、实际碰撞 reference 及这些节点祖先的动画仿射增量。逐段 runtime pivot 与 segment length 包含父物理、position 补偿及非均匀 scale，碰撞投影使用实际缩放后的段长；全几何 safety lever 另按层级保守 scale 收紧末端位移角限。Plane 法线使用 inverse-transpose，Sphere / Capsule 半径使用仿射变换的保守谱尺度上界，在正交轴缩放时精确、出现剪切时不低估；
 - [`RuntimeCollisionCache`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/collision/runtime/RuntimeCollisionCache.java) 为每个代理预分配准备态：每帧只更新上述碰撞依赖节点，并把静止几何变换到运行时一次；四轮摆角/碰撞交替投影复用同一结果，不在每轮重复矩阵变换。加入纯动画运动预采样后，本次环境中完整约束路径相对 `legacy-active` 为 `2.06x`，生产热路径仍为 `0 B/frame`；
@@ -261,7 +276,7 @@ Mixin 同时把 `tail/default` 使用的 `tickCount + partialTick` 时间源传�
 
 - **`/maidphysicsdebug`** → 获得**骨骼调试棒**(带 NBT 的原版木棍,无需注册物品)。
 - **手持** → [`MaidSkeletonDebugLayer`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/MaidSkeletonDebugLayer.java) 在所有女仆身上画骨架：灰色小十字 = authored pivot；黄/紫大十字 = 自动/元数据驱动骨骼的有效 pivot；红色大十字 = 支撑端仍有歧义、已自动收紧摆角；橙线 = 推断后的物理骨轴；RGB 线 = Gecko 模型坐标轴；青线 = cube 线框。碰撞层另画亮青色 runtime segment、蓝色 Plane、绿色 Sphere、琥珀色 Capsule，以及与代理同色的 reference origin 十字；当前末端对该代理仍为负 clearance 时，整组代理改画红色。
-- **右键女仆** → [`PhysicsDebugSkeletonDump`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/PhysicsDebugSkeletonDump.java) 把实际 `modelId`、完整骨架、模型路径、`META/AUTO` 来源、裙摆/饰品结构角色与判定原因、链 ID、段序号/总数、重力倍率、最终四向摆角/参考空间/碰撞策略、主簇选择、segment length、真实链 `jointSpacing`、全几何 safety lever 和置信度写入 `run/logs/latest.log`；同一次 dump 还记录每段 runtime pivot/tip、每个代理的 `AUTOMATIC/EXPLICIT` 来源、reference、运行时几何、形状/末端半径、缩放后力臂、clearance 和穿透标记，并在聊天栏汇总骨骼、代理和穿透数量。右键只 dump、不触发其它交互。
+- **右键女仆** → [`PhysicsDebugSkeletonDump`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/PhysicsDebugSkeletonDump.java) 把实际 `modelId`、完整骨架、模型路径、`META/AUTO` 来源、裙摆/饰品结构角色与判定原因、链 ID、段序号/总数、重力/受风/质量倍率、最终四向摆角/参考空间/碰撞策略、主簇选择、segment length、真实链 `jointSpacing`、全几何 safety lever 和置信度写入 `run/logs/latest.log`；同一次 dump 还记录每段 runtime pivot/tip、每个代理的 `AUTOMATIC/EXPLICIT` 来源、reference、运行时几何、形状/末端半径、缩放后力臂、clearance 和穿透标记，并在聊天栏汇总骨骼、代理和穿透数量。右键只 dump、不触发其它交互。
 
 ## 调参
 
@@ -269,8 +284,9 @@ Mixin 同时把 `tail/default` 使用的 `tickCount + partialTick` 时间源传�
 
 | 参数 | 作用 |
 | --- | --- |
-| `STIFFNESS` | 拉回动画姿态的刚度;越大越硬、垂量/摆幅越小 |
-| `GRAVITY_POWER` | 重力强度;静止垂量 ≈ `GRAVITY_POWER / STIFFNESS` |
+| `STIFFNESS` | 拉回动画姿态的刚度；实际恢复加速度按 `stiffness / max(1, mass)` 计算 |
+| `mass_scale` | 逐骨有效质量；`> 1` 越慢越下垂并低通掉高频阵风，`< 1` 不会超过作者刚度基准 |
+| `GRAVITY_POWER` | 重力加速度；不乘质量，静态垂量由重力与 `k/m` 共同决定 |
 | `DRAG` | 惯性阻尼(0–1),越大越快停摆 |
 | `INERTIA_GAIN` / `TURN_GAIN` | 移动 / 转身摆幅 |
 | `MAX_ANGLE` / `MAX_DEFLECT_*` | 总偏转与逐轴上限(代替碰撞、防钻入身体) |
@@ -298,4 +314,4 @@ Mixin 同时把 `tail/default` 使用的 `tickCount + partialTick` 时间源传�
 ./gradlew.bat --offline cleanTest check
 ```
 
-离线校验 schema 1/2 不生成自动 Head 代理、schema 3 裙摆只生成 Body 代理、显式 Head/Leg 引用仍可用、三种代理几何和胶囊退化、自动与显式布局、父骨偏转、后序显式 Leg reference、完整 affine、非均匀 scale/剪切尺度与缩放后碰撞力臂、近切/近反向 Plane、自动 reference 安全、准备态/直接投影等价、reset、20/30/60/120 FPS 不变量及约束路径 `0 B/frame`。动画惯性另覆盖静止姿态严格零力、关键帧 position/rotation/scale 均能产生有界信号、30/60/120 FPS 峰值一致性、动画切换/暂停/恢复零假冲量，以及 TLM `tail/default` 在控制器限流期间继续更新时的六通道姿态恢复和连续物理覆盖；实际 `winefox` 七段 `Tail → Tail7` 还会用每帧 0～2 次重复渲染验证相同动画时间只推进一次、末端位移与局部旋转无累计跳变，年糕狐 `FoxTailA → Body_Tail6` 则以慢速正弦目标验证微小姿态误差无零值台阶、局部旋转步长及步长变化有界。同时覆盖接触枢轴的 `1～2 px` 间隙、宽面与单骨包头 Head Shell、年糕狐 `HairFemaleK_Matching` 的零重力低惯性档及独立刘海/马尾保留、横穿支撑体的歧义接触、远程 authored pivot、真实多骨链、OBB 主簇、微型单 cube 支撑修正、匿名复合单骨附件、歧义上生悬臂、纸板狐华服 `HUDIEJIE` 上移、`bone101/bone103` 的稳定 authored pivot 保护，以及 `bone109` 的紧凑外围支点和身份补偿。全部 27 个内置模型还会扫描每个单骨/链末端的 `axis · (visibleMassCenter - effectivePivot)`，禁止物理轴明确背离可见主体，并验证 bind pose、首次动画姿态及 reset 后的 `dt=0` rotation/position 完全不变。无主导连通簇的自动候选保持刚性、显式 metadata 可覆盖；裙摆、面具和汉服/新年左右 `MWX` 三段继续验证 authored/effective/runtime 关节分离、端点重合和单次冲量相对响应。
+离线校验 schema 1/2 不生成自动 Head 代理、schema 3 裙摆只生成 Body 代理、显式 Head/Leg 引用仍可用、三种代理几何和胶囊退化、自动与显式布局、父骨偏转、后序显式 Leg reference、完整 affine、非均匀 scale/剪切尺度与缩放后碰撞力臂、近切/近反向 Plane、自动 reference 安全、准备态/直接投影等价、reset、20/30/60/120 FPS 不变量及约束路径 `0 B/frame`。环境风另覆盖天气/海拔强度排序、维度基值、邻近空间一致性、室内和浸水衰减、软限幅、30/60/120 FPS 近似一致、`wind_scale` 边界、旧无风重载等价及风场热路径 `0 B/frame`；去同步部分验证不同实体的高频脉动相关性低于 `0.6` 而平均风向仍同向、逐实体响应时间确有差异、同名骨在相同风下不会同步摆动、无风时不产生任何逐骨差异，以及 `dt=0` 重复渲染不推进抖振相位；质量部分验证 2 Hz 阵风下轻部件跟随幅度高于重部件 20% 以上。动画惯性另覆盖静止姿态严格零力、关键帧 position/rotation/scale 均能产生有界信号、30/60/120 FPS 峰值一致性、动画切换/暂停/恢复零假冲量，以及 TLM `tail/default` 在控制器限流期间继续更新时的六通道姿态恢复和连续物理覆盖；实际 `winefox` 七段 `Tail → Tail7` 还会在持续风中用每帧 0～2 次重复渲染验证相同动画时间只推进一次、末端位移与局部旋转无累计跳变，年糕狐 `FoxTailA → Body_Tail6` 则以慢速正弦目标叠加持续风，验证微小姿态误差无零值台阶、局部旋转步长及步长变化有界。同时覆盖接触枢轴的 `1～2 px` 间隙、宽面与单骨包头 Head Shell、年糕狐 `HairFemaleK_Matching` 的零重力低惯性档及独立刘海/马尾保留、横穿支撑体的歧义接触、远程 authored pivot、真实多骨链、OBB 主簇、微型单 cube 支撑修正、匿名复合单骨附件、歧义上生悬臂、纸板狐华服 `HUDIEJIE` 上移、`bone101/bone103` 的稳定 authored pivot 保护，以及 `bone109` 的紧凑外围支点和身份补偿。全部 27 个内置模型还会扫描每个单骨/链末端的 `axis · (visibleMassCenter - effectivePivot)`，禁止物理轴明确背离可见主体，并验证 bind pose、首次动画姿态及 reset 后的 `dt=0` rotation/position 完全不变。无主导连通簇的自动候选保持刚性、显式 metadata 可覆盖；裙摆、面具和汉服/新年左右 `MWX` 三段继续验证 authored/effective/runtime 关节分离、端点重合和单次冲量相对响应。

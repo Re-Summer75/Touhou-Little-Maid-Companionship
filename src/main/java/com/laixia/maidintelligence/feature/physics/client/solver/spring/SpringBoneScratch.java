@@ -16,7 +16,10 @@ final class SpringBoneScratch {
     final Quaternionf referenceTransport = new Quaternionf();
 
     final Vector3f boneAxis = new Vector3f();
+    final Vector3f authoredRestDirection = new Vector3f();
     final Vector3f restDirection = new Vector3f();
+    final Vector3f poseDriveTangent = new Vector3f();
+    final Vector3f poseDriveBinormal = new Vector3f();
     final Vector3f nextDirection = new Vector3f();
     final Vector3f localDirection = new Vector3f();
     final Vector3f deflectionAxis = new Vector3f();

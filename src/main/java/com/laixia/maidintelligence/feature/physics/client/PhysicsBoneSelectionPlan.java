@@ -173,6 +173,14 @@ public final class PhysicsBoneSelectionPlan {
         }
 
         private static SwingLimits defaults(PartType type) {
+            if (type == PartType.SKIRT) {
+                return new SwingLimits(
+                        0.45F,
+                        0.45F,
+                        0.55F,
+                        0.14F
+                );
+            }
             float inward = switch (type) {
                 case HEAD_SHELL -> 0.08F;
                 case HAIR -> 0.28F;
@@ -407,46 +415,119 @@ public final class PhysicsBoneSelectionPlan {
     }
 
     /**
-     * Multipliers over the solver's global constants. Large roots and wings
-     * need much smaller angular motion than a thin tail segment.
+     * Multipliers over the solver's global constants. Mass is kept separate
+     * from aerodynamic coupling so heavy parts can lag without weakening the
+     * wind field itself.
      */
     public record SpringProfile(
             float stiffnessScale,
             float gravityScale,
+            float windScale,
+            float massScale,
             float dragScale,
             float inertiaScale,
             float turnScale,
             float angleScale,
             float tipDisplacementScale
     ) {
+        public SpringProfile(
+                float stiffnessScale,
+                float gravityScale,
+                float dragScale,
+                float inertiaScale,
+                float turnScale,
+                float angleScale,
+                float tipDisplacementScale
+        ) {
+            this(
+                    stiffnessScale,
+                    gravityScale,
+                    1.0F,
+                    1.0F,
+                    dragScale,
+                    inertiaScale,
+                    turnScale,
+                    angleScale,
+                    tipDisplacementScale
+            );
+        }
+
+        public SpringProfile(
+                float stiffnessScale,
+                float gravityScale,
+                float windScale,
+                float dragScale,
+                float inertiaScale,
+                float turnScale,
+                float angleScale,
+                float tipDisplacementScale
+        ) {
+            this(
+                    stiffnessScale,
+                    gravityScale,
+                    windScale,
+                    1.0F,
+                    dragScale,
+                    inertiaScale,
+                    turnScale,
+                    angleScale,
+                    tipDisplacementScale
+            );
+        }
+
+        public SpringProfile {
+            windScale = Float.isFinite(windScale)
+                    ? Math.max(0.0F, Math.min(4.0F, windScale))
+                    : 1.0F;
+            massScale = Float.isFinite(massScale)
+                    ? Math.max(0.25F, Math.min(4.0F, massScale))
+                    : 1.0F;
+        }
+
+        /**
+         * Solver-facing name for the optional procedural pose channel.
+         */
+        public float poseDriveScale() {
+            return windScale;
+        }
+
         public static SpringProfile defaults(PartType type) {
             return switch (type) {
                 case HEAD_SHELL -> new SpringProfile(
-                        2.20F, 0.0F, 1.50F, 0.25F, 0.25F, 0.28F, 0.45F
+                        2.20F, 0.0F, 0.0F, 1.50F, 1.50F,
+                        0.25F, 0.25F, 0.28F, 0.45F
                 );
                 case HAIR -> new SpringProfile(
-                        1.00F, 1.00F, 1.00F, 1.00F, 1.00F, 1.00F, 1.00F
+                        1.00F, 1.00F, 1.45F, 0.80F, 1.00F,
+                        1.00F, 1.00F, 1.00F, 1.00F
                 );
                 case TAIL -> new SpringProfile(
-                        0.85F, 0.70F, 0.85F, 1.20F, 1.20F, 1.10F, 1.20F
+                        0.85F, 0.70F, 1.65F, 1.00F, 0.85F,
+                        1.20F, 1.20F, 1.10F, 1.20F
                 );
                 case EAR -> new SpringProfile(
-                        1.40F, 0.35F, 1.25F, 0.60F, 0.70F, 0.55F, 0.65F
+                        1.40F, 0.35F, 0.75F, 0.90F, 1.25F,
+                        0.60F, 0.70F, 0.55F, 0.65F
                 );
                 case SKIRT -> new SpringProfile(
-                        1.20F, 0.70F, 1.10F, 0.70F, 0.80F, 0.70F, 1.00F
+                        1.20F, 1.15F, 0.90F, 1.35F, 1.10F,
+                        0.70F, 0.80F, 0.70F, 1.00F
                 );
                 case RIBBON -> new SpringProfile(
-                        0.90F, 0.45F, 0.90F, 1.20F, 1.30F, 1.00F, 0.80F
+                        0.90F, 0.45F, 1.70F, 0.65F, 0.90F,
+                        1.20F, 1.30F, 1.00F, 0.80F
                 );
                 case CAPE -> new SpringProfile(
-                        0.85F, 0.80F, 0.95F, 1.00F, 1.00F, 0.85F, 1.10F
+                        0.85F, 0.80F, 1.55F, 1.30F, 0.95F,
+                        1.00F, 1.00F, 0.85F, 1.10F
                 );
                 case WING -> new SpringProfile(
-                        1.60F, 0.15F, 1.30F, 0.45F, 0.80F, 0.40F, 0.70F
+                        1.60F, 0.15F, 0.45F, 1.80F, 1.30F,
+                        0.45F, 0.80F, 0.40F, 0.70F
                 );
                 case GENERIC -> new SpringProfile(
-                        1.00F, 0.70F, 1.00F, 0.85F, 0.85F, 0.75F, 0.90F
+                        1.00F, 0.70F, 0.55F, 1.00F, 1.00F,
+                        0.85F, 0.85F, 0.75F, 0.90F
                 );
             };
         }
@@ -455,6 +536,8 @@ public final class PhysicsBoneSelectionPlan {
             return new SpringProfile(
                     stiffnessScale * override.stiffnessScale,
                     gravityScale * override.gravityScale,
+                    windScale * override.windScale,
+                    massScale * override.massScale,
                     dragScale * override.dragScale,
                     inertiaScale * override.inertiaScale,
                     turnScale * override.turnScale,
@@ -464,7 +547,10 @@ public final class PhysicsBoneSelectionPlan {
         }
 
         public static SpringProfile identity() {
-            return new SpringProfile(1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F);
+            return new SpringProfile(
+                    1.0F, 1.0F, 1.0F, 1.0F, 1.0F,
+                    1.0F, 1.0F, 1.0F, 1.0F
+            );
         }
     }
 

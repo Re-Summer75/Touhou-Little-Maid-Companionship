@@ -1,5 +1,6 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
+import com.laixia.maidintelligence.feature.atmosphere.client.wind.EnvironmentalWindField;
 import com.laixia.maidintelligence.feature.physics.client.SecondaryMotionFixture.Fixture;
 import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxies;
 import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySet;
@@ -14,6 +15,8 @@ import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVeri
 final class SecondaryMotionAllocationVerification {
     private static final int WARMUP_FRAMES = 20_000;
     private static final int MEASURED_FRAMES = 4_000;
+    private static final Vector3f WIND =
+            new Vector3f(0.04F, 0.0F, -0.015F);
 
     private SecondaryMotionAllocationVerification() {
     }
@@ -58,6 +61,7 @@ final class SecondaryMotionAllocationVerification {
                         + allocated + " bytes"
         );
         verifyGenericProxyAllocation(bean, threadId);
+        verifyWindFieldAllocation(bean, threadId);
     }
 
     private static void solveFrame(
@@ -92,6 +96,7 @@ final class SecondaryMotionAllocationVerification {
         fixture.hair().setScaleZ(1.0F);
         fixture.solver().solve(
                 acceleration,
+                WIND,
                 0.15F,
                 timeline.advance(frame / 3.0D, false),
                 false
@@ -161,6 +166,50 @@ final class SecondaryMotionAllocationVerification {
                 allocated == 0L,
                 "Generic multi-proxy hot path allocated "
                         + allocated + " bytes"
+        );
+    }
+
+    private static void verifyWindFieldAllocation(
+            com.sun.management.ThreadMXBean bean,
+            long threadId
+    ) {
+        Vector3f target = new Vector3f();
+        Vector3f filtered = new Vector3f();
+        for (int frame = 0; frame < WARMUP_FRAMES; frame++) {
+            sampleWindFrame(target, filtered, frame);
+        }
+        bean.getThreadAllocatedBytes(threadId);
+        long before = bean.getThreadAllocatedBytes(threadId);
+        for (int frame = 0; frame < MEASURED_FRAMES; frame++) {
+            sampleWindFrame(target, filtered, WARMUP_FRAMES + frame);
+        }
+        long allocated = bean.getThreadAllocatedBytes(threadId) - before;
+        require(
+                allocated == 0L,
+                "Environmental wind hot path allocated "
+                        + allocated + " bytes"
+        );
+    }
+
+    private static void sampleWindFrame(
+            Vector3f target,
+            Vector3f filtered,
+            int frame
+    ) {
+        EnvironmentalWindField.targetInto(
+                48.0D,
+                -32.0D,
+                frame / 3.0D,
+                991,
+                1171,
+                0.06F,
+                target
+        );
+        EnvironmentalWindField.smoothInto(
+                filtered,
+                target,
+                1.0F / 60.0F,
+                filtered
         );
     }
 

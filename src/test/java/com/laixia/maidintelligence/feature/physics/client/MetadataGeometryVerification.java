@@ -12,6 +12,8 @@ final class MetadataGeometryVerification {
 
     static void run() {
         verifiesMetadataParsing();
+        verifiesWindScaleBounds();
+        verifiesMassScaleBounds();
         verifiesSchemaOneConstraintCompatibility();
         verifiesSchemaThreeCollisionParsing();
         verifiesOlderSchemasIgnoreCollision();
@@ -74,6 +76,8 @@ final class MetadataGeometryVerification {
                             "include_descendants": true,
                             "profile": {
                               "stiffness_scale": 0.75,
+                              "wind_scale": 2.25,
+                              "mass_scale": 1.6,
                               "angle_scale": 0.5
                             },
                             "constraints": {
@@ -114,6 +118,14 @@ final class MetadataGeometryVerification {
                 "Metadata angle scale was not parsed"
         );
         require(
+                Math.abs(chain.profile().windScale() - 2.25F) < 1.0E-5F,
+                "Metadata wind scale was not parsed"
+        );
+        require(
+                Math.abs(chain.profile().massScale() - 1.6F) < 1.0E-5F,
+                "Metadata mass scale was not parsed"
+        );
+        require(
                 chain.constraints().simulationSpace()
                         == PhysicsBoneSelectionPlan.SimulationSpace.HEAD_LOCAL,
                 "Metadata simulation space was not parsed"
@@ -134,6 +146,64 @@ final class MetadataGeometryVerification {
                 chain.constraints().backstop()
                         && !chain.constraints().headCollision(),
                 "Metadata collision switches were not parsed"
+        );
+    }
+
+    private static void verifiesWindScaleBounds() {
+        PhysicsMetadata metadata = PhysicsMetadata.parse(
+                JsonParser.parseString("""
+                        {
+                          "schema_version":3,
+                          "chains":[
+                            {
+                              "id":"strong",
+                              "root":"Hair",
+                              "profile":{"wind_scale":9.0}
+                            },
+                            {
+                              "id":"disabled",
+                              "root":"Tail",
+                              "profile":{"wind_scale":-2.0}
+                            }
+                          ]
+                        }
+                        """).getAsJsonObject(),
+                "wind scale bounds verification"
+        );
+        require(
+                metadata.chains().get(0).profile().windScale() == 4.0F
+                        && metadata.chains().get(1).profile().windScale()
+                        == 0.0F,
+                "Metadata wind_scale was not clamped to 0-4"
+        );
+    }
+
+    private static void verifiesMassScaleBounds() {
+        PhysicsMetadata metadata = PhysicsMetadata.parse(
+                JsonParser.parseString("""
+                        {
+                          "schema_version":3,
+                          "chains":[
+                            {
+                              "id":"heavy",
+                              "root":"Cape",
+                              "profile":{"mass_scale":9.0}
+                            },
+                            {
+                              "id":"light",
+                              "root":"Ribbon",
+                              "profile":{"mass_scale":0.0}
+                            }
+                          ]
+                        }
+                        """).getAsJsonObject(),
+                "mass scale bounds verification"
+        );
+        require(
+                metadata.chains().get(0).profile().massScale() == 4.0F
+                        && metadata.chains().get(1).profile().massScale()
+                        == 0.25F,
+                "Metadata mass_scale was not clamped to 0.25-4"
         );
     }
 

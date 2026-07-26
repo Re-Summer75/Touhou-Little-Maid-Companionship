@@ -176,6 +176,8 @@ final class AccessoryChainIndependenceVerification {
                         > last.profile().stiffnessScale()
                         && first.profile().dragScale()
                         > last.profile().dragScale()
+                        && first.profile().massScale()
+                        > last.profile().massScale()
                         && first.profile().inertiaScale()
                         < last.profile().inertiaScale()
                         && first.profile().angleScale()

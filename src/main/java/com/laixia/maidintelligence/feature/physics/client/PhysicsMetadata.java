@@ -131,12 +131,18 @@ public final class PhysicsMetadata {
         return new PhysicsBoneSelectionPlan.SpringProfile(
                 scale(profile, "stiffness_scale"),
                 scale(profile, "gravity_scale"),
+                scale(profile, "wind_scale"),
+                massScale(profile),
                 scale(profile, "drag_scale"),
                 scale(profile, "inertia_scale"),
                 scale(profile, "turn_scale"),
                 scale(profile, "angle_scale"),
                 scale(profile, "tip_displacement_scale")
         );
+    }
+
+    private static float massScale(JsonObject profile) {
+        return number(profile, "mass_scale", 1.0F, 0.25F, 4.0F);
     }
 
     private static float scale(JsonObject object, String key) {

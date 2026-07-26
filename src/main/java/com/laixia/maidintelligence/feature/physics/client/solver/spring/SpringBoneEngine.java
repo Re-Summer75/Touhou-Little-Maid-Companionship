@@ -10,6 +10,7 @@ import org.joml.Vector3f;
 public final class SpringBoneEngine {
     private final SpringBoneContext context;
     private final Vector3f debugDirection = new Vector3f();
+    private final Vector3f zeroPoseDrive = new Vector3f();
 
     public SpringBoneEngine(
             PhysicsSolverLayout layout,
@@ -24,9 +25,26 @@ public final class SpringBoneEngine {
             float dt,
             boolean paused
     ) {
+        solve(
+                modelAcceleration,
+                zeroPoseDrive,
+                yawRate,
+                dt,
+                paused
+        );
+    }
+
+    public void solve(
+            Vector3f modelAcceleration,
+            Vector3f modelPoseDrive,
+            float yawRate,
+            float dt,
+            boolean paused
+    ) {
         SpringBoneFrameRunner.solve(
                 context,
                 modelAcceleration,
+                modelPoseDrive,
                 yawRate,
                 dt,
                 paused

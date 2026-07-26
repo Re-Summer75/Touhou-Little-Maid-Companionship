@@ -20,6 +20,10 @@ final class SpringBoneState {
     final Vector3f[] previousDirections;
     final float[] previousDeltaSeconds;
     final boolean[] initialized;
+    /** Integrated buffeting phase per bone; only stepped frames advance it. */
+    final double[] turbulencePhases;
+    /** Stable per-bone eddy identity, resolved once to keep frames allocation-free. */
+    final int[] turbulenceSeeds;
     int referenceGeneration;
 
     SpringBoneState(PhysicsSolverLayout layout) {
@@ -47,6 +51,15 @@ final class SpringBoneState {
         }
         previousDeltaSeconds = new float[drivenCount];
         initialized = new boolean[drivenCount];
+        turbulencePhases = new double[drivenCount];
+        turbulenceSeeds = new int[drivenCount];
+        for (int index = 0; index < activeCount; index++) {
+            PhysicsSolverLayout.Node node = layout.node(index);
+            if (node.driven()) {
+                turbulenceSeeds[node.drivenSlot()] =
+                        node.bone().getName().hashCode();
+            }
+        }
     }
 
     void beginReferenceFrame(boolean constraintsEnabled) {
@@ -85,6 +98,7 @@ final class SpringBoneState {
             previousDirections[slot].zero();
             previousDeltaSeconds[slot] = 0.0F;
             initialized[slot] = false;
+            turbulencePhases[slot] = 0.0D;
         }
         for (int index = 0;
              index < previousReferenceOrientations.length;

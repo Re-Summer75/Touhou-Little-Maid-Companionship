@@ -29,7 +29,7 @@
 - [女仆模型逐面外法线修正](shading/README.md)
   - 按实际面顶点重新计算外法线与外向绕序
   - 弱键缓存与 Sodium/Embeddium 精确回退
-- [女仆骨骼物理](physics/README.md)
+- [环境风与女仆骨骼物理](physics/README.md)
   - VRM 弹簧骨二级动作（尾巴、头发、耳朵）
   - 刚度拉回动画、逐骨骼解算、力臂归一化
   - 骨骼链判定、调试棒与调参

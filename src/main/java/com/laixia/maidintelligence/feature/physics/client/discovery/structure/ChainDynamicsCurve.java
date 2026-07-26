@@ -48,6 +48,8 @@ final class ChainDynamicsCurve {
                 new PhysicsBoneSelectionPlan.SpringProfile(
                         lerp(1.22F, 0.72F, t),
                         lerp(0.65F, 1.00F, t),
+                        lerp(0.35F, 1.35F, t),
+                        lerp(1.20F, 0.70F, t),
                         lerp(1.18F, 0.78F, t),
                         lerp(0.72F, 1.22F, t),
                         lerp(0.76F, 1.18F, t),
@@ -86,8 +88,9 @@ final class ChainDynamicsCurve {
         }
         PhysicsBoneSelectionPlan.SpringProfile conservative =
                 new PhysicsBoneSelectionPlan.SpringProfile(
-                1.35F, 0.65F, 1.25F, 0.65F, 0.65F, 0.42F, 0.48F
-        );
+                        1.35F, 0.65F, 0.25F, 1.25F, 1.25F,
+                        0.65F, 0.65F, 0.42F, 0.48F
+                );
         return decision.withDynamics(
                 decision.profile().multiply(conservative),
                 withRotationInertia(

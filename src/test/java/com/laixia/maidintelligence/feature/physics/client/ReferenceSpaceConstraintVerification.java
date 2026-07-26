@@ -18,6 +18,7 @@ final class ReferenceSpaceConstraintVerification {
         verifiesSlowReferenceRotationAccumulates();
         verifiesMicroscopicReferenceRotationAccumulates();
         verifiesAsymmetricSwingAndVelocityWriteBack();
+        verifiesPoseDriveCannotMoveConstraintFrame();
         verifiesRenderedRotationMatchesProjectedDirection();
     }
 
@@ -168,6 +169,42 @@ final class ReferenceSpaceConstraintVerification {
                 "Asymmetric inward swing limit was exceeded: "
                         + Math.toDegrees(inwardAngle) + " degrees, "
                         + current + ", outward=" + outward
+        );
+    }
+
+    private static void verifiesPoseDriveCannotMoveConstraintFrame() {
+        Fixture fixture = SecondaryMotionFixture.create(
+                8.0F,
+                0.0F,
+                false,
+                false
+        );
+        Vector3f rest = fixture.hairNode().axisInto(new Vector3f());
+        Vector3f outward = fixture.hairNode().constraint()
+                .outwardDirection(new Quaternionf(), new Vector3f());
+        Vector3f inwardWind = new Vector3f(outward).mul(-0.45F);
+        Vector3f acceleration = new Vector3f();
+        Vector3f current = new Vector3f();
+
+        for (int frame = 0; frame < 90; frame++) {
+            SecondaryMotionFixture.resetPose(fixture, 0.0F);
+            fixture.solver().solve(
+                    acceleration,
+                    inwardWind,
+                    0.0F,
+                    1.0F / 60.0F,
+                    false
+            );
+        }
+        copyCurrent(fixture, current);
+        float inwardAngle = (float) Math.atan2(
+                Math.max(0.0F, -current.dot(outward)),
+                Math.max(EPSILON, current.dot(rest))
+        );
+        require(
+                inwardAngle <= Math.toRadians(8.1D),
+                "Pose drive moved the asymmetric constraint frame: "
+                        + Math.toDegrees(inwardAngle) + " degrees"
         );
     }
 

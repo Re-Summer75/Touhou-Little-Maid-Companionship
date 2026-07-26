@@ -33,14 +33,14 @@ final class SpringConstraintProjector {
              iteration++) {
             boolean swingCorrected = constraint.projectSwing(
                     direction,
-                    scratch.restDirection,
+                    scratch.authoredRestDirection,
                     boneOrientation,
                     scratch.constraintRight
             );
             boolean safetyCorrected = constraint.enabled()
                     && projectMaximumSwing(
                     direction,
-                    scratch.restDirection,
+                    scratch.authoredRestDirection,
                     maximumCosine,
                     maximumSine,
                     scratch.localDirection

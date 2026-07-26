@@ -31,6 +31,27 @@ public final class SpringBoneSolver {
         engine.solve(modelAcceleration, yawRate, dt, paused);
     }
 
+    /**
+     * Solves against an optional procedural model-space pose target. The pose
+     * signal moves the animation rest direction and is not integrated as a
+     * physical force.
+     */
+    public void solve(
+            Vector3f modelAcceleration,
+            Vector3f modelPoseDrive,
+            float yawRate,
+            float dt,
+            boolean paused
+    ) {
+        engine.solve(
+                modelAcceleration,
+                modelPoseDrive,
+                yawRate,
+                dt,
+                paused
+        );
+    }
+
     public void reset() {
         engine.reset();
     }
