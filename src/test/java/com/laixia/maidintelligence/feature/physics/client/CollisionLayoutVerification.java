@@ -4,11 +4,14 @@ final class CollisionLayoutVerification {
     private CollisionLayoutVerification() {
     }
 
-    static void run() {
+    static void run() throws Exception {
         AutomaticCollisionLayoutVerification.run();
         AutomaticReferenceSafetyVerification.run();
-        HeadCapsuleLayoutVerification.run();
+        HeadMeshCollisionVerification.run();
+        MeshCollisionVerification.run();
+        ClothLayerCollisionVerification.run();
         CollisionSchemaCompatibilityVerification.run();
         ExplicitCollisionLayoutVerification.run();
+        SqueezedContactVerification.run();
     }
 }

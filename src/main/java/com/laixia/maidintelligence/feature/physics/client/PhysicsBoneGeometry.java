@@ -73,7 +73,8 @@ public final class PhysicsBoneGeometry {
                     mutableNode.pivot,
                     mutableNode.bounds,
                     mutableNode.subtreeBounds,
-                    mutableNode.maxChainDepth
+                    mutableNode.maxChainDepth,
+                    mutableNode.cubeBoxes
             );
             nodes.put(node.bone(), node);
             nodeList.add(node);
@@ -159,14 +160,15 @@ public final class PhysicsBoneGeometry {
         Vector3f pivot = transform.transformPosition(
                 new Vector3f(pivotX, pivotY, pivotZ)
         );
-        Bounds bounds = measure(bone.geoBone().cubes(), transform);
+        List<CubeBox> cubeBoxes = measureCubes(bone.geoBone().cubes(), transform);
         MutableNode node = new MutableNode(
                 bone,
                 parent,
                 path,
                 depth,
                 pivot,
-                bounds
+                measure(cubeBoxes),
+                cubeBoxes
         );
         nodes.put(bone, node);
         ordered.add(node);
@@ -184,25 +186,62 @@ public final class PhysicsBoneGeometry {
         }
     }
 
-    private static Bounds measure(GeoMesh mesh, Matrix4f transform) {
-        Bounds bounds = Bounds.EMPTY;
+    /**
+     * Each cube keeps its own edge frame, so a rotated or thin piece stays an
+     * exact box instead of collapsing into a loose axis-aligned hull.
+     */
+    private static List<CubeBox> measureCubes(GeoMesh mesh, Matrix4f transform) {
+        List<CubeBox> boxes = new ArrayList<>(mesh.getCubeCount());
         for (int cube = 0; cube < mesh.getCubeCount(); cube++) {
-            Vector3f position = mesh.position(cube);
-            Vector3f dx = mesh.dx(cube);
-            Vector3f dy = mesh.dy(cube);
-            Vector3f dz = mesh.dz(cube);
+            Vector3f corner = transform.transformPosition(
+                    new Vector3f(mesh.position(cube))
+            );
+            Vector3f dx = transform.transformDirection(
+                    new Vector3f(mesh.dx(cube))
+            );
+            Vector3f dy = transform.transformDirection(
+                    new Vector3f(mesh.dy(cube))
+            );
+            Vector3f dz = transform.transformDirection(
+                    new Vector3f(mesh.dz(cube))
+            );
+            Vector3f center = new Vector3f(corner)
+                    .fma(0.5F, dx)
+                    .fma(0.5F, dy)
+                    .fma(0.5F, dz);
+            boxes.add(new CubeBox(
+                    center,
+                    axis(dx, 1.0F, 0.0F, 0.0F),
+                    axis(dy, 0.0F, 1.0F, 0.0F),
+                    axis(dz, 0.0F, 0.0F, 1.0F),
+                    new Vector3f(
+                            dx.length() * 0.5F,
+                            dy.length() * 0.5F,
+                            dz.length() * 0.5F
+                    )
+            ));
+        }
+        return List.copyOf(boxes);
+    }
+
+    private static Vector3f axis(
+            Vector3f edge,
+            float fallbackX,
+            float fallbackY,
+            float fallbackZ
+    ) {
+        float length = edge.length();
+        return length <= EPSILON
+                ? new Vector3f(fallbackX, fallbackY, fallbackZ)
+                : new Vector3f(edge).div(length);
+    }
+
+    private static Bounds measure(List<CubeBox> cubeBoxes) {
+        Bounds bounds = Bounds.EMPTY;
+        Vector3f point = new Vector3f();
+        for (CubeBox box : cubeBoxes) {
             for (int corner = 0; corner < 8; corner++) {
-                Vector3f point = new Vector3f(position);
-                if ((corner & 1) != 0) {
-                    point.add(dx);
-                }
-                if ((corner & 2) != 0) {
-                    point.add(dy);
-                }
-                if ((corner & 4) != 0) {
-                    point.add(dz);
-                }
-                transform.transformPosition(point);
+                box.corner(corner, point);
                 bounds = bounds.include(point);
             }
         }
@@ -368,7 +407,8 @@ public final class PhysicsBoneGeometry {
             Vector3f pivot,
             Bounds bounds,
             Bounds subtreeBounds,
-            int maxChainDepth
+            int maxChainDepth,
+            List<CubeBox> cubeBoxes
     ) {
         public boolean hasGeometry() {
             return bone.geoBone().cubes().getCubeCount() > 0 && !bounds.isEmpty();
@@ -398,6 +438,43 @@ public final class PhysicsBoneGeometry {
                 cursor = cursor.parent;
             }
             return false;
+        }
+    }
+
+    /**
+     * One rest-pose cube as an oriented box in model space.
+     */
+    public record CubeBox(
+            Vector3f center,
+            Vector3f axisX,
+            Vector3f axisY,
+            Vector3f axisZ,
+            Vector3f half
+    ) {
+        public Vector3f corner(int index, Vector3f output) {
+            return output.set(center)
+                    .fma((index & 1) == 0 ? -half.x : half.x, axisX)
+                    .fma((index & 2) == 0 ? -half.y : half.y, axisY)
+                    .fma((index & 4) == 0 ? -half.z : half.z, axisZ);
+        }
+
+        /** Conservative axis-aligned half extents, used for cheap culling. */
+        public Vector3f axisAlignedHalf(Vector3f output) {
+            return output.set(
+                    Math.abs(axisX.x) * half.x
+                            + Math.abs(axisY.x) * half.y
+                            + Math.abs(axisZ.x) * half.z,
+                    Math.abs(axisX.y) * half.x
+                            + Math.abs(axisY.y) * half.y
+                            + Math.abs(axisZ.y) * half.z,
+                    Math.abs(axisX.z) * half.x
+                            + Math.abs(axisY.z) * half.y
+                            + Math.abs(axisZ.z) * half.z
+            );
+        }
+
+        public double volume() {
+            return 8.0D * half.x * half.y * half.z;
         }
     }
 
@@ -502,6 +579,7 @@ public final class PhysicsBoneGeometry {
         private final int depth;
         private final Vector3f pivot;
         private final Bounds bounds;
+        private final List<CubeBox> cubeBoxes;
         private Bounds subtreeBounds = Bounds.EMPTY;
         private int maxChainDepth;
 
@@ -511,7 +589,8 @@ public final class PhysicsBoneGeometry {
                 String path,
                 int depth,
                 Vector3f pivot,
-                Bounds bounds
+                Bounds bounds,
+                List<CubeBox> cubeBoxes
         ) {
             this.bone = bone;
             this.parent = parent;
@@ -519,6 +598,7 @@ public final class PhysicsBoneGeometry {
             this.depth = depth;
             this.pivot = pivot;
             this.bounds = bounds;
+            this.cubeBoxes = cubeBoxes;
         }
     }
 }

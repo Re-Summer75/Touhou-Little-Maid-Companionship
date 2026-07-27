@@ -32,6 +32,8 @@ final class CollisionProxyFrameworkVerification {
         verifiesSphereProjection();
         verifiesCapsuleProjection();
         verifiesCapsuleAxisCrossing();
+        verifiesBoxProjection();
+        verifiesBoxCornerProjection();
         verifiesMultipleProxyAssociation();
         verifiesIndependentReferenceOrientation();
         verifiesDegenerateCapsule();
@@ -81,6 +83,29 @@ final class CollisionProxyFrameworkVerification {
         verifyProjection(proxy, new Vector3f(-1.0F, 0.0F, 0.0F));
     }
 
+    private static void verifiesBoxProjection() {
+        verifyProjection(box(0), new Vector3f(0.0F, 0.0F, -1.0F));
+    }
+
+    /**
+     * A tip aimed at a corner has to leave along the diagonal, which is the
+     * case the plane linearisation has to iterate to solve.
+     */
+    private static void verifiesBoxCornerProjection() {
+        CollisionProxy proxy = CollisionProxies.box(
+                0,
+                new Vector3f(1.4F, 1.4F, 0.0F),
+                new Vector3f(),
+                new Vector3f(1.0F, 1.0F, 1.0F),
+                0.0F,
+                1.0F
+        );
+        verifyProjection(
+                proxy,
+                new Vector3f(-1.0F, -1.0F, 0.0F).normalize()
+        );
+    }
+
     private static void verifiesMultipleProxyAssociation() {
         CollisionProxySet proxies = new CollisionProxySet(
                 CollisionProxies.plane(
@@ -99,9 +124,10 @@ final class CollisionProxyFrameworkVerification {
                         0.0F,
                         1.0F
                 ),
-                capsule(-1)
+                capsule(-1),
+                box(1)
         );
-        require(proxies.proxyCount() == 3,
+        require(proxies.proxyCount() == 4,
                 "One bone did not retain all collision proxies");
         for (CollisionProxyKind kind : CollisionProxyKind.values()) {
             require(proxies.hasKind(kind),
@@ -110,7 +136,8 @@ final class CollisionProxyFrameworkVerification {
         require(
                 proxies.proxy(0).referenceNodeIndex() == 0
                         && proxies.proxy(1).referenceNodeIndex() == 1
-                        && proxies.proxy(2).referenceNodeIndex() == -1,
+                        && proxies.proxy(2).referenceNodeIndex() == -1
+                        && proxies.proxy(3).referenceNodeIndex() == 1,
                 "Per-proxy reference node indices were not preserved"
         );
     }
@@ -185,6 +212,20 @@ final class CollisionProxyFrameworkVerification {
                 origin,
                 new Vector3f(2.0F, 0.0F, 0.0F),
                 new Vector3f(-1.0F, 0.0F, 0.0F)
+        );
+        verifyPreparedEquivalent(
+                CollisionProxies.box(
+                        0, origin, new Vector3f(0.0F, 0.0F, 1.6F),
+                        new Vector3f(),
+                        new Vector3f(1.0F, 0.0F, 0.0F),
+                        new Vector3f(0.0F, 1.0F, 0.0F),
+                        new Vector3f(0.0F, 0.0F, 1.0F),
+                        new Vector3f(1.0F, 1.0F, 1.0F),
+                        0.0F, 1.0F
+                ),
+                origin,
+                new Vector3f(0.0F, 0.0F, 1.6F),
+                new Vector3f(0.0F, 0.0F, -1.0F)
         );
     }
 
@@ -263,6 +304,17 @@ final class CollisionProxyFrameworkVerification {
                 ),
                 expected, EPSILON,
                 "Prepared Plane normal skipped inverse-transpose"
+        );
+    }
+
+    private static CollisionProxy box(int referenceNodeIndex) {
+        return CollisionProxies.box(
+                referenceNodeIndex,
+                new Vector3f(0.0F, 0.0F, 1.6F),
+                new Vector3f(),
+                new Vector3f(1.0F, 1.0F, 1.0F),
+                0.0F,
+                1.0F
         );
     }
 

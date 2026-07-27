@@ -4,6 +4,7 @@ import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedG
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
 import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySet;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.MODEL_DIRECTORY;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadGeoModel;
@@ -19,6 +20,108 @@ final class ClothAccessoryDiscoveryVerification {
         verifiesWinefoxMasks();
         verifiesSkirtFixtures();
         verifiesWinefoxSkirtChain();
+        verifiesFrontSkirtChainsRunToTheHem();
+        verifiesVolumetricWaistAndRigidClothMount();
+    }
+
+    /**
+     * Every spatial scorer rewards geometry behind the body, so a front skirt
+     * panel stops looking soft on its own a segment or two down. Continuation
+     * must not depend on that, or the front of a skirt freezes while its
+     * mirror image at the back keeps swinging.
+     */
+    private static void verifiesFrontSkirtChainsRunToTheHem()
+            throws Exception {
+        Fixture fixture = discover("winefox.json");
+        requireChain(fixture, "FR", "FR1", "FR2");
+        requireChain(fixture, "FL", "FL1", "FL2");
+        requireChain(fixture, "FM", "FM1", "FM2");
+        requireChain(fixture, "RF", "RF2", "RF3");
+        requireChain(discover("winefox_momo.json"), "BL", "BL2", "BL3");
+    }
+
+    private static void requireChain(Fixture fixture, String... names) {
+        String chainId = null;
+        for (int index = 0; index < names.length; index++) {
+            String name = names[index];
+            requireSkirt(fixture, name);
+            PhysicsBoneSelectionPlan.Decision decision =
+                    fixture.plan().decision(fixture.bone(name));
+            if (chainId == null) {
+                chainId = decision.chainId();
+            }
+            require(
+                    chainId.equals(decision.chainId())
+                            && decision.chainSegment().index() == index
+                            && decision.chainSegment().count()
+                            >= names.length,
+                    name + " left the chain rooted at " + names[0] + ": "
+                            + decision
+            );
+        }
+    }
+
+    /**
+     * Salesperson Winefox builds the lower jacket from thick body cubes under
+     * an anonymous {@code jk2} bone. Its compact {@code cloth} waist ring is a
+     * shared mount for four long panels; rotating that ring would lean every
+     * panel around the torso centre and force the opposite side through it.
+     */
+    private static void verifiesVolumetricWaistAndRigidClothMount()
+            throws Exception {
+        Fixture fixture = discover("winefox_salesperson.json");
+        requireRigid(fixture, "jk");
+        requireRigid(fixture, "jk2");
+        requireRigidClothMount(fixture);
+        Fixture schoolUniform = discover("winefox_jk.json");
+        requireRigid(schoolUniform, "jk2");
+        requireRigidClothMount(schoolUniform);
+        Fixture survivor = discover("winefox_survivor.json");
+        requireRigid(survivor, "jk2");
+        requireRigidClothMount(survivor);
+
+        PhysicsSolverLayout layout = PhysicsSolverLayout.build(
+                fixture.model(),
+                fixture.plan()
+        );
+        requireMeshReference(layout, fixture, "FrontClothe", "jk2");
+    }
+
+    private static void requireRigidClothMount(Fixture fixture) {
+        requireRigidMount(fixture, "cloth");
+        requireSkirt(fixture, "RightClothe");
+        requireSkirt(fixture, "LeftClothe");
+        requireSkirt(fixture, "FrontClothe");
+        requireSkirt(fixture, "BackClothe");
+    }
+
+    private static void requireMeshReference(
+            PhysicsSolverLayout layout,
+            Fixture fixture,
+            String driven,
+            String reference
+    ) {
+        PhysicsSolverLayout.Node node = layoutNode(
+                layout,
+                fixture.bone(driven)
+        );
+        require(node != null, driven + " left the solver layout");
+        CollisionProxySet proxies = node.constraint().collisionProxies();
+        boolean found = false;
+        for (int index = 0; index < proxies.proxyCount(); index++) {
+            int referenceIndex = proxies.proxy(index).referenceNodeIndex();
+            if (proxies.proxy(index).kind() == CollisionProxyKind.BOX
+                    && referenceIndex >= 0
+                    && layout.node(referenceIndex).bone()
+                    == fixture.bone(reference)) {
+                found = true;
+                break;
+            }
+        }
+        require(
+                found,
+                driven + " did not receive rigid mesh " + reference
+        );
     }
 
     private static void verifiesZhibanRigidFlexibleSplit() throws Exception {
@@ -126,14 +229,17 @@ final class ClothAccessoryDiscoveryVerification {
                 PhysicsSolverLayout.build(fixture.model(), fixture.plan()),
                 fixture.bone("LF")
         );
+        CollisionProxySet proxies = node == null
+                ? null
+                : node.constraint().collisionProxies();
         require(
                 node != null
                         && node.constraint().simulationSpace()
                         == PhysicsBoneSelectionPlan.SimulationSpace.BODY_LOCAL
-                        && node.constraint().collisionProxies().proxyCount() == 1
-                        && node.constraint().collisionProxies()
-                        .hasKind(CollisionProxyKind.CAPSULE),
-                "SKIRT did not retain only its Body collision proxy"
+                        && proxies.proxyCount() > 0
+                        && !proxies.hasKind(CollisionProxyKind.CAPSULE)
+                        && proxies.hasKind(CollisionProxyKind.BOX),
+                "SKIRT did not receive mesh collision"
         );
     }
 
@@ -174,6 +280,19 @@ final class ClothAccessoryDiscoveryVerification {
         require(
                 bone != null && !fixture.plan().isDriven(bone),
                 name + " should remain rigid: " + fixture.plan().decision(bone)
+        );
+    }
+
+    private static void requireRigidMount(Fixture fixture, String name) {
+        PhysicsBoneSelectionPlan.Decision decision =
+                fixture.plan().decision(fixture.bone(name));
+        require(
+                !decision.driven()
+                        && decision.structureRole()
+                        == PhysicsBoneSelectionPlan.StructureRole
+                        .RIGID_ATTACHMENT_BASE,
+                name + " was not preserved as a rigid cloth mount: "
+                        + decision
         );
     }
 

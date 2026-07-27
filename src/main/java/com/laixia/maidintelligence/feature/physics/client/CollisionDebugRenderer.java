@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.feature.physics.client;
 
 import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
 import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySource;
 import com.laixia.maidintelligence.feature.physics.client.solver.collision.runtime.CollisionProxyDebugData;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -9,6 +10,9 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+
+import java.util.HashSet;
+import java.util.Set;
 
 @OnlyIn(Dist.CLIENT)
 final class CollisionDebugRenderer {
@@ -18,6 +22,9 @@ final class CollisionDebugRenderer {
     private static final int[] PLANE = {80, 150, 255};
     private static final int[] SPHERE = {80, 255, 110};
     private static final int[] CAPSULE = {255, 190, 45};
+    private static final int[] BOX = {190, 120, 255};
+    /** Another driven panel, drawn apart from the rigid mesh it sits on. */
+    private static final int[] LAYER = {255, 105, 180};
     private static final int[] PENETRATION = {255, 35, 35};
     private static final Vector3f X = new Vector3f(1.0F, 0.0F, 0.0F);
     private static final Vector3f Y = new Vector3f(0.0F, 1.0F, 0.0F);
@@ -33,6 +40,9 @@ final class CollisionDebugRenderer {
         Vector3f pivot = new Vector3f();
         Vector3f tip = new Vector3f();
         CollisionProxyDebugData data = new CollisionProxyDebugData();
+        // Dozens of segments share the same rigid collider; drawing it once
+        // per segment turns the overlay into noise.
+        Set<String> drawn = new HashSet<>();
         for (int nodeIndex = 0;
              nodeIndex < layout.activeNodeCount();
              nodeIndex++) {
@@ -45,28 +55,106 @@ final class CollisionDebugRenderer {
             int proxyCount = solver.preparedProxyCount(nodeIndex);
             for (int proxyIndex = 0; proxyIndex < proxyCount; proxyIndex++) {
                 if (solver.copyPreparedCollisionProxy(
-                        nodeIndex, proxyIndex, data)) {
+                        nodeIndex, proxyIndex, data)
+                        && (data.penetrating || drawn.add(identity(data)))) {
                     drawProxy(lines, pose, data);
                 }
             }
         }
     }
 
+    /** Shape plus margin: two segments only share a drawing when both match. */
+    private static String identity(CollisionProxyDebugData data) {
+        return switch (data.kind) {
+            case BOX -> "B" + data.boxCenter + data.boxHalfExtents
+                    + data.boxAxisY + data.boxOpenAxis
+                    + round(data.scaledHitRadius);
+            case PLANE -> "P" + data.planePoint + data.planeNormal
+                    + round(data.scaledHitRadius);
+            case SPHERE -> "S" + data.sphereCenter + round(data.sphereRadius)
+                    + round(data.scaledHitRadius);
+            case CAPSULE -> "C" + data.capsuleStart + data.capsuleEnd
+                    + round(data.capsuleRadius) + round(data.scaledHitRadius);
+        };
+    }
+
+    private static int round(float value) {
+        return Math.round(value * 512.0F);
+    }
+
     private static void drawProxy(VertexConsumer lines, Matrix4f pose,
                                   CollisionProxyDebugData data) {
-        int[] color = data.penetrating
-                ? PENETRATION
-                : switch (data.kind) {
-                    case PLANE -> PLANE;
-                    case SPHERE -> SPHERE;
-                    case CAPSULE -> CAPSULE;
-                };
+        int[] color;
+        if (data.penetrating) {
+            color = PENETRATION;
+        } else if (data.source == CollisionProxySource.LAYER) {
+            color = LAYER;
+        } else {
+            color = switch (data.kind) {
+                case PLANE -> PLANE;
+                case SPHERE -> SPHERE;
+                case CAPSULE -> CAPSULE;
+                case BOX -> BOX;
+            };
+        }
         cross(lines, pose, data.referenceOrigin, CROSS_SIZE, color);
         switch (data.kind) {
             case PLANE -> drawPlane(lines, pose, data, color);
             case SPHERE -> drawSphere(lines, pose, data, color);
             case CAPSULE -> drawCapsule(lines, pose, data, color);
+            case BOX -> drawBox(lines, pose, data, color);
         }
+    }
+
+    private static void drawBox(
+            VertexConsumer lines, Matrix4f pose,
+            CollisionProxyDebugData data, int[] color
+    ) {
+        float margin = data.scaledHitRadius;
+        float hx = data.boxHalfExtents.x + margin;
+        float hy = data.boxHalfExtents.y + margin;
+        float hz = data.boxHalfExtents.z + margin;
+        Vector3f[] corners = new Vector3f[8];
+        for (int index = 0; index < 8; index++) {
+            corners[index] = new Vector3f(data.boxCenter)
+                    .fma((index & 1) == 0 ? -hx : hx, data.boxAxisX)
+                    .fma((index & 2) == 0 ? -hy : hy, data.boxAxisY)
+                    .fma((index & 4) == 0 ? -hz : hz, data.boxAxisZ);
+        }
+        for (int index = 0; index < 8; index++) {
+            for (int bit = 1; bit <= 4; bit <<= 1) {
+                if ((index & bit) == 0) {
+                    line(lines, pose, corners[index], corners[index | bit],
+                            color);
+                }
+            }
+        }
+        drawOpenFace(lines, pose, data, color);
+    }
+
+    /**
+     * A half-open box is drawn at its mesh extents, so the spike is the only
+     * hint that it keeps going the other way. It marks the one closed face.
+     */
+    private static void drawOpenFace(
+            VertexConsumer lines, Matrix4f pose,
+            CollisionProxyDebugData data, int[] color
+    ) {
+        if (data.boxOpenAxis < 0) {
+            return;
+        }
+        Vector3f axis = switch (data.boxOpenAxis) {
+            case 0 -> data.boxAxisX;
+            case 1 -> data.boxAxisY;
+            default -> data.boxAxisZ;
+        };
+        float half = switch (data.boxOpenAxis) {
+            case 0 -> data.boxHalfExtents.x;
+            case 1 -> data.boxHalfExtents.y;
+            default -> data.boxHalfExtents.z;
+        };
+        Vector3f face = new Vector3f(data.boxCenter).fma(half, axis);
+        line(lines, pose, face, new Vector3f(face).fma(0.12F, axis), color);
     }
 
     private static void drawPlane(

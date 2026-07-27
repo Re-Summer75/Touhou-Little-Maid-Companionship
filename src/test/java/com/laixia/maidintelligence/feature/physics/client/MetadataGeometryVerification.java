@@ -274,7 +274,7 @@ final class MetadataGeometryVerification {
                                     "hit_radius": 0.25
                                   },
                                   {
-                                    "kind": "box",
+                                    "kind": "cone",
                                     "reference": "Body"
                                   }
                                 ]

@@ -14,15 +14,13 @@ final class CollisionSchemaCompatibilityVerification {
     static void run() {
         PhysicsSolverLayout legacy = layout(2);
         require(proxyCount(legacy, "HairA") == 0
-                        && proxyCount(legacy, "HairB") == 0,
-                "Schema 2 retained automatic Head collision");
-        require(proxyCount(legacy, "Soft") == 0,
-                "Schema 2 unexpectedly enabled Body collision");
+                        && proxyCount(legacy, "HairB") == 0
+                        && proxyCount(legacy, "Soft") == 0,
+                "Schema 2 unexpectedly gained automatic collision");
 
         PhysicsSolverLayout current = layout(3);
-        require(proxyCount(current, "HairA") == 0
-                        && proxyCount(current, "HairB") == 0,
-                "Schema 3 retained automatic Head collision");
+        require(proxyCount(current, "HairA") > 0,
+                "Schema 3 did not derive Head mesh collision for hair");
         require(proxyCount(current, "Soft") > 0,
                 "Schema 3 did not enable automatic Body collision");
     }

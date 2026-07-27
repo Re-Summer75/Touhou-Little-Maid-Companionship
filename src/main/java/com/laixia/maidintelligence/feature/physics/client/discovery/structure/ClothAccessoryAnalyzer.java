@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.feature.physics.client.discovery.structure;
 
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
+import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneClassifier;
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneGeometry;
 import org.joml.Vector3f;
 
@@ -11,6 +12,8 @@ import java.util.IdentityHashMap;
  */
 final class ClothAccessoryAnalyzer {
     private static final double EPSILON = 1.0E-6D;
+    private static final double VOLUMETRIC_CUBE_RATIO = 0.45D;
+    private static final double CORE_VOLUME_SHARE = 0.10D;
 
     private ClothAccessoryAnalyzer() {
     }
@@ -38,6 +41,7 @@ final class ClothAccessoryAnalyzer {
                                 metrics.headEnclosingWearable(),
                                 metrics.facialDescendants(),
                                 true,
+                                metrics.rigidClothMount(),
                                 metrics.singleBoneCloth()
                         )
                 );
@@ -106,10 +110,16 @@ final class ClothAccessoryAnalyzer {
                 || node.thinRatio() <= 0.15D);
 
         double horizontalSpan = Math.max(size.x, size.z);
+        boolean namedSoftPart =
+                PhysicsBoneClassifier.classifyVisibleGeometry(
+                        node.bone().getName()
+                ).isPhysical();
+        boolean rigidCore = hasVolumetricCore(node);
         boolean lowerPanel = !inHead
                 && verticalRatio < 0.60D
                 && horizontalSpan >= modelWidth * 0.12D
                 && size.y >= modelHeight * 0.05D
+                && (!rigidCore || namedSoftPart)
                 && (node.thinRatio() <= 0.45D
                 || horizontalSpan >= modelWidth * 0.28D);
         boolean narrowPendant = !inHead
@@ -136,6 +146,7 @@ final class ClothAccessoryAnalyzer {
                         geometry,
                         horizontalSpan
                 ));
+        boolean rigidClothMount = isRigidClothMount(node, geometry);
         return new ClothAccessoryMetrics(
                 lowerPanel,
                 narrowPendant,
@@ -145,8 +156,92 @@ final class ClothAccessoryAnalyzer {
                 enclosing,
                 facialDescendants,
                 false,
+                rigidClothMount,
                 singleCloth
         );
+    }
+
+    /**
+     * A short waist ring above several independent skirt panels is their
+     * mount, not another spring segment. Driving it rotates every panel around
+     * one central axis; one side then enters the torso whenever the opposite
+     * side swings out, which no single endpoint contact can prevent.
+     */
+    private static boolean isRigidClothMount(
+            PhysicsBoneGeometry.Node node,
+            PhysicsBoneGeometry.Analysis geometry
+    ) {
+        if (node.bone().children().size() < 2
+                || node.bone().geoBone().cubes().getCubeCount() < 2) {
+            return false;
+        }
+        Vector3f size = node.size();
+        double maximumHorizontal = Math.max(size.x, size.z);
+        double minimumHorizontal = Math.min(size.x, size.z);
+        boolean enclosesPivot = node.pivot().x >= node.bounds().minX()
+                && node.pivot().x <= node.bounds().maxX()
+                && node.pivot().z >= node.bounds().minZ()
+                && node.pivot().z <= node.bounds().maxZ();
+        if (!enclosesPivot
+                || minimumHorizontal < maximumHorizontal * 0.25D) {
+            return false;
+        }
+        int hangingPanels = 0;
+        double maximumPanelHeight = 0.0D;
+        for (AnimatedGeoBone childBone : node.bone().children()) {
+            PhysicsBoneGeometry.Node child = geometry.node(childBone);
+            if (child == null || !child.hasGeometry()) {
+                continue;
+            }
+            PhysicsBoneClassifier.Classification semantic =
+                    PhysicsBoneClassifier.classifyVisibleGeometry(
+                            childBone.getName()
+                    );
+            if (semantic.type() != PhysicsBoneClassifier.ChainType.SKIRT
+                    || child.size().y < size.y * 1.75D
+                    || child.center().y
+                    >= node.center().y - size.y * 0.25D) {
+                continue;
+            }
+            hangingPanels++;
+            maximumPanelHeight = Math.max(
+                    maximumPanelHeight,
+                    child.size().y
+            );
+        }
+        return hangingPanels >= 2
+                && size.y <= maximumPanelHeight * 0.45D;
+    }
+
+    /**
+     * A broad lower-body AABB is not sufficient cloth evidence: a jacket,
+     * pelvis, or shorts shell can be just as wide. Real segmented skirts are
+     * assembled from plates even when their union surrounds the whole body;
+     * a substantial cube that is thick on all three axes instead identifies a
+     * rigid body core. Explicit soft-part names remain authoritative.
+     */
+    private static boolean hasVolumetricCore(
+            PhysicsBoneGeometry.Node node
+    ) {
+        double boundsVolume = Math.max(EPSILON, node.bounds().volume());
+        for (PhysicsBoneGeometry.CubeBox cube : node.cubeBoxes()) {
+            Vector3f half = cube.half();
+            double maximum = Math.max(
+                    half.x,
+                    Math.max(half.y, half.z)
+            );
+            double minimum = Math.min(
+                    half.x,
+                    Math.min(half.y, half.z)
+            );
+            double volume = 8.0D * half.x * half.y * half.z;
+            if (minimum / Math.max(EPSILON, maximum)
+                    >= VOLUMETRIC_CUBE_RATIO
+                    && volume / boundsVolume >= CORE_VOLUME_SHARE) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean dominantAttachmentBody(

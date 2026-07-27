@@ -130,11 +130,92 @@ public final class CollisionProxies {
         );
     }
 
+    public static CollisionProxy box(
+            int referenceNodeIndex,
+            Vector3f referenceOriginModel,
+            Vector3f pivotFromReference,
+            Vector3f centerFromReference,
+            Vector3f axisXFromReference,
+            Vector3f axisYFromReference,
+            Vector3f axisZFromReference,
+            Vector3f halfExtents,
+            float hitRadius,
+            float leverArm
+    ) {
+        return box(
+                referenceNodeIndex,
+                referenceOriginModel,
+                pivotFromReference,
+                centerFromReference,
+                axisXFromReference,
+                axisYFromReference,
+                axisZFromReference,
+                halfExtents,
+                hitRadius,
+                CollisionProjector.CLOSED_BOX,
+                leverArm
+        );
+    }
+
+    /**
+     * @param openAxis local axis whose positive face is the only closed one,
+     *                 or {@link CollisionProjector#CLOSED_BOX}
+     */
+    public static CollisionProxy box(
+            int referenceNodeIndex,
+            Vector3f referenceOriginModel,
+            Vector3f pivotFromReference,
+            Vector3f centerFromReference,
+            Vector3f axisXFromReference,
+            Vector3f axisYFromReference,
+            Vector3f axisZFromReference,
+            Vector3f halfExtents,
+            float hitRadius,
+            int openAxis,
+            float leverArm
+    ) {
+        return new BoxCollisionProxy(
+                referenceNodeIndex,
+                referenceOriginModel,
+                pivotFromReference,
+                centerFromReference,
+                axisXFromReference,
+                axisYFromReference,
+                axisZFromReference,
+                halfExtents,
+                hitRadius,
+                openAxis,
+                leverArm
+        );
+    }
+
+    public static CollisionProxy box(
+            int referenceNodeIndex,
+            Vector3f pivotFromReference,
+            Vector3f centerFromReference,
+            Vector3f halfExtents,
+            float hitRadius,
+            float leverArm
+    ) {
+        return box(
+                referenceNodeIndex,
+                new Vector3f(),
+                pivotFromReference,
+                centerFromReference,
+                new Vector3f(1.0F, 0.0F, 0.0F),
+                new Vector3f(0.0F, 1.0F, 0.0F),
+                new Vector3f(0.0F, 0.0F, 1.0F),
+                halfExtents,
+                hitRadius,
+                leverArm
+        );
+    }
+
     public static CollisionProxy withSource(
             CollisionProxy proxy,
             CollisionProxySource source
     ) {
-        return source == CollisionProxySource.AUTOMATIC
+        return source == proxy.source()
                 ? proxy
                 : new SourcedCollisionProxy(proxy, source);
     }

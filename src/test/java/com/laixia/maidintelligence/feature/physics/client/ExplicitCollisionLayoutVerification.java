@@ -218,6 +218,16 @@ final class ExplicitCollisionLayoutVerification {
         solver.solve(new Vector3f(), 0.0F, 1.0F / 60.0F, true);
         require(solver.lastCollisionProjectionCount() > 0,
                 "Postordered Leg reference did not project");
+        /*
+         * The leg is scaled and swung across the strand in one step. A
+         * projection may only move the segment so far per frame, so a
+         * violation that large resolves over several frames instead of
+         * teleporting; settle before measuring the final clearance.
+         */
+        for (int frame = 0; frame < 60; frame++) {
+            solver.restoreAnimationPose();
+            solver.solve(new Vector3f(), 0.0F, 1.0F / 60.0F, true);
+        }
 
         PreparedCollisionProxy prepared = new PreparedCollisionProxy();
         proxy.copyStaticShape(

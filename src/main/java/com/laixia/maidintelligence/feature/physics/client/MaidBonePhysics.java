@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.feature.physics.client;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.physics.client.pose.PoseDriveGustFilter;
 import com.laixia.maidintelligence.feature.physics.client.pose.WorldPoseDriverSource;
 import com.laixia.maidintelligence.feature.physics.client.pose.WorldPoseDriverSources;
 import com.laixia.maidintelligence.feature.physics.client.solver.MotionSignalSampler;
@@ -195,6 +196,8 @@ public final class MaidBonePhysics {
                 new AnimationTimelineClock();
         private final WorldPoseDriverSource poseDriverSource =
                 WorldPoseDriverSources.create();
+        private final PoseDriveGustFilter gustFilter =
+                new PoseDriveGustFilter();
         private final Vector3f worldAcceleration = new Vector3f();
         private final Vector3f modelAcceleration = new Vector3f();
         private final Vector3f worldPoseDrive = new Vector3f();
@@ -241,6 +244,7 @@ public final class MaidBonePhysics {
             solver = new SpringBoneSolver(layout);
             motionSampler.reset();
             poseDriverSource.reset();
+            gustFilter.reset();
             worldAcceleration.zero();
             modelAcceleration.zero();
             worldPoseDrive.zero();
@@ -312,6 +316,8 @@ public final class MaidBonePhysics {
                     maid.yBodyRot,
                     modelPoseDrive
             );
+            // Body-local, so turning into the wind also reads as a gust.
+            gustFilter.isolateGust(modelPoseDrive, dt, paused);
         }
 
         private float advanceClock(
@@ -329,6 +335,7 @@ public final class MaidBonePhysics {
             solver.reset();
             motionSampler.reset();
             poseDriverSource.reset();
+            gustFilter.reset();
             worldAcceleration.zero();
             modelAcceleration.zero();
             worldPoseDrive.zero();

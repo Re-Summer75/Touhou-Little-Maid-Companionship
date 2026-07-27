@@ -3,13 +3,20 @@ package com.laixia.maidintelligence.feature.physics.client;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.google.gson.JsonParser;
 import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
 import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySet;
+import org.joml.Vector3f;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.requireVectorNear;
 
-final class HeadCapsuleLayoutVerification {
-    private HeadCapsuleLayoutVerification() {
+/**
+ * An elongated head is exactly why fitted capsules were disabled. The mesh
+ * box reproduces it without approximation, so hair may collide with it again.
+ */
+final class HeadMeshCollisionVerification {
+    private HeadMeshCollisionVerification() {
     }
 
     static void run() {
@@ -33,7 +40,7 @@ final class HeadCapsuleLayoutVerification {
                           "constraints":{"simulation_space":"HEAD_LOCAL"}
                         }]}
                         """).getAsJsonObject(),
-                "tall head capsule verification"
+                "tall head mesh collision verification"
         );
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(
                 model,
@@ -52,8 +59,16 @@ final class HeadCapsuleLayoutVerification {
         }
         require(
                 proxies != null
-                        && proxies.proxyCount() == 0,
-                "Elongated Head unexpectedly generated automatic collision"
+                        && proxies.proxyCount() == 1
+                        && !proxies.hasKind(CollisionProxyKind.CAPSULE)
+                        && proxies.hasKind(CollisionProxyKind.BOX),
+                "Hair did not receive the Head mesh box"
+        );
+        requireVectorNear(
+                MeshCollisionSupport.restHalfExtents(proxies.proxy(0)),
+                new Vector3f(0.25F, 0.375F, 0.25F),
+                1.0E-5F,
+                "Head collision box did not match the Head cube"
         );
     }
 }

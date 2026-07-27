@@ -6,5 +6,7 @@ package com.laixia.maidintelligence.feature.physics.client.solver.collision;
 public enum CollisionProxyKind {
     PLANE,
     SPHERE,
-    CAPSULE
+    CAPSULE,
+    /** Oriented box; exact for the cube meshes these models are built from. */
+    BOX
 }

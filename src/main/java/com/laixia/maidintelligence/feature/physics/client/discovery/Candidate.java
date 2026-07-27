@@ -48,6 +48,16 @@ record Candidate(
         );
     }
 
+    /**
+     * Whether the scorer positively ruled the bone out, as opposed to merely
+     * failing to recognise it. Zero confidence is reserved for this: every
+     * scoring path has a positive base term, so only {@link #reject} produces
+     * it.
+     */
+    boolean rejected() {
+        return confidence <= 0.0D;
+    }
+
     static Candidate reject(String reason) {
         return reject(
                 PhysicsBoneSelectionPlan.StructureRole.NONE,

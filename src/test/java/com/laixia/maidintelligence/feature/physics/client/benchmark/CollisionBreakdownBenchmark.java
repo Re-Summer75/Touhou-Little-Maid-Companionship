@@ -56,8 +56,8 @@ public final class CollisionBreakdownBenchmark {
                 Locale.ROOT,
                 "%s: %.1f ns/frame, active/full nodes=%d/%d, "
                         + "driven segments with proxies=%d/%d, "
-                        + "proxies=%d [Plane=%d, Sphere=%d, Capsule=%d], "
-                        + "solve allocation=%s%n",
+                        + "proxies=%d [Plane=%d, Sphere=%d, Capsule=%d, "
+                        + "Box=%d], solve allocation=%s%n",
                 label,
                 result.nanosecondsPerFrame(),
                 metrics.activeNodes(),
@@ -68,6 +68,7 @@ public final class CollisionBreakdownBenchmark {
                 metrics.planes(),
                 metrics.spheres(),
                 metrics.capsules(),
+                metrics.boxes(),
                 allocation
         );
     }
@@ -80,7 +81,8 @@ public final class CollisionBreakdownBenchmark {
             int totalProxies,
             int planes,
             int spheres,
-            int capsules
+            int capsules,
+            int boxes
     ) {
         private static LayoutMetrics from(PhysicsSolverLayout layout) {
             int proxySegments = 0;
@@ -88,6 +90,7 @@ public final class CollisionBreakdownBenchmark {
             int planes = 0;
             int spheres = 0;
             int capsules = 0;
+            int boxes = 0;
             for (int node = 0; node < layout.activeNodeCount(); node++) {
                 if (!layout.node(node).driven()) continue;
                 CollisionProxySet proxies =
@@ -99,6 +102,7 @@ public final class CollisionBreakdownBenchmark {
                     planes += kind == CollisionProxyKind.PLANE ? 1 : 0;
                     spheres += kind == CollisionProxyKind.SPHERE ? 1 : 0;
                     capsules += kind == CollisionProxyKind.CAPSULE ? 1 : 0;
+                    boxes += kind == CollisionProxyKind.BOX ? 1 : 0;
                 }
             }
             return new LayoutMetrics(
@@ -109,7 +113,8 @@ public final class CollisionBreakdownBenchmark {
                     total,
                     planes,
                     spheres,
-                    capsules
+                    capsules,
+                    boxes
             );
         }
     }

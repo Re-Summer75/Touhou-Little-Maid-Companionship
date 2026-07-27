@@ -5,6 +5,7 @@ import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedG
 import com.google.gson.JsonParser;
 import com.laixia.maidintelligence.feature.atmosphere.client.wind.EnvironmentalWindField;
 import com.laixia.maidintelligence.feature.atmosphere.client.wind.EnvironmentalWindSampler;
+import com.laixia.maidintelligence.feature.physics.client.pose.PoseDriveGustFilter;
 import com.laixia.maidintelligence.feature.physics.client.pose.WorldPoseDriverSources;
 import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
 import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
@@ -38,7 +39,9 @@ final class EnvironmentalWindVerification {
         verifiesFrameRateConsistency();
         verifiesPartResponseProfiles();
         verifiesLegacyNoWindCompatibility();
-        verifiesPoseDriveIsNotAForceStep();
+        verifiesWindDoesNotDisplaceTheInitialPose();
+        verifiesSteadyWindDoesNotBecomeThePose();
+        verifiesBoneReturnsToRestAfterWindStops();
         verifiesWindDrivesAnimationPose();
         verifiesMassControlsWindResponse();
         verifiesBonesDoNotFlutterInLockstep();
@@ -743,45 +746,147 @@ final class EnvironmentalWindVerification {
         );
     }
 
-    private static void verifiesPoseDriveIsNotAForceStep() {
+    /**
+     * A bone that enters the solver while a gust is already blowing must start
+     * where the animation put it. Wind is a lean added to the spring, not a
+     * relocation of what the spring pulls toward, so a frame carrying no time
+     * carries no wind either.
+     */
+    private static void verifiesWindDoesNotDisplaceTheInitialPose() {
         Fixture fixture = createFixture("zero_step_pose");
+        Vector3f gust = new Vector3f(0.20F, 0.0F, 0.0F);
         float initialX = fixture.tail().getRotationX();
         float initialY = fixture.tail().getRotationY();
         float initialZ = fixture.tail().getRotationZ();
-        fixture.solver().solve(
-                ZERO,
-                new Vector3f(0.20F, 0.0F, 0.0F),
-                0.0F,
-                0.0F,
-                false
-        );
-        float renderedDifference =
-                Math.abs(fixture.tail().getRotationX() - initialX)
-                        + Math.abs(
-                        fixture.tail().getRotationY() - initialY
-                )
-                        + Math.abs(
-                        fixture.tail().getRotationZ() - initialZ
-                );
+        fixture.solver().solve(ZERO, gust, 0.0F, 0.0F, false);
         require(
-                renderedDifference > 0.005F,
-                "Wind pose was incorrectly gated by the physical dt step"
+                fixture.tail().getRotationX() == initialX
+                        && fixture.tail().getRotationY() == initialY
+                        && fixture.tail().getRotationZ() == initialZ,
+                "Wind displaced the authored pose on a zero-time frame"
+        );
+        for (int frame = 0; frame < 120; frame++) {
+            fixture.solver().restoreAnimationPose();
+            fixture.solver().solve(ZERO, gust, 0.0F, 1.0F / 60.0F, false);
+        }
+        float leaned = Math.abs(fixture.tail().getRotationX() - initialX)
+                + Math.abs(fixture.tail().getRotationY() - initialY)
+                + Math.abs(fixture.tail().getRotationZ() - initialZ);
+        require(
+                leaned > 0.005F,
+                "Wind never leaned the bone once time advanced: " + leaned
         );
     }
 
+    /**
+     * The authored pose stays the equilibrium: once the gust drops the spring
+     * has to pull the bone back on its own, which a relocated rest target
+     * could never do.
+     */
+    private static void verifiesBoneReturnsToRestAfterWindStops() {
+        Fixture fixture = createFixture("wind_release");
+        Vector3f gust = new Vector3f(0.20F, 0.0F, 0.0F);
+        Vector3f authored = new Vector3f();
+        Vector3f leaned = new Vector3f();
+        Vector3f released = new Vector3f();
+        fixture.solver().solve(ZERO, ZERO, 0.0F, 0.0F, false);
+        require(
+                fixture.solver().copyCurrentDirection(
+                        fixture.drivenSlot(),
+                        authored
+                ),
+                "Wind release direction was unavailable"
+        );
+        for (int frame = 0; frame < 120; frame++) {
+            fixture.solver().restoreAnimationPose();
+            fixture.solver().solve(ZERO, gust, 0.0F, 1.0F / 60.0F, false);
+        }
+        fixture.solver().copyCurrentDirection(
+                fixture.drivenSlot(),
+                leaned
+        );
+        for (int frame = 0; frame < 240; frame++) {
+            fixture.solver().restoreAnimationPose();
+            fixture.solver().solve(ZERO, ZERO, 0.0F, 1.0F / 60.0F, false);
+        }
+        fixture.solver().copyCurrentDirection(
+                fixture.drivenSlot(),
+                released
+        );
+        float leanedAngle = angleBetween(authored, leaned);
+        float releasedAngle = angleBetween(authored, released);
+        require(
+                leanedAngle > 0.01F && releasedAngle < leanedAngle * 0.05F,
+                "Bone did not return to the authored pose after the gust: "
+                        + leanedAngle + " -> " + releasedAngle
+        );
+    }
+
+    /**
+     * A breeze that never lets up must not become part of the silhouette. The
+     * filter keeps the gusts and drops whatever is held for several seconds,
+     * so a maid standing in steady weather reads as the pose her author built.
+     */
+    private static void verifiesSteadyWindDoesNotBecomeThePose() {
+        PoseDriveGustFilter filter = new PoseDriveGustFilter();
+        Vector3f signal = new Vector3f();
+        Vector3f steady = new Vector3f(0.30F, 0.0F, -0.12F);
+        signal.set(steady);
+        filter.isolateGust(signal, 0.0F, false);
+        require(
+                signal.lengthSquared() == 0.0F,
+                "The first sample leaned before any weather had passed"
+        );
+        for (int frame = 0; frame < 1200; frame++) {
+            signal.set(steady);
+            filter.isolateGust(signal, 1.0F / 60.0F, false);
+        }
+        require(
+                signal.length() < steady.length() * 0.02F,
+                "A sustained breeze survived as a permanent lean: " + signal
+        );
+        float gustPeak = 0.0F;
+        for (int frame = 0; frame < 600; frame++) {
+            float seconds = frame / 60.0F;
+            signal.set(steady).mul(
+                    1.0F + 0.8F * (float) Math.sin(
+                            2.0D * Math.PI * 0.7D * seconds
+                    )
+            );
+            filter.isolateGust(signal, 1.0F / 60.0F, false);
+            gustPeak = Math.max(gustPeak, signal.length());
+        }
+        require(
+                gustPeak > steady.length() * 0.5F,
+                "Gusts were filtered away along with the steady wind: "
+                        + gustPeak
+        );
+    }
+
+    private static float angleBetween(Vector3f left, Vector3f right) {
+        return (float) Math.acos(
+                Math.max(-1.0F, Math.min(1.0F, left.dot(right)))
+        );
+    }
+
+    /**
+     * The lean settles at the safety ceiling instead of overshooting it, so
+     * this has to be measured after the spring converges rather than on a
+     * single frame. The calm fixture carries the same gravity sag, leaving the
+     * angle between the two as the wind's own contribution.
+     */
     private static void verifiesSkirtWindAngleIsBounded() {
         Fixture rest = createFixture("skirt_rest", "SKIRT");
         Fixture windy = createFixture("skirt_bounded", "SKIRT");
         Vector3f restDirection = new Vector3f();
         Vector3f windyDirection = new Vector3f();
-        rest.solver().solve(ZERO, ZERO, 0.0F, 0.0F, false);
-        windy.solver().solve(
-                ZERO,
-                new Vector3f(100.0F, 0.0F, 0.0F),
-                0.0F,
-                0.0F,
-                false
-        );
+        Vector3f gale = new Vector3f(100.0F, 0.0F, 0.0F);
+        for (int frame = 0; frame < 240; frame++) {
+            rest.solver().restoreAnimationPose();
+            windy.solver().restoreAnimationPose();
+            rest.solver().solve(ZERO, ZERO, 0.0F, 1.0F / 60.0F, false);
+            windy.solver().solve(ZERO, gale, 0.0F, 1.0F / 60.0F, false);
+        }
         require(
                 rest.solver().copyCurrentDirection(
                         rest.drivenSlot(),
@@ -793,13 +898,9 @@ final class EnvironmentalWindVerification {
                 ),
                 "Bounded skirt wind direction was unavailable"
         );
-        float dot = Math.max(
-                -1.0F,
-                Math.min(1.0F, restDirection.dot(windyDirection))
-        );
-        float angle = (float) Math.acos(dot);
+        float angle = angleBetween(restDirection, windyDirection);
         require(
-                angle > 0.12F && angle <= 0.131F,
+                angle > 0.10F && angle <= 0.135F,
                 "Skirt wind angle escaped its safety ceiling: " + angle
         );
     }

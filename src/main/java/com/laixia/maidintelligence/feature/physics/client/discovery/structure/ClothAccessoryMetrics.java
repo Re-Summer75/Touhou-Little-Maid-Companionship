@@ -12,10 +12,12 @@ public record ClothAccessoryMetrics(
         boolean headEnclosingWearable,
         boolean facialDescendants,
         boolean dominantAttachmentBody,
+        boolean rigidClothMount,
         boolean singleBoneCloth
 ) {
     public static final ClothAccessoryMetrics NONE =
             new ClothAccessoryMetrics(
+                    false,
                     false,
                     false,
                     false,

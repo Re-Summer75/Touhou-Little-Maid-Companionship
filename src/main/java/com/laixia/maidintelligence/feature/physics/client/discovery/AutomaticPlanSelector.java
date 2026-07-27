@@ -105,6 +105,18 @@ final class AutomaticPlanSelector {
         }
     }
 
+    /**
+     * The sole child of a flexible segment continues it unless something
+     * positively rules the bone out.
+     *
+     * <p>Requiring the child to independently score as soft would break every
+     * chain whose lower segments stop looking remarkable on their own: the
+     * spatial scorers all reward geometry behind the body, so a skirt panel at
+     * the front runs out of evidence one or two segments down and the tail of
+     * the chain is left rigid while its mirror image at the back survives. The
+     * chain's identity is settled by its root; a segment only has to not be a
+     * rigid part to inherit it.
+     */
     private static boolean isSerialContinuation(
             PhysicsBoneGeometry.Node node,
             Candidate candidate,
@@ -119,7 +131,7 @@ final class AutomaticPlanSelector {
                 || !PhysicsBoneClassifier.classifyVisibleGeometry(
                         node.bone().getName()
                 ).isPhysical())
-                && candidate.confidence() >= 0.35D;
+                && !candidate.rejected();
     }
 
     private static void decide(

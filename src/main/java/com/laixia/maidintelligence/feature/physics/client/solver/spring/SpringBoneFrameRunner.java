@@ -25,7 +25,7 @@ final class SpringBoneFrameRunner {
                 ? dt
                 : 0.0F;
         context.metrics.beginFrame();
-        SpringCollisionCoordinator.beginFrame(context);
+        SpringCollisionCoordinator.beginFrame(context, dt);
         state.beginReferenceFrame(context.constraintsEnabled);
         if (context.constraintsEnabled) {
             context.animationMotion.sample(state, dt, paused);
@@ -161,6 +161,7 @@ final class SpringBoneFrameRunner {
         if (context.constraintsEnabled
                 && scratch.nextDirection.lengthSquared()
                 > SpringBoneMath.EPSILON) {
+            scratch.projectionStart.set(scratch.nextDirection);
             corrected = SpringConstraintProjector.project(
                     node.constraint(),
                     boneBaseOrientation,
@@ -170,9 +171,20 @@ final class SpringBoneFrameRunner {
                             node,
                             scratch.runtimeSafetyScale
                     ),
+                    state.currentDirections[node.drivenSlot()],
+                    SpringConstraintProjector.maximumCorrection(dt),
                     scratch,
                     context.metrics
             );
+            if (corrected) {
+                SpringProjectionDamper.apply(
+                        node.drivenSlot(),
+                        scratch.projectionStart,
+                        scratch.nextDirection,
+                        dt,
+                        state
+                );
+            }
         }
         SpringDirectionIntegrator.commit(
                 node.drivenSlot(),

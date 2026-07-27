@@ -27,7 +27,7 @@ final class SpringDirectionIntegrator {
                 scratch.boneAxis,
                 scratch.authoredRestDirection
         ).normalize();
-        // Wind moves the spring target, never the collision/constraint frame.
+        // Wind leans the spring; the authored pose stays its equilibrium.
         scratch.restDirection.set(scratch.authoredRestDirection);
         SpringProceduralPoseDriver.apply(
                 node,
@@ -37,8 +37,10 @@ final class SpringDirectionIntegrator {
                 scratch
         );
         if (!state.initialized[slot]) {
-            state.currentDirections[slot].set(scratch.restDirection);
-            state.previousDirections[slot].set(scratch.restDirection);
+            // A bone entering the solver mid-gust starts at the authored pose
+            // and leans in over the following frames instead of snapping.
+            state.currentDirections[slot].set(scratch.authoredRestDirection);
+            state.previousDirections[slot].set(scratch.authoredRestDirection);
             state.initialized[slot] = true;
         }
     }
@@ -98,6 +100,8 @@ final class SpringDirectionIntegrator {
                 scratch.restDirection.y() * stiffness,
                 scratch.restDirection.z() * stiffness
         );
+        // Atmosphere leans the spring without displacing what it pulls toward.
+        scratch.nextDirection.fma(stiffness, scratch.poseDriveBias);
         float inertia =
                 SpringBoneMath.INERTIA_GAIN * profile.inertiaScale();
         float turn = SpringBoneMath.TURN_GAIN * profile.turnScale();

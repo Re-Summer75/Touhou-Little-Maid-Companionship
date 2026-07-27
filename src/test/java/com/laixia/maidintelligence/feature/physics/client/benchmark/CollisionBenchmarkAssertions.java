@@ -57,27 +57,39 @@ final class CollisionBenchmarkAssertions {
                     "schema2 SKIRT unexpectedly enabled Body collision");
             return;
         }
-        int body = indexOf(layout, "Body");
-        int left = indexOf(layout, "LeftLeg");
-        int right = indexOf(layout, "RightLeg");
-        require(body >= 0 && left < 0 && right < 0,
-                "schema3 SKIRT retained disabled Leg references");
-        requireBodySet(proxies(layout, first), body, "SkirtA");
-        requireBodySet(proxies(layout, second), body, "SkirtB");
-        require(proxySegments(layout) == 2 && totalProxies(layout) == 2,
-                "schema3 SKIRT did not retain Body-only proxies");
+        requireMeshSet(layout, first, "SkirtA");
+        requireMeshSet(layout, second, "SkirtB");
+        require(proxySegments(layout) == 2,
+                "schema3 SKIRT did not keep collision on both segments");
     }
 
-    private static void requireBodySet(
-            CollisionProxySet proxies,
-            int body,
+    /**
+     * Selection is no longer capped, so the contract is coverage rather than
+     * a fixed count: every reachable cube of the torso and both legs.
+     */
+    private static void requireMeshSet(
+            PhysicsSolverLayout layout,
+            int node,
             String segment
     ) {
-        require(proxies.proxyCount() == 1
-                        && proxies.proxy(0).kind()
-                        == CollisionProxyKind.CAPSULE
-                        && proxies.proxy(0).referenceNodeIndex() == body,
-                segment + " does not have exactly one Body Capsule");
+        CollisionProxySet proxies = proxies(layout, node);
+        require(proxies.proxyCount() > 0, segment + " lost mesh collision");
+        boolean body = false;
+        boolean left = false;
+        boolean right = false;
+        for (int index = 0; index < proxies.proxyCount(); index++) {
+            require(proxies.proxy(index).kind() == CollisionProxyKind.BOX,
+                    segment + " received a fitted shape instead of the mesh");
+            String reference = layout
+                    .node(proxies.proxy(index).referenceNodeIndex())
+                    .bone()
+                    .getName();
+            body |= "Body".equals(reference);
+            left |= "LeftLeg".equals(reference);
+            right |= "RightLeg".equals(reference);
+        }
+        require(body && left && right,
+                segment + " does not have torso plus both legs");
     }
 
     private static int drivenIndex(

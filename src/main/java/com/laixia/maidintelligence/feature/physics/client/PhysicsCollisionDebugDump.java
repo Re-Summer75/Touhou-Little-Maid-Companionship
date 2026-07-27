@@ -117,6 +117,10 @@ final class PhysicsCollisionDebugDump {
                     + " radius=" + decimal(data.capsuleRadius)
                     + " effectiveRadius="
                     + decimal(data.capsuleRadius + data.scaledHitRadius);
+            case BOX -> "center=" + vector(data.boxCenter)
+                    + " half=" + vector(data.boxHalfExtents)
+                    + " axisY=" + vector(data.boxAxisY)
+                    + " margin=" + decimal(data.scaledHitRadius);
         };
     }
 

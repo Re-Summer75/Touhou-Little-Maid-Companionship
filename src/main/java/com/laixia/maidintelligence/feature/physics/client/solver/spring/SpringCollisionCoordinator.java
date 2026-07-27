@@ -9,13 +9,13 @@ final class SpringCollisionCoordinator {
     private SpringCollisionCoordinator() {
     }
 
-    static void beginFrame(SpringBoneContext context) {
+    static void beginFrame(SpringBoneContext context, float dt) {
         if (!context.constraintsEnabled
                 || !context.collisionCache.hasAnyProxies()) {
             return;
         }
-        context.collisionFrames.prepare();
-        context.collisionCache.beginFrame();
+        context.collisionFrames.prepare(context.endpoints);
+        context.collisionCache.beginFrame(dt);
     }
 
     static PreparedCollisionProxySet prepareNode(
@@ -53,6 +53,10 @@ final class SpringCollisionCoordinator {
                 scratch.pivotScratch,
                 runtimeSegmentLength,
                 scratch.authoredRestDirection,
+                SpringConstraintProjector.maximumSwing(
+                        context.layout.node(nodeIndex),
+                        scratch.runtimeSafetyScale
+                ),
                 scratch.collision,
                 context.collisionFrames
         );

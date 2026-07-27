@@ -281,6 +281,14 @@ tasks.register('verifyModelShading', JavaExec) {
     mainClass = 'com.laixia.maidintelligence.feature.shading.client.ModelShadingVerification'
 }
 
+tasks.register('auditMeshColliders', JavaExec) {
+    group = 'verification'
+    description = 'Temporary: reports mesh collider counts per shipped model.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.laixia.maidintelligence.feature.physics.client.MeshColliderAudit'
+}
+
 tasks.register('benchmarkBonePhysics', JavaExec) {
     group = 'verification'
     description = 'Reports warmed spring-bone frame time, visited nodes, and thread allocation.'

@@ -132,7 +132,24 @@ public final class BonePhysicsBenchmark {
                 activeConstrained.nanosecondsPerFrame()
                         / activeLegacy.nanosecondsPerFrame()
         );
+        System.out.printf(
+                Locale.ROOT,
+                "constrained collision proxies: %d over %d driven segments%n",
+                totalProxies(constrainedLayout),
+                constrainedLayout.drivenBoneCount()
+        );
         CollisionBreakdownBenchmark.run();
+    }
+
+    private static int totalProxies(PhysicsSolverLayout layout) {
+        int count = 0;
+        for (int index = 0; index < layout.activeNodeCount(); index++) {
+            PhysicsSolverLayout.Node node = layout.node(index);
+            if (node.driven()) {
+                count += node.constraint().collisionProxies().proxyCount();
+            }
+        }
+        return count;
     }
 
     private static void warmReference(

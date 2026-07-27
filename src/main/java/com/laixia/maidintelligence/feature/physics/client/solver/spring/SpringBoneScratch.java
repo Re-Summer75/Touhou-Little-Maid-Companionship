@@ -20,7 +20,10 @@ final class SpringBoneScratch {
     final Vector3f restDirection = new Vector3f();
     final Vector3f poseDriveTangent = new Vector3f();
     final Vector3f poseDriveBinormal = new Vector3f();
+    final Vector3f poseDriveBias = new Vector3f();
     final Vector3f nextDirection = new Vector3f();
+    /** Pose entering constraint projection, kept to measure what it changed. */
+    final Vector3f projectionStart = new Vector3f();
     final Vector3f localDirection = new Vector3f();
     final Vector3f deflectionAxis = new Vector3f();
     final Vector3f rotationEuler = new Vector3f();

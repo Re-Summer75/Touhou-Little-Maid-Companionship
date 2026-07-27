@@ -104,6 +104,37 @@ final class CollisionBakeContext {
         );
     }
 
+    /**
+     * Mesh boxes carry the cube's own edge frame, so a rotated cube stays an
+     * exact collider once it is expressed in the reference rest frame.
+     */
+    CollisionProxy box(
+            CollisionReference reference,
+            Vector3f centerModel,
+            Vector3f axisXModel,
+            Vector3f axisYModel,
+            Vector3f axisZModel,
+            Vector3f halfExtents,
+            float hitRadius,
+            int openAxis
+    ) {
+        Quaternionf inverse = inverse(reference);
+        Vector3f origin = reference.copyOrigin(new Vector3f());
+        return CollisionProxies.box(
+                referenceIndex(reference),
+                origin,
+                relative(pivotModel, origin, inverse),
+                relative(centerModel, origin, inverse),
+                inverse.transform(new Vector3f(axisXModel)),
+                inverse.transform(new Vector3f(axisYModel)),
+                inverse.transform(new Vector3f(axisZModel)),
+                halfExtents,
+                hitRadius,
+                openAxis,
+                leverArm
+        );
+    }
+
     CollisionProxy sphere(
             CollisionReference reference,
             Vector3f centerModel,

@@ -6,6 +6,9 @@ import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLa
 import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
 import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySet;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
@@ -60,9 +63,10 @@ final class AutomaticCollisionLayoutVerification {
         CollisionProxySet skirtProxies = node(skirt, "Soft")
                 .constraint().collisionProxies();
         require(
-                skirtProxies.proxyCount() == 1
-                        && count(skirtProxies, CollisionProxyKind.CAPSULE) == 1,
-                "SKIRT did not retain only its Body Capsule"
+                skirtProxies.proxyCount() > 0
+                        && count(skirtProxies, CollisionProxyKind.BOX)
+                        == skirtProxies.proxyCount(),
+                "SKIRT did not receive mesh boxes instead of a fitted capsule"
         );
         int skirtIndex = indexOf(skirt, "Soft");
         for (int proxy = 0; proxy < skirtProxies.proxyCount(); proxy++) {
@@ -72,11 +76,11 @@ final class AutomaticCollisionLayoutVerification {
             );
         }
         require(
-                indexOf(skirt, "Body") >= 0
-                        && indexOf(skirt, "LeftLeg") < 0
-                        && indexOf(skirt, "RightLeg") < 0
+                references(skirt, skirtProxies).contains("Body")
+                        && references(skirt, skirtProxies).contains("LeftLeg")
+                        && references(skirt, skirtProxies).contains("RightLeg")
                         && skirt.referencesPreordered(),
-                "Disabled Leg references leaked into the active layout"
+                "SKIRT mesh collision missed the torso or the legs"
         );
 
         CollisionProxySet cape = node(
@@ -84,10 +88,10 @@ final class AutomaticCollisionLayoutVerification {
                 "Soft"
         ).constraint().collisionProxies();
         require(
-                cape.proxyCount() == 2
-                        && count(cape, CollisionProxyKind.CAPSULE) == 1
+                count(cape, CollisionProxyKind.BOX) > 0
+                        && count(cape, CollisionProxyKind.CAPSULE) == 0
                         && count(cape, CollisionProxyKind.PLANE) == 1,
-                "CAPE did not receive Body Capsule + Back Plane"
+                "CAPE did not receive mesh boxes + Back Plane"
         );
 
         CollisionProxySet ribbon = node(
@@ -95,9 +99,9 @@ final class AutomaticCollisionLayoutVerification {
                 "Soft"
         ).constraint().collisionProxies();
         require(
-                ribbon.proxyCount() == 1
-                        && ribbon.hasKind(CollisionProxyKind.CAPSULE),
-                "BODY_LOCAL RIBBON did not receive a Body Capsule"
+                ribbon.proxyCount() > 0
+                        && ribbon.hasKind(CollisionProxyKind.BOX),
+                "BODY_LOCAL RIBBON did not receive mesh collision"
         );
     }
 
@@ -168,6 +172,20 @@ final class AutomaticCollisionLayoutVerification {
             if (name.equals(layout.node(index).bone().getName())) return index;
         }
         return -1;
+    }
+
+    private static Set<String> references(
+            PhysicsSolverLayout layout,
+            CollisionProxySet proxies
+    ) {
+        Set<String> names = new HashSet<>();
+        for (int index = 0; index < proxies.proxyCount(); index++) {
+            int reference = proxies.proxy(index).referenceNodeIndex();
+            if (reference >= 0 && reference < layout.activeNodeCount()) {
+                names.add(layout.node(reference).bone().getName());
+            }
+        }
+        return names;
     }
 
     private static int count(CollisionProxySet proxies, CollisionProxyKind kind) {

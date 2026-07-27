@@ -162,6 +162,20 @@ final class RuntimeBoneEndpoints {
         }
     }
 
+    /**
+     * Full model-space transform written on the last completed pass, physics
+     * included. Read before the node loop it still holds the previous frame.
+     */
+    Matrix4f renderedTransform(int nodeIndex) {
+        return renderedTransforms[nodeIndex];
+    }
+
+    boolean hasRenderedTransform(int nodeIndex) {
+        return nodeIndex >= 0
+                && nodeIndex < pivotValid.length
+                && pivotValid[nodeIndex];
+    }
+
     boolean copyPivot(int nodeIndex, Vector3f output) {
         if (nodeIndex < 0
                 || nodeIndex >= renderedPivots.length

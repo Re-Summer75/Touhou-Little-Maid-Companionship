@@ -9,6 +9,12 @@ import org.joml.Quaternionf;
 
 /**
  * Captures the complete animation pose before any driven bone is modified.
+ *
+ * <p>A collider carried by a driven bone is the exception: its animation pose
+ * is not where the mesh actually is, so it uses the transform the solver wrote
+ * on the previous pass instead. That is one frame behind, which is invisible
+ * on cloth and keeps the capture a single prepass rather than a re-entrant
+ * update in the middle of the node loop.
  */
 public final class RuntimeCollisionFrames {
     private static final float PIXELS_PER_BLOCK = 16.0F;
@@ -25,10 +31,12 @@ public final class RuntimeCollisionFrames {
     private final Quaternionf[] restOrientations;
     private final float[] maxBasisScales;
     private final boolean[] required;
+    private final boolean[] physicsPosed;
 
     public RuntimeCollisionFrames(PhysicsSolverLayout layout) {
         this.layout = layout;
         int count = layout.activeNodeCount();
+        physicsPosed = new boolean[count];
         bindInverses = new Matrix4f[count];
         animationTransforms = new Matrix4f[count];
         affineDeltas = new Matrix4f[count];
@@ -40,6 +48,9 @@ public final class RuntimeCollisionFrames {
         for (int index = 0; index < count; index++) {
             PhysicsSolverLayout.Node node = layout.node(index);
             AnimatedGeoBone bone = node.bone();
+            physicsPosed[index] = node.driven()
+                    || (node.parentIndex() >= 0
+                    && physicsPosed[node.parentIndex()]);
             BoneSnapshot initial = bone.getInitialSnapshot();
             Quaternionf parentOrientation = node.parentIndex() < 0
                     ? identityOrientation
@@ -73,7 +84,12 @@ public final class RuntimeCollisionFrames {
         }
     }
 
+    /** Animation-only capture, for callers holding no solved pose. */
     public void prepare() {
+        prepare(null);
+    }
+
+    void prepare(RuntimeBoneEndpoints endpoints) {
         identity.identity();
         for (int index = 0; index < layout.activeNodeCount(); index++) {
             if (!required[index]) {
@@ -81,25 +97,32 @@ public final class RuntimeCollisionFrames {
             }
             PhysicsSolverLayout.Node node = layout.node(index);
             AnimatedGeoBone bone = node.bone();
-            Matrix4f parent = node.parentIndex() < 0
-                    ? identity
-                    : animationTransforms[node.parentIndex()];
-            localRotation.identity().rotateZYX(
-                    bone.getRotationZ(),
-                    bone.getRotationY(),
-                    bone.getRotationX()
-            );
-            compose(
-                    animationTransforms[index].set(parent),
-                    bone,
-                    bone.getPositionX(),
-                    bone.getPositionY(),
-                    bone.getPositionZ(),
-                    localRotation,
-                    bone.getScaleX(),
-                    bone.getScaleY(),
-                    bone.getScaleZ()
-            );
+            if (physicsPosed[index]
+                    && endpoints != null
+                    && endpoints.hasRenderedTransform(index)) {
+                animationTransforms[index]
+                        .set(endpoints.renderedTransform(index));
+            } else {
+                Matrix4f parent = node.parentIndex() < 0
+                        ? identity
+                        : animationTransforms[node.parentIndex()];
+                localRotation.identity().rotateZYX(
+                        bone.getRotationZ(),
+                        bone.getRotationY(),
+                        bone.getRotationX()
+                );
+                compose(
+                        animationTransforms[index].set(parent),
+                        bone,
+                        bone.getPositionX(),
+                        bone.getPositionY(),
+                        bone.getPositionZ(),
+                        localRotation,
+                        bone.getScaleX(),
+                        bone.getScaleY(),
+                        bone.getScaleZ()
+                );
+            }
             Matrix4f delta = affineDeltas[index]
                     .set(animationTransforms[index])
                     .mul(bindInverses[index]);

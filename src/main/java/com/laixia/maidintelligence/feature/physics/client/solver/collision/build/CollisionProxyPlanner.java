@@ -21,6 +21,8 @@ public final class CollisionProxyPlanner {
     private final PhysicsBoneGeometry.Analysis geometry;
     private final BodyCollisionGeometry bodyGeometry;
     private final PhysicsBoneSelectionPlan selectionPlan;
+    private final MeshColliderPlanner meshPlanner;
+    private final ClothLayerPlanner layerPlanner;
     private final Map<String, Optional<CollisionReference>> resolved =
             new HashMap<>();
 
@@ -32,6 +34,16 @@ public final class CollisionProxyPlanner {
         this.geometry = geometry;
         this.bodyGeometry = bodyGeometry;
         this.selectionPlan = selectionPlan;
+        this.meshPlanner = new MeshColliderPlanner(
+                geometry,
+                bodyGeometry,
+                selectionPlan
+        );
+        this.layerPlanner = new ClothLayerPlanner(
+                geometry,
+                selectionPlan,
+                bodyGeometry
+        );
     }
 
     public CollisionProxyPlan plan(
@@ -45,6 +57,13 @@ public final class CollisionProxyPlanner {
                 decision,
                 space
         );
+        boolean allowsMesh = AutomaticCollisionPolicy.allowsMesh(decision);
+        List<CollisionProxyPlan.MeshCollider> mesh = allowsMesh
+                ? meshPlanner.plan(drivenNode)
+                : List.of();
+        List<CollisionProxyPlan.MeshCollider> layers = allowsMesh
+                ? layerPlanner.plan(drivenNode)
+                : List.of();
         CollisionReference body = needsBody(automatic)
                 && bodyGeometry.hasBody()
                 ? CollisionReference.of(
@@ -65,6 +84,8 @@ public final class CollisionProxyPlanner {
         return new CollisionProxyPlan(
                 automatic,
                 body,
+                mesh,
+                layers,
                 explicit
         );
     }

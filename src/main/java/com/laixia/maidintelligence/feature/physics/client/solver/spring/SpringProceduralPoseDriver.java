@@ -5,14 +5,27 @@ import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLa
 import org.joml.Vector3f;
 
 /**
- * Converts an optional model-space atmosphere signal into a moving animation
- * rest direction. The spring follows this target; no physical force is added.
+ * Converts an optional model-space atmosphere signal into a lateral bias on
+ * the spring, expressed as {@code tan(angle)} along a unit tangent.
+ *
+ * <p>The bias is added alongside the restoring pull rather than replacing the
+ * rest direction, so the authored pose stays the equilibrium the spring is
+ * drawn back to: a bone starts at rest and leans into the wind over several
+ * frames, and returns on its own once the wind drops. Because the integrator
+ * scales the bias by the same stiffness it applies to the rest direction, the
+ * steady-state lean is exactly {@code angle} regardless of frame time or mass.
  *
  * <p>Each bone additionally sits in its own eddy, so the shared signal is
- * decorrelated per bone before it becomes a pose target.
+ * decorrelated per bone before it becomes a lean.
  */
 final class SpringProceduralPoseDriver {
-    private static final float DRIVE_GAIN = 0.90F;
+    /**
+     * Sized against the gust-only signal. Rejecting the sustained band costs
+     * roughly a third of the field's amplitude, so the lean is scaled back up
+     * to keep strong weather reading as strongly as it did when the steady
+     * component was still allowed to hold parts over.
+     */
+    private static final float DRIVE_GAIN = 1.45F;
     private static final float SAFETY_SHARE = 0.65F;
     private static final float DEGENERATE_SQUARED = 1.0E-12F;
 
@@ -26,6 +39,7 @@ final class SpringProceduralPoseDriver {
             SpringBoneState state,
             SpringBoneScratch scratch
     ) {
+        scratch.poseDriveBias.zero();
         PhysicsBoneSelectionPlan.SpringProfile profile =
                 node.decision().profile();
         float response = profile.poseDriveScale();
@@ -97,9 +111,13 @@ final class SpringProceduralPoseDriver {
         tangent.mul((float) Math.cos(azimuth))
                 .fma((float) Math.sin(azimuth), scratch.poseDriveBinormal)
                 .normalize();
-        restDirection.mul((float) Math.cos(angle))
-                .fma((float) Math.sin(angle), tangent)
-                .normalize();
+        /*
+         * Equilibrium requires the restoring pull and the bias to be parallel
+         * to the leaning direction: k/cos(angle) = bias/sin(angle). The bias
+         * therefore carries tan(angle) and the integrator supplies k, which
+         * already folds in dt and mass.
+         */
+        scratch.poseDriveBias.set(tangent).mul((float) Math.tan(angle));
     }
 
     private static float maximumDriveAngle(

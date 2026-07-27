@@ -1,7 +1,9 @@
 package com.laixia.maidintelligence.feature.physics.client.solver.collision.build;
 
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneGeometry;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxies;
 import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxy;
+import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySource;
 import org.joml.Vector3f;
 
 import java.util.List;
@@ -21,17 +23,38 @@ final class AutomaticCollisionProxyBaker {
             BodyCollisionGeometry bodyGeometry,
             List<CollisionProxy> output
     ) {
+        appendMesh(
+                plan.mesh(),
+                CollisionProxySource.AUTOMATIC,
+                context,
+                output
+        );
+        appendMesh(
+                plan.layers(),
+                CollisionProxySource.LAYER,
+                context,
+                output
+        );
+        // Mesh boxes already are the torso, so the fitted capsule is only a
+        // fallback for models that expose no usable rigid mesh. Layer boxes
+        // are other cloth and never stand in for the body.
+        boolean fitted = plan.mesh().isEmpty();
         switch (plan.automatic()) {
-            case BODY -> appendBody(
-                    plan.body(),
-                    bodyGeometry.bodyBounds(),
-                    context,
-                    output
-            );
+            case BODY -> {
+                if (fitted) {
+                    appendBody(
+                            plan.body(),
+                            bodyGeometry.bodyBounds(),
+                            context,
+                            output
+                    );
+                }
+            }
             case CAPE -> appendCape(
                     plan,
                     context,
                     bodyGeometry,
+                    fitted,
                     output
             );
             case NONE -> {
@@ -39,13 +62,46 @@ final class AutomaticCollisionProxyBaker {
         }
     }
 
+    private static void appendMesh(
+            List<CollisionProxyPlan.MeshCollider> colliders,
+            CollisionProxySource source,
+            CollisionBakeContext context,
+            List<CollisionProxy> output
+    ) {
+        for (CollisionProxyPlan.MeshCollider collider : colliders) {
+            Vector3f half = collider.halfExtents();
+            if (Math.min(half.x, Math.min(half.y, half.z)) <= EPSILON) {
+                continue;
+            }
+            output.add(CollisionProxies.withSource(
+                    context.box(
+                            collider.reference(),
+                            collider.centerModel(),
+                            collider.axisXModel(),
+                            collider.axisYModel(),
+                            collider.axisZModel(),
+                            half,
+                            context.hitRadius(
+                                    collider.endpointRadius(),
+                                    collider.endpointClamp()
+                            ),
+                            collider.openAxis()
+                    ),
+                    source
+            ));
+        }
+    }
+
     private static void appendCape(
             CollisionProxyPlan plan,
             CollisionBakeContext context,
             BodyCollisionGeometry geometry,
+            boolean fitted,
             List<CollisionProxy> output
     ) {
-        appendBody(plan.body(), geometry.bodyBounds(), context, output);
+        if (fitted) {
+            appendBody(plan.body(), geometry.bodyBounds(), context, output);
+        }
         if (plan.body() == null || geometry.backPlane().isEmpty()) {
             return;
         }

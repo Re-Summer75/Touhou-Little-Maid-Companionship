@@ -46,6 +46,15 @@ final class PreparedCollisionDebugCopier {
                         .add(source.referenceOrigin());
                 output.capsuleRadius = colliderRadius;
             }
+            case BOX -> {
+                output.boxCenter.set(source.pointA())
+                        .add(source.referenceOrigin());
+                output.boxHalfExtents.set(source.halfExtents());
+                output.boxAxisX.set(source.axisX());
+                output.boxAxisY.set(source.axisY());
+                output.boxAxisZ.set(source.axisZ());
+                output.boxOpenAxis = source.openAxis();
+            }
         }
         output.clearance = source.clearance(currentDirection, scratch);
         output.penetrating = output.clearance < 0.0F;

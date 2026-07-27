@@ -67,7 +67,7 @@
 上述三项现已由 [`SecondaryMotionConstraint`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/SecondaryMotionConstraint.java)
 和 `solver/collision` 通用代理框架实现：参考骨旋转增量先搬运历史状态，
 积分后将方向投影到四向摆角椭圆，再依次执行每骨关联的
-Plane / Sphere / Capsule 代理，并把合法方向写回当前和历史状态。
+Box / Plane / Sphere / Capsule 代理，并把合法方向写回当前和历史状态。
 单纯调整 `STIFFNESS`、`GRAVITY_POWER` 或 `MAX_ANGLE` 仍不能替代
 这些硬约束。
 
@@ -83,7 +83,7 @@ Plane / Sphere / Capsule 代理，并把合法方向写回当前和历史状态�
 6. 执行 Verlet 惯性、刚度、重力、实体运动和动画运动积分；
 7. 恢复骨长；
 8. 投影动画姿态相对的非对称摆角约束；
-9. 按顺序投影当前骨骼关联的 Plane / Sphere / Capsule 代理；
+9. 按顺序投影当前骨骼关联的 Box / Plane / Sphere / Capsule 代理；
 10. 最多交替复查摆角和碰撞四轮；代理内部也按固定上限复查多代理；
 11. 将最终合法方向写回当前和历史状态；
 12. 根据合法方向生成骨骼旋转和虚拟枢轴位移补偿。
@@ -258,27 +258,94 @@ p = p - C_plane * outwardNormal
 这与 VRM 扩展的单侧平面碰撞和 APEX Backstop 的用途一致：
 模拟点可以在外侧摆动，但不能越过蒙皮或头发外壳进入内部。
 
-### Plane / Sphere / Capsule
+### 网格 Box / Plane / Sphere / Capsule
 
-当前自动布局只保留躯干相关代理：
+自动布局直接使用网格，粒度是 **cube 而不是骨骼**：每个属于非受驱动、
+无受驱动祖先骨骼的静止 cube 成为一个 Box 代理。cube 自带 `dx/dy/dz`
+边框，所以 Box 与网格严格等同并保留 cube 自身旋转；若按骨骼取 AABB，
+散布着几十个 cube 的发套、法阵或披挂会被膨胀成大半是空气的包围盒，
+既挡住空处又看不出对应几何。头、上身、手臂、腿都不再需要作者摆放胶囊。
 
-- `HAIR`、`EAR`、`HEAD_LOCAL RIBBON`：不生成 Head 代理，仅使用参考空间
-  搬运和非对称摆角；
-- `SKIRT`：只使用 Body Capsule，不生成左右腿 Capsule；
-- `CAPE`：Body Capsule + 随 Body 运动的 Back Plane；
-- `BODY_LOCAL RIBBON`：Body Capsule。
+- `HAIR`、`EAR`、`HEAD_LOCAL RIBBON`：头、上身及可达手臂的网格 Box；
+- `SKIRT`、`BODY_LOCAL RIBBON`：躯干与左右腿的网格 Box；
+- `CAPE`：网格 Box + 随 Body 运动的 Back Plane。
+
+附着数量**不设上限**：一个段够得到的 cube 全部保留，碰撞面因此与模型
+一一对应，而不是靠“挑几个代表”近似。只做两类必要剔除：
+
+- **无法形成接触的薄片**：厚度不足 `0.5 px` 的 cube 与末端球只会产生
+  左右翻面抖动，永远稳不下来，发光层和法阵面片属于此类；
+- **摆动锥够不到的几何**：末端恒位于半径为力臂的球壳上，并被摆角限制
+  在静止方向附近的一顶球冠内，因此判定用 `SwingCone` 而不是扫掠球——
+  “半径合适但在身后”的 cube 直接出局。参考骨自身也会转动，故按
+  `0.35 rad` 弦长为远离参考枢轴的 cube 补偿余量，摆动包络另留
+  `1.4 rad`。枢轴已深埋超过 `1 px` 的普通候选、被已选 Box 覆盖 `75%`
+  以上的嵌套件同样丢弃。与身体地标重叠的刚性 cube 不使用埋入启发式，
+  因为裙根 pivot 通常就位于腰部网格内部，但仍必须通过同一摆动锥可达性
+  检查。
+
+`winefox` 由此得到 `3234` 个代理覆盖 `80` 个受驱动段，远处的灯笼、武器
+仍不进入热路径。数量放开后的成本由共享形状、逐帧锥剪枝和 Top-K 求解
+三层结构控制（见性能门槛）。若某模型完全没有可用刚性网格，才回退到旧的
+拟合 Body Capsule。
+
+### 布料层碰撞
+
+上面这套只认刚性骨，因此两片同为受驱动的布料互相穿过时它无能为力：
+围裙压在裙面上、外褂压在裙撑上，双方都在动，谁也不是对方的碰撞体。
+[`ClothLayerPlanner`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/collision/build/ClothLayerPlanner.java)
+补这一层，成对关系**严格单向**：外层把内层当碰撞体，内层完全看不见
+外层。这样既保住作者排定的层序，也杜绝两片软布每帧互推形成震荡。
+
+层序判定全部来自静止几何，不依赖命名：
+
+- 两块 cube 都是**薄板**——最薄轴不超过次薄轴的 `0.5`，蝴蝶结、绳扣一类
+  的方块因此出局；
+- 两块板的法线夹角在 `20°` 内，且相对躯干水平轴同侧（`dot ≥ 0.30`），
+  裙子前后襟这种隔着身体的组合直接排除；
+- 沿法线的错开量超过较薄一方厚度的 `40%`：低于此值是同一张布拆成多骨
+  的共面片，围在胯上的一圈裙片实测彼此只差不到五分之一个板厚；
+- 两片之间的净空气不超过 `3 px`，再远就是各穿各的两件衣服；
+- 面内两轴的交叠都要达到较窄一方的 `35%`，只贴着一条边不算被覆盖。
+
+若两根骨互为对方内衬——绕过胯部的裙片会一块在前、另一块在后——则认定
+无层序，双向丢弃。判定在构造期对整个模型做一次，因此结论对每个段一致。
+
+碰撞体就是内衬那块 cube 的**原始尺寸**，只是拆掉了朝内的那一面。`1 px`
+的实心薄片拦不住一帧就能越过它的末端：穿到另一侧后反而报告“无接触”，
+看起来就是直接跳了过去。半开棱柱没有背面可落，末端陷得再深也只能从
+正面被推出。曾经改用向内加厚 `4 px` 的板来解决同一问题，代价是调试
+叠加里的碰撞盒明显大于模型本身，作者无从判断它到底贴不贴合。
+
+半开形状必须让判定量和推出方向出自同一套度量。间隙按“落在面内轮廓里
+就是正面深度、否则是到棱柱的普通距离”计算，接触面就必须同样地在轮廓内
+取正面、在轮廓外取最近的侧面。若一律按正面推出，一个擦着侧边的
+`1e-9` 交叠会被当成“陷在整块板后面”，一帧炸出 `0.05 rad` 的摆角。
+
+末端半径取**外层布片自身的半厚**，而不是从受驱动骨的整体比例推导：后者
+对一片 `1 px` 的布会给出接近 `2 px` 的球，把两层顶开一道肉眼可见的缝。
+
+运行时这些代理走与网格 Box 完全相同的共享形状、锥剪枝和 Top-K 路径，
+唯一区别是参考骨是受驱动的，因此 [`RuntimeCollisionFrames`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/spring/RuntimeCollisionFrames.java)
+对它改用 solver 上一趟写出的变换而不是动画姿态——动画姿态并不是网格
+实际所在的位置。滞后一帧在布料上看不出来，换来的是预捕获仍然是单趟
+prepass，不必在节点循环中途重入刷新。`winefox` 由此新增 `9` 个代理，
+`zhiban_hanfu` 的和服外褂与里衬共形成 `55` 对。
 
 碰撞检测使用每段骨骼末端球，而不是无半径点。`hitRadius` 从该骨骼
 几何横截面估计，并可由 schema 3 元数据覆盖；投影始终维持固定骨长。
-需要头部或腿部碰撞的模型仍可用 schema 3 显式 Plane/Sphere/Capsule，
-并把 `reference` 指向相应 Head 或 Leg。
 
-当前碰撞数据统一为不可变的 Plane / Sphere / Capsule 代理数组。
+当前碰撞数据统一为不可变的 Box / Plane / Sphere / Capsule 代理数组。
 每根驱动骨可关联零到多个代理，每个代理独立记录形状参数、
 `referenceNodeIndex`、有效 pivot、`hitRadius` 和力臂；因此同一骨骼
-可以同时受随 Head 运动的平面、随 Body 运动的胶囊和模型空间代理约束。
-旧 `backstop` / `head_collision` 字段继续解析，但不再烘焙自动代理；
+可以同时受随 Head 运动的网格盒、随 Body 运动的平面和模型空间代理约束。
+旧 `backstop` / `head_collision` 字段继续解析，但不再烘焙拟合形状；
 显式 Plane/Sphere/Capsule 的投影公式与顺序保持不变。
+
+Box 在参考骨局部空间求点-盒最近点：外部按 clamp 得到面/棱/角接触，
+内部沿最浅轴逃逸，随后复用平面半空间投影，无需迭代搜索。运行时三条
+轴各自随仿射变换旋转，轴长直接乘进对应半轴，非均匀缩放的肢体依然
+被精确跟随。
 
 Sphere 与退化 Capsule 使用固定骨长的解析最小点积边界；普通 Capsule
 先求端点到线段的最近点，再做有限次固定骨长半空间投影。端点落在胶囊
@@ -378,6 +445,26 @@ Capsule 及末端半径使用保守谱尺度上界：旋转加轴缩放时等于
 - 自动拟合造成的初始静止交叠在 solver 首次准备或 reset 后标定为允许
   边界，只阻止二级运动继续深入；因此 `dt=0` 初始化不会改写当前动画
   rotation/position。显式代理不使用该宽限，仍严格执行作者边界。
+- 自动代理的边界逐帧相对当前动画姿态，不区分具体动作：当前作者方向在
+  刚性 reference 中的穿入量立即成为临时边界，风、重力和惯性只能到此
+  为止，不能继续深入。作者随时可以让模型自穿（坐、抱、蹲），绝对边界
+  会与动画逐帧对抗并表现为高频抖动或整片挤位。宽限立即放宽，姿态离开
+  后按 `0.20 s` 时间常数收回，避免硬边界瞬间恢复造成弹跳；显式代理和
+  受驱动布料之间的层碰撞不启用这条路径。
+- 陷入 Box 的末端沿上一帧那张面推出。出口面原本每帧按最浅穿透轴重选，
+  是整套求解里唯一的离散决策：立方体对角线上两面等深，待机姿态在平局
+  线附近颤动就会让推出方向逐帧转 `90°`，表现为高频振动。对手需浅出
+  `1/64` 方块才能夺面；末端漂过盒心时同样沿用旧面，否则会被从对侧推出
+  造成 `180°` 跳变。离开碰撞体即清除记忆，明显更浅的面照常接管。
+- 投影修正连续两帧反向时，`SpringProjectionDamper` 逐帧把响应降到
+  `12%`，使矛盾要求收敛到两侧各浅浅陷入的折中姿态而不是来回跳。单侧
+  接触方向恒定，不触发；无反向后按 `0.25 s` 恢复。
+- 投影结果另按 `40 rad/s` 限制帧间可见位移，使大幅违反在数帧内解开而
+  不是一次瞬移。预算衡量帧间结果而非单帧内部工作量：摆角与碰撞在四轮
+  交替中经常大幅互相抵消却几乎没有净位移，按内部工作量计费会让两侧硬
+  边界都拉不满、段永远差一点贴不到面。阈值远高于弹簧自身速度：接触中
+  的段每帧都被修正，预算一紧会连带扼住它跟随快速动画，先落后再追上同
+  样是卡顿；抖动由上面两条在源头处理。`dt=0` 预算为零。
 
 schema 3 sidecar 可在 `constraints.collision.proxies` 中显式添加 Plane、
 Sphere 和 Capsule；静止坐标与半径使用 Gecko 像素（`16 px = 1` 模型
@@ -386,16 +473,17 @@ Sphere 和 Capsule；静止坐标与半径使用 Gecko 像素（`16 px = 1` 模�
 之后；`auto:false` 只保留有效显式代理。缺失或歧义 reference 只跳过对应
 代理，不影响同链其它代理。
 
-旧 `backstop` / `head_collision` 开关继续解析，但不再生成自动 Head
-代理；schema 1/2 不读取 schema 3 的 `collision` 字段。复杂模型可用
-schema 3 显式代理恢复指定头部或腿部边界，但它仍不是任意网格的精确
-碰撞。
+旧 `backstop` / `head_collision` 开关继续解析，但不再生成拟合形状；
+schema 1/2 不读取 schema 3 的 `collision` 字段。头部和腿部现在由网格
+Box 自动覆盖；显式代理用于补充网格无法表达的边界（如空中禁区）。
 
 ### 调试可视化与 dump
 
 手持骨骼调试棒时，亮青线显示逐段 runtime pivot/tip；Plane 为蓝色、
-Sphere 为绿色、Capsule 为琥珀色，代理的 reference origin 以同色十字
-标出。当前末端对某代理的调整后 `clearance < 0` 时，该代理整组改为
+Sphere 为绿色、Capsule 为琥珀色、网格 Box 为紫色、布料层内衬为品红，
+reference origin 以同色十字标出。画的是本帧真正进入求解的代理，而不是全部候选，因此叠加层与
+solver 的实际工作集一致。几十个受驱动段常常共用同一个刚性碰撞体，因此
+形状相同且末端半径相同的代理只画一次，穿透中的代理始终单独重绘为红色。当前末端对某代理的调整后 `clearance < 0` 时，该代理整组改为
 红色，表示穿透超过了自动代理首次标定的静止交叠（显式代理仍以绝对
 边界计算），而不是声称整个渲染网格都已精确检测。
 
@@ -437,13 +525,16 @@ sibling 和后代延伸。明确发夹名称或具有强结构证据的紧凑底
 自动发现继续复用 `SKIRT` / `RIBBON` 求解类型，不增加逐 cube 写回：
 
 - `qunzi`、内外/前后裙、`Dress` 及中日韩常见裙摆名称提供语义证据；无名称时使用下半身位置、宽薄面板、上缘连接和分支拓扑；
+- 匿名宽面板还必须没有主导体积核心：占节点 AABB 至少 `10%`、最短/最长边至少 `0.45` 的厚 cube 是短裤、夹克或骨盆壳证据，不是布片。环形裙壳的组成 cube 仍是薄板，明确裙摆语义也继续优先；
 - `guashi/pendant/tassel`、吊坠和流苏，以及细长、上部附着的身体挂件作为 `RIBBON` 候选；空裙根只向可见子件传递语义，本身不进入 solver；
+- 带几何的短裙根若同时承载至少两块明显更长、向下延伸的独立命名裙片，也作为 `RIGID_ATTACHMENT_BASE`；子裙片各自驱动，安装座不再绕身体中心倾斜并把对侧压入躯干；
 - 位于头侧、非包头、从上部悬垂且没有眼嘴/表情后代的 `Mask` 使用零静态重力、保留惯性摆动的 `HEAD_LOCAL RIBBON`；`SHmask/faceplate`、头盔、贴脸面具、带表情子树的面具和手持树保持刚性；
 - 新结构角色 `DANGLING_ACCESSORY` 烘焙高参考跟随、高阻尼、零静态重力、低旋转惯性和小四向摆角。它响应实体移动、转身和预设动画的有界瞬态惯性，但不会让刚性主体在静止或匀速头部动画下掉到眼睛前；
 - 基础纸板狐 `bone37` 的 cube 分布在头部多处、各自拥有不同 cube pivot/rotation，且不存在占优连通簇；它与 `bone32`、`bone11/38` 及同样无主导簇的 `guashi` 均保持刚性，`qunzi` 继续使用单骨裙摆档位。
 
 单骨 `Dress/qunzi` 使用保守 `COMPOUND_SINGLE_BONE` 裙摆档位。真实
-`SKIRT` 父子链使用更保守的根硬梢软曲线，并只消费 Body Capsule；
+`SKIRT` 父子链使用更保守的根硬梢软曲线，并消费可达的刚性 cube 网格，
+仅在没有可用网格时回退 Body Capsule；
 头部悬垂饰品默认不消费碰撞代理。
 
 ## 真实链段的根梢动力学
@@ -569,9 +660,17 @@ XPBD 约束乘子按设计不分配，除非以后确有链间柔性关系需求
 
 - schema 1/2 兼容、schema 3 解析、Gecko 像素换算、可选
   `hit_radius` 和无效代理独立跳过；
-- Plane、Sphere、Capsule 几何、胶囊退化、自动/显式合并及
-  `auto:false`；
-- Head 自动代理禁用、SKIRT Body-only 与 CAPE Back Plane 布局；
+- Plane、Sphere、Capsule、Box 几何、胶囊退化、Box 面/角投影、
+  自动/显式合并及 `auto:false`；
+- 网格 Box 自动派生：长头骨的半轴与 cube 精确一致、发丝拿到头部、
+  裙摆拿到躯干与左右腿、不可达远处骨被剪枝、扁平发光层被拒、
+  受驱动骨不作网格参考、多 cube 参考骨的可达 cube 一个不漏、`winefox` 与 `zhiban_hanfu`
+  的每个 Box 都能对上参考骨的某个真实 cube，以及驱入头骨时停在表面 /
+  关闭碰撞则穿入的对照；
+- 布料层碰撞：围裙认下面的裙片为内衬而裙片看不见围裙、共面并排的裙片
+  不成层、互相环抱的两片双向丢弃、半开内衬确实挡住向内压的围裙，以及
+  把内衬的动画瞬间弹回静止时碰撞体仍停在解算姿态而非跟着动画归零；
+- CAPE 在网格 Box 之外仍附加 Back Plane；
 - 受驱动父子链、父物理偏转、虚拟 pivot position 补偿、非均匀 scale
   与后序显式 sibling Leg reference；
 - 接触感知 pivot 的 `1～2 px` OBB 间隙、宽面 `HEAD_SHELL`、横穿支撑体
@@ -620,30 +719,45 @@ XPBD 约束乘子按设计不分配，除非以后确有链间柔性关系需求
 最新 Windows/JDK 17、`winefox`、20,000 测量帧样例：
 
 ```text
-recursive-full: 58647.4 ns/frame, nodes=181/181, allocation=14912.00 B/frame
-iterative-active-legacy: 51753.9 ns/frame, nodes=110/181, allocation=0.00 B/frame
-iterative-active-constrained: 106806.0 ns/frame, nodes=110/181, allocation=0.00 B/frame
-legacy-equivalent solver speedup: 1.13x
-constraint-layer cost: 2.06x legacy-active
+recursive-full: 38357.6 ns/frame, nodes=181/181, allocation=14880.00 B/frame
+iterative-active-legacy: 40863.3 ns/frame, nodes=153/181, allocation=0.00 B/frame
+iterative-active-constrained: 211861.1 ns/frame, nodes=153/181, allocation=0.00 B/frame
+legacy-equivalent solver speedup: 0.94x
+constraint-layer cost: 5.18x legacy-active
+constrained collision proxies: 3234 over 80 driven segments
 
-head/schema2-auto-disabled: 3196.7 ns/frame, proxies=0, allocation=0.00 B/frame
-head/schema3-auto-disabled: 3265.0 ns/frame, proxies=0, allocation=0.00 B/frame
-skirt/schema2-body-disabled: 3080.1 ns/frame, proxies=0, allocation=0.00 B/frame
-skirt/schema3-body-only: 3741.4 ns/frame, proxies=2, allocation=0.00 B/frame
+head/schema2-auto-disabled: 3974.4 ns/frame, proxies=0, allocation=0.00 B/frame
+head/schema3-auto-disabled: 3162.1 ns/frame, proxies=0, allocation=0.00 B/frame
+skirt/schema2-body-disabled: 2972.4 ns/frame, proxies=0, allocation=0.00 B/frame
+skirt/schema3-body-only: 7012.8 ns/frame, proxies=11 [Box=11], allocation=0.00 B/frame
 ```
 
 绝对耗时会随机器波动；稳定门槛是生产约束路径继续保持
 `0 B/frame`，并单独报告旧积分等价路径与约束路径。`constrained` 的
-`2.06x` 代价包含纯动画层级与逐段导数预采样、碰撞依赖 affine 捕获、
-每段代理准备和投影；准备态缓存避免四轮交替投影重复变换同一代理。
+`5.18x` 代价包含纯动画层级与逐段导数预采样、碰撞依赖 affine 捕获、
+每段代理准备和投影。
+
+代理数量不再设上限：能碰到的 cube 全部附着，`winefox` 由 `259` 升到
+`3234`，成本却只从 `130.7 µs` 升到 `211.9 µs`。差距来自三层结构而不是
+裁剪精度：
+
+1. **共享形状**。同一 cube 常被几十个段引用，`PreparedCollisionShape`
+   按几何去重，每帧只做一次仿射/法线变换；`3234` 个代理背后只有几十
+   个唯一形状。代理本身只保留枢轴、力臂和静止宽限。
+2. **逐帧锥剪枝**。代理按参考骨分组，组内几何刚性相连，其静止包围球
+   随该骨变换后依旧有效，一次测试即可否掉整根骨。组内再逐个判定，且
+   末端恒在力臂球壳上，偏离球壳超过自身半径的一次平方距离就返回不可
+   达，绝大多数 cube 不进入开方与锥角运算。
+3. **Top-K 求解**。末端球一次最多贴住少数几个面，而松弛循环每轮重扫
+   全集，因此每帧只把最近的 `4` 个送进求解。排序每帧按实时姿态重做，
+   没有代理被永久丢弃。
 
 ## 已知限制
 
-- 自动代理由静止 AABB、名称和拓扑启发式拟合为 Plane / Sphere /
-  Capsule，不是任意网格、凹面或整块渲染几何的精确碰撞；它减少常见
-  穿模，但不保证完全无穿模。
-- 生产默认不生成头部或腿部代理；这两个区域只有 schema 3 显式代理
-  才会参与碰撞。
+- 网格 Box 与 cube 严格等同、数量也不设上限，但每段仍只投影末端球，
+  中段仍可能擦入相邻几何；末端摆动锥够不到的 cube 与厚度不足
+  `0.5 px` 的薄片不参与碰撞，因此不保证完全无穿模。
+- 静止已交叠的部位只被阻止继续深入，不会被推开，避免作者姿态位移。
 - 当前摆角与碰撞是固定骨长的硬 PBD，不提供 XPBD compliance；XPBD
   只在以后出现明确链间柔性关系时按需加入。
 - 同一个 Gecko bone 内所有 cube 共享一次 TRS；占优主簇只改善枢轴/轴和
@@ -655,16 +769,17 @@ skirt/schema3-body-only: 3741.4 ns/frame, proxies=2, allocation=0.00 B/frame
 
 1. **已完成—参考空间搬运**：参考骨帧间旋转、共享增量缓存和突变重置；
 2. **已完成—非对称摆角**：相对当前动画姿态投影并回写当前/历史状态；
-3. **已调整—头部约束**：保留参考空间与非对称摆角，自动 Head
-   Plane/Sphere/Capsule 已停用；
+3. **已调整—头部约束**：保留参考空间与非对称摆角，拟合 Head
+   Plane/Sphere/Capsule 已由头骨网格 Box 取代；
 4. **已完成—刚柔分离**：保守识别固定发饰底座，柔性后代继续发现；
 5. **已完成—运行时端点层级**：传播父物理、position 补偿和非均匀
    scale 下的真实 pivot/tip；
-6. **已完成—统一碰撞代理**：通用 Plane / Sphere / Capsule、每骨多代理、
-   每代理独立参考骨及零分配投影；
-7. **已完成—自动身体代理与逐段碰撞**：每个相关受驱动段消费运行时
-   pivot，自动覆盖 Body 与 Back Plane；Head/Leg 仅支持 schema 3
-   显式代理；
+6. **已完成—统一碰撞代理**：通用 Plane / Sphere / Capsule / Box、
+   每骨多代理、每代理独立参考骨及零分配投影；
+7. **已完成—网格自动碰撞与逐段碰撞**：每个相关受驱动段消费运行时
+   pivot；碰撞体直接由刚性骨网格逐 cube 派生，只按可达性剪枝、不设
+   数量上限，`CAPE` 追加 Back Plane，无需作者手工摆放形状；叠层布料
+   之间按静止几何判定层序，外层单向以内层原尺寸的半开棱柱为碰撞体；
 8. **已完成—发饰与马尾独立化**：结构化刚性底座、匿名镜像单骨马尾、
    主 cube 簇运动学及真实多骨链根硬梢软参数；
 9. **已完成—裙摆与悬垂饰品**：裙摆/挂饰结构证据、侧挂面具刚柔拆分、

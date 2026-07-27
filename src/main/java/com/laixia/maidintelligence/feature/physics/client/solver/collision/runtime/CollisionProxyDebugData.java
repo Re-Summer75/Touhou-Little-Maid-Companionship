@@ -18,6 +18,13 @@ public final class CollisionProxyDebugData {
     public final Vector3f sphereCenter = new Vector3f();
     public final Vector3f capsuleStart = new Vector3f();
     public final Vector3f capsuleEnd = new Vector3f();
+    public final Vector3f boxCenter = new Vector3f();
+    public final Vector3f boxHalfExtents = new Vector3f();
+    public final Vector3f boxAxisX = new Vector3f();
+    public final Vector3f boxAxisY = new Vector3f();
+    public final Vector3f boxAxisZ = new Vector3f();
+    /** Box axis whose positive face is the only closed one, or {@code -1}. */
+    public int boxOpenAxis = -1;
     public float sphereRadius;
     public float capsuleRadius;
     public float scaledHitRadius;
@@ -36,6 +43,12 @@ public final class CollisionProxyDebugData {
         sphereCenter.zero();
         capsuleStart.zero();
         capsuleEnd.zero();
+        boxCenter.zero();
+        boxHalfExtents.zero();
+        boxAxisX.zero();
+        boxAxisY.zero();
+        boxAxisZ.zero();
+        boxOpenAxis = -1;
         sphereRadius = 0.0F;
         capsuleRadius = 0.0F;
         scaledHitRadius = 0.0F;

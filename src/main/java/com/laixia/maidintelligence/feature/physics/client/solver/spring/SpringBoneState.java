@@ -18,6 +18,9 @@ final class SpringBoneState {
 
     final Vector3f[] currentDirections;
     final Vector3f[] previousDirections;
+    /** Last constraint correction, used to spot a segment being squeezed. */
+    final Vector3f[] projectionCorrections;
+    final float[] projectionDamping;
     final float[] previousDeltaSeconds;
     final boolean[] initialized;
     /** Integrated buffeting phase per bone; only stepped frames advance it. */
@@ -45,10 +48,13 @@ final class SpringBoneState {
         int drivenCount = layout.drivenBoneCount();
         currentDirections = new Vector3f[drivenCount];
         previousDirections = new Vector3f[drivenCount];
+        projectionCorrections = new Vector3f[drivenCount];
         for (int slot = 0; slot < drivenCount; slot++) {
             currentDirections[slot] = new Vector3f();
             previousDirections[slot] = new Vector3f();
+            projectionCorrections[slot] = new Vector3f();
         }
+        projectionDamping = new float[drivenCount];
         previousDeltaSeconds = new float[drivenCount];
         initialized = new boolean[drivenCount];
         turbulencePhases = new double[drivenCount];
@@ -96,6 +102,8 @@ final class SpringBoneState {
         for (int slot = 0; slot < currentDirections.length; slot++) {
             currentDirections[slot].zero();
             previousDirections[slot].zero();
+            projectionCorrections[slot].zero();
+            projectionDamping[slot] = 0.0F;
             previousDeltaSeconds[slot] = 0.0F;
             initialized[slot] = false;
             turbulencePhases[slot] = 0.0D;

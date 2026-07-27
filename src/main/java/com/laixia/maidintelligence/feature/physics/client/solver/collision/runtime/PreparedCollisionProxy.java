@@ -8,28 +8,23 @@ import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
+/**
+ * One segment paired with one collider. The geometry lives in a shared
+ * {@link PreparedCollisionShape}; only the pivot, lever arm and the authored
+ * rest overlap differ between the segments that share a collider.
+ */
 public final class PreparedCollisionProxy {
-    private static final float EPSILON = 1.0E-12F;
-    private CollisionProxyKind kind = CollisionProxyKind.SPHERE;
+    private PreparedCollisionShape shape = new PreparedCollisionShape();
     private CollisionProxySource source = CollisionProxySource.AUTOMATIC;
-    private int referenceNodeIndex = -1;
-    private final Vector3f referenceOriginModel = new Vector3f();
-    private final Vector3f restPointA = new Vector3f();
-    private final Vector3f restPointB = new Vector3f();
-    private final Vector3f restNormal = new Vector3f(0.0F, 1.0F, 0.0F);
-    private final Vector3f referenceOrigin = new Vector3f();
     private final Vector3f pivot = new Vector3f();
-    private final Vector3f pointA = new Vector3f();
-    private final Vector3f pointB = new Vector3f();
-    private final Vector3f normal = new Vector3f(0.0F, 1.0F, 0.0F);
-    private float radius;
-    private float hitRadius;
     private float leverArm = 1.0F;
     private float preparedLeverArm = 1.0F;
     private float preparedRadius;
     private float preparedHitRadius;
     private float projectionRadius;
     private float projectionHitRadius;
+    private boolean animationPoseAllowanceEligible;
+    private int exitFace = CollisionProjector.NO_FACE;
     private final PreparedCollisionRestAllowance restAllowance =
             new PreparedCollisionRestAllowance();
 
@@ -41,10 +36,9 @@ public final class PreparedCollisionProxy {
             float endpointRadius,
             float fixedLeverArm
     ) {
-        setCommon(CollisionProxyKind.PLANE, referenceIndex, originModel,
-                endpointRadius, fixedLeverArm);
-        restPointA.set(pointModel);
-        restNormal.set(normalModel).normalize();
+        shape.setPlane(referenceIndex, originModel, pointModel, normalModel,
+                endpointRadius);
+        setCommon(fixedLeverArm);
     }
 
     public void setSphere(
@@ -55,10 +49,9 @@ public final class PreparedCollisionProxy {
             float endpointRadius,
             float fixedLeverArm
     ) {
-        setCommon(CollisionProxyKind.SPHERE, referenceIndex, originModel,
-                endpointRadius, fixedLeverArm);
-        restPointA.set(centerModel);
-        radius = colliderRadius;
+        shape.setSphere(referenceIndex, originModel, centerModel,
+                colliderRadius, endpointRadius);
+        setCommon(fixedLeverArm);
     }
 
     public void setCapsule(
@@ -70,13 +63,33 @@ public final class PreparedCollisionProxy {
             float endpointRadius,
             float fixedLeverArm
     ) {
-        setCommon(CollisionProxyKind.CAPSULE, referenceIndex, originModel,
-                endpointRadius, fixedLeverArm);
-        restPointA.set(startModel);
-        restPointB.set(endModel);
-        radius = colliderRadius;
+        shape.setCapsule(referenceIndex, originModel, startModel, endModel,
+                colliderRadius, endpointRadius);
+        setCommon(fixedLeverArm);
     }
 
+    public void setBox(
+            int referenceIndex,
+            Vector3f originModel,
+            Vector3f centerModel,
+            Vector3f axisXModel,
+            Vector3f axisYModel,
+            Vector3f axisZModel,
+            Vector3f halfExtentsModel,
+            float endpointRadius,
+            int openAxis,
+            float fixedLeverArm
+    ) {
+        shape.setBox(referenceIndex, originModel, centerModel, axisXModel,
+                axisYModel, axisZModel, halfExtentsModel, endpointRadius,
+                openAxis);
+        setCommon(fixedLeverArm);
+    }
+
+    /**
+     * Standalone use keeps its own shape; the solver rebinds every pairing of
+     * the same collider onto one shared instance.
+     */
     public void prepare(
             Vector3f runtimePivotModel,
             Matrix4f affineDelta,
@@ -112,35 +125,76 @@ public final class PreparedCollisionProxy {
             float endpointScale,
             float runtimeLeverArm
     ) {
-        affineDelta.transformPosition(referenceOriginModel, referenceOrigin);
-        pivot.set(runtimePivotModel).sub(referenceOrigin);
-        affineDelta.transformPosition(restPointA, pointA).sub(referenceOrigin);
-        if (kind == CollisionProxyKind.CAPSULE) {
-            affineDelta.transformPosition(restPointB, pointB)
-                    .sub(referenceOrigin);
-        } else if (kind == CollisionProxyKind.PLANE) {
-            normalTransform.transform(restNormal, normal);
-            float lengthSquared = normal.lengthSquared();
-            if (!Float.isFinite(lengthSquared) || lengthSquared <= EPSILON) {
-                normal.set(restNormal);
-            } else {
-                normal.div((float) Math.sqrt(lengthSquared));
-            }
-        }
-        float shapeScale = finiteScale(colliderScale);
+        shape.prepare(affineDelta, normalTransform, colliderScale);
+        bindFrame(
+                runtimePivotModel,
+                colliderScale,
+                endpointScale,
+                runtimeLeverArm
+        );
+    }
+
+    /**
+     * Second half of {@link #prepare}, for callers whose shape was already
+     * transformed once for the whole model this frame.
+     */
+    void bindFrame(
+            Vector3f runtimePivotModel,
+            float colliderScale,
+            float endpointScale,
+            float runtimeLeverArm
+    ) {
+        pivot.set(runtimePivotModel).sub(shape.referenceOrigin());
         float hitScale = finiteScale(endpointScale);
-        preparedHitRadius = hitRadius * hitScale;
-        preparedRadius = radius * shapeScale + preparedHitRadius;
+        preparedHitRadius = shape.hitRadius() * hitScale;
+        preparedRadius = shape.scaledRadius() + preparedHitRadius;
         preparedLeverArm = Float.isFinite(runtimeLeverArm)
                 ? Math.max(1.0E-6F, runtimeLeverArm)
                 : leverArm;
         restAllowance.prepare(
-                shapeScale,
+                finiteScale(colliderScale),
                 hitScale,
                 preparedLeverArm,
                 leverArm
         );
         applyRestAllowance();
+    }
+
+    /**
+     * Whether this segment's endpoint sweep can still reach the collider. The
+     * endpoint always sits on a sphere of {@code leverArm} around the pivot,
+     * so a collider that misses that shell by more than its own extent cannot
+     * be touched however the segment turns. Runs before {@link #bindFrame} so
+     * an out-of-reach collider costs one distance and nothing else.
+     */
+    float slack(
+            Vector3f runtimePivotModel,
+            float runtimeLeverArm,
+            float endpointScale,
+            SwingCone cone
+    ) {
+        float bound = shape.cullRadius();
+        if (!Float.isFinite(bound)) {
+            return Float.NEGATIVE_INFINITY;
+        }
+        return cone.slackToSweep(
+                runtimePivotModel,
+                shape.centerModel(),
+                runtimeLeverArm,
+                bound + shape.hitRadius() * Math.max(0.0F, endpointScale)
+        );
+    }
+
+    void bind(PreparedCollisionShape sharedShape) {
+        shape = sharedShape;
+    }
+
+    float restHitRadius() {
+        return shape.hitRadius();
+    }
+
+    PreparedCollisionShape shape() {
+        return shape;
     }
 
     void allowInitialRestPose(
@@ -154,36 +208,104 @@ public final class PreparedCollisionProxy {
         applyRestAllowance();
     }
 
+    boolean needsCalibration() {
+        return restAllowance.needsCalibration(source);
+    }
+
+    /**
+     * Re-measures how deep the animation alone reaches into this collider and
+     * moves the allowance to match, so the projection below only rejects the
+     * depth secondary motion adds on top of the authored pose.
+     */
+    void trackAnimationPose(
+            Vector3f restDirection,
+            double poseTime,
+            CollisionScratch scratch
+    ) {
+        if (!animationPoseAllowanceEligible
+                || source == CollisionProxySource.EXPLICIT) {
+            return;
+        }
+        if (restAllowance.trackAnimationPose(
+                unadjustedClearance(restDirection, scratch),
+                poseTime
+        )) {
+            applyRestAllowance();
+        }
+    }
+
     public boolean project(Vector3f direction, CollisionScratch scratch) {
-        return switch (kind) {
+        return switch (shape.kind()) {
             case PLANE -> CollisionProjector.projectPlane(
-                    direction, pivot, pointA, normal,
+                    direction, pivot, shape.pointA(), shape.normal(),
                     projectionHitRadius, preparedLeverArm, scratch
             );
             case SPHERE -> CollisionProjector.projectSphere(
-                    direction, pivot, pointA, projectionRadius,
+                    direction, pivot, shape.pointA(), projectionRadius,
                     preparedLeverArm, scratch
             );
             case CAPSULE -> CollisionProjector.projectCapsule(
-                    direction, pivot, pointA, pointB, projectionRadius,
-                    preparedLeverArm, scratch
+                    direction, pivot, shape.pointA(), shape.pointB(),
+                    projectionRadius, preparedLeverArm, scratch
             );
+            case BOX -> projectBox(direction, scratch);
         };
     }
 
+    /**
+     * Carries the escape face across frames. The choice is this proxy's, not
+     * the scratch's: one endpoint meets many boxes per frame and each has to
+     * remember the face it entered through separately.
+     */
+    private boolean projectBox(Vector3f direction, CollisionScratch scratch) {
+        if (!touching(direction)) {
+            exitFace = CollisionProjector.NO_FACE;
+            return false;
+        }
+        scratch.setExitFace(exitFace);
+        boolean moved = CollisionProjector.projectBox(
+                direction, pivot, shape.pointA(), shape.axisX(),
+                shape.axisY(), shape.axisZ(), shape.halfExtents(),
+                projectionHitRadius, shape.openAxis(), preparedLeverArm,
+                scratch
+        );
+        exitFace = scratch.exitFace();
+        return moved;
+    }
+
+    /**
+     * Bounding-sphere reject for the current endpoint. Most colliders a
+     * segment carries are near but not under the tip on any given pass, and
+     * this answers those without entering the box's local frame.
+     */
+    private boolean touching(Vector3f direction) {
+        Vector3f center = shape.pointA();
+        float dx = pivot.x + direction.x * preparedLeverArm - center.x;
+        float dy = pivot.y + direction.y * preparedLeverArm - center.y;
+        float dz = pivot.z + direction.z * preparedLeverArm - center.z;
+        float reach = shape.cullRadius() + projectionHitRadius;
+        return dx * dx + dy * dy + dz * dz <= reach * reach;
+    }
+
     public float clearance(Vector3f direction, CollisionScratch scratch) {
-        return switch (kind) {
+        return switch (shape.kind()) {
             case PLANE -> CollisionProjector.planeClearance(
-                    direction, pivot, pointA, normal,
+                    direction, pivot, shape.pointA(), shape.normal(),
                     projectionHitRadius, preparedLeverArm, scratch
             );
             case SPHERE -> CollisionProjector.sphereClearance(
-                    direction, pivot, pointA, projectionRadius,
+                    direction, pivot, shape.pointA(), projectionRadius,
                     preparedLeverArm, scratch
             );
             case CAPSULE -> CollisionProjector.capsuleClearance(
-                    direction, pivot, pointA, pointB, projectionRadius,
-                    preparedLeverArm, scratch
+                    direction, pivot, shape.pointA(), shape.pointB(),
+                    projectionRadius, preparedLeverArm, scratch
+            );
+            case BOX -> CollisionProjector.boxClearance(
+                    direction, pivot, shape.pointA(), shape.axisX(),
+                    shape.axisY(), shape.axisZ(), shape.halfExtents(),
+                    projectionHitRadius, shape.openAxis(), preparedLeverArm,
+                    scratch
             );
         };
     }
@@ -199,20 +321,28 @@ public final class PreparedCollisionProxy {
     }
 
     public int referenceNodeIndex() {
-        return referenceNodeIndex;
+        return shape.referenceNodeIndex();
     }
 
     public CollisionProxyKind kind() {
-        return kind;
+        return shape.kind();
     }
 
     void setSource(CollisionProxySource value) { source = value; }
+    void setAnimationPoseAllowanceEligible(boolean value) {
+        animationPoseAllowanceEligible = value;
+    }
     CollisionProxySource source() { return source; }
-    Vector3f referenceOrigin() { return referenceOrigin; }
+    Vector3f referenceOrigin() { return shape.referenceOrigin(); }
     Vector3f pivot() { return pivot; }
-    Vector3f pointA() { return pointA; }
-    Vector3f pointB() { return pointB; }
-    Vector3f normal() { return normal; }
+    Vector3f pointA() { return shape.pointA(); }
+    Vector3f pointB() { return shape.pointB(); }
+    Vector3f normal() { return shape.normal(); }
+    Vector3f axisX() { return shape.axisX(); }
+    Vector3f axisY() { return shape.axisY(); }
+    Vector3f axisZ() { return shape.axisZ(); }
+    Vector3f halfExtents() { return shape.halfExtents(); }
+    int openAxis() { return shape.openAxis(); }
     float preparedRadius() { return preparedRadius; }
     float preparedHitRadius() { return preparedHitRadius; }
     float projectionHitRadius() { return projectionHitRadius; }
@@ -220,6 +350,7 @@ public final class PreparedCollisionProxy {
 
     void resetRestAllowance() {
         restAllowance.reset();
+        exitFace = CollisionProjector.NO_FACE;
         applyRestAllowance();
     }
 
@@ -227,21 +358,7 @@ public final class PreparedCollisionProxy {
         return Float.isFinite(scale) ? Math.max(0.0F, scale) : 1.0F;
     }
 
-    private void setCommon(
-            CollisionProxyKind proxyKind,
-            int referenceIndex,
-            Vector3f originModel,
-            float endpointRadius,
-            float fixedLeverArm
-    ) {
-        kind = proxyKind;
-        referenceNodeIndex = referenceIndex;
-        referenceOriginModel.set(originModel);
-        restPointA.zero();
-        restPointB.zero();
-        restNormal.set(0.0F, 1.0F, 0.0F);
-        radius = 0.0F;
-        hitRadius = Math.max(0.0F, endpointRadius);
+    private void setCommon(float fixedLeverArm) {
         leverArm = Math.max(1.0E-6F, fixedLeverArm);
         preparedLeverArm = leverArm;
         restAllowance.reset();
@@ -252,18 +369,24 @@ public final class PreparedCollisionProxy {
             Vector3f direction,
             CollisionScratch scratch
     ) {
-        return switch (kind) {
+        return switch (shape.kind()) {
             case PLANE -> CollisionProjector.planeClearance(
-                    direction, pivot, pointA, normal,
+                    direction, pivot, shape.pointA(), shape.normal(),
                     preparedHitRadius, preparedLeverArm, scratch
             );
             case SPHERE -> CollisionProjector.sphereClearance(
-                    direction, pivot, pointA, preparedRadius,
+                    direction, pivot, shape.pointA(), preparedRadius,
                     preparedLeverArm, scratch
             );
             case CAPSULE -> CollisionProjector.capsuleClearance(
-                    direction, pivot, pointA, pointB, preparedRadius,
-                    preparedLeverArm, scratch
+                    direction, pivot, shape.pointA(), shape.pointB(),
+                    preparedRadius, preparedLeverArm, scratch
+            );
+            case BOX -> CollisionProjector.boxClearance(
+                    direction, pivot, shape.pointA(), shape.axisX(),
+                    shape.axisY(), shape.axisZ(), shape.halfExtents(),
+                    preparedHitRadius, shape.openAxis(), preparedLeverArm,
+                    scratch
             );
         };
     }

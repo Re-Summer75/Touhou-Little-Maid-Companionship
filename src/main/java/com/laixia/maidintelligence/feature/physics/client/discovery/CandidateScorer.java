@@ -28,6 +28,13 @@ final class CandidateScorer {
         BoneStructureMetrics structure = structures.metrics(node.bone());
         ClothAccessoryMetrics clothAccessory =
                 structures.clothAccessory(node.bone());
+        if (clothAccessory.rigidClothMount()) {
+            return Candidate.reject(
+                    PhysicsBoneSelectionPlan.StructureRole
+                            .RIGID_ATTACHMENT_BASE,
+                    "compact mount above independent cloth panels"
+            );
+        }
         WearableAttachmentClassifier.Result wearable =
                 WearableAttachmentClassifier.classify(
                         node,
