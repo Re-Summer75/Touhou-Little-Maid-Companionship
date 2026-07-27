@@ -21,11 +21,17 @@ final class ReferenceSpringBoneSolver {
     private static final double INERTIA_GAIN = 7.0D;
     private static final double TURN_GAIN = 3.0D;
 
-    private static final float MAX_ANGLE = 0.8F;
+    /*
+     * Copied on purpose rather than shared: this class exists to disagree with
+     * the production solver when the production solver is wrong, which it
+     * cannot do while reading the same constants. Keep the values in step with
+     * SwingRange by hand.
+     */
+    private static final float MAX_ANGLE = 1.05F;
     private static final float MAX_DEFLECT_X = 0.6F;
     private static final float MAX_DEFLECT_Y = 0.6F;
     private static final float MAX_DEFLECT_Z = 0.6F;
-    private static final float MAX_TIP_DISPLACEMENT = 3.0F;
+    private static final float MAX_TIP_DISPLACEMENT = 4.5F;
     private static final float REFERENCE_DELTA_SECONDS = 1.0F / 60.0F;
     private static final double EPSILON = 1.0E-5D;
 
@@ -121,7 +127,11 @@ final class ReferenceSpringBoneSolver {
                         restDir.y() * stiffness,
                         restDir.z() * stiffness
                 );
-                Vector3f externalForce = motion.force(profile);
+                Vector3f externalForce = motion.force(
+                        profile,
+                        restDir,
+                        data.currentDir
+                );
                 next.add(
                         externalForce.x() * dt,
                         externalForce.y() * dt,
@@ -318,17 +328,39 @@ final class ReferenceSpringBoneSolver {
     }
 
     private record MotionSignals(Vector3f acceleration, float yawRate) {
+        /**
+         * @param restDir    the authored pose, which gravity is resolved
+         *                   against rather than against the world; the author
+         *                   drew the part where gravity had already settled
+         *                   it, so a world-down pull would apply gravity twice
+         *                   and displace the pose.
+         * @param currentDir where the segment is now, which decides how much
+         *                   of the pose-displacing perpendicular pull is let
+         *                   in.
+         */
         private Vector3f force(
-                PhysicsBoneSelectionPlan.SpringProfile profile
+                PhysicsBoneSelectionPlan.SpringProfile profile,
+                Vector3f restDir,
+                Vector3f currentDir
         ) {
             float inertia = (float) INERTIA_GAIN * profile.inertiaScale();
             float turn = (float) TURN_GAIN * profile.turnScale();
+            float gravity = (float) GRAVITY_POWER * profile.gravityScale();
+            float alongRest = -restDir.y() * gravity;
+            float displaced = Mth.clamp(
+                    1.0F - currentDir.dot(restDir),
+                    0.0F,
+                    1.0F
+            );
+            float seated = 1.0F - displaced;
             return new Vector3f(
-                    acceleration.x() * -inertia + yawRate * turn,
+                    acceleration.x() * -inertia + yawRate * turn
+                            + restDir.x() * alongRest * seated,
                     acceleration.y() * -inertia
-                            - (float) GRAVITY_POWER
-                            * profile.gravityScale(),
+                            + restDir.y() * alongRest * seated
+                            - gravity * displaced,
                     acceleration.z() * -inertia
+                            + restDir.z() * alongRest * seated
             );
         }
     }

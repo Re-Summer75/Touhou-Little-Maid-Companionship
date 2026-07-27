@@ -11,10 +11,20 @@ import org.joml.Vector3f;
 public final class PreparedCollisionProxySet {
     private static final int MAX_PASSES = 96;
     /**
-     * Faces an endpoint sphere can touch at once. Three meet at a cube corner;
-     * this leaves room for layered clothing on top of that.
+     * Colliders one endpoint may be held by at once. Three faces meet at a cube
+     * corner, and a hem pinched between a torso and both legs already wants
+     * more than that before any layered clothing is counted. Ranking drops
+     * whatever exceeds this, so too low a limit reads as the endpoint ignoring
+     * one surface while it resolves another. The relaxation loop exits as soon
+     * as a pass changes nothing, so an unused slot costs one reject.
      */
-    private static final int ACTIVE_LIMIT = 4;
+    private static final int ACTIVE_LIMIT = 6;
+    /**
+     * Colliders per cull bucket. Small enough that a bucket's bounding sphere
+     * is a tight stand-in for its contents, large enough that testing the
+     * spheres does not cost more than testing the contents would have.
+     */
+    private static final int MAX_GROUP_SIZE = 8;
     public static final PreparedCollisionProxySet EMPTY =
             new PreparedCollisionProxySet(0);
 
@@ -33,6 +43,13 @@ public final class PreparedCollisionProxySet {
     private boolean bound;
     private boolean calibrationPending = true;
     private double poseTime;
+    /**
+     * Counts frames so a pairing can tell whether it was bound on the
+     * previous one. A pairing culled for a frame has nothing charged against
+     * its measured gaps that frame, so those gaps stop being trustworthy, and
+     * this is cheaper than walking the culled ones to say so.
+     */
+    private int frameIndex;
     private final SwingCone cone = new SwingCone();
     private final Vector3f boundsCenter = new Vector3f();
     private final Vector3f passStart = new Vector3f();
@@ -49,7 +66,17 @@ public final class PreparedCollisionProxySet {
     }
 
     /**
-     * Buckets the proxies by reference bone once the shapes are known.
+     * Buckets the proxies by reference bone, then splits each bucket in space
+     * once the shapes are known.
+     *
+     * <p>A bucket is cheap to reject as a whole only while it is compact, and
+     * per-bone buckets are not: one hair bone can carry sixty cubes spread over
+     * the entire head, giving a bounding sphere so large that every endpoint
+     * passes it and then pays for all sixty. Splitting on the longest axis
+     * until the buckets are small gives the frame loop tight spheres to reject
+     * against, which is where most of the per-frame cost of full-mesh collision
+     * goes. Culling is all this affects; whatever survives is projected exactly
+     * as before.
      */
     void groupByReference() {
         grouped = new int[proxies.length];
@@ -59,23 +86,91 @@ public final class PreparedCollisionProxySet {
         groupRadius = new float[proxies.length];
         groupHitRadius = new float[proxies.length];
         groupCount = 0;
+        boolean[] bucketed = new boolean[proxies.length];
         int written = 0;
         for (int slot = 0; slot < proxies.length; slot++) {
-            int reference = proxies[slot].referenceNodeIndex();
-            if (contains(groupReference, groupCount, reference)) {
+            if (bucketed[slot]) {
                 continue;
             }
-            groupReference[groupCount] = reference;
-            groupStart[groupCount] = written;
+            int reference = proxies[slot].referenceNodeIndex();
+            int start = written;
             for (int scan = slot; scan < proxies.length; scan++) {
                 if (proxies[scan].referenceNodeIndex() == reference) {
                     grouped[written++] = scan;
+                    bucketed[scan] = true;
                 }
             }
-            groupCount++;
+            subdivide(reference, start, written);
         }
         groupStart[groupCount] = written;
         measureGroups();
+    }
+
+    /**
+     * Registers {@code grouped[from, to)} as one group, or splits it and
+     * recurses. The left half is always registered first so group starts stay
+     * ascending, which is what lets {@code groupStart[group + 1]} serve as the
+     * end of a group.
+     */
+    private void subdivide(int reference, int from, int to) {
+        if (to - from <= MAX_GROUP_SIZE) {
+            groupReference[groupCount] = reference;
+            groupStart[groupCount] = from;
+            groupCount++;
+            return;
+        }
+        sortByLongestAxis(from, to);
+        int middle = from + (to - from) / 2;
+        subdivide(reference, from, middle);
+        subdivide(reference, middle, to);
+    }
+
+    /**
+     * Orders the slots along whichever axis the group is most spread out on.
+     * Insertion sort because this runs once per model load over a handful of
+     * cubes, not per frame.
+     */
+    private void sortByLongestAxis(int from, int to) {
+        float minX = Float.POSITIVE_INFINITY;
+        float minY = Float.POSITIVE_INFINITY;
+        float minZ = Float.POSITIVE_INFINITY;
+        float maxX = Float.NEGATIVE_INFINITY;
+        float maxY = Float.NEGATIVE_INFINITY;
+        float maxZ = Float.NEGATIVE_INFINITY;
+        for (int cursor = from; cursor < to; cursor++) {
+            Vector3f center = proxies[grouped[cursor]].shape().restCenter();
+            minX = Math.min(minX, center.x);
+            minY = Math.min(minY, center.y);
+            minZ = Math.min(minZ, center.z);
+            maxX = Math.max(maxX, center.x);
+            maxY = Math.max(maxY, center.y);
+            maxZ = Math.max(maxZ, center.z);
+        }
+        float spanX = maxX - minX;
+        float spanY = maxY - minY;
+        float spanZ = maxZ - minZ;
+        int axis = spanX >= spanY && spanX >= spanZ
+                ? 0
+                : (spanY >= spanZ ? 1 : 2);
+        for (int cursor = from + 1; cursor < to; cursor++) {
+            int slot = grouped[cursor];
+            float key = axisValue(slot, axis);
+            int scan = cursor - 1;
+            while (scan >= from && axisValue(grouped[scan], axis) > key) {
+                grouped[scan + 1] = grouped[scan];
+                scan--;
+            }
+            grouped[scan + 1] = slot;
+        }
+    }
+
+    private float axisValue(int slot, int axis) {
+        Vector3f center = proxies[slot].shape().restCenter();
+        return switch (axis) {
+            case 0 -> center.x;
+            case 1 -> center.y;
+            default -> center.z;
+        };
     }
 
     /**
@@ -157,6 +252,7 @@ public final class PreparedCollisionProxySet {
     ) {
         activeCount = 0;
         bound = true;
+        frameIndex++;
         advancePoseTime(dt);
         boolean stillPending = false;
         cone.set(restDirection, maximumSwing);
@@ -192,15 +288,18 @@ public final class PreparedCollisionProxySet {
                 if (slack > 0.0F && !calibrationPending) {
                     continue;
                 }
-                proxy.bindFrame(
-                        runtimePivotModel,
-                        colliderScale,
-                        endpointScale,
-                        runtimeLeverArm
-                );
-                if (calibrationPending && proxy.needsCalibration()) {
-                    proxy.allowInitialRestPose(restDirection, scratch);
-                    stillPending = true;
+                if (calibrationPending) {
+                    proxy.bindFrame(
+                            runtimePivotModel,
+                            colliderScale,
+                            endpointScale,
+                            runtimeLeverArm,
+                            frameIndex
+                    );
+                    if (proxy.needsCalibration()) {
+                        proxy.allowInitialRestPose(restDirection, scratch);
+                        stillPending = true;
+                    }
                 }
                 if (slack <= 0.0F) {
                     insert(slot, slack);
@@ -208,17 +307,26 @@ public final class PreparedCollisionProxySet {
             }
         }
         /*
-         * Only the proxies that survived ranking can constrain this frame, so
-         * only they need their authored depth re-measured. Each carries its
-         * own sample time, so one that drops out and returns later releases by
-         * the elapsed time rather than by a single frame.
+         * Binding is what costs: it rescales the collider, both allowances and
+         * the radii derived from them. Ranking needs none of that — it orders
+         * on the reach test alone — so binding waits until the set is known
+         * and is paid for the handful that survived rather than for every
+         * collider the sweep happened to overlap.
+         *
+         * Re-measuring the authored depth waits with it, for the same reason.
+         * Each proxy carries its own sample time, so one that drops out and
+         * returns later releases by the elapsed time rather than by a frame.
          */
         for (int index = 0; index < activeCount; index++) {
-            proxies[active[index]].trackAnimationPose(
-                    restDirection,
-                    poseTime,
-                    scratch
+            PreparedCollisionProxy proxy = proxies[active[index]];
+            proxy.bindFrame(
+                    runtimePivotModel,
+                    frames.maxBasisScale(proxy.referenceNodeIndex()),
+                    endpointScale,
+                    runtimeLeverArm,
+                    frameIndex
             );
+            proxy.trackAnimationPose(restDirection, poseTime, scratch);
         }
         calibrationPending = stillPending;
     }
@@ -349,12 +457,4 @@ public final class PreparedCollisionProxySet {
         poseTime += step;
     }
 
-    private static boolean contains(int[] values, int count, int value) {
-        for (int index = 0; index < count; index++) {
-            if (values[index] == value) {
-                return true;
-            }
-        }
-        return false;
-    }
 }

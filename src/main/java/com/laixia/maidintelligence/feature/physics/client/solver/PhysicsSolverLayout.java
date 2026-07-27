@@ -26,8 +26,6 @@ import java.util.Set;
  * the rendered orientation to those bones.
  */
 public final class PhysicsSolverLayout {
-    private static final float MAX_ANGLE = 0.8F;
-    private static final float MAX_TIP_DISPLACEMENT = 3.0F;
     private static final float EPSILON = 1.0E-6F;
 
     private final Node[] nodes;
@@ -291,7 +289,7 @@ public final class PhysicsSolverLayout {
                 node.decision().constraints();
         PhysicsBoneSelectionPlan.SwingLimits authored =
                 profile.swingLimits();
-        float cap = angularCap(node);
+        float cap = SwingRange.maximum(node);
         PhysicsBoneSelectionPlan.SwingLimits limits =
                 new PhysicsBoneSelectionPlan.SwingLimits(
                         Math.min(authored.left(), cap),
@@ -366,19 +364,6 @@ public final class PhysicsSolverLayout {
                 limits,
                 collisionProxies
         );
-    }
-
-    private static float angularCap(Node node) {
-        PhysicsBoneSelectionPlan.SpringProfile profile =
-                node.decision().profile();
-        float geometric = Math.min(
-                MAX_ANGLE,
-                node.kinematics().safeAngle()
-        ) * profile.angleScale();
-        float displacement = MAX_TIP_DISPLACEMENT
-                * profile.tipDisplacementScale()
-                / node.kinematics().leverArm();
-        return Math.max(0.0F, Math.min(geometric, displacement));
     }
 
     private static void orthogonalize(Vector3f vector, Vector3f axis) {

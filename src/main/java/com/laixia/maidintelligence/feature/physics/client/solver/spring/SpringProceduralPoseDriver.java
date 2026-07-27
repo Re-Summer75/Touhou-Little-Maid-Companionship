@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.feature.physics.client.solver.spring;
 
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneSelectionPlan;
 import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.client.solver.SwingRange;
 import org.joml.Vector3f;
 
 /**
@@ -26,7 +27,14 @@ final class SpringProceduralPoseDriver {
      * component was still allowed to hold parts over.
      */
     private static final float DRIVE_GAIN = 1.45F;
-    private static final float SAFETY_SHARE = 0.65F;
+    /**
+     * Share of the segment's own swing ceiling a gust may claim. The remainder
+     * is left to inertia and the walk cycle, which are added on top; the hard
+     * ceiling behind this is enforced by projection either way, so the share
+     * only decides whether a storm reads as strong on its own or spends the
+     * frame pinned against the limit by everything else.
+     */
+    private static final float SAFETY_SHARE = 0.78F;
     private static final float DEGENERATE_SQUARED = 1.0E-12F;
 
     private SpringProceduralPoseDriver() {
@@ -77,20 +85,11 @@ final class SpringProceduralPoseDriver {
                 turbulenceSeed,
                 turbulencePhase
         );
-        float geometricLimit = Math.min(
-                SpringBoneMath.MAX_ANGLE,
-                node.kinematics().safeAngle()
-        ) * profile.angleScale() * SAFETY_SHARE;
-        float displacementLimit =
-                SpringBoneMath.MAX_TIP_DISPLACEMENT
-                        * profile.tipDisplacementScale()
-                        / node.kinematics().leverArm()
-                        * SAFETY_SHARE;
         float angleLimit = Math.max(
                 0.0F,
                 Math.min(
                         maximumDriveAngle(node.decision().type()),
-                        Math.min(geometricLimit, displacementLimit)
+                        SwingRange.maximum(node) * SAFETY_SHARE
                 )
         );
         // Soft saturation preserves gust variation below the safety ceiling.
@@ -120,16 +119,22 @@ final class SpringProceduralPoseDriver {
         scratch.poseDriveBias.set(tangent).mul((float) Math.tan(angle));
     }
 
+    /**
+     * Lean, in radians, a part reaches only in the strongest weather the field
+     * can produce. Ordinary breezes land far below this: the request saturates
+     * softly against it, so raising the ceiling opens up the storm end without
+     * touching how calm days read.
+     */
     private static float maximumDriveAngle(
             PhysicsBoneSelectionPlan.PartType type
     ) {
         return switch (type) {
             case HEAD_SHELL -> 0.0F;
-            case HAIR, RIBBON -> 0.26F;
-            case TAIL -> 0.30F;
-            case EAR -> 0.17F;
-            case SKIRT, WING -> 0.13F;
-            case CAPE, GENERIC -> 0.20F;
+            case HAIR, RIBBON -> 0.40F;
+            case TAIL -> 0.46F;
+            case EAR -> 0.26F;
+            case SKIRT, WING -> 0.22F;
+            case CAPE, GENERIC -> 0.32F;
         };
     }
 }

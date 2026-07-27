@@ -20,6 +20,8 @@ final class SpringBoneState {
     final Vector3f[] previousDirections;
     /** Last constraint correction, used to spot a segment being squeezed. */
     final Vector3f[] projectionCorrections;
+    /** Consecutive frames the correction has reversed on. */
+    final int[] projectionReversals;
     final float[] projectionDamping;
     final float[] previousDeltaSeconds;
     final boolean[] initialized;
@@ -54,6 +56,7 @@ final class SpringBoneState {
             previousDirections[slot] = new Vector3f();
             projectionCorrections[slot] = new Vector3f();
         }
+        projectionReversals = new int[drivenCount];
         projectionDamping = new float[drivenCount];
         previousDeltaSeconds = new float[drivenCount];
         initialized = new boolean[drivenCount];
@@ -103,6 +106,7 @@ final class SpringBoneState {
             currentDirections[slot].zero();
             previousDirections[slot].zero();
             projectionCorrections[slot].zero();
+            projectionReversals[slot] = 0;
             projectionDamping[slot] = 0.0F;
             previousDeltaSeconds[slot] = 0.0F;
             initialized[slot] = false;

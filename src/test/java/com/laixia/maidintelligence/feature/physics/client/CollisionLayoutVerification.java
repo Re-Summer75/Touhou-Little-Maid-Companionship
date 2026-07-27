@@ -13,5 +13,7 @@ final class CollisionLayoutVerification {
         CollisionSchemaCompatibilityVerification.run();
         ExplicitCollisionLayoutVerification.run();
         SqueezedContactVerification.run();
+        SweptContactVerification.run();
+        CullBucketSubdivisionVerification.run();
     }
 }

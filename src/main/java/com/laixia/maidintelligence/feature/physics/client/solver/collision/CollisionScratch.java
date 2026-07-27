@@ -22,6 +22,13 @@ public final class CollisionScratch {
     final Vector3f local = new Vector3f();
     /** Face a buried endpoint left through last time, or {@code -1}. */
     int exitFace = CollisionProjector.NO_FACE;
+    /**
+     * Gap the last projection measured on its way to deciding it had nothing
+     * to push, or a negative value when it pushed. A projection has to find
+     * this distance before it can act on it, so reading it back costs nothing
+     * and tells the caller how long the answer stays true.
+     */
+    float measuredClearance = -1.0F;
 
     public CollisionScratch() {
     }
@@ -32,5 +39,17 @@ public final class CollisionScratch {
 
     public void setExitFace(int face) {
         exitFace = face;
+    }
+
+    public float measuredClearance() {
+        return measuredClearance;
+    }
+
+    /**
+     * Marks the gap unknown, so a shape whose projection does not report one
+     * cannot be read as having measured a gap the previous shape left behind.
+     */
+    public void clearMeasuredClearance() {
+        measuredClearance = -1.0F;
     }
 }

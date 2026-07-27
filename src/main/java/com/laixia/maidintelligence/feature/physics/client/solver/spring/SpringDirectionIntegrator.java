@@ -105,15 +105,44 @@ final class SpringDirectionIntegrator {
         float inertia =
                 SpringBoneMath.INERTIA_GAIN * profile.inertiaScale();
         float turn = SpringBoneMath.TURN_GAIN * profile.turnScale();
+        /*
+         * Gravity is resolved against the authored pose, not against the
+         * world. The author already drew the part where gravity had settled
+         * it — a skirt hanging, a sash lying along a hip — so pulling world-
+         * down on top of that pose applies gravity a second time, and the
+         * spring settles where the two balance instead of where the model was
+         * drawn. A raised strand sags, a sideways ribbon droops, and no amount
+         * of retuning the strength fixes it, because the displacement is what
+         * a constant force does to a spring.
+         *
+         * Only the component along the rest direction acts unconditionally:
+         * direction is normalized afterwards, so that component changes how
+         * firmly the part is drawn home without moving where home is. Parts
+         * hanging downwards are pulled home harder, parts raised against
+         * gravity more softly, which is the weight gravity should lend them.
+         * The perpendicular component is the one that displaces the pose, so
+         * it fades in with how far the segment already is from rest: a strand
+         * thrown out by wind or a kick still falls the way gravity really
+         * points, while one sitting at rest is left exactly where it was
+         * drawn. It cannot run away either — it saturates at full gravity
+         * while the restoring pull keeps growing with the angle.
+         */
+        float gravity = SpringBoneMath.GRAVITY_POWER * profile.gravityScale();
+        Vector3f rest = scratch.restDirection;
+        float alongRest = -rest.y() * gravity;
+        float displaced = Mth.clamp(1.0F - current.dot(rest), 0.0F, 1.0F);
+        float seated = 1.0F - displaced;
         scratch.nextDirection.add(
                 ((modelAcceleration.x() + animationAcceleration.x())
-                        * -inertia + yawRate * turn) * dt,
+                        * -inertia + yawRate * turn
+                        + rest.x() * alongRest * seated) * dt,
                 ((modelAcceleration.y() + animationAcceleration.y())
                         * -inertia
-                        - SpringBoneMath.GRAVITY_POWER
-                        * profile.gravityScale()) * dt,
-                (modelAcceleration.z() + animationAcceleration.z())
-                        * -inertia * dt
+                        + rest.y() * alongRest * seated
+                        - gravity * displaced) * dt,
+                ((modelAcceleration.z() + animationAcceleration.z())
+                        * -inertia
+                        + rest.z() * alongRest * seated) * dt
         );
         if (scratch.nextDirection.lengthSquared()
                 > SpringBoneMath.EPSILON) {

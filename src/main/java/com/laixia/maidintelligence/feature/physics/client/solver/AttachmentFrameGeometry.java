@@ -8,6 +8,13 @@ import org.joml.Vector3f;
 final class AttachmentFrameGeometry {
     private static final float MIN_PRINCIPAL_CONFIDENCE = 0.48F;
     private static final float MIN_SUPPORT_CONFIDENCE = 0.20F;
+    /**
+     * Ceiling for a segment whose rotation centre had to be inferred. Turning
+     * far around a guessed pivot moves the mesh somewhere the author never
+     * placed it, so the error grows with the angle and this stays well under
+     * {@link SwingRange#MAX_ANGLE}.
+     */
+    private static final float INFERRED_PIVOT_ANGLE = 0.40F;
     private static final float EPSILON = 1.0E-6F;
 
     private AttachmentFrameGeometry() {
@@ -52,7 +59,7 @@ final class AttachmentFrameGeometry {
             float pivotConfidence,
             boolean supportStabilityImprovement
     ) {
-        float angle = corrected ? 0.30F : 0.80F;
+        float angle = corrected ? INFERRED_PIVOT_ANGLE : SwingRange.MAX_ANGLE;
         if (endpointConfidence < MIN_PRINCIPAL_CONFIDENCE) {
             angle = Math.min(angle, 0.25F);
         }

@@ -27,6 +27,18 @@ final class SpringProjectionDamper {
     private static final float RISE = 0.5F;
     /** Below this a correction is numerical noise rather than a demand. */
     private static final float SIGNIFICANT = 1.0E-4F;
+    /**
+     * Consecutive reversing frames before the segment counts as stuck.
+     *
+     * <p>A single reversal is not evidence of anything: a collider that sweeps
+     * across a segment and back — a leg while walking — reverses once per
+     * stride, and damping on that basis is what makes a skirt stop reacting to
+     * being kicked, which is the one thing it most needs to react to. An
+     * unsatisfiable squeeze is a period-2 cycle instead: it reverses on every
+     * single frame, so requiring a streak separates the two without needing to
+     * measure anything about the collider.
+     */
+    private static final int SUSTAINED = 3;
 
     private SpringProjectionDamper() {
     }
@@ -43,6 +55,7 @@ final class SpringProjectionDamper {
         float cy = after.y - before.y;
         float cz = after.z - before.z;
         if (cx * cx + cy * cy + cz * cz <= SIGNIFICANT * SIGNIFICANT) {
+            state.projectionReversals[drivenSlot] = 0;
             state.projectionDamping[drivenSlot] = decay(
                     state.projectionDamping[drivenSlot],
                     dt
@@ -53,7 +66,9 @@ final class SpringProjectionDamper {
         boolean reversed = previous.lengthSquared()
                 > SIGNIFICANT * SIGNIFICANT
                 && cx * previous.x + cy * previous.y + cz * previous.z < 0.0F;
-        float damping = reversed
+        int streak = reversed ? state.projectionReversals[drivenSlot] + 1 : 0;
+        state.projectionReversals[drivenSlot] = streak;
+        float damping = streak >= SUSTAINED
                 ? Math.min(1.0F, state.projectionDamping[drivenSlot] + RISE)
                 : decay(state.projectionDamping[drivenSlot], dt);
         state.projectionDamping[drivenSlot] = damping;

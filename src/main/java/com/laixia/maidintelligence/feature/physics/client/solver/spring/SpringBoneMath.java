@@ -14,11 +14,9 @@ public final class SpringBoneMath {
     static final float INERTIA_GAIN = 7.0F;
     static final float TURN_GAIN = 3.0F;
 
-    static final float MAX_ANGLE = 0.8F;
     static final float MAX_DEFLECT_X = 0.6F;
     static final float MAX_DEFLECT_Y = 0.6F;
     static final float MAX_DEFLECT_Z = 0.6F;
-    static final float MAX_TIP_DISPLACEMENT = 3.0F;
 
     static final float REFERENCE_DELTA_SECONDS = 1.0F / 60.0F;
     static final float EPSILON = 1.0E-5F;

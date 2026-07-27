@@ -87,7 +87,9 @@ public final class CollisionProjector {
     ) {
         scratch.tip.set(direction).mul(leverArm).add(pivot);
         localise(scratch.tip, center, axisX, axisY, axisZ, scratch.local);
-        if (clearance(scratch.local, half, hitRadius, openAxis) >= 0.0F) {
+        scratch.measuredClearance =
+                clearance(scratch.local, half, hitRadius, openAxis);
+        if (scratch.measuredClearance >= 0.0F) {
             scratch.exitFace = NO_FACE;
             return false;
         }

@@ -40,6 +40,15 @@ public final class PreparedCollisionShape {
     private float scaledRadius;
     private float cullRadius = Float.POSITIVE_INFINITY;
 
+    private final Vector3f previousCenter = new Vector3f();
+    private final Vector3f previousHalfX = new Vector3f();
+    private final Vector3f previousHalfY = new Vector3f();
+    private final Vector3f previousHalfZ = new Vector3f();
+    private final Vector3f halfAxis = new Vector3f();
+    private float previousRadius;
+    private boolean posed;
+    private float motionBound = Float.POSITIVE_INFINITY;
+
     void setPlane(
             int referenceIndex,
             Vector3f originModel,
@@ -146,6 +155,52 @@ public final class PreparedCollisionShape {
             case SPHERE -> scaledRadius;
             default -> Float.POSITIVE_INFINITY;
         };
+        measureMotion();
+    }
+
+    /**
+     * How far any point of this collider's surface can have travelled since
+     * the previous frame, as an upper bound.
+     *
+     * <p>Measured rather than assumed, because it is what lets a segment reuse
+     * a gap it measured earlier instead of re-deriving it: a gap wider than
+     * everything that has moved since cannot have closed. The bound has to be
+     * an over-estimate for that to be sound, so a box adds the travel of each
+     * half-axis to the travel of its centre, which covers every corner however
+     * the limb turned. Shapes with no bounded surface, and the first frame of
+     * any shape, report infinity and simply defeat the reuse.
+     */
+    private void measureMotion() {
+        float travel = switch (kind) {
+            case BOX -> previousCenter.distance(pointA)
+                    + halfAxisTravel(axisX, halfExtents.x, previousHalfX)
+                    + halfAxisTravel(axisY, halfExtents.y, previousHalfY)
+                    + halfAxisTravel(axisZ, halfExtents.z, previousHalfZ);
+            case SPHERE -> previousCenter.distance(pointA)
+                    + Math.abs(scaledRadius - previousRadius);
+            default -> Float.POSITIVE_INFINITY;
+        };
+        motionBound = posed ? travel : Float.POSITIVE_INFINITY;
+        previousCenter.set(pointA);
+        previousRadius = scaledRadius;
+        posed = true;
+    }
+
+    /** Travel of one box half-axis tip, recording it for the next frame. */
+    private float halfAxisTravel(
+            Vector3f axis,
+            float extent,
+            Vector3f previous
+    ) {
+        halfAxis.set(axis).mul(extent);
+        float travel = previous.distance(halfAxis);
+        previous.set(halfAxis);
+        return travel;
+    }
+
+    /** @see #measureMotion() */
+    float motionBound() {
+        return motionBound;
     }
 
     CollisionProxyKind kind() {

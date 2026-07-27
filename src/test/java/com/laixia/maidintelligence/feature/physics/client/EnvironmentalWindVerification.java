@@ -872,8 +872,9 @@ final class EnvironmentalWindVerification {
     /**
      * The lean settles at the safety ceiling instead of overshooting it, so
      * this has to be measured after the spring converges rather than on a
-     * single frame. The calm fixture carries the same gravity sag, leaving the
-     * angle between the two as the wind's own contribution.
+     * single frame. Measuring against a calm fixture rather than against the
+     * authored axis keeps the reading to the wind's own contribution whatever
+     * else settles the segment.
      */
     private static void verifiesSkirtWindAngleIsBounded() {
         Fixture rest = createFixture("skirt_rest", "SKIRT");
@@ -900,7 +901,7 @@ final class EnvironmentalWindVerification {
         );
         float angle = angleBetween(restDirection, windyDirection);
         require(
-                angle > 0.10F && angle <= 0.135F,
+                angle > 0.17F && angle <= 0.23F,
                 "Skirt wind angle escaped its safety ceiling: " + angle
         );
     }

@@ -27,6 +27,16 @@ import java.util.Locale;
 public final class BonePhysicsBenchmark {
     private static final int WARMUP_FRAMES = 20_000;
     private static final int MEASURED_FRAMES = 20_000;
+    /**
+     * Measured frames are split into rounds and the best round is reported.
+     *
+     * <p>One long average is at the mercy of whatever else the machine did
+     * during it, and on this workload that was worth twenty percent — enough
+     * to hide or invent the effect of a change being evaluated. The fastest
+     * round is the one that came closest to running undisturbed, so comparing
+     * fastest rounds compares the code rather than the machine's mood.
+     */
+    private static final int MEASURED_ROUNDS = 5;
     private static final IdentityHashMap<AnimatedGeoBone, Vector3f>
             INITIAL_ROTATIONS = new IdentityHashMap<>();
     private static volatile double blackhole;
@@ -196,33 +206,35 @@ public final class BonePhysicsBenchmark {
     ) {
         Vector3f acceleration = new Vector3f();
         long allocatedBytes = allocations.available() ? 0L : -1L;
-        long solveNanos = 0L;
+        double best = Double.POSITIVE_INFINITY;
         double checksum = 0.0D;
-        for (int frame = 0; frame < frames; frame++) {
-            resetPose(model, frame);
-            motion(frame, acceleration);
-            long allocatedBefore = allocations.currentThreadBytes();
-            long start = System.nanoTime();
-            solver.solve(
-                    acceleration,
-                    yawRate(frame),
-                    deltaSeconds(frame),
-                    false
-            );
-            solveNanos += System.nanoTime() - start;
-            allocatedBytes = allocations.accumulate(
-                    allocatedBytes,
-                    allocatedBefore,
-                    allocations.currentThreadBytes()
-            );
-            checksum += model.topLevelBones().get(0).getRotationX();
+        int perRound = roundLength(frames);
+        int frame = 0;
+        for (int round = 0; round < MEASURED_ROUNDS; round++) {
+            long solveNanos = 0L;
+            for (int step = 0; step < perRound; step++, frame++) {
+                resetPose(model, frame);
+                motion(frame, acceleration);
+                long allocatedBefore = allocations.currentThreadBytes();
+                long start = System.nanoTime();
+                solver.solve(
+                        acceleration,
+                        yawRate(frame),
+                        deltaSeconds(frame),
+                        false
+                );
+                solveNanos += System.nanoTime() - start;
+                allocatedBytes = allocations.accumulate(
+                        allocatedBytes,
+                        allocatedBefore,
+                        allocations.currentThreadBytes()
+                );
+                checksum += model.topLevelBones().get(0).getRotationX();
+            }
+            best = Math.min(best, solveNanos / (double) perRound);
         }
         blackhole = checksum;
-        return BenchmarkResult.of(
-                solveNanos,
-                frames,
-                allocatedBytes
-        );
+        return BenchmarkResult.of(best, frame, allocatedBytes);
     }
 
     private static BenchmarkResult measureOptimized(
@@ -233,33 +245,39 @@ public final class BonePhysicsBenchmark {
     ) {
         Vector3f acceleration = new Vector3f();
         long allocatedBytes = allocations.available() ? 0L : -1L;
-        long solveNanos = 0L;
+        double best = Double.POSITIVE_INFINITY;
         double checksum = 0.0D;
-        for (int frame = 0; frame < frames; frame++) {
-            resetPose(model, frame);
-            motion(frame, acceleration);
-            long allocatedBefore = allocations.currentThreadBytes();
-            long start = System.nanoTime();
-            solver.solve(
-                    acceleration,
-                    yawRate(frame),
-                    deltaSeconds(frame),
-                    false
-            );
-            solveNanos += System.nanoTime() - start;
-            allocatedBytes = allocations.accumulate(
-                    allocatedBytes,
-                    allocatedBefore,
-                    allocations.currentThreadBytes()
-            );
-            checksum += solver.lastPeakDeflection();
+        int perRound = roundLength(frames);
+        int frame = 0;
+        for (int round = 0; round < MEASURED_ROUNDS; round++) {
+            long solveNanos = 0L;
+            for (int step = 0; step < perRound; step++, frame++) {
+                resetPose(model, frame);
+                motion(frame, acceleration);
+                long allocatedBefore = allocations.currentThreadBytes();
+                long start = System.nanoTime();
+                solver.solve(
+                        acceleration,
+                        yawRate(frame),
+                        deltaSeconds(frame),
+                        false
+                );
+                solveNanos += System.nanoTime() - start;
+                allocatedBytes = allocations.accumulate(
+                        allocatedBytes,
+                        allocatedBefore,
+                        allocations.currentThreadBytes()
+                );
+                checksum += solver.lastPeakDeflection();
+            }
+            best = Math.min(best, solveNanos / (double) perRound);
         }
         blackhole = checksum;
-        return BenchmarkResult.of(
-                solveNanos,
-                frames,
-                allocatedBytes
-        );
+        return BenchmarkResult.of(best, frame, allocatedBytes);
+    }
+
+    private static int roundLength(int frames) {
+        return Math.max(1, frames / MEASURED_ROUNDS);
     }
 
     private static void resetPose(AnimatedGeoModel model, int frame) {
@@ -366,12 +384,12 @@ public final class BonePhysicsBenchmark {
             double allocatedBytesPerFrame
     ) {
         private static BenchmarkResult of(
-                long elapsedNanos,
+                double bestRoundNanosPerFrame,
                 int frames,
                 long allocatedBytes
         ) {
             return new BenchmarkResult(
-                    elapsedNanos / (double) frames,
+                    bestRoundNanosPerFrame,
                     allocatedBytes < 0L
                             ? -1.0D
                             : allocatedBytes / (double) frames

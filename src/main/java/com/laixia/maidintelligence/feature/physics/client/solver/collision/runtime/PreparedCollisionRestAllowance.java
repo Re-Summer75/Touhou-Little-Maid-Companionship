@@ -24,9 +24,28 @@ final class PreparedCollisionRestAllowance {
     /** Keeps the endpoint just clear of the surface it is allowed to touch. */
     private static final float POSE_MARGIN = 1.0F / 1024.0F;
     private static final float RELEASE_SECONDS = 0.20F;
+    /**
+     * How fast the allowance may widen, in model pixels per second.
+     *
+     * <p>Two very different things both look like "the animation overlaps its
+     * own collider", and they want opposite treatment. A pose settling into an
+     * overlap — sitting down, an embrace, a crouch folding a hem into a thigh —
+     * is the author's silhouette and has to be allowed. A collider sweeping
+     * through at speed — a leg kicking out while walking — is exactly what the
+     * cloth is supposed to react to, and allowing it reads as the leg passing
+     * straight through the skirt.
+     *
+     * <p>Rate is what separates them, so the allowance simply cannot keep up
+     * with a fast approach: a pose that closes over a few tenths of a second is
+     * absorbed as before, while a kick outruns the allowance and stays a real
+     * collision. This needs no classifier and degrades sanely at both ends —
+     * unbounded would absorb everything, zero would fight every authored pose.
+     */
+    private static final float GROWTH_PIXELS_PER_SECOND = 2.0F;
+    /** Longest single step that may earn growth budget. */
+    private static final double GROWTH_WINDOW_SECONDS = 0.05D;
 
     private boolean calibrated;
-    private float restNormalizedPenetration;
     private float poseNormalizedPenetration;
     private double poseSampleTime;
     private boolean poseSampled;
@@ -52,8 +71,22 @@ final class PreparedCollisionRestAllowance {
         return source != CollisionProxySource.EXPLICIT && !calibrated;
     }
 
+    /**
+     * Seeds the allowance from the depth the model is drawn at, so the very
+     * first solved frame does not shove a segment out of an overlap it was
+     * authored inside.
+     *
+     * <p>The seed is only a starting value, not a floor. Holding it forever
+     * would fix the allowance at whatever a single arbitrary frame happened to
+     * show, and for a collider that moves — a leg, which rest-poses inside the
+     * skirt it will later kick — that frame says nothing about any other. The
+     * leg would then be free to swing to that depth anywhere, forever, and the
+     * skirt would sit still through it. Letting the seed decay like any other
+     * sample keeps the first frame honest and still lets the surface come back
+     * once the collider leaves.
+     */
     void calibrate(float clearance) {
-        restNormalizedPenetration =
+        poseNormalizedPenetration =
                 Math.max(0.0F, -clearance) / runtimeScale;
         calibrated = true;
     }
@@ -76,8 +109,19 @@ final class PreparedCollisionRestAllowance {
         poseSampleTime = poseTime;
         poseSampled = true;
         if (target >= previous) {
-            poseNormalizedPenetration = target;
-            return target != previous;
+            /*
+             * Budget is earned by time spent in contact, so it is capped per
+             * step: elapsed also counts the frames this proxy was out of reach
+             * — which release needs, to hand the surface back by real time —
+             * and spending that on growth would let a returning collider claim
+             * a whole second of widening in one frame, which is no limit at
+             * all.
+             */
+            double step = Math.min(elapsed, GROWTH_WINDOW_SECONDS);
+            poseNormalizedPenetration = Math.min(target, previous
+                    + (float) (GROWTH_PIXELS_PER_SECOND * step)
+                    / runtimeScale);
+            return poseNormalizedPenetration != previous;
         }
         if (elapsed <= 0.0D) {
             return false;
@@ -92,16 +136,11 @@ final class PreparedCollisionRestAllowance {
     }
 
     float threshold(float unadjusted) {
-        float allowance = Math.max(
-                restNormalizedPenetration,
-                poseNormalizedPenetration
-        );
-        return unadjusted - allowance * runtimeScale;
+        return unadjusted - poseNormalizedPenetration * runtimeScale;
     }
 
     void reset() {
         calibrated = false;
-        restNormalizedPenetration = 0.0F;
         poseNormalizedPenetration = 0.0F;
         poseSampleTime = 0.0D;
         poseSampled = false;

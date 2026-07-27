@@ -4,6 +4,7 @@ import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedG
 import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneSelectionPlan;
 import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
 import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.client.solver.SwingRange;
 import org.joml.Quaternionf;
 
 /**
@@ -102,15 +103,7 @@ final class SpringDeflectionApplier {
         PhysicsBoneSelectionPlan.SpringProfile profile =
                 node.decision().profile();
         BoneKinematics.Metrics kinematics = node.kinematics();
-        float cap = Math.min(
-                Math.min(
-                        SpringBoneMath.MAX_ANGLE,
-                        kinematics.safeAngle()
-                ) * profile.angleScale(),
-                SpringBoneMath.MAX_TIP_DISPLACEMENT
-                        * profile.tipDisplacementScale()
-                        / kinematics.leverArm()
-        );
+        float cap = SwingRange.maximum(node);
         boolean constrainedOutput =
                 constraintsEnabled && node.constraint().enabled();
         float angle = constrainedOutput

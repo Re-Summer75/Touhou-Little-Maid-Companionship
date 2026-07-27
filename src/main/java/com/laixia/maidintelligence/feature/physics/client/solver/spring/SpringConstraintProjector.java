@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.feature.physics.client.solver.spring;
 
 import com.laixia.maidintelligence.feature.physics.client.solver.SecondaryMotionConstraint;
 import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.client.solver.SwingRange;
 import com.laixia.maidintelligence.feature.physics.client.solver.collision.runtime.PreparedCollisionProxySet;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -141,17 +142,7 @@ final class SpringConstraintProjector {
             PhysicsSolverLayout.Node node,
             float runtimeSafetyScale
     ) {
-        float scale = Float.isFinite(runtimeSafetyScale)
-                ? Math.max(1.0E-6F, runtimeSafetyScale)
-                : 1.0F;
-        float geometric = Math.min(
-                SpringBoneMath.MAX_ANGLE,
-                node.kinematics().safeAngle()
-        ) * node.decision().profile().angleScale();
-        float displacement = SpringBoneMath.MAX_TIP_DISPLACEMENT
-                * node.decision().profile().tipDisplacementScale()
-                / (node.kinematics().leverArm() * scale);
-        return Math.max(0.0F, Math.min(geometric, displacement));
+        return SwingRange.maximum(node, runtimeSafetyScale);
     }
 
     private static boolean projectMaximumSwing(
