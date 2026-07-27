@@ -44,7 +44,6 @@ final class PreparedCollisionRestAllowance {
     private static final float GROWTH_PIXELS_PER_SECOND = 2.0F;
     /** Longest single step that may earn growth budget. */
     private static final double GROWTH_WINDOW_SECONDS = 0.05D;
-
     private boolean calibrated;
     private float poseNormalizedPenetration;
     private double poseSampleTime;

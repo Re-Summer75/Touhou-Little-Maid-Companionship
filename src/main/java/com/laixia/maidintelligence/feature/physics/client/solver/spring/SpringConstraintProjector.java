@@ -50,6 +50,8 @@ final class SpringConstraintProjector {
             SpringBoneMetrics metrics
     ) {
         boolean corrected = false;
+        scratch.collisionCorrected = false;
+        scratch.collisionNormal.zero();
         float maximumCosine = (float) Math.cos(maximumSwing);
         float maximumSine = (float) Math.sin(maximumSwing);
         for (int iteration = 0;
@@ -72,6 +74,7 @@ final class SpringConstraintProjector {
             if (swingCorrected || safetyCorrected) {
                 metrics.recordConstraintProjection();
             }
+            scratch.collisionStart.set(direction);
             boolean collisionCorrected =
                     collisions.project(
                             direction,
@@ -80,6 +83,12 @@ final class SpringConstraintProjector {
                     );
             if (collisionCorrected) {
                 metrics.recordCollisionProjection();
+                scratch.collisionCorrected = true;
+                scratch.collisionNormal.add(
+                        direction.x() - scratch.collisionStart.x(),
+                        direction.y() - scratch.collisionStart.y(),
+                        direction.z() - scratch.collisionStart.z()
+                );
             }
             corrected |= swingCorrected
                     || safetyCorrected

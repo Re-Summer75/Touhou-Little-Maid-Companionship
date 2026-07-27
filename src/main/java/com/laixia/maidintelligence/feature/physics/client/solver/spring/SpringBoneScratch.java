@@ -24,6 +24,17 @@ final class SpringBoneScratch {
     final Vector3f nextDirection = new Vector3f();
     /** Pose entering constraint projection, kept to measure what it changed. */
     final Vector3f projectionStart = new Vector3f();
+    /** Pose entering the last collision pass, to isolate what that pass moved. */
+    final Vector3f collisionStart = new Vector3f();
+    /** Sum of what the collision passes moved, which points along the surface. */
+    final Vector3f collisionNormal = new Vector3f();
+    /**
+     * Whether collision, specifically, moved the pose this frame. A swing limit
+     * moves it too, and only a collider stands for a surface a part can rest on.
+     */
+    boolean collisionCorrected;
+    /** External acceleration for the step, before contact support trims it. */
+    final Vector3f appliedForce = new Vector3f();
     final Vector3f localDirection = new Vector3f();
     final Vector3f deflectionAxis = new Vector3f();
     final Vector3f rotationEuler = new Vector3f();

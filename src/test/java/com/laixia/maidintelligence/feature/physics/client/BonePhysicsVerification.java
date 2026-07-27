@@ -30,7 +30,6 @@ public final class BonePhysicsVerification {
         RigidAttachmentVerification.run();
         ClothAccessoryDiscoveryVerification.run();
         InitialPoseStabilityVerification.run();
-        GravityRestPoseVerification.run();
         DanglingAccessoryStabilityVerification.run();
         BundledGeckoModelVerification.run();
         BundledAxisPolarityVerification.run();

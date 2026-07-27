@@ -23,6 +23,25 @@ final class SpringBoneState {
     /** Consecutive frames the correction has reversed on. */
     final int[] projectionReversals;
     final float[] projectionDamping;
+    /**
+     * Direction the last correction pushed the segment, and how sure of it we
+     * still are, together standing in for the surface the segment rests on.
+     *
+     * <p>Without one, a part held against a collider by a steady force never
+     * settles: the force presses it in by a frame's worth of travel, the
+     * projection lifts it back out, and nothing about either changes, so it
+     * repeats for as long as the pose is held. Real contact does not work that
+     * way — the surface pushes back, exactly hard enough — and reading the push
+     * off the correction gives us that normal for free, since a projection can
+     * only ever move a segment along it.
+     *
+     * <p>Confidence decays rather than being dropped the moment a frame goes by
+     * without a correction, because that is the normal state of resting contact:
+     * the support holds the segment still, so there is nothing left to correct,
+     * and forgetting the surface then would restart the cycle it prevents.
+     */
+    final Vector3f[] contactNormals;
+    final float[] contactSupport;
     final float[] previousDeltaSeconds;
     final boolean[] initialized;
     /** Integrated buffeting phase per bone; only stepped frames advance it. */
@@ -51,13 +70,16 @@ final class SpringBoneState {
         currentDirections = new Vector3f[drivenCount];
         previousDirections = new Vector3f[drivenCount];
         projectionCorrections = new Vector3f[drivenCount];
+        contactNormals = new Vector3f[drivenCount];
         for (int slot = 0; slot < drivenCount; slot++) {
             currentDirections[slot] = new Vector3f();
             previousDirections[slot] = new Vector3f();
             projectionCorrections[slot] = new Vector3f();
+            contactNormals[slot] = new Vector3f();
         }
         projectionReversals = new int[drivenCount];
         projectionDamping = new float[drivenCount];
+        contactSupport = new float[drivenCount];
         previousDeltaSeconds = new float[drivenCount];
         initialized = new boolean[drivenCount];
         turbulencePhases = new double[drivenCount];
@@ -106,8 +128,10 @@ final class SpringBoneState {
             currentDirections[slot].zero();
             previousDirections[slot].zero();
             projectionCorrections[slot].zero();
+            contactNormals[slot].zero();
             projectionReversals[slot] = 0;
             projectionDamping[slot] = 0.0F;
+            contactSupport[slot] = 0.0F;
             previousDeltaSeconds[slot] = 0.0F;
             initialized[slot] = false;
             turbulencePhases[slot] = 0.0D;

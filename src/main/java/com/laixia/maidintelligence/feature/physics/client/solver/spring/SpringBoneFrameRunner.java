@@ -186,6 +186,7 @@ final class SpringBoneFrameRunner {
                 );
             }
         }
+        SpringContactSupport.record(node.drivenSlot(), dt, state, scratch);
         SpringDirectionIntegrator.commit(
                 node.drivenSlot(),
                 stepped,

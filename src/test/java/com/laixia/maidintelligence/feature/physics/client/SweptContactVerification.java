@@ -55,15 +55,16 @@ final class SweptContactVerification {
     /**
      * Deflection a swept leg has to produce, in radians.
      *
-     * <p>The panels reach 0.17 here and 0.010 with body sampling removed, so
-     * this sits between the two with room on both sides. The gap is that wide
-     * because these panels hang where they were drawn: their tips end above
-     * the swing of a leg and never meet one, leaving the contact entirely to
-     * the length of the segment. Being far below the swing ceiling, the claim
-     * stays "the cloth was driven, not merely nudged" rather than pinning an
-     * exact response.
+     * <p>The panels reach 0.35 here and 0.094 with body sampling removed, so
+     * this sits between the two with room on both sides. Both ends move with
+     * gravity: pulling world-down lets the panels sag into the swing of a leg,
+     * so their tips meet one and the length of the segment is no longer the
+     * only thing in contact — resolving gravity against the authored pose
+     * instead held them clear and left 0.17 against 0.010. Being far below the
+     * swing ceiling either way, the claim stays "the cloth was driven, not
+     * merely nudged" rather than pinning an exact response.
      */
-    private static final float RESPONSE = 0.12F;
+    private static final float RESPONSE = 0.20F;
     /** Cloth may not be thrown further than a limb could plausibly push it. */
     private static final float RUNAWAY = 0.95F;
     private static final String MODEL = "winefox.json";

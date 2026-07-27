@@ -14,6 +14,15 @@ import org.joml.Vector3f;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * Draws colliders at their own geometry, not at the surface a segment is
+ * actually held to. The endpoint radius is deliberately left off: the question
+ * this overlay answers is whether a collider matches the cube it was derived
+ * from, and adding the radius made every box read as a collider that had been
+ * built a ring too large. Where a segment stops is that radius further out,
+ * and for a cloth layer it has to be — the panel is held off by its own half
+ * thickness so its surface, not its axis, lands on the sheet below.
+ */
 @OnlyIn(Dist.CLIENT)
 final class CollisionDebugRenderer {
     private static final int CIRCLE_SEGMENTS = 24;
@@ -63,18 +72,19 @@ final class CollisionDebugRenderer {
         }
     }
 
-    /** Shape plus margin: two segments only share a drawing when both match. */
+    /**
+     * Geometry only, matching what is drawn. The endpoint radius is left out
+     * of both: it differs per segment against the same cube, so keying on it
+     * would redraw one collider several times at the same size.
+     */
     private static String identity(CollisionProxyDebugData data) {
         return switch (data.kind) {
             case BOX -> "B" + data.boxCenter + data.boxHalfExtents
-                    + data.boxAxisY + data.boxOpenAxis
-                    + round(data.scaledHitRadius);
-            case PLANE -> "P" + data.planePoint + data.planeNormal
-                    + round(data.scaledHitRadius);
-            case SPHERE -> "S" + data.sphereCenter + round(data.sphereRadius)
-                    + round(data.scaledHitRadius);
+                    + data.boxAxisY + data.boxOpenAxis;
+            case PLANE -> "P" + data.planePoint + data.planeNormal;
+            case SPHERE -> "S" + data.sphereCenter + round(data.sphereRadius);
             case CAPSULE -> "C" + data.capsuleStart + data.capsuleEnd
-                    + round(data.capsuleRadius) + round(data.scaledHitRadius);
+                    + round(data.capsuleRadius);
         };
     }
 
@@ -110,10 +120,9 @@ final class CollisionDebugRenderer {
             VertexConsumer lines, Matrix4f pose,
             CollisionProxyDebugData data, int[] color
     ) {
-        float margin = data.scaledHitRadius;
-        float hx = data.boxHalfExtents.x + margin;
-        float hy = data.boxHalfExtents.y + margin;
-        float hz = data.boxHalfExtents.z + margin;
+        float hx = data.boxHalfExtents.x;
+        float hy = data.boxHalfExtents.y;
+        float hz = data.boxHalfExtents.z;
         Vector3f[] corners = new Vector3f[8];
         for (int index = 0; index < 8; index++) {
             corners[index] = new Vector3f(data.boxCenter)
@@ -182,7 +191,7 @@ final class CollisionDebugRenderer {
             VertexConsumer lines, Matrix4f pose,
             CollisionProxyDebugData data, int[] color
     ) {
-        float radius = data.sphereRadius + data.scaledHitRadius;
+        float radius = data.sphereRadius;
         circle(lines, pose, data.sphereCenter, X, Y, radius, color);
         circle(lines, pose, data.sphereCenter, X, Z, radius, color);
         circle(lines, pose, data.sphereCenter, Y, Z, radius, color);
@@ -196,7 +205,7 @@ final class CollisionDebugRenderer {
         Vector3f u = new Vector3f();
         Vector3f v = new Vector3f();
         basis(axis, u, v);
-        float radius = data.capsuleRadius + data.scaledHitRadius;
+        float radius = data.capsuleRadius;
         line(lines, pose, data.capsuleStart, data.capsuleEnd, color);
         circle(lines, pose, data.capsuleStart, u, v, radius, color);
         circle(lines, pose, data.capsuleEnd, u, v, radius, color);

@@ -286,6 +286,14 @@ final class MeshCollisionVerification {
      * Rests the strand against the skull and then blows it inward with frame
      * acceleration. Secondary motion is exactly what collision exists to stop,
      * so the mesh box has to hold the endpoint on the surface.
+     *
+     * <p>Where the surface is, is checked exactly inside {@code driveIntoHead}.
+     * This adds the end-to-end half: that the clearance reached the written
+     * pose rather than being computed and dropped. The margin is small on
+     * purpose — the endpoint radius is a tolerance now, not a thickness, so the
+     * box no longer stands a ring off its own cube and the only swing taken
+     * back is the part that truly sank in. A collider that stopped working
+     * entirely still lands on {@code free} and is caught.
      */
     private static void verifiesEndpointStopsAtHeadSurface() {
         float free = driveIntoHead(false);
@@ -295,7 +303,7 @@ final class MeshCollisionVerification {
         );
         float blocked = driveIntoHead(true);
         require(
-                blocked < free - 0.03F,
+                blocked < free - 0.01F,
                 "Mesh collision did not hold the strand back: " + blocked
                         + " against a free swing of " + free
         );
