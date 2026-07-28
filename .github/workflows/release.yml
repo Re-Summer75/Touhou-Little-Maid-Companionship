@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布的标签（例如 v0.0.1）'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Read mod version
+        id: mod
+        run: |
+          version=$(grep '^mod_version=' gradle.properties | cut -d= -f2)
+          mc=$(grep '^minecraft_version=' gradle.properties | cut -d= -f2)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "minecraft=$mc" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: ./gradlew build --no-daemon --stacktrace
+
+      - name: Collect artifacts
+        id: artifacts
+        run: |
+          mkdir -p release
+          find build/libs -maxdepth 1 -name '*.jar' \
+            ! -name '*-sources.jar' ! -name '*-dev*.jar' \
+            -exec cp {} release/ \;
+          ls -l release
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tlm-companionship-${{ steps.mod.outputs.version }}
+          path: release/*.jar
+
+      - name: Determine prerelease flag
+        id: flag
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          if [[ "$tag" == *-* || "${{ steps.mod.outputs.version }}" == 0.* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: ${{ github.event.inputs.tag || github.ref_name }} · Minecraft ${{ steps.mod.outputs.minecraft }}
+          prerelease: ${{ steps.flag.outputs.prerelease }}
+          generate_release_notes: true
+          files: release/*.jar
+          body_path: .github/RELEASE_TEMPLATE.md
