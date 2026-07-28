@@ -65,7 +65,7 @@ jobs:
         id: flag
         run: |
           tag="${{ github.event.inputs.tag || github.ref_name }}"
-          if [[ "$tag" == *-* || "${{ steps.mod.outputs.version }}" == 0.* ]]; then
+          if [[ "$tag" == *-* ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
             echo "prerelease=false" >> "$GITHUB_OUTPUT"

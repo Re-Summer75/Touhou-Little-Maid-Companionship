@@ -6,7 +6,7 @@
 
 为《车万女仆》带来更沉浸、更细腻的陪伴体验
 
-![Version](https://img.shields.io/badge/Version-v0.0.1--beta-yellow?style=flat-square)
+![Version](https://img.shields.io/badge/Version-v0.0.1-yellow?style=flat-square)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-brightgreen?style=flat-square&logo=minecraft)
 ![Mod Loader](https://img.shields.io/badge/Forge-47.4.0%2B-orange?style=flat-square)
 ![Touhou Little Maid](https://img.shields.io/badge/TLM-%3E%3D%201.5.3-ff69b4?style=flat-square)
