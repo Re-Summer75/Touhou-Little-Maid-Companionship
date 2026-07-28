@@ -100,21 +100,35 @@ final class SpringDirectionIntegrator {
                 scratch.restDirection.y() * stiffness,
                 scratch.restDirection.z() * stiffness
         );
-        // Atmosphere leans the spring without displacing what it pulls toward.
-        scratch.nextDirection.fma(stiffness, scratch.poseDriveBias);
         float inertia =
                 SpringBoneMath.INERTIA_GAIN * profile.inertiaScale();
         float turn = SpringBoneMath.TURN_GAIN * profile.turnScale();
         /*
-         * Gravity pulls world-down, on every part, at all times. It therefore
-         * also displaces the authored pose: the spring settles where the pull
-         * and the restoring force balance, not where the model was drawn, so a
-         * raised strand sags and a sideways ribbon droops a little. Resolving
-         * it against the rest direction instead removes that displacement, but
-         * it also removes the sag that reads as weight, and the trade was
-         * judged the wrong way round — a part that never sags looks stiff.
+         * Everything the surroundings do to the part, gathered before any of it
+         * reaches the pose, because a surface the part rests on answers all of
+         * it at once. Atmosphere belongs here even though it arrives as a lean
+         * rather than a force: it leans the spring by displacing what the spring
+         * pulls towards, and a gust blowing inwards puts that target inside the
+         * body. Projection alone cannot settle a target it can never reach — it
+         * keeps answering the same violation for as long as the weather lasts,
+         * and the cloth rides at whatever depth pull and push balance at. Being
+         * held against a collider is the one thing a gust must not be able to
+         * turn into being pressed through it.
+         *
+         * <p>Gravity pulls world-down on every part at all times, so it also
+         * displaces the authored pose: the spring settles where the pull and the
+         * restoring force balance rather than where the model was drawn, and a
+         * raised strand sags. Resolving it against the rest direction removes
+         * that displacement, but it removes the sag that reads as weight along
+         * with it, and the trade was judged the wrong way round.
+         *
+         * <p>The restoring pull towards the authored pose is deliberately left
+         * out. That pose is the equilibrium, overlap and all — an author may seat
+         * a hem inside a hip — and cancelling it would stop the part returning to
+         * where the model was drawn.
          */
-        scratch.appliedForce.set(
+        scratch.appliedForce.set(scratch.poseDriveBias).mul(stiffness);
+        scratch.appliedForce.add(
                 ((modelAcceleration.x() + animationAcceleration.x())
                         * -inertia + yawRate * turn) * dt,
                 ((modelAcceleration.y() + animationAcceleration.y())
@@ -124,7 +138,6 @@ final class SpringDirectionIntegrator {
                 (modelAcceleration.z() + animationAcceleration.z())
                         * -inertia * dt
         );
-        // A part already resting on a collider is held up by it, not pressed on.
         SpringContactSupport.cancelInward(slot, state, scratch.appliedForce);
         scratch.nextDirection.add(scratch.appliedForce);
         if (scratch.nextDirection.lengthSquared()

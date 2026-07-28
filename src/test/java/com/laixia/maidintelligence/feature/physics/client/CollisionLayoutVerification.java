@@ -15,6 +15,7 @@ final class CollisionLayoutVerification {
         SqueezedContactVerification.run();
         SweptContactVerification.run();
         SeatedOverlapVerification.run();
+        WindCollisionVerification.run();
         CullBucketSubdivisionVerification.run();
     }
 }

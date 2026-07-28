@@ -29,8 +29,23 @@ public final class CollisionScratch {
      * and tells the caller how long the answer stays true.
      */
     float measuredClearance = -1.0F;
+    /**
+     * Whether the last relaxation ran out of passes while still moving the
+     * segment, which is what colliders demanding opposite things looks like
+     * from the inside: each answers in turn, each undoes the last, and no
+     * number of passes converges because no legal pose exists.
+     */
+    private boolean unresolved;
 
     public CollisionScratch() {
+    }
+
+    public boolean unresolved() {
+        return unresolved;
+    }
+
+    public void setUnresolved(boolean value) {
+        unresolved = value;
     }
 
     public int exitFace() {

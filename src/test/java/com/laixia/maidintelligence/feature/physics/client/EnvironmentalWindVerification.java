@@ -47,6 +47,7 @@ final class EnvironmentalWindVerification {
         verifiesBonesDoNotFlutterInLockstep();
         verifiesRepeatedRenderHoldsTurbulencePhase();
         verifiesSkirtWindAngleIsBounded();
+        verifiesChainRipplesAlongItsLength();
     }
 
     private static void verifiesPhysicsFallbackWithoutAtmosphere() {
@@ -1029,6 +1030,158 @@ final class EnvironmentalWindVerification {
         );
     }
 
+    /**
+     * A disturbance crossing a surface reaches the far end of a chain after the
+     * near end, so the tip must repeat the root's motion a moment later rather
+     * than beside it. Both halves of that matter: shared timing (a ripple, not
+     * independent jitter) and a delay (a travelling wave, not a lockstep swing).
+     */
+    private static void verifiesChainRipplesAlongItsLength() {
+        ChainFixture fixture = createChainFixture();
+        int samples = 600;
+        int segments = fixture.slots().length;
+        float[][] history = new float[segments][samples];
+        Vector3f wind = new Vector3f(0.22F, 0.0F, 0.0F);
+        Vector3f direction = new Vector3f();
+        for (int frame = 0; frame < samples + 120; frame++) {
+            fixture.solver().restoreAnimationPose();
+            fixture.solver().solve(ZERO, wind, 0.0F, 1.0F / 60.0F, false);
+            if (frame < 120) {
+                continue;
+            }
+            for (int segment = 0; segment < segments; segment++) {
+                require(
+                        fixture.solver().copyCurrentDirection(
+                                fixture.slots()[segment],
+                                direction
+                        ),
+                        "Chain ripple direction was unavailable"
+                );
+                history[segment][frame - 120] = direction.x;
+            }
+        }
+        float[] root = highPass(history[0]);
+        float[] tip = highPass(history[segments - 1]);
+        int lag = bestLag(root, tip);
+        float aligned = shifted(root, tip, 0);
+        float delayed = shifted(root, tip, lag);
+        /*
+         * The spring itself carries some delay down a chain, so a positive lag
+         * alone proves nothing: with the travelling gust switched off this
+         * fixture still reads 5 frames. What separates a wave from a chain
+         * merely dragging behind its root is that the two ends stop resembling
+         * each other when compared frame for frame — 0.19 here against 0.86
+         * without it — while resembling each other closely once the delay is
+         * taken out.
+         */
+        require(
+                lag >= 10 && delayed > 0.80F,
+                "No gust travelled down the chain; the tip never reproduced"
+                        + " the root's motion later: lag " + lag
+                        + " at " + delayed
+        );
+        require(
+                aligned < 0.50F,
+                "Chain segments leaned in lockstep instead of rippling: "
+                        + aligned
+        );
+    }
+
+    /**
+     * Delay, in frames, at which the tail signal best reproduces the root
+     * signal. Searching only positive lags would find one by construction, so
+     * negative lags are searched too and a leading tip reads as failure.
+     */
+    private static final int LAG_SPAN = 60;
+
+    private static int bestLag(float[] root, float[] tip) {
+        int best = -LAG_SPAN - 1;
+        float strongest = Float.NEGATIVE_INFINITY;
+        for (int lag = -LAG_SPAN; lag <= LAG_SPAN; lag++) {
+            float value = shifted(root, tip, lag);
+            if (value > strongest) {
+                strongest = value;
+                best = lag;
+            }
+        }
+        return best;
+    }
+
+    /** Correlation of the tip signal advanced by {@code lag} frames. */
+    private static float shifted(float[] root, float[] tip, int lag) {
+        int length = root.length - 2 * LAG_SPAN;
+        float[] left = new float[length];
+        float[] right = new float[length];
+        for (int index = 0; index < length; index++) {
+            left[index] = root[index + LAG_SPAN];
+            right[index] = tip[index + LAG_SPAN + lag];
+        }
+        return correlation(left, right);
+    }
+
+    private static ChainFixture createChainFixture() {
+        AnimatedGeoModel model = modelFromJson("""
+                {
+                  "format_version":"1.12.0",
+                  "minecraft:geometry":[{
+                    "description":{
+                      "identifier":"geometry.wind_chain",
+                      "texture_width":16,
+                      "texture_height":16
+                    },
+                    "bones":[
+                      {"name":"Root","pivot":[0,24,0]},
+                      {"name":"Tail1","parent":"Root","pivot":[0,24,0],
+                       "cubes":[{"origin":[-.5,20,-.5],"size":[1,4,1],
+                                 "uv":[0,0]}]},
+                      {"name":"Tail2","parent":"Tail1","pivot":[0,20,0],
+                       "cubes":[{"origin":[-.5,16,-.5],"size":[1,4,1],
+                                 "uv":[0,0]}]},
+                      {"name":"Tail3","parent":"Tail2","pivot":[0,16,0],
+                       "cubes":[{"origin":[-.5,12,-.5],"size":[1,4,1],
+                                 "uv":[0,0]}]},
+                      {"name":"Tail4","parent":"Tail3","pivot":[0,12,0],
+                       "cubes":[{"origin":[-.5,8,-.5],"size":[1,4,1],
+                                 "uv":[0,0]}]}
+                    ]
+                  }]
+                }
+                """);
+        PhysicsMetadata metadata = PhysicsMetadata.parse(
+                JsonParser.parseString("""
+                        {
+                          "schema_version":1,
+                          "mode":"explicit",
+                          "chains":[{
+                            "id":"wind_chain",
+                            "type":"TAIL",
+                            "root":"Root/Tail1",
+                            "profile":{
+                              "gravity_scale":0.0,
+                              "wind_scale":1.0
+                            }
+                          }]
+                        }
+                        """).getAsJsonObject(),
+                "environmental wind chain verification"
+        );
+        PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
+                "verification:wind_chain",
+                model,
+                metadata
+        );
+        PhysicsSolverLayout layout = PhysicsSolverLayout.build(model, plan);
+        return new ChainFixture(
+                new SpringBoneSolver(layout),
+                new int[]{
+                        drivenSlot(layout, model, "Tail1"),
+                        drivenSlot(layout, model, "Tail2"),
+                        drivenSlot(layout, model, "Tail3"),
+                        drivenSlot(layout, model, "Tail4")
+                }
+        );
+    }
+
     private static SiblingFixture createSiblingFixture() {
         AnimatedGeoModel model = modelFromJson("""
                 {
@@ -1202,5 +1355,8 @@ final class EnvironmentalWindVerification {
             int firstSlot,
             int secondSlot
     ) {
+    }
+
+    private record ChainFixture(SpringBoneSolver solver, int[] slots) {
     }
 }

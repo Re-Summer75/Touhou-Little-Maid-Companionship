@@ -1,5 +1,6 @@
 package com.laixia.maidintelligence.feature.physics.client.solver.spring;
 
+import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneSelectionPlan;
 import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -46,8 +47,27 @@ final class SpringBoneState {
     final boolean[] initialized;
     /** Integrated buffeting phase per bone; only stepped frames advance it. */
     final double[] turbulencePhases;
+    /**
+     * Integrated phase of the gust that crosses a chain. Kept apart from the
+     * buffeting phase above because the two describe different things: strength
+     * arrives as a wave shared by the whole chain, while the direction it leans
+     * is local to each bone and has to keep its own timing.
+     */
+    final double[] wavePhases;
     /** Stable per-bone eddy identity, resolved once to keep frames allocation-free. */
     final int[] turbulenceSeeds;
+    /**
+     * Eddy identity shared by every segment of one chain, so the gust strength
+     * they sample is the same signal and the lag below can space it out along
+     * the chain. Falls back to the bone's own identity when it stands alone.
+     */
+    final int[] waveSeeds;
+    /**
+     * Position along the owning chain in {@code [0, 1)}, used to delay the
+     * shared eddy so a disturbance reaches the tip after the root. Zero for
+     * bones that are not part of a chain.
+     */
+    final float[] turbulenceLags;
     int referenceGeneration;
 
     SpringBoneState(PhysicsSolverLayout layout) {
@@ -83,13 +103,33 @@ final class SpringBoneState {
         previousDeltaSeconds = new float[drivenCount];
         initialized = new boolean[drivenCount];
         turbulencePhases = new double[drivenCount];
+        wavePhases = new double[drivenCount];
         turbulenceSeeds = new int[drivenCount];
+        waveSeeds = new int[drivenCount];
+        turbulenceLags = new float[drivenCount];
         for (int index = 0; index < activeCount; index++) {
             PhysicsSolverLayout.Node node = layout.node(index);
-            if (node.driven()) {
-                turbulenceSeeds[node.drivenSlot()] =
-                        node.bone().getName().hashCode();
+            if (!node.driven()) {
+                continue;
             }
+            PhysicsBoneSelectionPlan.ChainSegment segment =
+                    node.decision().chainSegment();
+            int slot = node.drivenSlot();
+            turbulenceSeeds[slot] = node.bone().getName().hashCode();
+            /*
+             * A chain shares one eddy strength. Seeding each bone separately
+             * made every segment of a tail sample an unrelated gust, so a chain
+             * buffeted hard enough to see read as its links jittering rather
+             * than as air moving over it. One seed for the chain plus a delay
+             * along it is the same disturbance arriving late further down, which
+             * is what a gust crossing a surface is.
+             */
+            waveSeeds[slot] = segment.count() > 1
+                    ? segment.rootPath().hashCode()
+                    : turbulenceSeeds[slot];
+            turbulenceLags[slot] = segment.count() > 1
+                    ? (float) segment.index() / segment.count()
+                    : 0.0F;
         }
     }
 

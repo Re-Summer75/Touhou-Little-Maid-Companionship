@@ -111,7 +111,7 @@ public final class PreparedCollisionShape {
         openAxis = openBoxAxis;
     }
 
-    void prepare(
+    void prepareNow(
             Matrix4f affineDelta,
             Matrix3f normalTransform,
             float colliderScale
@@ -169,6 +169,7 @@ public final class PreparedCollisionShape {
      * half-axis to the travel of its centre, which covers every corner however
      * the limb turned. Shapes with no bounded surface, and the first frame of
      * any shape, report infinity and simply defeat the reuse.
+     *
      */
     private void measureMotion() {
         float travel = switch (kind) {

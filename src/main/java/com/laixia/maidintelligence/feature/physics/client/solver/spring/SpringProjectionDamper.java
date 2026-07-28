@@ -12,12 +12,20 @@ import org.joml.Vector3f;
  * the segment ends up hopping between two surfaces at frame rate. That reads as
  * a buzz, and the rate limit only bounds how far each hop travels.
  *
- * <p>The signature of that state is a correction that reverses every frame, so
+  * <p>The signature of that state is a correction that reverses every frame, so
  * this watches for it and, while it lasts, applies successively less of what
  * the projection asks for. Alternating demands then converge on the pose in
  * between — overlapping both colliders a little, which is what a squeeze
- * physically is — instead of oscillating between them. One-sided contact never
- * reverses and is left at full strength.
+ * physically is — instead of oscillating between them.
+ *
+ * <p>Reversal alone does not identify it, because the pose a segment is drawn
+ * back towards moves. Wind leans it, and gusts wander in direction, so cloth
+ * merely leaning against a body has its correction reverse as readily as one
+ * with nowhere to go — and damping that let a gust press cloth through the
+ * body it was leaning on. The relaxation itself settles the question: a single
+ * collider is satisfied in one pass and stays satisfied, while colliders
+ * wanting opposite things never converge however many passes they are given.
+ * Requiring both keeps a squeeze damped without reading a moving target as one.
  */
 final class SpringProjectionDamper {
     /** How long a settled segment takes to regain full response. */
@@ -47,6 +55,7 @@ final class SpringProjectionDamper {
             int drivenSlot,
             Vector3f before,
             Vector3f after,
+            boolean unresolved,
             float dt,
             SpringBoneState state
     ) {
@@ -68,7 +77,7 @@ final class SpringProjectionDamper {
                 && cx * previous.x + cy * previous.y + cz * previous.z < 0.0F;
         int streak = reversed ? state.projectionReversals[drivenSlot] + 1 : 0;
         state.projectionReversals[drivenSlot] = streak;
-        float damping = streak >= SUSTAINED
+        float damping = streak >= SUSTAINED && unresolved
                 ? Math.min(1.0F, state.projectionDamping[drivenSlot] + RISE)
                 : decay(state.projectionDamping[drivenSlot], dt);
         state.projectionDamping[drivenSlot] = damping;
