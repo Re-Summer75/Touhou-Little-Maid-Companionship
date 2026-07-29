@@ -20,9 +20,26 @@ final class CollisionHitRadius {
     /**
      * Kept in Gecko pixels because it is judged against the model: the point
      * is that it stays invisible next to a cube edge, and cubes are authored
-     * in pixels. Roughly a tenth of the thinnest geometry anyone draws.
+     * in pixels.
+     *
+     * <p>Sized by what it has to hide rather than by what it can get away with.
+     * The endpoint is a point on the axis while the mesh around it has real
+     * width, so a face the axis clears by nothing at all is a face the mesh is
+     * still halfway through. Three tenths of a pixel is a fiftieth of a block —
+     * invisible beside geometry authored in whole pixels — and buys enough
+     * margin that shallow contact reads as resting on a surface rather than
+     * grazing it.
+     *
+     * <p>There is a ceiling on it, and it is close by. Every pixel of tolerance
+     * also holds cloth that pixel further off the body it is cut to lie on, so
+     * contact gets shallower: at half a pixel a leg swept through this model's
+     * skirt drove it 0.197 rad against the 0.20 the sweep coverage asks for,
+     * and the head fixture's strand stopped 0.04 px shy of the face it is
+     * supposed to rest on. Deriving this from the collider's own thickness used
+     * to put it as high as 0.675 px, which is where the visible hovering came
+     * from.
      */
-    private static final float TOLERANCE_PIXELS = 0.1F;
+    private static final float TOLERANCE_PIXELS = 0.3F;
     private static final float PIXELS_PER_BLOCK = 16.0F;
 
     private CollisionHitRadius() {

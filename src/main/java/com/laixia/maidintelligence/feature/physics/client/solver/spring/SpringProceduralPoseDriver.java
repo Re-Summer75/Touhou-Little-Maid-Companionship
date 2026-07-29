@@ -17,7 +17,10 @@ import org.joml.Vector3f;
  * steady-state lean is exactly {@code angle} regardless of frame time or mass.
  *
  * <p>Each bone additionally sits in its own eddy, so the shared signal is
- * decorrelated per bone before it becomes a lean.
+ * decorrelated per bone before it becomes a lean. Along a chain that happens in
+ * two parts: gust strength is one signal delayed further down the chain, which
+ * is a disturbance travelling across the surface, while the direction the lean
+ * points stays each bone's own.
  */
 final class SpringProceduralPoseDriver {
     /**
@@ -71,20 +74,32 @@ final class SpringProceduralPoseDriver {
         float tangentLength = (float) Math.sqrt(tangentSquared);
         int slot = node.drivenSlot();
         int turbulenceSeed = state.turbulenceSeeds[slot];
+        int waveSeed = state.waveSeeds[slot];
         if (turbulenceStep > 0.0F) {
             state.turbulencePhases[slot] += turbulenceStep
                     * SpringMicroTurbulence.frequency(
                     turbulenceSeed,
                     tangentLength
             );
+            /*
+             * The wave's rate follows the flow and the chain, never the single
+             * segment's exposure to it, so links advance together however their
+             * rest directions differ. Rates that drifted apart would dissolve
+             * the travelling delay below back into unrelated noise in seconds.
+             */
+            state.wavePhases[slot] += turbulenceStep
+                    * SpringMicroTurbulence.frequency(
+                    waveSeed,
+                    modelPoseDrive.length()
+            );
         }
-        double turbulencePhase = state.turbulencePhases[slot]
+        double eddyPhase = state.turbulencePhases[slot]
                 + SpringMicroTurbulence.phaseOffset(turbulenceSeed);
+        double wavePhase = state.wavePhases[slot]
+                + SpringMicroTurbulence.phaseOffset(waveSeed)
+                - SpringMicroTurbulence.travelLag(state.turbulenceLags[slot]);
         float requestedAngle = tangentLength * DRIVE_GAIN * response
-                * SpringMicroTurbulence.amplitudeGain(
-                turbulenceSeed,
-                turbulencePhase
-        );
+                * SpringMicroTurbulence.amplitudeGain(waveSeed, wavePhase);
         float angleLimit = Math.max(
                 0.0F,
                 Math.min(
@@ -104,7 +119,7 @@ final class SpringProceduralPoseDriver {
         // Swing azimuth wanders per bone; magnitude limits stay untouched.
         float azimuth = SpringMicroTurbulence.azimuthOffset(
                 turbulenceSeed,
-                turbulencePhase
+                eddyPhase
         );
         scratch.poseDriveBinormal.set(restDirection).cross(tangent);
         tangent.mul((float) Math.cos(azimuth))

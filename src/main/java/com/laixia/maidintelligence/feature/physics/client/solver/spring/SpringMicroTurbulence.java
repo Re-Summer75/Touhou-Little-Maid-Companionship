@@ -14,9 +14,15 @@ final class SpringMicroTurbulence {
     private static final double SPEED_FREQUENCY = 5.50D;
     private static final double MIN_FREQUENCY_JITTER = 0.62D;
     private static final double FREQUENCY_JITTER_SPAN = 0.80D;
+    /**
+     * Depth of the gust modulation. Shared along a chain, so a peak arrives
+     * across a whole panel at once rather than being averaged away between
+     * independent links, which is what makes it read as a wave at all.
+     */
     private static final float AMPLITUDE_DEPTH = 0.42F;
     private static final float AZIMUTH_SPREAD = 0.46F;
     private static final double PHASE_SPREAD = 512.0D;
+    private static final double TRAVEL_SPAN = 0.85D;
 
     private SpringMicroTurbulence() {
     }
@@ -25,6 +31,12 @@ final class SpringMicroTurbulence {
         return 1.0F + AMPLITUDE_DEPTH * noise(seed ^ 0x9E3779B9, phase);
     }
 
+    /**
+     * Wander in the lean direction. Seeded per bone even when the amplitude is
+     * shared along a chain: a chain that also agreed on direction would twist
+     * as one rigid piece and press cloth through the body it hangs on, which no
+     * amount of projection can answer while the gust lasts.
+     */
     static float azimuthOffset(int seed, double phase) {
         return AZIMUTH_SPREAD * noise(seed ^ 0x85157AF5, phase);
     }
@@ -44,6 +56,21 @@ final class SpringMicroTurbulence {
     /** Keeps bones off a common lattice cell before any time has passed. */
     static double phaseOffset(int seed) {
         return unit(seed ^ 0x165667B1) * PHASE_SPREAD;
+    }
+
+    /**
+     * Phase a segment at {@code positionAlongChain} trails the chain root by.
+     * A disturbance crosses a surface at finite speed, so the far end of a
+     * chain repeats what the near end did a moment ago; that offset in time is
+     * the whole difference between a chain rippling and a chain shivering.
+     *
+     * <p>The span is held just under a full lattice cell so the crest is inside
+     * the chain at all times: a longer delay would fit several crests on one
+     * tail and read as noise again, a much shorter one leaves the chain nearly
+     * in phase.
+     */
+    static double travelLag(float positionAlongChain) {
+        return TRAVEL_SPAN * Math.max(0.0F, positionAlongChain);
     }
 
     private static float noise(int seed, double phase) {

@@ -52,6 +52,7 @@ final class SpringConstraintProjector {
         boolean corrected = false;
         scratch.collisionCorrected = false;
         scratch.collisionNormal.zero();
+        scratch.collision.setUnresolved(false);
         float maximumCosine = (float) Math.cos(maximumSwing);
         float maximumSine = (float) Math.sin(maximumSwing);
         for (int iteration = 0;

@@ -164,7 +164,7 @@ public final class PreparedCollisionProxy {
             float endpointScale,
             float runtimeLeverArm
     ) {
-        shape.prepare(affineDelta, normalTransform, colliderScale);
+        shape.prepareNow(affineDelta, normalTransform, colliderScale);
         bindFrame(
                 runtimePivotModel,
                 colliderScale,

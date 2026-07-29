@@ -181,6 +181,7 @@ final class SpringBoneFrameRunner {
                         node.drivenSlot(),
                         scratch.projectionStart,
                         scratch.nextDirection,
+                        scratch.collision.unresolved(),
                         dt,
                         state
                 );
