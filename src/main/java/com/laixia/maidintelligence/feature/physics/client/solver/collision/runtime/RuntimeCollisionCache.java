@@ -87,6 +87,35 @@ public final class RuntimeCollisionCache {
                                 && !layout.node(reference).driven())
                 );
             }
+            /*
+             * The sheet is described in the bone's rest frame, which is the same
+             * frame the prepared shapes are expressed in, so the projections can
+             * dot it against a contact normal directly.
+             */
+            Vector3f meshHalf = node.constraint()
+                    .copyMeshHalfExtents(new Vector3f());
+            if (meshHalf.lengthSquared() > 0.0F) {
+                Vector3f right = new Vector3f();
+                Vector3f outward = new Vector3f();
+                Vector3f along = node.axisInto(new Vector3f());
+                node.constraint().copyRightLocal(right);
+                node.constraint().copyOutwardLocal(outward);
+                prepared.setMeshExtent(meshHalf, right, along, outward);
+                /*
+                 * The largest single extent, not the diagonal. Only one face
+                 * normal is ever charged at a time, so the diagonal over-reaches
+                 * and admits contacts the projection then answers far too
+                 * strongly — a swept leg threw this model's skirt 1.18 rad
+                 * against the 1.0 the coverage allows.
+                 */
+                float cull = Math.max(
+                        meshHalf.x,
+                        Math.max(meshHalf.y, meshHalf.z)
+                );
+                for (int index = 0; index < prepared.proxyCount(); index++) {
+                    prepared.proxy(index).setMeshCullReach(cull);
+                }
+            }
             prepared.groupByReference();
         }
         shapes = unique.toArray(new PreparedCollisionShape[0]);

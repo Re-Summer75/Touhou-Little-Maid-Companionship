@@ -27,6 +27,12 @@ public final class SecondaryMotionConstraint {
     private final float tanInward;
     private final float cosMinimumSwing;
     private final CollisionProxySet collisionProxies;
+    /**
+     * Half extents of this bone's own sheet in the bone frame, zero on any
+     * direction that is not a thickness. Contacts use it to pad by the sheet's
+     * reach along the one normal they are resolving.
+     */
+    private final Vector3f meshHalfExtents;
 
     SecondaryMotionConstraint(
             boolean enabled,
@@ -36,7 +42,8 @@ public final class SecondaryMotionConstraint {
             Vector3f rightLocal,
             Vector3f outwardLocal,
             PhysicsBoneSelectionPlan.SwingLimits limits,
-            CollisionProxySet collisionProxies
+            CollisionProxySet collisionProxies,
+            Vector3f meshHalfExtents
     ) {
         this.enabled = enabled;
         this.simulationSpace = simulationSpace;
@@ -59,6 +66,21 @@ public final class SecondaryMotionConstraint {
         this.collisionProxies = collisionProxies == null
                 ? CollisionProxySet.EMPTY
                 : collisionProxies;
+        this.meshHalfExtents = meshHalfExtents == null
+                ? new Vector3f()
+                : new Vector3f(meshHalfExtents);
+    }
+
+    public Vector3f copyMeshHalfExtents(Vector3f output) {
+        return output.set(meshHalfExtents);
+    }
+
+    public Vector3f copyRightLocal(Vector3f output) {
+        return output.set(rightLocal);
+    }
+
+    public Vector3f copyOutwardLocal(Vector3f output) {
+        return output.set(outwardLocal);
     }
 
     public PhysicsBoneSelectionPlan.SimulationSpace simulationSpace() {

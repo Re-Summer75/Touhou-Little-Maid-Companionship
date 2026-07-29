@@ -90,6 +90,14 @@ public final class SpringBoneSolver {
         return engine.copyCurrentDirection(drivenSlot, output);
     }
 
+    public float projectionDamping(int drivenSlot) {
+        return engine.projectionDamping(drivenSlot);
+    }
+
+    public int projectionReversals(int drivenSlot) {
+        return engine.projectionReversals(drivenSlot);
+    }
+
     public boolean copyPreviousDirection(
             int drivenSlot,
             Vector3f output

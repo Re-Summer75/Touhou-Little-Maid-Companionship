@@ -60,6 +60,15 @@ public final class PreparedCollisionProxySet {
      * this is cheaper than walking the culled ones to say so.
      */
     private int frameIndex;
+    /**
+     * The driven sheet's own box, in its rest frame. Supplied to the projections
+     * so a contact can be padded by the sheet's reach along that one contact
+     * normal instead of by a scalar in every direction.
+     */
+    private final Vector3f meshHalf = new Vector3f();
+    private final Vector3f meshAxisX = new Vector3f(1.0F, 0.0F, 0.0F);
+    private final Vector3f meshAxisY = new Vector3f(0.0F, 1.0F, 0.0F);
+    private final Vector3f meshAxisZ = new Vector3f(0.0F, 0.0F, 1.0F);
     private final SwingCone cone = new SwingCone();
     private final Vector3f boundsCenter = new Vector3f();
     private final Vector3f passStart = new Vector3f();
@@ -243,6 +252,22 @@ public final class PreparedCollisionProxySet {
         return proxies.length;
     }
 
+    /**
+     * Records the driven sheet's extent. Left at zero for a node whose mesh is
+     * not sheet-like, which keeps the projections point-based as before.
+     */
+    public void setMeshExtent(
+            Vector3f half,
+            Vector3f axisX,
+            Vector3f axisY,
+            Vector3f axisZ
+    ) {
+        meshHalf.set(half);
+        meshAxisX.set(axisX);
+        meshAxisY.set(axisY);
+        meshAxisZ.set(axisZ);
+    }
+
 
     public PreparedCollisionProxy proxy(int index) {
         return proxies[index];
@@ -265,6 +290,14 @@ public final class PreparedCollisionProxySet {
         bound = true;
         frameIndex++;
         advancePoseTime(dt);
+        /*
+         * Set for the whole of binding, because calibration measures the
+         * authored pose's depth here and the projection enforces against the
+         * same figure. A gap measured without the sheet's width would license
+         * exactly that width back again, and a settled pose would move on its
+         * first solved frame.
+         */
+        scratch.setMeshExtent(meshHalf, meshAxisX, meshAxisY, meshAxisZ);
         boolean stillPending = false;
         cone.set(restDirection, maximumSwing);
         for (int group = 0; group < groupCount; group++) {
@@ -340,6 +373,7 @@ public final class PreparedCollisionProxySet {
             proxy.trackAnimationPose(restDirection, poseTime, scratch);
         }
         calibrationPending = stillPending;
+        scratch.clearMeshExtent();
     }
 
     public boolean project(
@@ -351,6 +385,7 @@ public final class PreparedCollisionProxySet {
         if (count == 0) {
             return false;
         }
+        scratch.setMeshExtent(meshHalf, meshAxisX, meshAxisY, meshAxisZ);
         boolean corrected = false;
         int passes = count == 1
                 ? 1
@@ -388,6 +423,7 @@ public final class PreparedCollisionProxySet {
         if (!settled) {
             scratch.setUnresolved(true);
         }
+        scratch.clearMeshExtent();
         return corrected;
     }
 
@@ -396,7 +432,10 @@ public final class PreparedCollisionProxySet {
             Vector3f direction,
             CollisionScratch scratch
     ) {
-        return proxies[proxyIndex].clearance(direction, scratch);
+        scratch.setMeshExtent(meshHalf, meshAxisX, meshAxisY, meshAxisZ);
+        float result = proxies[proxyIndex].clearance(direction, scratch);
+        scratch.clearMeshExtent();
+        return result;
     }
 
     void resetFrame() {

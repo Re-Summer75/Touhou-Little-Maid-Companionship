@@ -20,14 +20,21 @@ final class AnimationTimelineClockVerification {
         requireNear(clock.advance(101.0D, false), 0.0F, "resume duplicate");
         requireNear(clock.advance(101.20D, false), 0.01F, "resume advance");
 
-        requireNear(clock.advance(104.20D, false), 0.10F, "clamp");
+        /*
+         * One game tick sits exactly on the ceiling and has to pass through
+         * intact. That is what keeps the clamp off every frame rate from 20 up,
+         * leaving it to act only on a genuine stall.
+         */
+        requireNear(clock.advance(102.20D, false), 0.05F, "one tick");
+
+        requireNear(clock.advance(105.0D, false), 0.05F, "clamp");
         require(
                 !clock.discontinuous(),
                 "A finite clamped animation step was treated as a cut"
         );
-        requireNear(clock.advance(110.0D, false), 0.0F, "large gap");
+        requireNear(clock.advance(111.0D, false), 0.0F, "large gap");
         require(clock.discontinuous(), "Large animation gap was not detected");
-        requireNear(clock.advance(110.20D, false), 0.01F, "gap recovery");
+        requireNear(clock.advance(111.20D, false), 0.01F, "gap recovery");
 
         requireNear(
                 clock.advance(Double.NaN, false),

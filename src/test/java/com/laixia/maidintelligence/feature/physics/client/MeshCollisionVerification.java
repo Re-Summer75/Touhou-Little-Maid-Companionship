@@ -407,8 +407,16 @@ final class MeshCollisionVerification {
             );
             nearest = Math.min(nearest, data.clearance);
         }
+        /*
+         * Contact is the sheet's surface meeting the face, so the endpoint on its
+         * axis stops half a thickness short of it rather than on it. The tolerance
+         * is that half thickness: this strand is 2 px through, and requiring the
+         * axis itself to land on the face is requiring the visible surface to be
+         * halfway inside.
+         */
+        float halfThickness = 1.0F / 16.0F;
         require(
-                nearest <= 1.0E-3F,
+                nearest <= halfThickness + 1.0E-3F,
                 "The strand never reached the mesh collider: " + nearest
         );
     }

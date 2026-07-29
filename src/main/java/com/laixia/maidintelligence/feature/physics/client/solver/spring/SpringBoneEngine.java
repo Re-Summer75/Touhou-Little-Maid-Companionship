@@ -99,6 +99,15 @@ public final class SpringBoneEngine {
         return context.state.copyPreviousDirection(drivenSlot, output);
     }
 
+    /** Damper state for one segment, so a buzz can be attributed. */
+    public float projectionDamping(int drivenSlot) {
+        return context.state.projectionDamping[drivenSlot];
+    }
+
+    public int projectionReversals(int drivenSlot) {
+        return context.state.projectionReversals[drivenSlot];
+    }
+
     public boolean copyAnimationAcceleration(
             int drivenSlot,
             Vector3f output

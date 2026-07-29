@@ -87,8 +87,9 @@ public final class CollisionProjector {
     ) {
         scratch.tip.set(direction).mul(leverArm).add(pivot);
         localise(scratch.tip, center, axisX, axisY, axisZ, scratch.local);
+        float meshReach = meshReachInto(axisX, axisY, axisZ, scratch);
         scratch.measuredClearance =
-                clearance(scratch.local, half, hitRadius, openAxis);
+                clearance(scratch.local, half, hitRadius + meshReach, openAxis);
         if (scratch.measuredClearance >= 0.0F) {
             scratch.exitFace = NO_FACE;
             return false;
@@ -100,10 +101,19 @@ public final class CollisionProjector {
         float pivotDistance = (pivot.x - scratch.closest.x) * scratch.normal.x
                 + (pivot.y - scratch.closest.y) * scratch.normal.y
                 + (pivot.z - scratch.closest.z) * scratch.normal.z;
+        /*
+         * The sheet's own reach along this contact normal, added only here. The
+         * endpoint tracks the middle of the sheet, so stopping the endpoint on
+         * the face leaves the surface half a thickness through it. Asking for
+         * the extent along the normal the contact frame just produced pads that
+         * one direction and nothing else — which is the whole difference from
+         * putting a thickness in the hit radius, where it would hold the segment
+         * off every other collider too and squeeze it out of the space it needs.
+         */
         return CollisionProjectionMath.projectMinimumDot(
                 direction,
                 scratch.normal,
-                (hitRadius - pivotDistance) / leverArm,
+                (hitRadius + meshReach - pivotDistance) / leverArm,
                 scratch.tangent
         );
     }
@@ -133,7 +143,46 @@ public final class CollisionProjector {
     ) {
         scratch.tip.set(direction).mul(leverArm).add(pivot);
         localise(scratch.tip, center, axisX, axisY, axisZ, scratch.local);
-        return clearance(scratch.local, half, hitRadius, openAxis);
+        /*
+         * Padded by the same reach the projection uses, so the two agree. They
+         * have to: the rest allowance calibrates from this figure and the
+         * projection enforces against it, and a gap measured without the sheet's
+         * width would license exactly that much of it back again — which would
+         * also move a settled pose on its first solved frame.
+         */
+        return clearance(
+                scratch.local,
+                half,
+                hitRadius + meshReachInto(axisX, axisY, axisZ, scratch),
+                openAxis
+        );
+    }
+
+    /**
+     * Sheet reach against this box, taken as the largest of its three face
+     * normals.
+     *
+     * <p>Deliberately not the reach along whichever face the endpoint happens to
+     * be nearest. Measuring and enforcing are separate calls — the rest
+     * allowance calibrates from a clearance, the projection acts on one — and the
+     * face they would each pick is not the same: the projection holds the face it
+     * entered through under hysteresis, while a clearance query has only the
+     * position to go on. Disagreeing by so much as part of a thickness makes a
+     * settled pose move on its first solved frame, which is what this cost
+     * before. One figure per box keeps them consistent, and it stays anisotropic
+     * where it matters: it follows the box's own orientation, so a sheet is only
+     * padded by its thickness against colliders that face it broadside.
+     */
+    private static float meshReachInto(
+            Vector3f axisX,
+            Vector3f axisY,
+            Vector3f axisZ,
+            CollisionScratch scratch
+    ) {
+        return Math.max(
+                scratch.meshReach(axisX),
+                Math.max(scratch.meshReach(axisY), scratch.meshReach(axisZ))
+        );
     }
 
     private static void localise(

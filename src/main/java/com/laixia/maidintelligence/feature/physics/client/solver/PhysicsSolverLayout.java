@@ -354,6 +354,20 @@ public final class PhysicsSolverLayout {
                         pivot
                 );
 
+        /*
+         * The sheet's own thickness, expressed as a box in the bone frame so a
+         * contact can ask for its reach along one normal. Only the thin
+         * direction is filled in: the wide ones are the panel's width and length,
+         * which never stand between the axis and a surface, and padding by them
+         * is what made every scalar attempt worse.
+         */
+        Vector3f meshHalf = MeshSheetExtent.halfExtents(
+                geometryNode,
+                node.axis(),
+                rightLocal,
+                outwardLocal
+        );
+
         return new SecondaryMotionConstraint(
                 profile.enabled(),
                 space,
@@ -362,7 +376,8 @@ public final class PhysicsSolverLayout {
                 rightLocal,
                 outwardLocal,
                 limits,
-                collisionProxies
+                collisionProxies,
+                meshHalf
         );
     }
 

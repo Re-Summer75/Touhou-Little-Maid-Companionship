@@ -20,6 +20,20 @@ public final class CollisionScratch {
     final Vector3f axisZ = new Vector3f(0.0F, 0.0F, 1.0F);
     final Vector3f half = new Vector3f();
     final Vector3f local = new Vector3f();
+    /**
+     * Half extents of the driven sheet in its own frame, and that frame, so a
+     * projection can ask how far the sheet reaches along the contact normal it
+     * has just computed.
+     *
+     * <p>This is the part a scalar hit radius cannot express. Padding the radius
+     * holds the endpoint off every collider at once and closes the gaps a
+     * segment needs to sit between them; asking for the extent along one normal
+     * pads only the direction the contact is actually on.
+     */
+    final Vector3f meshHalf = new Vector3f();
+    final Vector3f meshAxisX = new Vector3f(1.0F, 0.0F, 0.0F);
+    final Vector3f meshAxisY = new Vector3f(0.0F, 1.0F, 0.0F);
+    final Vector3f meshAxisZ = new Vector3f(0.0F, 0.0F, 1.0F);
     /** Face a buried endpoint left through last time, or {@code -1}. */
     int exitFace = CollisionProjector.NO_FACE;
     /**
@@ -66,5 +80,39 @@ public final class CollisionScratch {
      */
     public void clearMeasuredClearance() {
         measuredClearance = -1.0F;
+    }
+
+    /**
+     * Describes the driven sheet to the projections. Half extents of zero mean
+     * an endpoint with no width, which is the previous behaviour exactly.
+     */
+    public void setMeshExtent(
+            Vector3f half,
+            Vector3f axisX,
+            Vector3f axisY,
+            Vector3f axisZ
+    ) {
+        meshHalf.set(half);
+        meshAxisX.set(axisX);
+        meshAxisY.set(axisY);
+        meshAxisZ.set(axisZ);
+    }
+
+    public void clearMeshExtent() {
+        meshHalf.zero();
+    }
+
+    /**
+     * How far the sheet reaches from its axis along {@code normal}: the support
+     * function of an oriented box, which is the sum of each half extent
+     * projected onto that direction.
+     */
+    float meshReach(Vector3f normal) {
+        if (meshHalf.lengthSquared() <= CollisionProjectionMath.EPSILON) {
+            return 0.0F;
+        }
+        return Math.abs(meshAxisX.dot(normal)) * meshHalf.x
+                + Math.abs(meshAxisY.dot(normal)) * meshHalf.y
+                + Math.abs(meshAxisZ.dot(normal)) * meshHalf.z;
     }
 }

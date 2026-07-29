@@ -32,6 +32,8 @@ public final class PreparedCollisionProxy {
     private float preparedHitRadius;
     private float projectionRadius;
     private float projectionHitRadius;
+    /** Largest the driven sheet reaches in any direction, for sphere tests. */
+    private float meshCullReach;
     private float bodyProjectionRadius;
     private float bodyProjectionHitRadius;
     private boolean animationPoseAllowanceEligible;
@@ -601,7 +603,14 @@ public final class PreparedCollisionProxy {
         float dx = pivot.x + direction.x * arm - center.x;
         float dy = pivot.y + direction.y * arm - center.y;
         float dz = pivot.z + direction.z * arm - center.z;
-        float reach = shape.cullRadius() + hitRadius;
+        /*
+         * The sheet's widest reach is added to the cull radius. This test only
+         * has to be conservative, and it has no contact normal to ask along, so
+         * it uses the largest the sheet could reach in any direction — a sphere
+         * test that under-reached would skip a contact the projection would have
+         * found and let the surface pass through.
+         */
+        float reach = shape.cullRadius() + hitRadius + meshCullReach;
         float distanceSquared = dx * dx + dy * dy + dz * dz;
         if (distanceSquared <= reach * reach) {
             return -1.0F;
@@ -678,6 +687,10 @@ public final class PreparedCollisionProxy {
     }
 
     void setSource(CollisionProxySource value) { source = value; }
+
+    void setMeshCullReach(float value) {
+        meshCullReach = Float.isFinite(value) ? Math.max(0.0F, value) : 0.0F;
+    }
     void setAnimationPoseAllowanceEligible(boolean value) {
         animationPoseAllowanceEligible = value;
     }

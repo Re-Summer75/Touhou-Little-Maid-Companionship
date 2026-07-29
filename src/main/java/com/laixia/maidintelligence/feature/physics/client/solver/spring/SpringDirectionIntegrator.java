@@ -160,6 +160,19 @@ final class SpringDirectionIntegrator {
         if (stepped && scratch.nextDirection.lengthSquared()
                 > SpringBoneMath.EPSILON) {
             if (corrected) {
+                /*
+                 * The whole step is erased rather than only the component the
+                 * constraint objected to, and that is load-bearing rather than
+                 * merely conservative. SpringProjectionDamper identifies an
+                 * unsatisfiable squeeze by a correction that reverses on
+                 * consecutive frames, which presumes contact leaves no velocity
+                 * of its own. Keeping the tangential sweep makes an ordinary
+                 * sustained contact reverse just as often; the damper then reads
+                 * that as a squeeze and drops response to its floor, and cloth
+                 * stops reacting to a limb sweeping through it. Measured on the
+                 * swept-leg case: 0.17 rad falling to 0.097 as more of the step
+                 * was preserved.
+                 */
                 previous.set(scratch.nextDirection);
             } else {
                 previous.set(current);

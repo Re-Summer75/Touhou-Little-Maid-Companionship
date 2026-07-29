@@ -289,6 +289,17 @@ tasks.register('auditMeshColliders', JavaExec) {
     mainClass = 'com.laixia.maidintelligence.feature.physics.client.MeshColliderAudit'
 }
 
+tasks.register('auditMeshPenetration', JavaExec) {
+    group = 'verification'
+    description = 'Diagnostic: reports axis vs surface penetration depth per model.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.laixia.maidintelligence.feature.physics.client.MeshPenetrationAudit'
+    if (project.hasProperty('auditArgs')) {
+        args project.property('auditArgs').toString().split(' ')
+    }
+}
+
 tasks.register('benchmarkBonePhysics', JavaExec) {
     group = 'verification'
     description = 'Reports warmed spring-bone frame time, visited nodes, and thread allocation.'

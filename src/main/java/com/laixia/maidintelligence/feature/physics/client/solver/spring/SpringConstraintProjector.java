@@ -50,6 +50,8 @@ final class SpringConstraintProjector {
             SpringBoneMetrics metrics
     ) {
         boolean corrected = false;
+        boolean settled = false;
+        boolean swingDeadlocked = false;
         scratch.collisionCorrected = false;
         scratch.collisionNormal.zero();
         scratch.collision.setUnresolved(false);
@@ -91,14 +93,48 @@ final class SpringConstraintProjector {
                         direction.z() - scratch.collisionStart.z()
                 );
             }
+            /*
+             * A swing limiter is idempotent on its own: it snaps onto its own
+             * boundary, so a second look finds the direction already legal.
+             * Still objecting on the final pass while a collider objects too
+             * means each is pushing the direction back out of the other's
+             * bound. The collision loop reports its own passes converging, so
+             * it cannot see this: the two agree individually and disagree only
+             * across the alternation between them.
+             */
+            swingDeadlocked =
+                    (swingCorrected || safetyCorrected) && collisionCorrected;
             corrected |= swingCorrected
                     || safetyCorrected
                     || collisionCorrected;
             if (!swingCorrected
                     && !safetyCorrected
                     && !collisionCorrected) {
+                settled = true;
                 break;
             }
+        }
+        /*
+         * Leaving the loop with the last iteration still correcting means the
+         * bounds never agreed, not that four passes were too few: each is a
+         * hard snap onto its own boundary, so a set with a common solution
+         * reaches it and the next pass finds nothing to do. The collision loop
+         * reports its own failure to converge, but two swing limiters
+         * deadlocking against each other was invisible, and that is a period-2
+         * cycle the damper never saw — measured on winefox_momo as bowL9
+         * flipping 0.270 rad every frame indefinitely, its reversal streak past
+         * 200 and its damping still nought because nothing ever reported the
+         * set as unsatisfiable.
+         *
+         * <p>Reported only for a swing pair deadlock, never for a collider that
+         * is merely still working. Cloth leaning on a body under wind corrects
+         * every frame without being stuck, and damping that is what lets a gust
+         * press it through the surface it is leaning on — the failure this was
+         * caught by twice. Damping still needs the reversal streak the damper
+         * counts for itself on top of this.
+         */
+        if (!settled && swingDeadlocked) {
+            scratch.collision.setUnresolved(true);
         }
         if (corrected) {
             limitCorrection(committedDirection, direction, maximumCorrection);

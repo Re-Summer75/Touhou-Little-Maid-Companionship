@@ -14,6 +14,26 @@ import org.joml.Vector3f;
  * cloth off the body by however thick the bone happened to be. What the radius
  * has to buy is the margin that keeps an endpoint resting exactly on a face
  * from flickering across it, and that is a small absolute distance.
+ *
+ * <p>Five attempts to make this carry the mesh's thickness instead all failed
+ * the same way, and the reason is structural rather than a matter of tuning.
+ * The radius is isotropic: it holds the endpoint off every collider at once,
+ * not just the surface the sheet is resting against. Padding it by a sheet's
+ * half width therefore closes the gaps between neighbouring colliders that the
+ * segment needs somewhere legal to sit in, and a squeezed segment ends up
+ * further inside something else. Measured on winefox seated, axis clearance
+ * went from -0.12 px to between -1.86 and -3.98 px and buzzing from 0.03 to
+ * between 5.8 and 50, whichever way the thickness was derived — along the bone
+ * axis, along the bearing to the collider, as the narrow cross-axis extent,
+ * folded into the baked radius, or applied at runtime past a clamped rest
+ * allowance so the allowance could not measure it back out.
+ *
+ * <p>What remains genuinely unsolved is that the solver tracks a sheet by one
+ * point on its axis, so the surface leads the endpoint by half a thickness.
+ * Fixing that means giving the projection the sheet's extent along the contact
+ * normal it computes at solve time — an anisotropic support function inside
+ * {@code projectBox}, not a scalar anywhere — so that padding applies only
+ * along the one direction the contact is on. A scalar radius cannot express it.
  */
 final class CollisionHitRadius {
     private static final float EPSILON = 1.0E-6F;

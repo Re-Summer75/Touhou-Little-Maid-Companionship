@@ -11,7 +11,21 @@ package com.laixia.maidintelligence.feature.physics.client;
 final class AnimationTimelineClock {
     private static final double TICKS_PER_SECOND = 20.0D;
     private static final double MIN_ADVANCE_TICKS = 1.0E-6D;
-    private static final double MAX_DELTA_SECONDS = 0.1D;
+    /**
+     * Longest step the integrator is asked to take. There is one Verlet step
+     * per frame and no substepping, so this is also the largest span any single
+     * step covers, and stiffness enters it as {@code k * dt}: at a tenth of a
+     * second the restoring pull alone rotates a light part far enough in one
+     * step to cross a collider that a shorter step would have stopped at.
+     *
+     * <p>One game tick is the natural place to put it — the animation timeline
+     * this reads advances in ticks, so every frame rate from 20 up is unaffected
+     * and only a genuine stall is clamped. A stall then runs slightly slow
+     * rather than resolving a large step badly, which is the better failure:
+     * time is already being lost, and the alternative shows up as parts jumping
+     * through geometry on the frame the game recovers.
+     */
+    private static final double MAX_DELTA_SECONDS = 1.0D / TICKS_PER_SECOND;
     private static final double MAX_GAP_SECONDS = 0.25D;
 
     private double latestTick = Double.NaN;
