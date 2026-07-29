@@ -88,8 +88,9 @@ public final class CollisionProjector {
         scratch.tip.set(direction).mul(leverArm).add(pivot);
         localise(scratch.tip, center, axisX, axisY, axisZ, scratch.local);
         float meshReach = meshReachInto(axisX, axisY, axisZ, scratch);
+        float padded = hitRadius + meshReach;
         scratch.measuredClearance =
-                clearance(scratch.local, half, hitRadius + meshReach, openAxis);
+                clearance(scratch.local, half, padded, openAxis);
         if (scratch.measuredClearance >= 0.0F) {
             scratch.exitFace = NO_FACE;
             return false;
@@ -113,7 +114,7 @@ public final class CollisionProjector {
         return CollisionProjectionMath.projectMinimumDot(
                 direction,
                 scratch.normal,
-                (hitRadius + meshReach - pivotDistance) / leverArm,
+                (padded - pivotDistance) / leverArm,
                 scratch.tangent
         );
     }

@@ -77,11 +77,20 @@ final class SpringDirectionIntegrator {
         float stepRatio = previousDt > SpringBoneMath.EPSILON
                 ? Mth.clamp(dt / previousDt, 0.25F, 4.0F)
                 : 1.0F;
-        scratch.nextDirection.add(
+        scratch.carriedVelocity.set(
                 (current.x() - previous.x()) * retention * stepRatio,
                 (current.y() - previous.y()) * retention * stepRatio,
                 (current.z() - previous.z()) * retention * stepRatio
         );
+        /*
+         * A segment resting on a surface may not use its carried velocity to climb
+         * off it. The force cancellation below keeps such a segment from pressing
+         * in, and leaving the outward half untouched let it be launched instead.
+         */
+        SpringContactSupport.cancelOutward(
+                slot, state, scratch.carriedVelocity
+        );
+        scratch.nextDirection.add(scratch.carriedVelocity);
         /*
          * Mass enters through k/m; gravity and frame acceleration stay
          * accelerations and must not be multiplied by mass. Only added mass

@@ -18,7 +18,14 @@ public final class PreparedCollisionProxy {
     private static final float CLEAR = 1.0F;
     /** Closest to the root a body sample may be resolved, as a fraction. */
     private static final float BODY_MIN = 0.35F;
-    /** Past this the body sample has merged with the tip; skip it. */
+    /**
+     * Past this the body sample has merged with the tip; skip it.
+     *
+     * <p>Held close to the tip rather than at it. A collider centred just short
+     * of the endpoint is the tip sample's to answer, and resolving the same
+     * contact twice in one pass doubles the correction: the two samples sit
+     * within a hit radius of each other, so both find it and both push.
+     */
     private static final float BODY_MAX = 0.90F;
     /** Frame stamp of a pairing the solver is not driving frame by frame. */
     private static final int NO_FRAME = Integer.MIN_VALUE;

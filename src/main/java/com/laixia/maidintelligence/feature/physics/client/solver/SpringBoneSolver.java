@@ -98,6 +98,18 @@ public final class SpringBoneSolver {
         return engine.projectionReversals(drivenSlot);
     }
 
+    public float contactSupport(int drivenSlot) {
+        return engine.contactSupport(drivenSlot);
+    }
+
+    public float lastIntegratorStep(int drivenSlot) {
+        return engine.lastIntegratorStep(drivenSlot);
+    }
+
+    public float lastProjectionStep(int drivenSlot) {
+        return engine.lastProjectionStep(drivenSlot);
+    }
+
     public boolean copyPreviousDirection(
             int drivenSlot,
             Vector3f output

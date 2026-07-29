@@ -21,8 +21,22 @@ final class SpringBoneState {
     final Vector3f[] previousDirections;
     /** Last constraint correction, used to spot a segment being squeezed. */
     final Vector3f[] projectionCorrections;
-    /** Consecutive frames the correction has reversed on. */
+    /**
+     * Which of the recent frames the correction reversed on, one bit per frame,
+     * newest in the low bit. A count of set bits recognises cycles of any short
+     * period, where a consecutive streak only ever saw period-2.
+     */
     final int[] projectionReversals;
+    /** Frames since the correction last reversed, for releasing damping. */
+    final int[] projectionQuiet;
+    /**
+     * How far the integrator and then the projection moved the direction, kept
+     * apart. A lurch is either the step or the correction that follows it, and
+     * the committed result cannot say which; splitting them at the one point both
+     * are visible answers it without guessing.
+     */
+    public final float[] lastIntegratorStep;
+    public final float[] lastProjectionStep;
     final float[] projectionDamping;
     /**
      * Direction the last correction pushed the segment, and how sure of it we
@@ -98,6 +112,9 @@ final class SpringBoneState {
             contactNormals[slot] = new Vector3f();
         }
         projectionReversals = new int[drivenCount];
+        projectionQuiet = new int[drivenCount];
+        lastIntegratorStep = new float[drivenCount];
+        lastProjectionStep = new float[drivenCount];
         projectionDamping = new float[drivenCount];
         contactSupport = new float[drivenCount];
         previousDeltaSeconds = new float[drivenCount];
@@ -170,6 +187,7 @@ final class SpringBoneState {
             projectionCorrections[slot].zero();
             contactNormals[slot].zero();
             projectionReversals[slot] = 0;
+            projectionQuiet[slot] = 0;
             projectionDamping[slot] = 0.0F;
             contactSupport[slot] = 0.0F;
             previousDeltaSeconds[slot] = 0.0F;

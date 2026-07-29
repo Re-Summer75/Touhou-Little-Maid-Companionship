@@ -32,6 +32,19 @@ final class SpringConstraintProjector {
      * throttle it following an animation that is moving legitimately fast —
      * lag, then catch-up, which is its own kind of stutter. Buzzing contact is
      * dealt with where it originates instead.
+     *
+     * <p>Not the place to catch an intermittent ejection, though one exists: on
+     * winefox_magical, hatsidefront2 leaves the projection idle for a hundred and
+     * four of a hundred and twenty frames, then moves 0.394, 0.414 and 0.156 rad
+     * on three consecutive frames and repeats on a thirty-frame cycle. Tightening
+     * this to catch that was measured and rejected. Six radians a second lets a
+     * gust press cloth through the body it is blown against; twelve survives the
+     * coverage but only halves the ejection, and it costs contacts everywhere —
+     * winefox rising from 813 to 920, winefox_little from 416 to 656 — because a
+     * projection kept under its budget is a projection that did not finish. The
+     * budget is a smoothing device for a violation that is already legitimate,
+     * and an ejection that should not have happened has to be stopped where it is
+     * decided.
      */
     private static final float MAX_CORRECTION_RATE = 40.0F;
 
@@ -132,6 +145,17 @@ final class SpringConstraintProjector {
          * press it through the surface it is leaning on — the failure this was
          * caught by twice. Damping still needs the reversal streak the damper
          * counts for itself on top of this.
+         */
+        /*
+         * <p>Not reported for a swing limiter working alone, though that is also
+         * a segment its own cone keeps pushing back. Tried, and it changes
+         * nothing: the damper needs a reversal streak of its own on top of this,
+         * and a cone-wall stick-slip reverses once per release — every thirtieth
+         * frame on winefox_magical's hatsidefront2 — so the streak is cleared by
+         * the quiet frames in between long before it counts. That restraint is
+         * correct. An occasional 0.373 rad lurch is not the sustained buzz this
+         * damper exists for, and dulling a contactless segment on the strength of
+         * its cone alone would reach far past the case at hand.
          */
         if (!settled && swingDeadlocked) {
             scratch.collision.setUnresolved(true);

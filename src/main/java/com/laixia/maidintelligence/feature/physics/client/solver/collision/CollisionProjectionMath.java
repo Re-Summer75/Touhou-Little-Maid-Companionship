@@ -7,6 +7,14 @@ import org.joml.Vector3f;
  */
 final class CollisionProjectionMath {
     static final float EPSILON = 1.0E-6F;
+    /**
+     * Closest a projection may ask the direction to come to a contact normal.
+     *
+     * <p>Cosine of about twenty degrees, which still lets a projection lift an
+     * endpoint most of the way onto a surface it is pressed against; the excluded
+     * remainder is the band where the arithmetic stops paying for itself.
+     */
+    private static final float MAX_MINIMUM_DOT = 0.94F;
 
     private CollisionProjectionMath() {
     }
@@ -20,7 +28,18 @@ final class CollisionProjectionMath {
         if (minimumDot <= -1.0F) {
             return false;
         }
-        minimumDot = Math.min(minimumDot, 1.0F);
+        /*
+         * Held short of pointing straight along the normal. As the bound
+         * approaches one the cone it names closes onto the normal itself, and the
+         * turn needed to reach it grows without limit while the clearance it buys
+         * approaches nothing: the endpoint moves along the normal by the sine of
+         * its angle to it, so near the axis it barely moves at all. Enforcing such
+         * a bound swings the segment far for almost no gain — measured on
+         * winefox_magical's hatsidefront2, 0.373 rad in one frame to gain 1.13 px,
+         * while its lever arm is 126 px. Whatever cannot be cleared this frame is
+         * left for the next, which is how every other bound here behaves.
+         */
+        minimumDot = Math.min(minimumDot, MAX_MINIMUM_DOT);
         float currentDot = direction.dot(normal);
         if (currentDot + EPSILON >= minimumDot) {
             return false;
@@ -44,6 +63,7 @@ final class CollisionProjectionMath {
         direction.set(normal).mul(minimumDot).add(tangent).normalize();
         return true;
     }
+
 
     static boolean projectOutsideSphere(
             Vector3f direction,

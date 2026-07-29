@@ -117,4 +117,43 @@ final class SpringContactSupport {
         }
         force.fma(-inward * support, normal);
     }
+
+    /**
+     * Removes the part of {@code velocity} carrying a supported segment off its
+     * surface, scaled by how sure of that surface we are.
+     *
+     * <p>Cancelling only the force leaves a segment being launched off the very
+     * surface holding it up. Support rises the frame a correction lands, so more
+     * of the load pressing inwards is cancelled from that frame on, and the
+     * outward velocity accumulated before then is still in the step — nothing
+     * balances it any more. Measured on winefox_magical's hatsidefront2: support
+     * stepped 0.51 to 0.71 and the segment left in the same frame, 0.373 rad in
+     * one step and 1.13 px further from the collider than it had been, then drifted
+     * back as support faded, touched, and went again on a thirty-frame cycle — the
+     * period of {@link #FADE_SECONDS}, not of anything physical.
+     *
+     * <p>Only the outward component and only in proportion to support, so a part
+     * genuinely thrown clear by a moving collider still leaves: that arrives as
+     * fresh velocity while support is still low, and a part fully supported is one
+     * that should be resting, not climbing.
+     */
+    static void cancelOutward(
+            int drivenSlot,
+            SpringBoneState state,
+            Vector3f velocity
+    ) {
+        float support = state.contactSupport[drivenSlot];
+        if (support <= 0.0F) {
+            return;
+        }
+        Vector3f normal = state.contactNormals[drivenSlot];
+        if (normal.lengthSquared() <= EPSILON) {
+            return;
+        }
+        float outward = velocity.dot(normal);
+        if (outward <= 0.0F) {
+            return;
+        }
+        velocity.fma(-outward * support, normal);
+    }
 }

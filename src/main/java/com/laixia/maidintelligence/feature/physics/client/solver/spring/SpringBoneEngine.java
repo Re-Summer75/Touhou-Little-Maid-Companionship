@@ -108,6 +108,19 @@ public final class SpringBoneEngine {
         return context.state.projectionReversals[drivenSlot];
     }
 
+    /** How much of a resting surface one segment is currently relying on. */
+    public float contactSupport(int drivenSlot) {
+        return context.state.contactSupport[drivenSlot];
+    }
+
+    public float lastIntegratorStep(int drivenSlot) {
+        return context.state.lastIntegratorStep[drivenSlot];
+    }
+
+    public float lastProjectionStep(int drivenSlot) {
+        return context.state.lastProjectionStep[drivenSlot];
+    }
+
     public boolean copyAnimationAcceleration(
             int drivenSlot,
             Vector3f output

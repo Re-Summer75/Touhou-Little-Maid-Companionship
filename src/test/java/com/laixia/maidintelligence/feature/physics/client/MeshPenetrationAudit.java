@@ -8,6 +8,7 @@ import com.laixia.maidintelligence.feature.physics.client.solver.SwingRange;
 import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
 import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySource;
 import com.laixia.maidintelligence.feature.physics.client.solver.collision.runtime.CollisionProxyDebugData;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.nio.file.Files;
@@ -39,8 +40,6 @@ public final class MeshPenetrationAudit {
     private static final int SETTLE = 240;
     private static final int SAMPLE = 120;
     private static final float PIXELS_PER_BLOCK = 16.0F;
-    /** Matches the solver's own body-sample floor. */
-    private static final float BODY_MIN_FRACTION = 0.35F;
     /** Below this a step is numerical noise rather than motion. */
     private static final float MOVED = 1.0E-4F;
     /** X rotation in degrees, from the shipped sit animation. */
@@ -100,23 +99,23 @@ public final class MeshPenetrationAudit {
         }
         System.out.printf(
                 Locale.ROOT,
-                "%-22s %4s %6s %7s %6s %5s %6s %5s  %-16s %s%n",
+                "%-22s %4s %6s %7s %6s %5s %6s %5s  %-16s %-16s %s%n",
                 "model", "segs", "axis", "geom", "hits", "lyr",
-                "path", "revs", "worstAxis", "worstJitter"
+                "buzz", "revs", "worstAxis", "worstGeom", "worstJitter"
         );
-        System.out.println("-".repeat(118));
+        System.out.println("-".repeat(136));
         Row total = new Row();
         for (Path path : models) {
             total.accumulate(audit(path));
         }
-        System.out.println("-".repeat(118));
+        System.out.println("-".repeat(136));
         print("WORST OF " + models.size(), total);
     }
 
     private static void print(String name, Row row) {
         System.out.printf(
                 Locale.ROOT,
-                "%-22s %4d %6.2f %7.2f %6d %5d %6.3f %5d  %-16s %s%n",
+                "%-22s %4d %6.2f %7.2f %6d %5d %6.1f %5d  %-16s %-16s %s%n",
                 name,
                 row.segments,
                 row.axis * PIXELS_PER_BLOCK,
@@ -126,6 +125,7 @@ public final class MeshPenetrationAudit {
                 row.path,
                 row.reversals,
                 row.label,
+                row.geometricLabel,
                 row.jitterLabel
         );
     }
@@ -175,9 +175,21 @@ public final class MeshPenetrationAudit {
             return;
         }
         List<AnimatedGeoBone> legs = legs(geo);
+        PhysicsBoneGeometry.Analysis geometry =
+                PhysicsBoneGeometry.analyze(geo);
         SpringBoneSolver solver = new SpringBoneSolver(layout);
         int slot = layout.node(node).drivenSlot();
         solver.solve(new Vector3f(), 0.0F, 0.0F, false);
+        /*
+         * The animated pose before any secondary motion, which is what the swing
+         * cone is measured from. Taken on the settling frame rather than kept from
+         * the rest pose: the sit animation rotates these bones itself, so the cone
+         * travels with it.
+         */
+        Vector3f restDirection = new Vector3f();
+        solver.restoreAnimationPose();
+        sit(legs);
+        solver.copyCurrentDirection(slot, restDirection);
         for (int frame = 0; frame < SETTLE; frame++) {
             solver.restoreAnimationPose();
             sit(legs);
@@ -186,9 +198,11 @@ public final class MeshPenetrationAudit {
         System.out.println("=== " + model + " / " + bone + " (seated) ===");
         System.out.printf(
                 Locale.ROOT,
-                "%5s %9s %7s %5s %5s %8s %8s %5s %5s %6s %4s%n",
+                "%5s %9s %7s %5s %5s %8s %8s %5s %5s %6s %4s %6s %5s %6s"
+                        + " %8s %8s %5s%n",
                 "frame", "step", "dot", "auto", "layer", "minAuto",
-                "minLayer", "swing", "coll", "damp", "revs"
+                    "minLayer", "swing", "coll", "damp", "revs", "geom",
+                    "pad", "cone", "integ", "proj", "sup"
         );
         /*
          * Where the two states of a cycle sit against the cone tells the two
@@ -203,9 +217,13 @@ public final class MeshPenetrationAudit {
         Vector3f current = new Vector3f();
         Vector3f step = new Vector3f();
         Vector3f lastStep = new Vector3f();
+        Vector3f traceTip = new Vector3f();
+        Vector3f tracePivot = new Vector3f();
+        Vector3f poseNow = new Vector3f();
+        Vector3f posePrevious = new Vector3f();
         CollisionProxyDebugData data = new CollisionProxyDebugData();
         solver.copyCurrentDirection(slot, previous);
-        for (int frame = 0; frame < 40; frame++) {
+        for (int frame = 0; frame < SAMPLE; frame++) {
             solver.restoreAnimationPose();
             sit(legs);
             solver.solve(new Vector3f(), 0.0F, DT, false);
@@ -215,10 +233,21 @@ public final class MeshPenetrationAudit {
             int layer = 0;
             float minAuto = 0.0F;
             float minLayer = 0.0F;
+            float deepest = 0.0F;
             int count = solver.preparedProxyCount(node);
             for (int proxy = 0; proxy < count; proxy++) {
-                if (!solver.copyPreparedCollisionProxy(node, proxy, data)
-                        || data.clearance >= 0.0F) {
+                if (!solver.copyPreparedCollisionProxy(node, proxy, data)) {
+                    continue;
+                }
+                if (data.kind == CollisionProxyKind.BOX
+                        && solver.copyRuntimeTip(node, traceTip)
+                        && solver.copyRuntimePivot(node, tracePivot)) {
+                    deepest = Math.max(deepest, meshDepth(
+                            geometry.node(layout.node(node).bone()),
+                            tracePivot, traceTip, data
+                    ));
+                }
+                if (data.clearance >= 0.0F) {
                     continue;
                 }
                 if (data.source == CollisionProxySource.LAYER) {
@@ -231,7 +260,8 @@ public final class MeshPenetrationAudit {
             }
             System.out.printf(
                     Locale.ROOT,
-                    "%5d %9.5f %7.2f %5d %5d %8.3f %8.3f %5d %5d %6.2f %4d%n",
+                    "%5d %9.5f %7.2f %5d %5d %8.3f %8.3f %5d %5d %6.2f %4d"
+                            + " %6.2f %5.2f %6.3f %8.5f %8.5f %5.2f%n",
                     frame,
                     step.length(),
                     lastStep.lengthSquared() > 1.0E-9F
@@ -244,7 +274,31 @@ public final class MeshPenetrationAudit {
                     solver.lastConstraintProjectionCount(),
                     solver.lastCollisionProjectionCount(),
                     solver.projectionDamping(slot),
-                    solver.projectionReversals(slot)
+                    solver.projectionReversals(slot),
+                    deepest * PIXELS_PER_BLOCK,
+                    layout.node(node).constraint()
+                            .copyMeshHalfExtents(new Vector3f())
+                            .length() * PIXELS_PER_BLOCK,
+                    /*
+                     * How far off the animated pose the segment currently sits.
+                     * Read against the cone printed above: riding the cap means
+                     * the limiter is clamping every frame, and sitting well inside
+                     * it means whatever the segment is doing, the cone is not the
+                     * cause.
+                     */
+                    (float) Math.acos(Math.max(-1.0, Math.min(1.0,
+                            current.dot(restDirection)))),
+                    /*
+                     * The step split at the one point both halves are visible.
+                     * A committed direction cannot say whether a lurch came from
+                     * the integrator or from the correction that followed it, and
+                     * on winefox_magical that distinction was the whole answer:
+                     * hatsidefront2's 0.373 rad frame was 0.024 of step and 0.394
+                     * of projection.
+                     */
+                    solver.lastIntegratorStep(slot),
+                    solver.lastProjectionStep(slot),
+                    solver.contactSupport(slot)
             );
             lastStep.set(step);
             previous.set(current);
@@ -298,6 +352,7 @@ public final class MeshPenetrationAudit {
         Vector3f[] previous = new Vector3f[driven.length];
         Vector3f[] lastStep = new Vector3f[driven.length];
         float[] path = new float[driven.length];
+        float[] depth = new float[driven.length];
         int[] reversals = new int[driven.length];
         for (int index = 0; index < driven.length; index++) {
             previous[index] = new Vector3f();
@@ -327,17 +382,21 @@ public final class MeshPenetrationAudit {
                 );
                 step.set(current).sub(previous[slot]);
                 float travelled = step.length();
-                /*
-                 * Accumulated travel, per segment. A settled pose goes nowhere,
-                 * so path is the jitter amplitude summed over the window: a
-                 * segment buzzing between two surfaces racks up path while its
-                 * position looks unchanged.
-                 */
-                path[slot] += travelled;
-                if (travelled > MOVED
+                boolean reversed = travelled > MOVED
                         && lastStep[slot].lengthSquared() > 1.0E-8F
-                        && step.dot(lastStep[slot]) < 0.0F) {
+                        && step.dot(lastStep[slot]) < 0.0F;
+                if (reversed) {
                     reversals[slot]++;
+                }
+                /*
+                 * Only travel that reverses is counted. A segment swinging one
+                 * way covers ground without shaking, and charging it for that
+                 * ranked a freely settling hat ornament as the worst buzz in
+                 * every model at 10.2 px a frame, while its steps ran the same
+                 * direction forty frames running and it never touched anything.
+                 */
+                if (reversed) {
+                    path[slot] += travelled;
                 }
                 lastStep[slot].set(step);
                 previous[slot].set(current);
@@ -364,7 +423,6 @@ public final class MeshPenetrationAudit {
                             && data.source != CollisionProxySource.AUTOMATIC) {
                         continue;
                     }
-                    float reach = normalReach(mesh, pivot, tip, data);
                     if (data.clearance < 0.0F) {
                         row.contacts++;
                         if (layer) {
@@ -376,24 +434,52 @@ public final class MeshPenetrationAudit {
                         continue;
                     }
                     row.considerAxis(data.clearance, label);
-                    /*
-                     * Reported, not minimised. Reach is a property of the mesh
-                     * and the contact direction alone, so once the solver has
-                     * driven clearance to nothing this figure is pinned at
-                     * -reach and no amount of solving moves it. Four separate
-                     * attempts to improve it each left it where it was while
-                     * driving axis clearance from -0.12 px to -3.98 px, which is
-                     * the measurement that does answer to the solver. It stays
-                     * here as the standing cost of tracking a sheet by a point
-                     * on its axis, and it is read, not chased.
-                     */
-                    row.considerGeometric(data.clearance - reach, label);
+                    float sunk = meshDepth(mesh, pivot, tip, data);
+                    depth[slot] = Math.max(depth[slot], sunk);
+                    row.considerGeometric(sunk, label);
                 }
             }
         }
+        /*
+         * Per-segment depths, on request. The summary reports only the worst, and
+         * chasing that one figure hides whether it is an outlier or the whole
+         * skirt: on winefox it turned out eight segments were sinking about 2 px
+         * each while the named one sank 4.
+         */
+        if (System.getProperty("tlm.dumpDepth") != null) {
+            for (int slot = 0; slot < driven.length; slot++) {
+                System.out.printf(
+                        Locale.ROOT,
+                        "  depth %-20s %6.2f pad=%5.2f arm=%6.2f%n",
+                        layout.node(driven[slot]).bone().getName(),
+                        depth[slot] * PIXELS_PER_BLOCK,
+                        layout.node(driven[slot]).constraint()
+                                .copyMeshHalfExtents(new Vector3f())
+                                .length() * PIXELS_PER_BLOCK,
+                        layout.node(driven[slot]).kinematics().leverArm()
+                                * PIXELS_PER_BLOCK
+                );
+            }
+        }
         for (int slot = 0; slot < driven.length; slot++) {
+            /*
+             * How far the tip moves in an average frame, in model pixels. This is
+             * the figure the complaint was about: a part shaking visibly moves its
+             * tip a noticeable distance every frame, and one settling does not.
+             *
+             * <p>Neither a bare path nor a bare ratio says that. Path alone counts
+             * a segment swinging somewhere the same as one trembling in place; the
+             * ratio alone ranks a limit cycle of 0.0003 rad level with one of 0.27,
+             * though the first moves its tip by under a hundredth of a pixel and
+             * cannot be seen at all. Scaling by the lever arm puts an angle where
+             * it belongs, since the same rotation on a long strand shows far more
+             * than on a stub. Read together with revs, which says whether that
+             * travel was retraced or spent going somewhere.
+             */
             row.considerJitter(
-                    path[slot],
+                    path[slot] / SAMPLE
+                            * layout.node(driven[slot]).kinematics().leverArm()
+                            * PIXELS_PER_BLOCK,
                     reversals[slot],
                     layout.node(driven[slot]).bone().getName()
             );
@@ -420,12 +506,20 @@ public final class MeshPenetrationAudit {
     }
 
     /**
-     * How far the segment's mesh reaches past its endpoint along the direction
-     * the collider pushes back. Taken along the contact normal rather than as
-     * an omnidirectional maximum: a bow whose cubes fan out sideways reaches
-     * far from its axis without any of that width facing the surface.
+     * How far the deepest corner of the segment's mesh lies inside the box, in
+     * model pixels, or nought when every corner is outside it. This is the
+     * penetration a viewer sees: cloth is drawn as its cubes, so a cube corner
+     * inside a leg is visible however well the axis is placed.
+     *
+     * <p>Measured as a point-in-box depth, not as a clearance minus a reach.
+     * Subtracting an extent taken along the contact normal charges the segment
+     * for its own length whenever the normal is not square to the bone axis, and
+     * a hanging panel is far longer than it is thick — that read a settled hem as
+     * 15.8 px penetrating when nothing had gone inside anything, and it moved for
+     * every solver change because it was pinned to geometry rather than to the
+     * pose. Walking the corners cannot make that mistake.
      */
-    private static float normalReach(
+    private static float meshDepth(
             PhysicsBoneGeometry.Node node,
             Vector3f pivot,
             Vector3f tip,
@@ -434,68 +528,71 @@ public final class MeshPenetrationAudit {
         if (node == null || node.cubeBoxes().isEmpty()) {
             return 0.0F;
         }
-        Vector3f normal = contactNormal(data, tip);
-        if (normal == null) {
-            return 0.0F;
-        }
-        Vector3f axis = new Vector3f(tip).sub(pivot);
-        if (axis.lengthSquared() <= 1.0E-12F) {
-            return 0.0F;
-        }
-        axis.normalize();
         /*
-         * The span is taken about the axis rather than about a pivot: the
-         * authored pivot of an accessory can sit well away from its mesh, and
-         * the solver uses a corrected one, so anchoring on either would report
-         * that offset instead of a thickness.
+         * The cubes are authored in the rest pose, so they are carried onto the
+         * solved axis before being tested. Skipping this would test the hem where
+         * the artist left it rather than where the solver put it, which is the
+         * whole question.
          */
+        Vector3f restAxis = new Vector3f(node.center()).sub(node.pivot());
+        Vector3f liveAxis = new Vector3f(tip).sub(pivot);
+        if (restAxis.lengthSquared() <= 1.0E-12F
+                || liveAxis.lengthSquared() <= 1.0E-12F) {
+            return 0.0F;
+        }
+        Quaternionf pose = new Quaternionf().rotateTo(
+                restAxis.normalize(), liveAxis.normalize()
+        );
         Vector3f corner = new Vector3f();
-        float nearest = Float.MAX_VALUE;
-        float furthest = -Float.MAX_VALUE;
+        float deepest = 0.0F;
         for (PhysicsBoneGeometry.CubeBox box : node.cubeBoxes()) {
             for (int index = 0; index < 8; index++) {
                 box.corner(index, corner);
-                float along = corner.dot(normal);
-                nearest = Math.min(nearest, along);
-                furthest = Math.max(furthest, along);
+                corner.sub(node.pivot());
+                pose.transform(corner);
+                corner.add(pivot);
+                deepest = Math.max(deepest, boxDepth(corner, data));
             }
         }
-        if (nearest > furthest) {
-            return 0.0F;
-        }
-        // Half the extent: the endpoint tracks the middle of the sheet.
-        return (furthest - nearest) * 0.5F;
+        return deepest;
     }
 
-    /** Direction the collider pushes the endpoint, in model space. */
-    private static Vector3f contactNormal(
-            CollisionProxyDebugData data,
-            Vector3f tip
+    /**
+     * Depth of a point inside an oriented box, nought if it is outside. The
+     * smallest distance to a face, since that is the shortest way back out and so
+     * what a viewer reads as how far in the part has sunk.
+     */
+    private static float boxDepth(
+            Vector3f point,
+            CollisionProxyDebugData data
     ) {
-        Vector3f local = new Vector3f(tip).sub(data.boxCenter);
-        float[] extents = {
+        Vector3f local = new Vector3f(point).sub(data.boxCenter);
+        float[] along = {
+                local.dot(data.boxAxisX),
+                local.dot(data.boxAxisY),
+                local.dot(data.boxAxisZ)
+        };
+        float[] half = {
                 data.boxHalfExtents.x,
                 data.boxHalfExtents.y,
                 data.boxHalfExtents.z
         };
-        Vector3f[] axes = {data.boxAxisX, data.boxAxisY, data.boxAxisZ};
-        int shallowest = -1;
-        float best = -Float.MAX_VALUE;
-        for (int index = 0; index < 3; index++) {
-            if (axes[index].lengthSquared() <= 1.0E-12F) {
+        float shallowest = Float.MAX_VALUE;
+        for (int axis = 0; axis < 3; axis++) {
+            /*
+             * A half-open box is missing the face on its open axis, so that
+             * direction cannot contain the point and is not a way out either.
+             */
+            if (axis == data.boxOpenAxis) {
                 continue;
             }
-            float over = Math.abs(local.dot(axes[index])) - extents[index];
-            if (over > best) {
-                best = over;
-                shallowest = index;
+            float inside = half[axis] - Math.abs(along[axis]);
+            if (inside <= 0.0F) {
+                return 0.0F;
             }
+            shallowest = Math.min(shallowest, inside);
         }
-        if (shallowest < 0) {
-            return null;
-        }
-        Vector3f normal = new Vector3f(axes[shallowest]);
-        return local.dot(normal) < 0.0F ? normal.negate() : normal;
+        return shallowest == Float.MAX_VALUE ? 0.0F : shallowest;
     }
 
     /** Every bone the sit pose keyframes, whichever of them a model has. */
@@ -527,10 +624,20 @@ public final class MeshPenetrationAudit {
 
     private static final class Row {
         private int segments;
+        /**
+         * Worst gap the solver measured at an endpoint, negative when it wanted
+         * more room than it had.
+         *
+         * <p>Not a penetration figure. The projection holds the axis a sheet's
+         * half thickness clear of a surface so that the surface lands on it, so
+         * an axis settling inside the padded bound is the intended result — on
+         * kluonoa's Tail this reads -0.89 px while the mesh itself is 0.06 px in.
+         * Read {@code geom} for what a viewer sees, and read this for whether the
+         * solver is being asked for something it cannot deliver.
+         */
         private float axis;
         private float surface;
         private float layerDepth;
-        private float deficit;
         private float path;
         private int reversals;
         private int contacts;
@@ -547,9 +654,10 @@ public final class MeshPenetrationAudit {
             }
         }
 
-        private void considerGeometric(float clearance, String name) {
-            if (clearance < surface) {
-                surface = clearance;
+        // A depth, so the worst case is the largest, unlike the clearances.
+        private void considerGeometric(float depth, String name) {
+            if (depth > surface) {
+                surface = depth;
                 geometricLabel = name;
             }
         }

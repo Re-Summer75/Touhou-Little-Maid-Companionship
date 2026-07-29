@@ -187,6 +187,13 @@ final class SpringBoneFrameRunner {
                 );
             }
         }
+        state.lastIntegratorStep[node.drivenSlot()] =
+                scratch.projectionStart.distance(
+                        state.currentDirections[node.drivenSlot()]
+                );
+        state.lastProjectionStep[node.drivenSlot()] = corrected
+                ? scratch.projectionStart.distance(scratch.nextDirection)
+                : 0.0F;
         SpringContactSupport.record(node.drivenSlot(), dt, state, scratch);
         SpringDirectionIntegrator.commit(
                 node.drivenSlot(),

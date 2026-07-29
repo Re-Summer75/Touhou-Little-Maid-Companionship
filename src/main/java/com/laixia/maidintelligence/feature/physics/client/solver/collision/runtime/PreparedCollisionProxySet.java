@@ -420,6 +420,16 @@ public final class PreparedCollisionProxySet {
              */
             settled = pass < passes - 1;
         }
+        /*
+         * The pose the last pass reached is handed back as it stands, even when
+         * the passes never agreed. Averaging the poses they visited was tried, on
+         * the reasoning that which one the count stops on is arbitrary — single
+         * passes here move the direction by up to 1.03 rad, and one slot reported
+         * an identical 0.606 pass after pass. It is arbitrary, but the mean is
+         * worse: it satisfies no bound exactly, so cloth settles further inside
+         * every collider it is caught between. Contacts rose across the models
+         * and the buzz it was aimed at did not move at all.
+         */
         if (!settled) {
             scratch.setUnresolved(true);
         }

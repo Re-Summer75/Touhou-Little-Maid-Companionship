@@ -35,6 +35,8 @@ final class SpringBoneScratch {
     boolean collisionCorrected;
     /** External acceleration for the step, before contact support trims it. */
     final Vector3f appliedForce = new Vector3f();
+    /** Velocity carried from the previous step, before support trims it. */
+    final Vector3f carriedVelocity = new Vector3f();
     final Vector3f localDirection = new Vector3f();
     final Vector3f deflectionAxis = new Vector3f();
     final Vector3f rotationEuler = new Vector3f();
