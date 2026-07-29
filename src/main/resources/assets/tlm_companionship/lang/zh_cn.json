@@ -19,7 +19,7 @@
   "tooltips.tlm_companionship.info.experience": "升级经验",
   "tooltips.tlm_companionship.info.max_level": "已满级",
   "tooltips.tlm_companionship.info.favorability_level": "好感等级",
-  "gui.tlm_companionship.hunger": "饱食度：%s/%s，饱和度：%s/%s",
+  "gui.tlm_companionship.hunger": "饥饿值：%s/%s，饱和度：%s/%s",
   "gui.tlm_companionship.advancement.tab": "女仆进度",
   "gui.tlm_companionship.advancement.tab.desc": "查看这位女仆自己的进度",
   "gui.tlm_companionship.advancement.completion": "已完成 %s/%s",
