@@ -1,10 +1,18 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -51,28 +59,42 @@ final class PhysicsPlanCacheVerification {
             );
             require(secondBone != null, "Template binding lost a live bone");
             require(
-                    first.decision(firstBone).equals(
-                            second.decision(secondBone)
+                    BonePhysicsVerificationSupport.decision(first, firstBone)
+                            .equals(
+                            BonePhysicsVerificationSupport.decision(
+                                    second, secondBone
+                            )
                     ),
                     "Template binding changed decision for "
-                            + first.path(firstBone)
+                            + BonePhysicsVerificationSupport.path(
+                            first, firstBone
+                    )
             );
             require(
-                    first.path(firstBone).equals(second.path(secondBone)),
+                    BonePhysicsVerificationSupport.path(first, firstBone)
+                            .equals(BonePhysicsVerificationSupport.path(
+                                    second, secondBone
+                            )),
                     "Template binding changed path for "
-                            + first.path(firstBone)
+                            + BonePhysicsVerificationSupport.path(
+                            first, firstBone
+                    )
             );
-            if (first.isDriven(firstBone)) {
+            if (BonePhysicsVerificationSupport.isDriven(first, firstBone)) {
                 require(
-                        second.kinematics(secondBone) != null,
+                        BonePhysicsVerificationSupport.kinematics(
+                                second, secondBone
+                        ) != null,
                         "Template binding lost static kinematics for "
-                                + first.path(firstBone)
+                                + BonePhysicsVerificationSupport.path(
+                                first, firstBone
+                        )
                 );
             }
         });
 
         PhysicsSolverLayout layout =
-                PhysicsSolverLayout.build(secondModel, second);
+                BonePhysicsVerificationSupport.layout(secondModel, second);
         require(
                 layout.activeNodeCount() < layout.fullBoneCount(),
                 "Active layout did not prune any inactive branch"
@@ -110,23 +132,27 @@ final class PhysicsPlanCacheVerification {
             PhysicsBoneSelectionPlan plan,
             PhysicsSolverLayout layout
     ) {
-        IdentityHashMap<AnimatedGeoBone, AnimatedGeoBone> parents =
+        BoneModelSnapshot coreModel =
+                BonePhysicsVerificationSupport.coreModel(model);
+        IdentityHashMap<BoneModelSnapshot.Bone, BoneModelSnapshot.Bone> parents =
                 new IdentityHashMap<>();
-        for (AnimatedGeoBone root : model.topLevelBones()) {
-            collectParents(root, null, parents);
-        }
-        IdentityHashMap<AnimatedGeoBone, Boolean> expected =
-                new IdentityHashMap<>();
-        forEachBone(model, bone -> {
-            if (!plan.isDriven(bone)) {
-                return;
+        for (BoneModelSnapshot.Bone bone : coreModel.boneList()) {
+            if (bone.parent() != null) {
+                parents.put(bone, bone.parent());
             }
-            AnimatedGeoBone cursor = bone;
+        }
+        IdentityHashMap<BoneModelSnapshot.Bone, Boolean> expected =
+                new IdentityHashMap<>();
+        for (BoneModelSnapshot.Bone bone : coreModel.boneList()) {
+            if (!plan.isDriven(bone)) {
+                continue;
+            }
+            BoneModelSnapshot.Bone cursor = bone;
             while (cursor != null) {
                 expected.put(cursor, Boolean.TRUE);
                 cursor = parents.get(cursor);
             }
-        });
+        }
         for (int index = 0; index < layout.activeNodeCount(); index++) {
             PhysicsSolverLayout.Node node = layout.node(index);
             if (!node.driven()) {
@@ -156,7 +182,7 @@ final class PhysicsPlanCacheVerification {
                 expected.size() == layout.activeNodeCount(),
                 "Active layout is not the exact driven/reference ancestor union"
         );
-        IdentityHashMap<AnimatedGeoBone, Integer> indices =
+        IdentityHashMap<BoneModelSnapshot.Bone, Integer> indices =
                 new IdentityHashMap<>();
         for (int index = 0; index < layout.activeNodeCount(); index++) {
             PhysicsSolverLayout.Node node = layout.node(index);
@@ -170,7 +196,7 @@ final class PhysicsPlanCacheVerification {
                     "Active layout assigned the wrong node role: "
                             + node.path()
             );
-            AnimatedGeoBone parent = parents.get(node.bone());
+            BoneModelSnapshot.Bone parent = parents.get(node.bone());
             int expectedParent = parent == null
                     ? -1
                     : indices.getOrDefault(parent, -2);
@@ -186,8 +212,8 @@ final class PhysicsPlanCacheVerification {
     private static void addReferencePath(
             PhysicsSolverLayout layout,
             int referenceIndex,
-            Map<AnimatedGeoBone, AnimatedGeoBone> parents,
-            IdentityHashMap<AnimatedGeoBone, Boolean> expected
+            Map<BoneModelSnapshot.Bone, BoneModelSnapshot.Bone> parents,
+            IdentityHashMap<BoneModelSnapshot.Bone, Boolean> expected
     ) {
         if (referenceIndex < 0) {
             return;
@@ -196,7 +222,7 @@ final class PhysicsPlanCacheVerification {
                 referenceIndex < layout.activeNodeCount(),
                 "Constraint reference index escaped the active layout"
         );
-        AnimatedGeoBone cursor = layout.node(referenceIndex).bone();
+        BoneModelSnapshot.Bone cursor = layout.node(referenceIndex).bone();
         while (cursor != null) {
             expected.put(cursor, Boolean.TRUE);
             cursor = parents.get(cursor);

@@ -1,23 +1,34 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.atmosphere.client.wind.EnvironmentalWindField;
-import com.laixia.maidintelligence.feature.atmosphere.client.wind.EnvironmentalWindSampler;
-import com.laixia.maidintelligence.feature.physics.client.pose.PoseDriveGustFilter;
+import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.atmosphere.application.EnvironmentalWindField;
+import com.laixia.maidintelligence.feature.atmosphere.client.wind.JomlWindVectorPort;
+import com.laixia.maidintelligence.feature.atmosphere.domain.DimensionWindProfile;
+import com.laixia.maidintelligence.feature.atmosphere.port.MutableWindVectorPort;
+import com.laixia.maidintelligence.feature.physics.session.PoseDriveGustFilter;
 import com.laixia.maidintelligence.feature.physics.client.pose.WorldPoseDriverSources;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 import org.joml.Vector3f;
 
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.requireNear;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.requireVectorNear;
 
 final class EnvironmentalWindVerification {
     private static final Vector3f ZERO = new Vector3f();
+    private static final MutableWindVectorPort<Vector3f> WIND_VECTORS =
+            JomlWindVectorPort.INSTANCE;
 
     private EnvironmentalWindVerification() {
     }
@@ -66,7 +77,7 @@ final class EnvironmentalWindVerification {
     }
 
     private static void verifiesEnvironmentStrengthOrdering() {
-        float base = EnvironmentalWindSampler.dimensionBase(
+        float base = DimensionWindProfile.baseStrength(
                 "minecraft:overworld"
         );
         float calm = EnvironmentalWindField.strength(
@@ -87,10 +98,10 @@ final class EnvironmentalWindVerification {
         float submerged = EnvironmentalWindField.strength(
                 base, 0.0F, 0.0F, 0.0F, 1.0F, true
         );
-        float nether = EnvironmentalWindSampler.dimensionBase(
+        float nether = DimensionWindProfile.baseStrength(
                 "minecraft:the_nether"
         );
-        float end = EnvironmentalWindSampler.dimensionBase(
+        float end = DimensionWindProfile.baseStrength(
                 "minecraft:the_end"
         );
 
@@ -120,13 +131,16 @@ final class EnvironmentalWindVerification {
         Vector3f same = new Vector3f();
         Vector3f nearby = new Vector3f();
         EnvironmentalWindField.targetInto(
-                120.0D, -80.0D, 24_000.25D, 913, 0.05F, first
+                120.0D, -80.0D, 24_000.25D, 913, 0.05F,
+                first, WIND_VECTORS
         );
         EnvironmentalWindField.targetInto(
-                120.0D, -80.0D, 24_000.25D, 913, 0.05F, same
+                120.0D, -80.0D, 24_000.25D, 913, 0.05F,
+                same, WIND_VECTORS
         );
         EnvironmentalWindField.targetInto(
-                122.0D, -79.0D, 24_000.25D, 913, 0.05F, nearby
+                122.0D, -79.0D, 24_000.25D, 913, 0.05F,
+                nearby, WIND_VECTORS
         );
 
         requireVectorNear(
@@ -160,10 +174,12 @@ final class EnvironmentalWindVerification {
         for (int sample = 0; sample < samples; sample++) {
             double time = 24_000.25D + sample * 2.0D;
             EnvironmentalWindField.targetInto(
-                    120.0D, -80.0D, time, 913, 1171, 0.25F, first
+                    120.0D, -80.0D, time, 913, 1171, 0.25F,
+                    first, WIND_VECTORS
             );
             EnvironmentalWindField.targetInto(
-                    120.0D, -80.0D, time, 913, 3571, 0.25F, second
+                    120.0D, -80.0D, time, 913, 3571, 0.25F,
+                    second, WIND_VECTORS
             );
             firstLateral[sample] = first.x;
             secondLateral[sample] = second.x;
@@ -184,11 +200,11 @@ final class EnvironmentalWindVerification {
         );
         EnvironmentalWindField.targetInto(
                 120.0D, -80.0D, 24_000.25D,
-                913, 1171, 0.25F, repeated
+                913, 1171, 0.25F, repeated, WIND_VECTORS
         );
         EnvironmentalWindField.targetInto(
                 120.0D, -80.0D, 24_000.25D,
-                913, 1171, 0.25F, first
+                913, 1171, 0.25F, first, WIND_VECTORS
         );
         requireVectorNear(
                 repeated,
@@ -263,7 +279,8 @@ final class EnvironmentalWindVerification {
         for (int sample = 0; sample < 32; sample++) {
             double time = 32_000.0D + sample * 20.0D;
             EnvironmentalWindField.targetInto(
-                    73.0D, -41.0D, time, 1771, 0.16F, first
+                    73.0D, -41.0D, time, 1771, 0.16F,
+                    first, WIND_VECTORS
             );
             EnvironmentalWindField.targetInto(
                     73.0D,
@@ -271,7 +288,8 @@ final class EnvironmentalWindVerification {
                     time + 1_000_003.0D,
                     1771,
                     0.16F,
-                    later
+                    later,
+                    WIND_VECTORS
             );
             accumulatedDifference += first.distance(later);
         }
@@ -292,7 +310,8 @@ final class EnvironmentalWindVerification {
                 current,
                 target,
                 0.0F,
-                current
+                current,
+                WIND_VECTORS
         );
         requireNear(current.x, 0.0F, 0.0F, "dt=0 advanced wind smoothing");
 
@@ -302,7 +321,8 @@ final class EnvironmentalWindVerification {
                     current,
                     target,
                     1.0F / 60.0F,
-                    current
+                    current,
+                    WIND_VECTORS
             );
             require(
                     current.x >= previous
@@ -317,7 +337,8 @@ final class EnvironmentalWindVerification {
         );
 
         EnvironmentalWindField.targetInto(
-                0.0D, 0.0D, 0.0D, 0, 100.0F, target
+                0.0D, 0.0D, 0.0D, 0, 100.0F,
+                target, WIND_VECTORS
         );
         require(
                 target.length() <= EnvironmentalWindField.MAX_FORCE
@@ -337,7 +358,8 @@ final class EnvironmentalWindVerification {
                     index * 2.0D,
                     771,
                     0.25F,
-                    sample
+                    sample,
+                    WIND_VECTORS
             );
             mean.add(sample);
         }
@@ -352,7 +374,8 @@ final class EnvironmentalWindVerification {
                     index * 2.0D,
                     771,
                     0.25F,
-                    sample
+                    sample,
+                    WIND_VECTORS
             );
             float lateral = mean.x * sample.z - mean.z * sample.x;
             minimumLateral = Math.min(minimumLateral, lateral);
@@ -378,14 +401,16 @@ final class EnvironmentalWindVerification {
                     72_000.0D + frame / 3.0D,
                     913,
                     strength,
-                    target
+                    target,
+                    WIND_VECTORS
             );
             EnvironmentalWindField.smoothInto(
                     filtered,
                     target,
                     1.0F / 60.0F,
                     response,
-                    filtered
+                    filtered,
+                    WIND_VECTORS
             );
             if (frame >= 300) {
                 float pressure = filtered.length();
@@ -409,7 +434,8 @@ final class EnvironmentalWindVerification {
                 24_000_000.0D,
                 991,
                 0.1249F,
-                before
+                before,
+                WIND_VECTORS
         );
         EnvironmentalWindField.targetInto(
                 18.0D,
@@ -417,7 +443,8 @@ final class EnvironmentalWindVerification {
                 24_000_000.0D,
                 991,
                 0.1251F,
-                after
+                after,
+                WIND_VECTORS
         );
         require(
                 before.distance(after) < 0.001F,
@@ -477,14 +504,16 @@ final class EnvironmentalWindVerification {
                     48_000.0D + frame / 3.0D,
                     771,
                     strength,
-                    target
+                    target,
+                    WIND_VECTORS
             );
             EnvironmentalWindField.smoothInto(
                     filtered,
                     target,
                     1.0F / 60.0F,
                     response,
-                    filtered
+                    filtered,
+                    WIND_VECTORS
             );
             normalized.set(filtered).div(strength);
             if (frame == warmupFrames) {
@@ -518,14 +547,16 @@ final class EnvironmentalWindVerification {
                     48_000.0D + frame / 3.0D,
                     771,
                     strength,
-                    target
+                    target,
+                    WIND_VECTORS
             );
             EnvironmentalWindField.smoothInto(
                     filtered,
                     target,
                     1.0F / 60.0F,
                     response,
-                    filtered
+                    filtered,
+                    WIND_VECTORS
             );
             if (frame == warmupFrames) {
                 previous.set(filtered);
@@ -565,13 +596,15 @@ final class EnvironmentalWindVerification {
                     worldTicks,
                     1771,
                     0.06F,
-                    target
+                    target,
+                    WIND_VECTORS
             );
             EnvironmentalWindField.smoothInto(
                     current,
                     target,
                     dt,
-                    current
+                    current,
+                    WIND_VECTORS
             );
         }
         return current;
@@ -1120,7 +1153,7 @@ final class EnvironmentalWindVerification {
     }
 
     private static ChainFixture createChainFixture() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {
                   "format_version":"1.12.0",
                   "minecraft:geometry":[{
@@ -1147,7 +1180,7 @@ final class EnvironmentalWindVerification {
                   }]
                 }
                 """);
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {
                           "schema_version":1,
@@ -1183,7 +1216,7 @@ final class EnvironmentalWindVerification {
     }
 
     private static SiblingFixture createSiblingFixture() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {
                   "format_version":"1.12.0",
                   "minecraft:geometry":[{
@@ -1210,7 +1243,7 @@ final class EnvironmentalWindVerification {
                   }]
                 }
                 """);
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {
                           "schema_version":1,
@@ -1254,10 +1287,10 @@ final class EnvironmentalWindVerification {
 
     private static int drivenSlot(
             PhysicsSolverLayout layout,
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             String boneName
     ) {
-        AnimatedGeoBone bone = model.bones().get(boneName);
+        BoneModelSnapshot.Bone bone = model.bones().get(boneName);
         for (int index = 0; index < layout.activeNodeCount(); index++) {
             if (layout.node(index).bone() == bone) {
                 int slot = layout.node(index).drivenSlot();
@@ -1281,7 +1314,7 @@ final class EnvironmentalWindVerification {
             String type,
             float massScale
     ) {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {
                   "format_version":"1.12.0",
                   "minecraft:geometry":[{
@@ -1302,7 +1335,7 @@ final class EnvironmentalWindVerification {
                   }]
                 }
                 """.formatted(suffix));
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {
                           "schema_version":1,
@@ -1331,7 +1364,7 @@ final class EnvironmentalWindVerification {
                 metadata
         );
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(model, plan);
-        AnimatedGeoBone tail = model.bones().get("Tail");
+        BoneModelSnapshot.Bone tail = model.bones().get("Tail");
         int drivenSlot = -1;
         for (int index = 0; index < layout.activeNodeCount(); index++) {
             if (layout.node(index).bone() == tail) {
@@ -1344,7 +1377,7 @@ final class EnvironmentalWindVerification {
     }
 
     private record Fixture(
-            AnimatedGeoBone tail,
+            BoneModelSnapshot.Bone tail,
             SpringBoneSolver solver,
             int drivenSlot
     ) {

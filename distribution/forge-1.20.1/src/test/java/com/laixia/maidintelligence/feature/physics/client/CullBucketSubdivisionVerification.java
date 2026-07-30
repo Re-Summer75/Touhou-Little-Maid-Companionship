@@ -1,15 +1,23 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.runtime.CollisionProxyDebugData;
+import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.CollisionProxyDebugData;
 import org.joml.Vector3f;
 
 import java.util.Arrays;
 
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
 /**
@@ -85,13 +93,13 @@ final class CullBucketSubdivisionVerification {
 
     /** Clearances of every collider the endpoint was held by, ascending. */
     private static float[] selected(int colliders) {
-        AnimatedGeoModel model = model();
+        BoneModelSnapshot model = model();
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(
                 model,
                 PhysicsBoneDiscoverer.discover(
                         "verification:buckets",
                         model,
-                        PhysicsMetadata.parse(
+                        PhysicsMetadataJsonParser.parse(
                                 JsonParser.parseString(metadata(colliders))
                                         .getAsJsonObject(),
                                 "bucket verification"
@@ -161,8 +169,8 @@ final class CullBucketSubdivisionVerification {
                 .append(",\"hit_radius\":0}");
     }
 
-    private static AnimatedGeoModel model() {
-        return modelFromJson("""
+    private static BoneModelSnapshot model() {
+        return coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.buckets",
                     "texture_width":64,"texture_height":64},

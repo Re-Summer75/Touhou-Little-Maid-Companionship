@@ -1,9 +1,13 @@
 package com.laixia.maidintelligence.feature.advancement.server;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.advancement.api.MaidAdvancementAccess;
+import com.laixia.maidintelligence.feature.advancement.api.MaidStatisticsApi;
+import com.laixia.maidintelligence.feature.advancement.port.MaidExperienceRewardPort;
 import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.ServerAdvancementManager;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -16,6 +20,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -29,7 +34,7 @@ import javax.annotation.Nullable;
  * 直接走原版 {@code PlayerAdvancements} 的读写。之所以不存进 TLM TaskData：原版读档时会跳过
  * 已完成条目的监听注册，若改为手工恢复，已完成的 criteria 会重新触发一次奖励与聊天广播。
  */
-public final class MaidAdvancementManager {
+public final class MaidAdvancementManager implements MaidAdvancementAccess {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final String SAVE_DIRECTORY = "tlm_companionship/maid_advancements";
     /** 奖励发放可能再引出触发（例如经验升级），留几层余量后直接丢弃，避免无限递归。 */
@@ -37,7 +42,23 @@ public final class MaidAdvancementManager {
 
     private final Map<ResourceKey<Level>, MaidMirrorPlayer> mirrors = new HashMap<>();
     private final Map<UUID, MaidAdvancementTracker> trackers = new HashMap<>();
+    private final MaidExperienceRewardPort<EntityMaid> experienceRewards;
+    private final MaidStatisticsApi<EntityMaid> statistics;
     private int depth;
+
+    public MaidAdvancementManager(
+            MaidExperienceRewardPort<EntityMaid> experienceRewards,
+            MaidStatisticsApi<EntityMaid> statistics
+    ) {
+        this.experienceRewards = Objects.requireNonNull(
+                experienceRewards,
+                "experienceRewards"
+        );
+        this.statistics = Objects.requireNonNull(
+                statistics,
+                "statistics"
+        );
+    }
 
     /**
      * 把一次原版触发器调用喂给指定女仆：绑定镜像玩家、确保进度存在、执行、恢复上一次绑定。
@@ -73,6 +94,14 @@ public final class MaidAdvancementManager {
         return Optional.of(session.tracker);
     }
 
+    @Override
+    public Optional<MaidAdvancementSnapshot> snapshot(
+            EntityMaid maid,
+            ServerAdvancementManager advancements
+    ) {
+        return tracker(maid).map(tracker -> tracker.snapshot(advancements));
+    }
+
     /**
      * 进度有变化时标脏，落盘只写真正动过的女仆。由 Forge 的进度事件驱动。
      */
@@ -91,6 +120,7 @@ public final class MaidAdvancementManager {
     }
 
     /** 女仆离开世界（卸载、死亡、跨维度）时释放监听并落盘。 */
+    @Override
     public void release(UUID maidId) {
         MaidAdvancementTracker tracker = trackers.remove(maidId);
         if (tracker != null) {
@@ -129,7 +159,7 @@ public final class MaidAdvancementManager {
         }
         MaidMirrorPlayer mirror = mirrors.computeIfAbsent(
                 level.dimension(),
-                dimension -> MaidMirrorPlayer.create(level)
+                dimension -> MaidMirrorPlayer.create(level, experienceRewards)
         );
         MaidMirrorPlayer.Binding previous = mirror.bind(maid, null);
         MaidAdvancementTracker tracker = trackers.get(maid.getUUID());
@@ -142,7 +172,8 @@ public final class MaidAdvancementManager {
             if (firstRun && MaidLegacyAchievementMigration.apply(
                     maid,
                     tracker.advancements(),
-                    server.getAdvancements()
+                    server.getAdvancements(),
+                    statistics
             )) {
                 tracker.markDirty();
                 tracker.save();

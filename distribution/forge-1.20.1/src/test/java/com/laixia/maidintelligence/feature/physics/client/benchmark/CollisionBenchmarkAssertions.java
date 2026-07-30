@@ -1,8 +1,16 @@
 package com.laixia.maidintelligence.feature.physics.client.benchmark;
 
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySet;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxyKind;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySet;
 
 import static com.laixia.maidintelligence.feature.physics.client.benchmark.CollisionBenchmarkFixture.Kind;
 

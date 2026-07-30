@@ -3,10 +3,15 @@ package com.laixia.maidintelligence.feature.interaction.client;
 import com.github.tartaricacid.simplebedrockmodel.client.bedrock.model.BedrockCube;
 import com.github.tartaricacid.simplebedrockmodel.client.bedrock.model.BedrockPart;
 import com.github.tartaricacid.touhoulittlemaid.client.model.bedrock.BedrockModel;
+import com.laixia.maidintelligence.feature.interaction.api.FaceSelectionApi;
+import com.laixia.maidintelligence.feature.interaction.application.FaceCandidateSelector;
+import com.laixia.maidintelligence.feature.interaction.domain.FaceBoneClassifier;
+import com.laixia.maidintelligence.feature.interaction.domain.FaceGeometry;
+import com.laixia.maidintelligence.feature.interaction.domain.MaidFacePlane;
+import com.laixia.maidintelligence.shared.geometry.Vec3d;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix3f;
 import org.joml.Vector3f;
 
@@ -21,6 +26,8 @@ import java.util.Optional;
 
 final class BedrockFaceGeometryAdapter {
     private static final double THIN_RATIO = 0.015D;
+    private static final FaceSelectionApi FACE_SELECTOR =
+            new FaceCandidateSelector();
     private static final ThreadLocal<PoseStack> SCRATCH_POSE =
             ThreadLocal.withInitial(PoseStack::new);
     private static final ThreadLocal<FaceWindowConsumer> FACE_WINDOW =
@@ -67,7 +74,10 @@ final class BedrockFaceGeometryAdapter {
             if (!isUsable(handle.ownerHierarchy(), semanticSurface)) {
                 continue;
             }
-            List<Vec3> facePositions = captureFacePositions(handle, basePose);
+            List<Vec3d> facePositions = captureFacePositions(
+                    handle,
+                    basePose
+            );
             if (facePositions == null) {
                 stalePlan = true;
                 continue;
@@ -144,7 +154,7 @@ final class BedrockFaceGeometryAdapter {
             );
 
             FaceGeometry.Selection selection =
-                    FaceCandidateSelector.selectPrioritizingSemanticSurface(
+                    FACE_SELECTOR.selectPrioritizingSemanticSurface(
                             candidates,
                             frame
                     );
@@ -240,7 +250,7 @@ final class BedrockFaceGeometryAdapter {
      * sibling-face candidates. Returns {@code null} when the cube no longer
      * emits that window.
      */
-    private static List<Vec3> captureFacePositions(
+    private static List<Vec3d> captureFacePositions(
             Handle handle,
             PoseStack basePose
     ) {
@@ -286,10 +296,10 @@ final class BedrockFaceGeometryAdapter {
             return List.of();
         }
 
-        List<Vec3> positions = vertices.stream()
+        List<Vec3d> positions = vertices.stream()
                 .map(CapturedVertex::position)
                 .toList();
-        Vec3 groupCenter = FaceGeometry.average(positions);
+        Vec3d groupCenter = FaceGeometry.average(positions);
         double groupWidth = projectionRange(positions, frame.right());
         double groupHeight = projectionRange(positions, frame.up());
         double groupDepth = projectionRange(positions, frame.forward());
@@ -305,12 +315,14 @@ final class BedrockFaceGeometryAdapter {
                     faceOrdinal * 4,
                     faceOrdinal * 4 + 4
             );
-            List<Vec3> facePositions = face.stream()
+            List<Vec3d> facePositions = face.stream()
                     .map(CapturedVertex::position)
                     .toList();
-            Vec3 geometricOutward = FaceGeometry.average(facePositions)
+            Vec3d geometricOutward = FaceGeometry.average(
+                    facePositions
+            )
                     .subtract(groupCenter);
-            Vec3 outward = averageNormal(face);
+            Vec3d outward = averageNormal(face);
             if (!thin
                     && completeFaces == BedrockCube.NUM_CUBE_FACES
                     && geometricOutward.lengthSqr() > 1.0E-10D) {
@@ -419,7 +431,7 @@ final class BedrockFaceGeometryAdapter {
         return copy;
     }
 
-    private static Vec3 transformedPosition(
+    private static Vec3d transformedPosition(
             PoseStack pose,
             float x,
             float y,
@@ -427,10 +439,14 @@ final class BedrockFaceGeometryAdapter {
     ) {
         Vector3f transformed = new Vector3f(x, y, z)
                 .mulPosition(pose.last().pose());
-        return new Vec3(transformed.x(), transformed.y(), transformed.z());
+        return new Vec3d(
+                transformed.x(),
+                transformed.y(),
+                transformed.z()
+        );
     }
 
-    private static Vec3 transformedDirection(
+    private static Vec3d transformedDirection(
             PoseStack pose,
             float x,
             float y,
@@ -439,7 +455,11 @@ final class BedrockFaceGeometryAdapter {
         Vector3f transformed = new Vector3f(x, y, z)
                 .mulDirection(pose.last().pose())
                 .normalize();
-        return new Vec3(transformed.x(), transformed.y(), transformed.z());
+        return new Vec3d(
+                transformed.x(),
+                transformed.y(),
+                transformed.z()
+        );
     }
 
     private static Vector3f[] createNormals(Matrix3f normal) {
@@ -459,20 +479,25 @@ final class BedrockFaceGeometryAdapter {
         return normals;
     }
 
-    private static Vec3 averageNormal(List<CapturedVertex> vertices) {
-        Vec3 normal = Vec3.ZERO;
+    private static Vec3d averageNormal(
+            List<CapturedVertex> vertices
+    ) {
+        Vec3d normal = Vec3d.ZERO;
         for (CapturedVertex vertex : vertices) {
             normal = normal.add(vertex.normal());
         }
         return normal.lengthSqr() <= 1.0E-10D
-                ? Vec3.ZERO
+                ? Vec3d.ZERO
                 : normal.normalize();
     }
 
-    private static double projectionRange(List<Vec3> vertices, Vec3 axis) {
+    private static double projectionRange(
+            List<Vec3d> vertices,
+            Vec3d axis
+    ) {
         double minimum = Double.POSITIVE_INFINITY;
         double maximum = Double.NEGATIVE_INFINITY;
-        for (Vec3 vertex : vertices) {
+        for (Vec3d vertex : vertices) {
             double projection = vertex.dot(axis);
             minimum = Math.min(minimum, projection);
             maximum = Math.max(maximum, projection);
@@ -522,7 +547,10 @@ final class BedrockFaceGeometryAdapter {
     ) {
     }
 
-    private record CapturedVertex(Vec3 position, Vec3 normal) {
+    private record CapturedVertex(
+            Vec3d position,
+            Vec3d normal
+    ) {
     }
 
     /**
@@ -542,15 +570,31 @@ final class BedrockFaceGeometryAdapter {
             this.vertexIndex = 0;
         }
 
-        private List<Vec3> finish() {
+        private List<Vec3d> finish() {
             if (vertexIndex < windowStart + 4) {
                 return null;
             }
             return List.of(
-                    new Vec3(positions[0], positions[1], positions[2]),
-                    new Vec3(positions[3], positions[4], positions[5]),
-                    new Vec3(positions[6], positions[7], positions[8]),
-                    new Vec3(positions[9], positions[10], positions[11])
+                    new Vec3d(
+                            positions[0],
+                            positions[1],
+                            positions[2]
+                    ),
+                    new Vec3d(
+                            positions[3],
+                            positions[4],
+                            positions[5]
+                    ),
+                    new Vec3d(
+                            positions[6],
+                            positions[7],
+                            positions[8]
+                    ),
+                    new Vec3d(
+                            positions[9],
+                            positions[10],
+                            positions[11]
+                    )
             );
         }
 
@@ -635,8 +679,8 @@ final class BedrockFaceGeometryAdapter {
 
     private static final class CapturingVertexConsumer implements VertexConsumer {
         private final List<CapturedVertex> vertices = new ArrayList<>();
-        private Vec3 pendingPosition = Vec3.ZERO;
-        private Vec3 pendingNormal = Vec3.ZERO;
+        private Vec3d pendingPosition = Vec3d.ZERO;
+        private Vec3d pendingNormal = Vec3d.ZERO;
 
         private List<CapturedVertex> vertices() {
             return List.copyOf(vertices);
@@ -644,8 +688,8 @@ final class BedrockFaceGeometryAdapter {
 
         @Override
         public VertexConsumer vertex(double x, double y, double z) {
-            pendingPosition = new Vec3(x, y, z);
-            pendingNormal = Vec3.ZERO;
+            pendingPosition = new Vec3d(x, y, z);
+            pendingNormal = Vec3d.ZERO;
             return this;
         }
 
@@ -671,7 +715,7 @@ final class BedrockFaceGeometryAdapter {
 
         @Override
         public VertexConsumer normal(float x, float y, float z) {
-            pendingNormal = new Vec3(x, y, z);
+            pendingNormal = new Vec3d(x, y, z);
             return this;
         }
 

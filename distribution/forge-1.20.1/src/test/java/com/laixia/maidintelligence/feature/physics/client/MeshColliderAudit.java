@@ -1,10 +1,17 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxy;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySet;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxy;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxyKind;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySet;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -35,17 +42,17 @@ public final class MeshColliderAudit {
 
     private static void audit(Path path) throws Exception {
         String name = path.getFileName().toString();
-        AnimatedGeoModel model = new AnimatedGeoModel(
+        BoneModelSnapshot model = BonePhysicsVerificationSupport.coreModel(
                 BonePhysicsVerificationSupport.loadGeoModel(path)
         );
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(
                 model,
-                PhysicsBoneDiscoverer.discover(
+                BonePhysicsVerificationSupport.discover(
                         "audit:" + name, model, PhysicsMetadata.EMPTY
                 )
         );
         PhysicsBoneGeometry.Analysis geometry =
-                PhysicsBoneGeometry.analyze(model);
+                BonePhysicsVerificationSupport.analyze(model);
         int totalCubes = 0;
         for (PhysicsBoneGeometry.Node node : geometry.nodes()) {
             totalCubes += node.cubeBoxes().size();

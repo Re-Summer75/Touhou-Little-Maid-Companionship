@@ -1,8 +1,9 @@
 package com.laixia.maidintelligence.feature.advancement.server;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.advancement.api.MaidStatisticsApi;
+import com.laixia.maidintelligence.feature.advancement.domain.ItemId;
 import com.laixia.maidintelligence.feature.advancement.tlm.LegacyAchievementData;
-import com.laixia.maidintelligence.feature.advancement.tlm.MaidStatisticsData;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.advancements.Advancement;
 import net.minecraft.advancements.AdvancementProgress;
@@ -32,7 +33,8 @@ final class MaidLegacyAchievementMigration {
             "devoted",
             "perfect_maid"
     );
-    private static final ResourceLocation CAKE = ResourceLocation.fromNamespaceAndPath("minecraft", "cake");
+    private static final ItemId CAKE =
+            ItemId.of("minecraft", "cake");
     private static final int REGULAR_MEALS_GOAL = 32;
     private static final int SWEET_TOOTH_GOAL = 8;
     private static final int DILIGENT_STUDY_GOAL = 1000;
@@ -43,7 +45,12 @@ final class MaidLegacyAchievementMigration {
     /**
      * @return 是否真的补过东西，调用方据此决定要不要立刻落盘
      */
-    static boolean apply(EntityMaid maid, PlayerAdvancements advancements, ServerAdvancementManager manager) {
+    static boolean apply(
+            EntityMaid maid,
+            PlayerAdvancements advancements,
+            ServerAdvancementManager manager,
+            MaidStatisticsApi<EntityMaid> statistics
+    ) {
         LegacyAchievementData.Progress legacy = LegacyAchievementData.get(maid);
         if (legacy.isEmpty()) {
             return false;
@@ -55,7 +62,7 @@ final class MaidLegacyAchievementMigration {
                 changed |= grantSilently(advancements, manager, ModResources.id("maid/" + achievement));
             }
         }
-        liftStatistics(maid, legacy);
+        liftStatistics(maid, legacy, statistics);
         LegacyAchievementData.clear(maid);
         return changed;
     }
@@ -63,7 +70,11 @@ final class MaidLegacyAchievementMigration {
     /**
      * 阈值类条件现在读统计量，所以进行中的计数也要跟着搬，不然喂了 30 次的女仆会从 0 重来。
      */
-    private static void liftStatistics(EntityMaid maid, LegacyAchievementData.Progress legacy) {
+    private static void liftStatistics(
+            EntityMaid maid,
+            LegacyAchievementData.Progress legacy,
+            MaidStatisticsApi<EntityMaid> statistics
+    ) {
         int feeds = Math.max(
                 counterOf(legacy, "first_feed"),
                 Math.max(
@@ -75,9 +86,12 @@ final class MaidLegacyAchievementMigration {
         int experience = isUnlocked(legacy, "diligent_study")
                 ? DILIGENT_STUDY_GOAL
                 : counterOf(legacy, "diligent_study");
-        MaidStatisticsData.set(
+        statistics.liftToAtLeast(
                 maid,
-                MaidStatisticsData.get(maid).atLeast(Math.max(feeds, cakes), CAKE, cakes, experience)
+                Math.max(feeds, cakes),
+                CAKE,
+                cakes,
+                experience
         );
     }
 

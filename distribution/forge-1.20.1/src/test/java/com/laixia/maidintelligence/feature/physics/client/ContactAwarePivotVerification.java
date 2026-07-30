@@ -1,10 +1,16 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
 
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
+
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
 /**
@@ -33,7 +39,7 @@ final class ContactAwarePivotVerification {
 
     private static BoneKinematics.Metrics hangingHair(float gapPixels) {
         float top = 16.0F - gapPixels;
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.contact_gap",
                     "texture_width":32,"texture_height":32},
@@ -44,7 +50,7 @@ final class ContactAwarePivotVerification {
                      "cubes":[{"origin":[-1,%s,-1],"size":[2,8,2],"uv":[0,0]}]}
                   ]}]}
                 """.formatted(top - 8.0F));
-        AnimatedGeoBone head = model.bones().get("Head");
+        BoneModelSnapshot.Bone head = model.bones().get("Head");
         return BoneKinematics.measure(
                 model.bones().get("Hair"),
                 head,
@@ -75,7 +81,7 @@ final class ContactAwarePivotVerification {
     }
 
     private static void verifiesAmbiguousThroughContactFallsBack() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.ambiguous_contact",
                     "texture_width":32,"texture_height":32},
@@ -86,7 +92,7 @@ final class ContactAwarePivotVerification {
                      "cubes":[{"origin":[-4,19.5,-.5],"size":[8,1,1],"uv":[0,0]}]}
                   ]}]}
                 """);
-        AnimatedGeoBone head = model.bones().get("Head");
+        BoneModelSnapshot.Bone head = model.bones().get("Head");
         BoneKinematics.Metrics metrics = BoneKinematics.measure(
                 model.bones().get("Ribbon"),
                 head,
@@ -104,7 +110,7 @@ final class ContactAwarePivotVerification {
     }
 
     private static void verifiesHeadShellPrefersSupportContact() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.shell_contact",
                     "texture_width":32,"texture_height":32},
@@ -115,7 +121,7 @@ final class ContactAwarePivotVerification {
                      "cubes":[{"origin":[-4,25,-4],"size":[8,2,8],"uv":[0,0]}]}
                   ]}]}
                 """);
-        AnimatedGeoBone head = model.bones().get("Head");
+        BoneModelSnapshot.Bone head = model.bones().get("Head");
         BoneKinematics.Metrics metrics = BoneKinematics.measure(
                 model.bones().get("Cap"),
                 head,

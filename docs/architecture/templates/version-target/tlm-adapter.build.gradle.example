@@ -1,0 +1,28 @@
+plugins {
+    id 'base'
+}
+
+description = 'TLM >= @TLM_MINIMUM@ / Gecko @GECKO_GENERATION@ adapter for Minecraft @MC_VERSION@.'
+
+tasks.register('verifyAdapterLayout') {
+    group = 'verification'
+    inputs.files(fileTree('src/main/java') { include '**/*.java' })
+    doLast {
+        if (inputs.files.files.isEmpty()) {
+            throw new GradleException(
+                    'TLM adapter must implement the existing feature Ports.'
+            )
+        }
+        inputs.files.files.each { source ->
+            if (source.getText('UTF-8').contains('implements ForgeFeatureInstaller')) {
+                throw new GradleException(
+                        "TLM adapter must not implement Forge installers: ${source}"
+                )
+            }
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifyAdapterLayout')
+}

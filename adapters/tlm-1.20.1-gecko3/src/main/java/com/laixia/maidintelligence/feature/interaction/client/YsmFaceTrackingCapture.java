@@ -4,13 +4,18 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.core.processor.ILocationBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.IGeoEntityRenderer;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.util.RenderUtils;
+import com.laixia.maidintelligence.feature.interaction.api.FaceSelectionApi;
+import com.laixia.maidintelligence.feature.interaction.application.FaceCandidateSelector;
+import com.laixia.maidintelligence.feature.interaction.domain.FaceBoneClassifier;
+import com.laixia.maidintelligence.feature.interaction.domain.FaceGeometry;
+import com.laixia.maidintelligence.feature.interaction.domain.MaidFacePlane;
 import com.laixia.maidintelligence.feature.shading.client.ShadowPassDetector;
+import com.laixia.maidintelligence.shared.geometry.Vec3d;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 
 import java.util.ArrayDeque;
@@ -22,6 +27,8 @@ import java.util.List;
 public final class YsmFaceTrackingCapture {
     private static final int MAX_VERTICES_PER_STREAM = 200_000;
     private static final int INITIAL_STREAM_CAPACITY = 64;
+    private static final FaceSelectionApi FACE_SELECTOR =
+            new FaceCandidateSelector();
     private static final ThreadLocal<Deque<CaptureSession>> SESSIONS =
             ThreadLocal.withInitial(ArrayDeque::new);
 
@@ -148,7 +155,7 @@ public final class YsmFaceTrackingCapture {
             return;
         }
 
-        FaceGeometry.Selection selection = FaceCandidateSelector.select(
+        FaceGeometry.Selection selection = FACE_SELECTOR.select(
                 candidates,
                 session.frame()
         );
@@ -191,10 +198,10 @@ public final class YsmFaceTrackingCapture {
         double forwardLimit = entityHeight * 0.55D;
         double minimumUp = -entityHeight * 0.18D;
         double maximumUp = entityHeight * 0.65D;
-        Vec3 origin = frame.origin();
-        Vec3 right = frame.right();
-        Vec3 up = frame.up();
-        Vec3 forward = frame.forward();
+        Vec3d origin = frame.origin();
+        Vec3d right = frame.right();
+        Vec3d up = frame.up();
+        Vec3d forward = frame.forward();
 
         List<FaceGeometry.Candidate> candidates = new ArrayList<>();
         List<CapturedStream> streams = session.streams();
@@ -207,7 +214,7 @@ public final class YsmFaceTrackingCapture {
                 int base = quadIndex * 12;
                 // The head-region test only needs the quad centroid, which is
                 // permutation-independent, so it can run on the raw capture
-                // buffer before any quad ordering or Vec3 boxing happens.
+                // buffer before any quad ordering or vector boxing happens.
                 double centerX = (positions[base]
                         + positions[base + 3]
                         + positions[base + 6]
@@ -256,23 +263,23 @@ public final class YsmFaceTrackingCapture {
                     continue;
                 }
 
-                List<Vec3> quadPositions = List.of(
-                        new Vec3(
+                List<Vec3d> quadPositions = List.of(
+                        new Vec3d(
                                 positions[base],
                                 positions[base + 1],
                                 positions[base + 2]
                         ),
-                        new Vec3(
+                        new Vec3d(
                                 positions[base + 3],
                                 positions[base + 4],
                                 positions[base + 5]
                         ),
-                        new Vec3(
+                        new Vec3d(
                                 positions[base + 6],
                                 positions[base + 7],
                                 positions[base + 8]
                         ),
-                        new Vec3(
+                        new Vec3d(
                                 positions[base + 9],
                                 positions[base + 10],
                                 positions[base + 11]
@@ -285,13 +292,17 @@ public final class YsmFaceTrackingCapture {
                     continue;
                 }
 
-                Vec3 outward = new Vec3(normalSumX, normalSumY, normalSumZ)
+                Vec3d outward = new Vec3d(
+                        normalSumX,
+                        normalSumY,
+                        normalSumZ
+                )
                         .normalize();
                 double estimatedDepth = Math.max(
                         Math.min(quad.width(), quad.height()),
                         1.0E-4D
                 );
-                Vec3 groupCenter = quad.center().subtract(
+                Vec3d groupCenter = quad.center().subtract(
                         outward.normalize().scale(estimatedDepth * 0.5D)
                 );
                 candidates.add(new FaceGeometry.Candidate(
@@ -337,7 +348,7 @@ public final class YsmFaceTrackingCapture {
         return copy;
     }
 
-    private static Vec3 transformedPosition(
+    private static Vec3d transformedPosition(
             PoseStack pose,
             float x,
             float y,
@@ -345,10 +356,14 @@ public final class YsmFaceTrackingCapture {
     ) {
         Vector3f transformed = new Vector3f(x, y, z)
                 .mulPosition(pose.last().pose());
-        return new Vec3(transformed.x(), transformed.y(), transformed.z());
+        return new Vec3d(
+                transformed.x(),
+                transformed.y(),
+                transformed.z()
+        );
     }
 
-    private static Vec3 transformedDirection(
+    private static Vec3d transformedDirection(
             PoseStack pose,
             float x,
             float y,
@@ -357,7 +372,11 @@ public final class YsmFaceTrackingCapture {
         Vector3f transformed = new Vector3f(x, y, z)
                 .mulDirection(pose.last().pose())
                 .normalize();
-        return new Vec3(transformed.x(), transformed.y(), transformed.z());
+        return new Vec3d(
+                transformed.x(),
+                transformed.y(),
+                transformed.z()
+        );
     }
 
     private static final class CaptureSession {

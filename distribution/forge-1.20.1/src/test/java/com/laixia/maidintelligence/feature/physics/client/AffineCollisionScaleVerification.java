@@ -1,13 +1,20 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionScratch;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.runtime.CollisionProxyDebugData;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.runtime.PreparedCollisionProxy;
-import com.laixia.maidintelligence.feature.physics.client.solver.spring.RuntimeCollisionFrames;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionScratch;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.CollisionProxyDebugData;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.PreparedCollisionProxy;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.RuntimeCollisionFrames;
 import com.google.gson.JsonParser;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
@@ -15,7 +22,7 @@ import org.joml.Vector3f;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.requireNear;
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 
 final class AffineCollisionScaleVerification {
     private AffineCollisionScaleVerification() {
@@ -28,7 +35,7 @@ final class AffineCollisionScaleVerification {
     }
 
     private static void verifiesShearUsesConservativeScaleBound() {
-        AnimatedGeoModel model = RuntimeEndpointHierarchyFixture.model();
+        BoneModelSnapshot model = RuntimeEndpointHierarchyFixture.model();
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(
                 model,
                 PhysicsBoneDiscoverer.discover(
@@ -37,8 +44,8 @@ final class AffineCollisionScaleVerification {
                         RuntimeEndpointHierarchyFixture.collisionMetadata()
                 )
         );
-        AnimatedGeoBone body = find(model, "Body");
-        AnimatedGeoBone child = find(model, "ChildHair");
+        BoneModelSnapshot.Bone body = find(model, "Body");
+        BoneModelSnapshot.Bone child = find(model, "ChildHair");
         int childIndex = indexOf(layout, "ChildHair");
         require(body != null && child != null && childIndex >= 0,
                 "Affine scale fixture is incomplete");
@@ -117,7 +124,7 @@ final class AffineCollisionScaleVerification {
     }
 
     private static float solveScaledHair(float scale) {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.scaled_safety",
                     "texture_width":32,"texture_height":32},
@@ -128,7 +135,7 @@ final class AffineCollisionScaleVerification {
                      "cubes":[{"origin":[4.5,0,-.5],"size":[1,8,1],"uv":[0,0]}]}
                   ]}]}
                 """);
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {"schema_version":3,"mode":"explicit","chains":[{
                           "id":"scaled","type":"HAIR","root":"Head/Hair",
@@ -149,7 +156,7 @@ final class AffineCollisionScaleVerification {
         );
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(model, plan);
         SpringBoneSolver solver = new SpringBoneSolver(layout);
-        AnimatedGeoBone hair = model.bones().get("Hair");
+        BoneModelSnapshot.Bone hair = model.bones().get("Hair");
         hair.setScaleX(scale);
         hair.setScaleY(scale);
         hair.setScaleZ(scale);
@@ -180,12 +187,12 @@ final class AffineCollisionScaleVerification {
         ));
     }
 
-    private static AnimatedGeoBone find(
-            AnimatedGeoModel model,
+    private static BoneModelSnapshot.Bone find(
+            BoneModelSnapshot model,
             String name
     ) {
-        for (AnimatedGeoBone root : model.topLevelBones()) {
-            AnimatedGeoBone found = find(root, name);
+        for (BoneModelSnapshot.Bone root : model.topLevelBones()) {
+            BoneModelSnapshot.Bone found = find(root, name);
             if (found != null) {
                 return found;
             }
@@ -193,15 +200,15 @@ final class AffineCollisionScaleVerification {
         return null;
     }
 
-    private static AnimatedGeoBone find(
-            AnimatedGeoBone bone,
+    private static BoneModelSnapshot.Bone find(
+            BoneModelSnapshot.Bone bone,
             String name
     ) {
         if (name.equals(bone.getName())) {
             return bone;
         }
-        for (AnimatedGeoBone child : bone.children()) {
-            AnimatedGeoBone found = find(child, name);
+        for (BoneModelSnapshot.Bone child : bone.children()) {
+            BoneModelSnapshot.Bone found = find(child, name);
             if (found != null) {
                 return found;
             }

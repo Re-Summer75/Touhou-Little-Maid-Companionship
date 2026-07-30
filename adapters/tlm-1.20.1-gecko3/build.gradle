@@ -8,8 +8,106 @@ tasks.register('verifyAdapterLayout') {
     group = 'verification'
     inputs.files(fileTree('src/main/java') { include '**/*.java' })
     doLast {
-        if (inputs.files.files.isEmpty()) {
-            throw new GradleException('TLM adapter contains no source files.')
+        def sources = inputs.files.files
+        if (sources.size() < 50) {
+            throw new GradleException(
+                    "TLM adapter must contain real integration sources; found ${sources.size()}."
+            )
+        }
+
+        def sourceRoot = file('src/main/java')
+        sources.each { source ->
+            def relative = sourceRoot.toPath()
+                    .relativize(source.toPath())
+                    .toString()
+                    .replace('\\', '/')
+            def text = source.getText('UTF-8')
+            if (relative.contains('/platform/network/')
+                    || relative.contains('/client/network/')
+                    || relative.contains('/platform/gui/')
+                    || relative.contains('/platform/menu/')
+                    || relative.matches('.*feature/[^/]+/network/.*')
+                    || relative.matches('.*feature/[^/]+/forge/.*')
+                    || text.contains(
+                    'net.minecraftforge.event.RegisterCommandsEvent'
+            )
+                    || text.contains(
+                    'net.minecraftforge.network.NetworkHooks'
+            )
+                    || text.contains(
+                    'net.minecraftforge.registries.DeferredRegister'
+            )
+                    || text.contains(
+                    'net.minecraftforge.common.extensions.IForgeMenuType'
+            )) {
+                throw new GradleException(
+                        "Forge network/GUI/installer infrastructure leaked into TLM adapter: ${relative}"
+                )
+            }
+            if (text.contains('implements ForgeFeatureInstaller')
+                    || text.contains(
+                    'import com.laixia.maidintelligence.platform.forge.ForgeFeatureInstaller'
+            )) {
+                throw new GradleException(
+                        "TLM adapter implements a Forge installer: ${relative}"
+                )
+            }
+            if (text.contains(
+                    'import com.laixia.maidintelligence.MaidIntelligence'
+            )) {
+                throw new GradleException(
+                        "TLM adapter depends on distribution composition root: ${relative}"
+                )
+            }
+        }
+
+        def required = [
+                'feature/advancement/api/MaidWorldAdvancementTriggers.java',
+                'feature/advancement/api/MaidCombatAdvancementTriggers.java',
+                'feature/advancement/api/MaidProgressAdvancementTriggers.java',
+                'feature/advancement/server/MaidVanillaWorldCriteria.java',
+                'feature/advancement/server/MaidVanillaCombatCriteria.java',
+                'feature/advancement/server/MaidProgressCriteria.java',
+                'feature/advancement/tlm/TlmAdvancementRequestResolver.java'
+        ]
+        required.each { relative ->
+            if (!file(
+                    "src/main/java/com/laixia/maidintelligence/${relative}"
+            ).isFile()) {
+                throw new GradleException(
+                        "Missing TLM adapter boundary source: ${relative}"
+                )
+            }
+        }
+        [
+                'feature/advancement/api/MaidAdvancementTriggers.java',
+                'feature/advancement/server/MaidCriteria.java'
+        ].each { relative ->
+            if (file(
+                    "src/main/java/com/laixia/maidintelligence/${relative}"
+            ).exists()) {
+                throw new GradleException(
+                        "Legacy advancement trigger hub remains: ${relative}"
+                )
+            }
+        }
+
+        def mixins = fileTree(
+                'src/main/java/com/laixia/maidintelligence/mixin/tlm'
+        ) {
+            include '**/*.java'
+        }.files
+        if (mixins.size() != 9) {
+            throw new GradleException(
+                    "Expected 9 TLM/Gecko Mixins, found ${mixins.size()}."
+            )
+        }
+        mixins.each { mixin ->
+            if (!mixin.getText('UTF-8').contains('remap = false')) {
+                throw new GradleException(
+                        "TLM/Gecko Mixin must use remap=false: ${mixin}"
+                )
+            }
         }
     }
 }

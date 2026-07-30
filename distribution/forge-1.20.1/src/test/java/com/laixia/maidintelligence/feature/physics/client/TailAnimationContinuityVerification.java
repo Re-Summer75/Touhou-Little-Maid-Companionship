@@ -1,16 +1,24 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.MODEL_DIRECTORY;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadGeoModel;
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadWinefoxGeoModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
@@ -40,7 +48,7 @@ final class TailAnimationContinuityVerification {
 
     private static void verifiesSnapshotRestoresEveryLocalChannel() {
         Fixture fixture = createFixture();
-        AnimatedGeoBone tail = fixture.tail();
+        BoneModelSnapshot.Bone tail = fixture.tail();
         tail.setRotationX(0.13F);
         tail.setRotationY(-0.17F);
         tail.setRotationZ(0.21F);
@@ -67,7 +75,7 @@ final class TailAnimationContinuityVerification {
 
     private static void verifiesSmallPoseErrorsRemainContinuous() {
         Fixture fixture = createFixture();
-        AnimatedGeoBone tail = fixture.tail();
+        BoneModelSnapshot.Bone tail = fixture.tail();
         Quaternionf animation = new Quaternionf().rotateZYX(
                 tail.getRotationZ(),
                 tail.getRotationY(),
@@ -101,7 +109,7 @@ final class TailAnimationContinuityVerification {
 
     private static void verifiesMicroscopicPoseErrorsRemainContinuous() {
         Fixture fixture = createFixture();
-        AnimatedGeoBone tail = fixture.tail();
+        BoneModelSnapshot.Bone tail = fixture.tail();
         Quaternionf animation = new Quaternionf().rotateZYX(
                 tail.getRotationZ(),
                 tail.getRotationY(),
@@ -135,7 +143,7 @@ final class TailAnimationContinuityVerification {
 
     private static void verifiesRateLimitedTailAnimationRemainsContinuous() {
         Fixture fixture = createFixture();
-        AnimatedGeoBone tail = fixture.tail();
+        BoneModelSnapshot.Bone tail = fixture.tail();
         Quaternionf previous = new Quaternionf();
         Quaternionf current = new Quaternionf();
         float expectedY = tail.getRotationY();
@@ -227,7 +235,7 @@ final class TailAnimationContinuityVerification {
 
     private static void verifiesBundledTailCoalescesDuplicateRenders()
             throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(loadWinefoxGeoModel());
+        BoneModelSnapshot model = coreModel(loadWinefoxGeoModel());
         PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
                 "verification:tail_continuity_winefox",
                 model,
@@ -236,8 +244,8 @@ final class TailAnimationContinuityVerification {
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(model, plan);
         SpringBoneSolver solver = new SpringBoneSolver(layout);
         AnimationTimelineClock clock = new AnimationTimelineClock();
-        AnimatedGeoBone root = model.bones().get("Tail");
-        AnimatedGeoBone terminal = model.bones().get("Tail7");
+        BoneModelSnapshot.Bone root = model.bones().get("Tail");
+        BoneModelSnapshot.Bone terminal = model.bones().get("Tail7");
         int terminalIndex = -1;
         for (int index = 0; index < layout.activeNodeCount(); index++) {
             if (layout.node(index).bone() == terminal) {
@@ -360,7 +368,7 @@ final class TailAnimationContinuityVerification {
 
     private static void verifiesRiceCakeSlowTailRemainsContinuous()
             throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(loadGeoModel(
+        BoneModelSnapshot model = coreModel(loadGeoModel(
                 MODEL_DIRECTORY.resolve("rice_cake_fox.json")
         ));
         PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
@@ -371,8 +379,8 @@ final class TailAnimationContinuityVerification {
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(model, plan);
         SpringBoneSolver solver = new SpringBoneSolver(layout);
         AnimationTimelineClock clock = new AnimationTimelineClock();
-        AnimatedGeoBone root = model.bones().get("Tail");
-        AnimatedGeoBone terminal = model.bones().get("Body_Tail6");
+        BoneModelSnapshot.Bone root = model.bones().get("Tail");
+        BoneModelSnapshot.Bone terminal = model.bones().get("Body_Tail6");
         int terminalIndex = -1;
         for (int index = 0; index < layout.activeNodeCount(); index++) {
             if (layout.node(index).bone() == terminal) {
@@ -457,7 +465,7 @@ final class TailAnimationContinuityVerification {
     }
 
     private static Fixture createFixture() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {
                   "format_version":"1.12.0",
                   "minecraft:geometry":[{
@@ -477,7 +485,7 @@ final class TailAnimationContinuityVerification {
                   }]
                 }
                 """);
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {
                           "mode":"explicit",
@@ -509,7 +517,7 @@ final class TailAnimationContinuityVerification {
                 metadata
         );
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(model, plan);
-        AnimatedGeoBone tail = model.bones().get("Tail");
+        BoneModelSnapshot.Bone tail = model.bones().get("Tail");
         boolean driven = false;
         for (int index = 0; index < layout.activeNodeCount(); index++) {
             if (layout.node(index).bone() == tail) {
@@ -522,7 +530,7 @@ final class TailAnimationContinuityVerification {
     }
 
     private record Fixture(
-            AnimatedGeoBone tail,
+            BoneModelSnapshot.Bone tail,
             SpringBoneSolver solver
     ) {
     }

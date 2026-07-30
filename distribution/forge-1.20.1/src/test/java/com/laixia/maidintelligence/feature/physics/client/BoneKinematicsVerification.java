@@ -1,13 +1,20 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadWinefoxGeoModel;
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.requireVectorNear;
 
@@ -16,8 +23,8 @@ final class BoneKinematicsVerification {
     }
 
     static void run() throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(loadWinefoxGeoModel());
-        AnimatedGeoBone baseHair = model.bones().get("BaseHair");
+        BoneModelSnapshot model = coreModel(loadWinefoxGeoModel());
+        BoneModelSnapshot.Bone baseHair = model.bones().get("BaseHair");
         BoneKinematics.Metrics shell = BoneKinematics.measure(
                 baseHair,
                 model.bones().get("Hair"),
@@ -143,7 +150,7 @@ final class BoneKinematicsVerification {
     }
 
     private static void verifiesDominantClusterSafety() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.cluster_kinematics",
                     "texture_width":32,"texture_height":32},
@@ -179,7 +186,7 @@ final class BoneKinematicsVerification {
     }
 
     private static void verifiesSeparatedThinCubes() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.thin_cube_partition",
                     "texture_width":32,"texture_height":32},

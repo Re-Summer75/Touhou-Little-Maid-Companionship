@@ -18,7 +18,8 @@ plugins {
 
 apply plugin: 'org.spongepowered.mixin'
 
-description = 'Forge 1.20.1 distribution and the only ForgeGradle compilation boundary.'
+description = "Forge ${forge_version} / Minecraft ${minecraft_version} " +
+        'distribution and the only ForgeGradle compilation boundary.'
 archivesBaseName = "tlm-companionship-${minecraft_version}-forge"
 
 def stableModules = [
@@ -32,22 +33,27 @@ def stableModules = [
         project(':features:shading'),
         project(':features:atmosphere')
 ]
-def forgeAdapter = project(':adapters:forge-1.20.1')
-def tlmAdapter = project(':adapters:tlm-1.20.1-gecko3')
+def forgeAdapter = project(forge_adapter_project_path)
+def tlmAdapter = project(tlm_adapter_project_path)
+def tlmMixinConfig =
+        "tlm_companionship.tlm-gecko${gecko_generation}.mixins.json"
+
+// ForgeGradle consumes stable-module source sets while this project is configured.
+stableModules.each { module ->
+    evaluationDependsOn(module.path)
+}
 
 java {
-    toolchain.languageVersion = JavaLanguageVersion.of(17)
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
 }
 
 sourceSets {
     main {
         java {
-            srcDir 'src/main/java'
             srcDir forgeAdapter.file('src/main/java')
             srcDir tlmAdapter.file('src/main/java')
         }
         resources {
-            srcDir 'src/main/resources'
             srcDir 'src/generated/resources'
         }
     }
@@ -97,8 +103,12 @@ minecraft {
 }
 
 mixin {
+    // MixinGradle emits one refmap per source set. MC/Forge configs share it;
+    // every TLM/Gecko target uses remap=false and intentionally has no refmap.
     add sourceSets.main, 'tlm_companionship.refmap.json'
-    config 'tlm_companionship.mixins.json'
+    config 'tlm_companionship.common.mixins.json'
+    config 'tlm_companionship.client.mixins.json'
+    config tlmMixinConfig
 }
 
 repositories {
@@ -128,6 +138,7 @@ processResources {
             forge_version          : forge_version,
             forge_version_range    : forge_version_range,
             loader_version_range   : loader_version_range,
+            tlm_version_range      : tlm_version_range,
             mod_id                 : mod_id,
             mod_license            : mod_license,
             mod_version            : mod_version
@@ -197,6 +208,9 @@ verificationEntrypoints.each { taskName, definition ->
         dependsOn testClasses
         classpath = sourceSets.test.runtimeClasspath
         mainClass = definition[1]
+        if (taskName in ['verifyBonePhysics', 'verifyModelShading']) {
+            workingDir rootProject.projectDir
+        }
     }
 }
 
@@ -222,8 +236,103 @@ tasks.register('verifyAll') {
     dependsOn stableModules.collect { "${it.path}:verifyArchitecture" }
 }
 
+tasks.register('verifyDistributionBoundary') {
+    group = 'verification'
+    inputs.files(fileTree('src/main/java') { include '**/*.java' })
+    doLast {
+        def productionSources = inputs.files.files
+        if (productionSources.size() != 1
+                || productionSources.first().name != 'MaidIntelligence.java') {
+            throw new GradleException(
+                    'Distribution production code must contain only the @Mod composition root.'
+            )
+        }
+    }
+}
+
+tasks.register('verifyMixinLayout') {
+    group = 'verification'
+    def configs = [
+            'tlm_companionship.common.mixins.json'     : [
+                    'HoneyBlockSlideMixin'
+            ],
+            'tlm_companionship.client.mixins.json'     : [
+                    'LivingEntityEatingParticleMixin',
+                    'LivingEntityRendererAccessor'
+            ],
+            (tlmMixinConfig)                              : [
+                    'EntityMaidPlaceBlockMixin',
+                    'MaidFeedAnimalTaskMixin',
+                    'CustomPackPhysicsMetadataMixin',
+                    'EntityMaidClientRandomHealingMixin',
+                    'EntityMaidRendererYsmCaptureMixin',
+                    'GeckoMaidEntityBonePhysicsMixin',
+                    'GeoRendererOutsideNormalMixin',
+                    'SodiumDownNormalPackingMixin',
+                    'SodiumOutsideNormalFallbackMixin'
+            ]
+    ]
+    inputs.files(configs.keySet().collect { file("src/main/resources/${it}") })
+    inputs.file('src/main/resources/META-INF/mods.toml')
+    doLast {
+        int total = 0
+        configs.each { name, expectedMixins ->
+            def configFile = file("src/main/resources/${name}")
+            if (!configFile.isFile()) {
+                throw new GradleException("Missing Mixin config ${name}")
+            }
+            def config = configFile.getText('UTF-8')
+            expectedMixins.each { mixinName ->
+                if (!config.contains("\"${mixinName}\"")) {
+                    throw new GradleException(
+                            "${name} does not register ${mixinName}."
+                    )
+                }
+            }
+            int count = (config =~ /"[A-Z][A-Za-z0-9]*(?:Mixin|Accessor)"/)
+                    .count
+            if (count != expectedMixins.size()) {
+                throw new GradleException(
+                        "${name} expected ${expectedMixins.size()} Mixins, found ${count}."
+                )
+            }
+            total += count
+            if (name == tlmMixinConfig) {
+                if (config.contains('"refmap"')) {
+                    throw new GradleException(
+                            'TLM/Gecko Mixin config must not declare a refmap.'
+                    )
+                }
+            } else if (!config.contains(
+                    '"refmap": "tlm_companionship.refmap.json"'
+            )) {
+                throw new GradleException(
+                        "${name} must use the generated common refmap."
+                )
+            }
+        }
+        if (total != 12) {
+            throw new GradleException(
+                    "Expected 12 Mixins across three configs, found ${total}."
+            )
+        }
+        def modsToml = file(
+                'src/main/resources/META-INF/mods.toml'
+        ).getText('UTF-8')
+        configs.keySet().each { name ->
+            if (!modsToml.contains(name)) {
+                throw new GradleException(
+                        "mods.toml does not register ${name}."
+                )
+            }
+        }
+    }
+}
+
 tasks.named('check') {
     dependsOn tasks.named('verifyAll')
+    dependsOn tasks.named('verifyDistributionBoundary')
+    dependsOn tasks.named('verifyMixinLayout')
     dependsOn forgeAdapter.tasks.named('verifyAdapterLayout')
     dependsOn tlmAdapter.tasks.named('verifyAdapterLayout')
 }
@@ -234,6 +343,7 @@ tasks.register('auditMeshColliders', JavaExec) {
     dependsOn testClasses
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'com.laixia.maidintelligence.feature.physics.client.MeshColliderAudit'
+    workingDir rootProject.projectDir
 }
 
 tasks.register('auditMeshPenetration', JavaExec) {
@@ -242,6 +352,7 @@ tasks.register('auditMeshPenetration', JavaExec) {
     dependsOn testClasses
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'com.laixia.maidintelligence.feature.physics.client.MeshPenetrationAudit'
+    workingDir rootProject.projectDir
     if (project.hasProperty('auditArgs')) {
         args project.property('auditArgs').toString().split(' ')
     }
@@ -253,6 +364,7 @@ tasks.register('benchmarkBonePhysics', JavaExec) {
     dependsOn testClasses
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'com.laixia.maidintelligence.feature.physics.client.BonePhysicsBenchmark'
+    workingDir rootProject.projectDir
 }
 
 tasks.register('prepareGameTestStructures', Copy) {

@@ -1,13 +1,19 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.MODEL_DIRECTORY;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadGeoModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.requireDriven;
@@ -43,9 +49,7 @@ final class BundledGeckoModelVerification {
         for (Path modelPath : modelPaths) {
             String fileName = modelPath.getFileName().toString();
             String modelName = fileName.substring(0, fileName.length() - 5);
-            AnimatedGeoModel model = new AnimatedGeoModel(
-                    loadGeoModel(modelPath)
-            );
+            BoneModelSnapshot model = coreModel(loadGeoModel(modelPath));
             PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
                     "geckolib:" + modelName,
                     model,
@@ -68,7 +72,7 @@ final class BundledGeckoModelVerification {
                 }
                 if (!node.hasGeometry()
                         || Boolean.TRUE.equals(
-                        node.bone().geoBone().dontRender()
+                        node.bone().geometry().dontRender()
                 )
                         || !PhysicsBoneClassifier.isFringeHint(
                         node.bone().getName()
@@ -118,7 +122,7 @@ final class BundledGeckoModelVerification {
 
     private static void verifyZhiban(
             PhysicsBoneSelectionPlan plan,
-            AnimatedGeoModel model
+            BoneModelSnapshot model
     ) {
         require(
                 !plan.isDriven(model.bones().get("bone53")),
@@ -159,9 +163,10 @@ final class BundledGeckoModelVerification {
 
     private static void verifyRiceCakeHeadShell(
             PhysicsBoneSelectionPlan plan,
-            AnimatedGeoModel model
+            BoneModelSnapshot model
     ) {
-        AnimatedGeoBone shell = model.bones().get("HairFemaleK_Matching");
+        BoneModelSnapshot.Bone shell =
+                model.bones().get("HairFemaleK_Matching");
         requireDriven(
                 plan,
                 shell,
@@ -187,10 +192,10 @@ final class BundledGeckoModelVerification {
 
     private static void requireRigidAttachment(
             PhysicsBoneSelectionPlan plan,
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             String boneName
     ) {
-        AnimatedGeoBone bone = model.bones().get(boneName);
+        BoneModelSnapshot.Bone bone = model.bones().get(boneName);
         require(
                 bone != null
                         && !plan.isDriven(bone)
@@ -241,7 +246,7 @@ final class BundledGeckoModelVerification {
 
     private static void requireHair(
             PhysicsBoneSelectionPlan plan,
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             String boneName,
             String message
     ) {

@@ -1,8 +1,14 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
 
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.requireDriven;
 
@@ -11,7 +17,7 @@ final class HairDiscoveryVerification {
     }
 
     static void run() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {
                   "format_version": "1.12.0",
                   "minecraft:geometry": [{
@@ -137,7 +143,7 @@ final class HairDiscoveryVerification {
 
     private static void requireHair(
             PhysicsBoneSelectionPlan plan,
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             String boneName,
             String message
     ) {

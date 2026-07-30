@@ -2,13 +2,14 @@ package com.laixia.maidintelligence.gametest;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
-import com.laixia.maidintelligence.MaidIntelligence;
-import com.laixia.maidintelligence.feature.status.StatusFeedbackFeature;
+import com.laixia.maidintelligence.platform.resource.ModResources;
+import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.feature.status.domain.DefaultToolDurabilityPolicy;
 import com.laixia.maidintelligence.feature.status.domain.MaidStatusState;
 import com.laixia.maidintelligence.feature.status.service.ToolReplacementResult;
 import com.laixia.maidintelligence.feature.status.service.ToolReplacementService;
 import com.laixia.maidintelligence.feature.status.tlm.StatusTaskData;
+import com.laixia.maidintelligence.platform.runtime.AdapterRuntime;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -19,7 +20,7 @@ import net.minecraft.world.item.Items;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
-@GameTestHolder(MaidIntelligence.MOD_ID)
+@GameTestHolder(ModResources.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class StatusFeedbackGameTests {
     private StatusFeedbackGameTests() {
@@ -28,8 +29,8 @@ public final class StatusFeedbackGameTests {
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void statusDataSurvivesEntitySaveAndLoad(GameTestHelper helper) {
         EntityMaid maid = spawnMaid(helper);
-        StatusFeedbackFeature.INSTANCE.api().setHunger(maid, 23);
-        MaidStatusState expected = StatusFeedbackFeature.INSTANCE.api().getState(maid);
+        statusApi().setHunger(maid, 23);
+        MaidStatusState expected = statusApi().getState(maid);
 
         CompoundTag saved = new CompoundTag();
         maid.saveWithoutId(saved);
@@ -38,7 +39,7 @@ public final class StatusFeedbackGameTests {
         helper.assertTrue(loaded != null, "Failed to create maid for status reload verification");
         loaded.load(saved);
 
-        MaidStatusState actual = StatusFeedbackFeature.INSTANCE.api().getState(loaded);
+        MaidStatusState actual = statusApi().getState(loaded);
         helper.assertTrue(
                 actual.equals(expected),
                 "Status data did not survive entity NBT save/load: " + actual
@@ -59,7 +60,7 @@ public final class StatusFeedbackGameTests {
         helper.assertTrue(loaded != null, "Failed to create maid for legacy status migration");
         loaded.load(saved);
 
-        MaidStatusState actual = StatusFeedbackFeature.INSTANCE.api().getState(loaded);
+        MaidStatusState actual = statusApi().getState(loaded);
         helper.assertTrue(
                 expected.equals(actual),
                 "Legacy status data was not read after the MOD ID migration: " + actual
@@ -120,13 +121,13 @@ public final class StatusFeedbackGameTests {
             GameTestHelper helper
     ) {
         EntityMaid maid = spawnMaid(helper);
-        StatusFeedbackFeature.INSTANCE.api().setHunger(maid, 100);
+        statusApi().setHunger(maid, 100);
         maid.setHealth(1.0F);
         maid.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.APPLE));
         maid.startUsingItem(InteractionHand.MAIN_HAND);
 
         helper.runAfterDelay(15, () -> {
-            MaidStatusState firstCycle = StatusFeedbackFeature.INSTANCE.api().getState(maid);
+            MaidStatusState firstCycle = statusApi().getState(maid);
             helper.assertTrue(
                     firstCycle.hunger() == 99
                             && Math.abs(firstCycle.saturation() - 20.0F) < 1.0E-4F,
@@ -139,13 +140,13 @@ public final class StatusFeedbackGameTests {
             maid.stopUsingItem();
             maid.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
             maid.setHealth(maid.getMaxHealth());
-            StatusFeedbackFeature.INSTANCE.api().setHunger(maid, 100);
+            statusApi().setHunger(maid, 100);
         });
 
         helper.runAfterDelay(20, () -> maid.setHealth(1.0F));
 
         helper.runAfterDelay(35, () -> {
-            MaidStatusState secondCycle = StatusFeedbackFeature.INSTANCE.api().getState(maid);
+            MaidStatusState secondCycle = statusApi().getState(maid);
             helper.assertTrue(
                     secondCycle.hunger() == 99
                             && Math.abs(secondCycle.saturation() - 15.0F) < 1.0E-4F,
@@ -168,5 +169,10 @@ public final class StatusFeedbackGameTests {
 
     private static ToolReplacementService toolService() {
         return new ToolReplacementService(DefaultToolDurabilityPolicy.INSTANCE);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static MaidStatusApi<EntityMaid> statusApi() {
+        return (MaidStatusApi<EntityMaid>) AdapterRuntime.require(MaidStatusApi.class);
     }
 }

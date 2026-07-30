@@ -9,9 +9,9 @@ import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 public final class LevelExperienceHandler {
-    private final MaidLevelApi levelApi;
+    private final MaidLevelApi<EntityMaid> levelApi;
 
-    public LevelExperienceHandler(MaidLevelApi levelApi) {
+    public LevelExperienceHandler(MaidLevelApi<EntityMaid> levelApi) {
         this.levelApi = levelApi;
     }
 

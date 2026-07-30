@@ -1,14 +1,20 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoMesh;
-import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
 import org.joml.Vector3f;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.MODEL_DIRECTORY;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadGeoModel;
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
 /**
@@ -28,7 +34,7 @@ final class SupportStabilityPivotVerification {
     }
 
     private static void verifiesBundledHanfuBow() throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(loadGeoModel(
+        BoneModelSnapshot model = coreModel(loadGeoModel(
                 MODEL_DIRECTORY.resolve("zhiban_hanfu.json")
         ));
         PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
@@ -36,10 +42,10 @@ final class SupportStabilityPivotVerification {
                 model,
                 PhysicsMetadata.EMPTY
         );
-        AnimatedGeoBone bow = model.bones().get("HUDIEJIE");
+        BoneModelSnapshot.Bone bow = model.bones().get("HUDIEJIE");
         BoneKinematics.Metrics metrics = plan.kinematics(bow);
         PhysicsBoneSelectionPlan.Decision decision = plan.decision(bow);
-        float massCenterY = massCenter(bow.geoBone().cubes()).y;
+        float massCenterY = massCenter(bow.geometry().cubes()).y;
         require(
                 decision.driven()
                         && metrics != null
@@ -65,7 +71,7 @@ final class SupportStabilityPivotVerification {
     }
 
     private static void verifiesAnonymousCompoundMount() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.support_stability",
                     "texture_width":32,"texture_height":32},
@@ -82,8 +88,9 @@ final class SupportStabilityPivotVerification {
                      ]}
                   ]}]}
                 """);
-        AnimatedGeoBone head = model.bones().get("Head");
-        AnimatedGeoBone attachment = model.bones().get("AnonymousMount");
+        BoneModelSnapshot.Bone head = model.bones().get("Head");
+        BoneModelSnapshot.Bone attachment =
+                model.bones().get("AnonymousMount");
         BoneKinematics.Metrics metrics = BoneKinematics.measure(
                 attachment,
                 head,
@@ -98,7 +105,7 @@ final class SupportStabilityPivotVerification {
                 ),
                 null
         );
-        float massCenterY = massCenter(attachment.geoBone().cubes()).y;
+        float massCenterY = massCenter(attachment.geometry().cubes()).y;
         require(
                 metrics.supportStabilityPivotCorrected()
                         && metrics.effectivePivot().y * PIXELS_PER_BLOCK
@@ -111,7 +118,7 @@ final class SupportStabilityPivotVerification {
     }
 
     private static void verifiesAmbiguousFlexibleMountIsNotForcedRigid() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.unsupported_mount",
                     "texture_width":32,"texture_height":32},
@@ -128,7 +135,7 @@ final class SupportStabilityPivotVerification {
                      ]}
                   ]}]}
                 """);
-        AnimatedGeoBone attachment = model.bones().get("RibbonMount");
+        BoneModelSnapshot.Bone attachment = model.bones().get("RibbonMount");
         PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
                 "verification:unsupported_support_mount",
                 model,
@@ -148,7 +155,7 @@ final class SupportStabilityPivotVerification {
         );
     }
 
-    private static Vector3f massCenter(GeoMesh mesh) {
+    private static Vector3f massCenter(BoneModelSnapshot.Mesh mesh) {
         Vector3f center = new Vector3f();
         float totalWeight = 0.0F;
         for (int cube = 0; cube < mesh.getCubeCount(); cube++) {

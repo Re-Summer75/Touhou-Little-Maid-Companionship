@@ -2,6 +2,8 @@ package com.laixia.maidintelligence.feature.shading.client;
 
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoMesh;
+import com.laixia.maidintelligence.feature.shading.api.FaceNormalTemplate;
+import com.laixia.maidintelligence.feature.shading.domain.CubeFaceTopology;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -39,7 +41,7 @@ public final class OutsideNormalWriter {
         if (!ShadowPassDetector.isActive() && !isWorldView()) {
             return false;
         }
-        return GeoMeshNormalCache.getOrBuild(
+        return GeckoMeshNormalTemplates.getOrBuild(
                 bone.geoBone().cubes()
         ).hasWindingCorrections();
     }
@@ -59,7 +61,8 @@ public final class OutsideNormalWriter {
             return;
         }
         GeoMesh mesh = bone.geoBone().cubes();
-        GeoMeshNormalTemplate template = GeoMeshNormalCache.getOrBuild(mesh);
+        FaceNormalTemplate template =
+                GeckoMeshNormalTemplates.getOrBuild(mesh);
         PoseStack.Pose last = poseStack.last();
         Matrix4f pose = last.pose();
         Matrix3f normalMatrix = last.normal();
@@ -67,11 +70,15 @@ public final class OutsideNormalWriter {
         for (int cube = 0; cube < mesh.getCubeCount(); cube++) {
             prepareCorners(mesh, cube, pose);
             int faces = mesh.faces(cube);
-            for (int face = 0; face < GeoCubeFaceTable.FACE_COUNT; face++) {
+            for (int face = 0; face < CubeFaceTopology.FACE_COUNT; face++) {
                 if ((faces & (1 << face)) == 0) {
                     continue;
                 }
-                template.setNormal(cube, face, FACE_NORMAL);
+                FACE_NORMAL.set(
+                        template.normalX(cube, face),
+                        template.normalY(cube, face),
+                        template.normalZ(cube, face)
+                );
                 FACE_NORMAL.mul(normalMatrix);
                 if (FACE_NORMAL.lengthSquared() > 1.0E-12F) {
                     FACE_NORMAL.normalize();
@@ -183,7 +190,7 @@ public final class OutsideNormalWriter {
             float blue,
             float alpha
     ) {
-        Vector3f corner = CORNERS[GeoCubeFaceTable.corner(face, vertex)];
+        Vector3f corner = CORNERS[CubeFaceTopology.corner(face, vertex)];
         buffer.vertex(
                 corner.x, corner.y, corner.z,
                 red, green, blue, alpha,

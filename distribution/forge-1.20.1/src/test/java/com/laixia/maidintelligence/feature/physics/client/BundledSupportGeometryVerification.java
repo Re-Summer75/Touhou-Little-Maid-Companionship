@@ -1,8 +1,15 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.MODEL_DIRECTORY;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadGeoModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
@@ -24,7 +31,7 @@ final class BundledSupportGeometryVerification {
             String boneName,
             float minimumY
     ) throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(loadGeoModel(
+        BoneModelSnapshot model = coreModel(loadGeoModel(
                 MODEL_DIRECTORY.resolve(fileName)
         ));
         PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(

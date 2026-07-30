@@ -1,19 +1,26 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySet;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.runtime.CollisionProxyDebugData;
+import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxyKind;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySet;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.CollisionProxyDebugData;
 import org.joml.Vector3f;
 
 import java.util.HashSet;
 import java.util.Set;
 
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
 /**
@@ -79,7 +86,7 @@ final class ClothLayerCollisionVerification {
      * but only the chain directly behind it may constrain that plate.
      */
     private static void verifiesNearestLiningChainWins() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.multi_lining",
                     "texture_width":64,"texture_height":64},
@@ -101,7 +108,7 @@ final class ClothLayerCollisionVerification {
                        "uv":[0,0]}]}
                   ]}]}
                 """);
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {"schema_version":3,"mode":"explicit","chains":[
                           {"id":"left","type":"SKIRT",
@@ -137,7 +144,7 @@ final class ClothLayerCollisionVerification {
      * same sheet split across bones and have no layer order.
      */
     private static void verifiesCoplanarPanelsAreNotStacked() {
-        PhysicsSolverLayout layout = layout(modelFromJson("""
+        PhysicsSolverLayout layout = layout(coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.coplanar_panels",
                     "texture_width":64,"texture_height":64},
@@ -166,7 +173,7 @@ final class ClothLayerCollisionVerification {
      * corrections every frame, so the pair is dropped in both directions.
      */
     private static void verifiesWrappedPanelsHaveNoOrder() {
-        PhysicsSolverLayout layout = layout(modelFromJson("""
+        PhysicsSolverLayout layout = layout(coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.wrapped_panels",
                     "texture_width":64,"texture_height":64},
@@ -210,14 +217,14 @@ final class ClothLayerCollisionVerification {
     }
 
     private static float driveIntoLining(boolean auto) {
-        AnimatedGeoModel model = stackedModel();
+        BoneModelSnapshot model = stackedModel();
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(
                 model,
                 plan(model, auto)
         );
         SpringBoneSolver solver = new SpringBoneSolver(layout);
         solver.solve(new Vector3f(), 0.0F, 0.0F, false);
-        AnimatedGeoBone apron = bone(model, "Apron");
+        BoneModelSnapshot.Bone apron = bone(model, "Apron");
         for (int frame = 0; frame < 60; frame++) {
             solver.restoreAnimationPose();
             apron.setRotationX(-LEAN);
@@ -255,7 +262,7 @@ final class ClothLayerCollisionVerification {
      * the bone already reads as unrotated.
      */
     private static void verifiesColliderFollowsSolvedPose() {
-        AnimatedGeoModel model = stackedModel();
+        BoneModelSnapshot model = stackedModel();
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(
                 model,
                 plan(model, true)
@@ -266,7 +273,7 @@ final class ClothLayerCollisionVerification {
         solver.solve(new Vector3f(), 0.0F, 0.0F, false);
         Vector3f rest = new Vector3f(liningCollider(solver, apron, skirt));
 
-        AnimatedGeoBone lining = bone(model, "Skirt");
+        BoneModelSnapshot.Bone lining = bone(model, "Skirt");
         for (int frame = 0; frame < 60; frame++) {
             solver.restoreAnimationPose();
             lining.setRotationX(SWING);
@@ -307,8 +314,8 @@ final class ClothLayerCollisionVerification {
      * A torso to anchor the body axis, an inner skirt panel, and an apron one
      * pixel in front of it. Both panels are their own driven chain.
      */
-    private static AnimatedGeoModel stackedModel() {
-        return modelFromJson("""
+    private static BoneModelSnapshot stackedModel() {
+        return coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.stacked_panels",
                     "texture_width":64,"texture_height":64},
@@ -326,18 +333,18 @@ final class ClothLayerCollisionVerification {
                 """);
     }
 
-    private static PhysicsSolverLayout layout(AnimatedGeoModel model) {
+    private static PhysicsSolverLayout layout(BoneModelSnapshot model) {
         return PhysicsSolverLayout.build(model, plan(model, true));
     }
 
     private static PhysicsBoneSelectionPlan plan(
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             boolean auto
     ) {
         return PhysicsBoneDiscoverer.discover(
                 "verification:cloth_layer_" + auto,
                 model,
-                PhysicsMetadata.parse(
+                PhysicsMetadataJsonParser.parse(
                         JsonParser.parseString("""
                                 {"schema_version":3,"mode":"explicit","chains":[
                                   {"id":"lining","type":"SKIRT",
@@ -379,14 +386,12 @@ final class ClothLayerCollisionVerification {
         return -1;
     }
 
-    private static AnimatedGeoBone bone(AnimatedGeoModel model, String name) {
-        AnimatedGeoBone[] found = new AnimatedGeoBone[1];
-        BonePhysicsVerificationSupport.forEachBone(model, bone -> {
-            if (name.equals(bone.getName())) {
-                found[0] = bone;
-            }
-        });
-        require(found[0] != null, "Missing bone " + name);
-        return found[0];
+    private static BoneModelSnapshot.Bone bone(
+            BoneModelSnapshot model,
+            String name
+    ) {
+        BoneModelSnapshot.Bone bone = model.bones().get(name);
+        require(bone != null, "Missing bone " + name);
+        return bone;
     }
 }

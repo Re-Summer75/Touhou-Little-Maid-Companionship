@@ -1,9 +1,17 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.google.gson.JsonParser;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
 
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import com.google.gson.JsonParser;
+import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
 final class MetadataGeometryVerification {
@@ -22,7 +30,7 @@ final class MetadataGeometryVerification {
     }
 
     private static void verifiesExplicitAttachmentOverride() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.attachment_override",
                     "texture_width":32,"texture_height":32},
@@ -35,7 +43,7 @@ final class MetadataGeometryVerification {
                      "cubes":[{"origin":[2.5,0,-.5],"size":[1,7,1],"uv":[0,0]}]}
                   ]}]}
                 """);
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {"schema_version":3,"mode":"auto","chains":[{
                           "id":"author_mount","type":"HAIR","root":"Head/Mount",
@@ -63,7 +71,7 @@ final class MetadataGeometryVerification {
     }
 
     private static void verifiesMetadataParsing() {
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {
                           "schema_version": 1,
@@ -150,7 +158,7 @@ final class MetadataGeometryVerification {
     }
 
     private static void verifiesWindScaleBounds() {
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {
                           "schema_version":3,
@@ -179,7 +187,7 @@ final class MetadataGeometryVerification {
     }
 
     private static void verifiesMassScaleBounds() {
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {
                           "schema_version":3,
@@ -208,7 +216,7 @@ final class MetadataGeometryVerification {
     }
 
     private static void verifiesSchemaOneConstraintCompatibility() {
-        PhysicsMetadata legacy = PhysicsMetadata.parse(
+        PhysicsMetadata legacy = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {
                           "schema_version":1,
@@ -218,7 +226,7 @@ final class MetadataGeometryVerification {
                         """).getAsJsonObject(),
                 "legacy verification"
         );
-        PhysicsMetadata current = PhysicsMetadata.parse(
+        PhysicsMetadata current = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {
                           "schema_version":2,
@@ -239,7 +247,7 @@ final class MetadataGeometryVerification {
     }
 
     private static void verifiesSchemaThreeCollisionParsing() {
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {
                           "schema_version": 3,
@@ -381,7 +389,7 @@ final class MetadataGeometryVerification {
                 "Capsule collision values were not retained in Gecko pixels"
         );
 
-        PhysicsMetadata automatic = PhysicsMetadata.parse(
+        PhysicsMetadata automatic = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {
                           "schema_version": 3,
@@ -401,7 +409,7 @@ final class MetadataGeometryVerification {
 
     private static void verifiesOlderSchemasIgnoreCollision() {
         for (int schema = 1; schema <= 2; schema++) {
-            PhysicsMetadata metadata = PhysicsMetadata.parse(
+            PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                     JsonParser.parseString("""
                             {
                               "schema_version": %d,
@@ -440,7 +448,7 @@ final class MetadataGeometryVerification {
     }
 
     private static void verifiesEmptyAnchorFallback() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {
                   "format_version": "1.12.0",
                   "minecraft:geometry": [{

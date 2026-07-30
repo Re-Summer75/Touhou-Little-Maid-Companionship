@@ -1,9 +1,16 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.runtime.CollisionProxyDebugData;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.CollisionProxyDebugData;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -45,7 +52,7 @@ final class WindCollisionVerification {
 
     private static void verifiesWindDoesNotPressClothIntoTheBody()
             throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(
+        BoneModelSnapshot model = BonePhysicsVerificationSupport.coreModel(
                 BonePhysicsVerificationSupport.loadGeoModel(
                         BonePhysicsVerificationSupport.MODEL_DIRECTORY
                                 .resolve(MODEL)

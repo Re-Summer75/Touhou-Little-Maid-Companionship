@@ -1,13 +1,21 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.build.BodyCollisionGeometry;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.build.BodyCollisionGeometryAnalyzer;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.build.CapsuleFit;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.engine.collision.bake.BodyCollisionGeometry;
+import com.laixia.maidintelligence.feature.physics.engine.collision.bake.BodyCollisionGeometryAnalyzer;
+import com.laixia.maidintelligence.feature.physics.engine.collision.bake.CapsuleFit;
 import org.joml.Vector3f;
 
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadWinefoxGeoModel;
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
 final class BodyCollisionGeometryVerification {
@@ -40,7 +48,7 @@ final class BodyCollisionGeometryVerification {
     }
 
     private static void verifiesWinefoxBodyIsolation() throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(loadWinefoxGeoModel());
+        BoneModelSnapshot model = coreModel(loadWinefoxGeoModel());
         BodyCollisionGeometry geometry = analyze(model);
         require(
                 "UpperBody".equals(geometry.body().bone().getName()),
@@ -53,10 +61,7 @@ final class BodyCollisionGeometryVerification {
     }
 
     private static void verifiesConservativeCapsuleFit() {
-        PhysicsBoneGeometry.Bounds bounds = new PhysicsBoneGeometry.Bounds(
-                -2.0D, 0.0D, -1.0D,
-                2.0D, 10.0D, 1.0D
-        );
+        PhysicsBoneGeometry.Bounds bounds = bounds(4.0F, 10.0F, 2.0F);
         CapsuleFit fit = CapsuleFit.fromBounds(bounds);
         Vector3f start = fit.start();
         Vector3f end = fit.end();
@@ -69,10 +74,7 @@ final class BodyCollisionGeometryVerification {
                 "Capsule fit escaped its source AABB"
         );
         CapsuleFit shortFit = CapsuleFit.fit(
-                new PhysicsBoneGeometry.Bounds(
-                        -2.0D, 0.0D, -2.0D,
-                        2.0D, 1.0D, 2.0D
-                )
+                bounds(4.0F, 1.0F, 4.0F)
         );
         require(
                 shortFit.isFinite() && shortFit.sphereFallback(),
@@ -80,14 +82,14 @@ final class BodyCollisionGeometryVerification {
         );
     }
 
-    private static BodyCollisionGeometry analyze(AnimatedGeoModel model) {
+    private static BodyCollisionGeometry analyze(BoneModelSnapshot model) {
         return BodyCollisionGeometryAnalyzer.analyze(
                 PhysicsBoneGeometry.analyze(model)
         );
     }
 
-    private static AnimatedGeoModel humanoid() {
-        return modelFromJson("""
+    private static BoneModelSnapshot humanoid() {
+        return coreModelFromJson("""
                 {
                   "format_version":"1.12.0",
                   "minecraft:geometry":[{
@@ -103,5 +105,21 @@ final class BodyCollisionGeometryVerification {
                   }]
                 }
                 """);
+    }
+
+    private static PhysicsBoneGeometry.Bounds bounds(
+            float width,
+            float height,
+            float depth
+    ) {
+        BoneModelSnapshot model = coreModelFromJson("""
+                {"format_version":"1.12.0","minecraft:geometry":[{
+                  "description":{"identifier":"geometry.bounds",
+                    "texture_width":16,"texture_height":16},
+                  "bones":[{"name":"Bounds","pivot":[0,0,0],
+                    "cubes":[{"origin":[0,0,0],"size":[%s,%s,%s],
+                      "uv":[0,0]}]}]}]}
+                """.formatted(width, height, depth));
+        return PhysicsBoneGeometry.analyze(model).modelBounds();
     }
 }

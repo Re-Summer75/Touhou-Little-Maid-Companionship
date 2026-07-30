@@ -8,8 +8,10 @@
 - Minecraft：1.20.1
 - Forge：47.4.0
 - 车万女仆：1.5.3 Forge
-- 模块根目录：`src/main/java/com/laixia/maidintelligence/feature/advancement`
-- 内置进度数据：`src/main/resources/data/tlm_companionship/advancements/maid`
+- 稳定功能模块：`features/advancement/src/main/java/com/laixia/maidintelligence/feature/advancement`
+- Forge 适配器：`adapters/forge-1.20.1/src/main/java/com/laixia/maidintelligence/feature/advancement`
+- TLM/Gecko 适配器：`adapters/tlm-1.20.1-gecko3/src/main/java/com/laixia/maidintelligence/feature/advancement`
+- 内置进度数据：`distribution/forge-1.20.1/src/main/resources/data/tlm_companionship/advancements/maid`
 
 ## 2. 为什么是镜像玩家
 
@@ -25,10 +27,13 @@
 
 ```mermaid
 flowchart LR
-    Event["TLM 事件 / Forge 事件 / mixin"] --> Bridge[MaidCriteria]
-    Bridge --> Mirror[MaidMirrorPlayer]
+    Event["TLM 事件 / Forge 事件 / mixin"] --> Bridge[MaidAdvancementBridgeHandlers]
+    Bridge --> Ports["World / Combat / Progress 触发端口"]
+    Ports --> Criteria["MaidVanillaWorldCriteria / MaidVanillaCombatCriteria / MaidProgressCriteria"]
+    Criteria --> Manager[MaidAdvancementManager]
+    Manager --> Mirror[MaidMirrorPlayer]
     Mirror -->|"getAdvancements()"| Tracker["该女仆的 PlayerAdvancements"]
-    Bridge --> Vanilla["CriteriaTriggers.X.trigger(mirror, ...)"]
+    Criteria --> Vanilla["CriteriaTriggers / MaidCriteriaTriggers"]
     Vanilla --> Tracker
     Tracker -->|award| Chat["聊天广播 chat.type.advancement.*"]
     Tracker -->|award| Rewards[AdvancementRewards.grant]
@@ -91,7 +96,10 @@ flowchart LR
 | `honey_block_slide` | mixin `HoneyBlock#maybeDoSlideAchievement` |
 | `maid_fed`、`maid_level`、`maid_favorability_level`、`maid_experience` | 本模组自定义，见第 5 节 |
 
-三处 mixin 都在 `tlm_companionship.mixins.json` 的公共列表里：
+三处 mixin 按目标边界拆分：`HoneyBlockSlideMixin` 注册在
+`distribution/forge-1.20.1/src/main/resources/tlm_companionship.common.mixins.json`，
+另外两处 TLM mixin 注册在
+`distribution/forge-1.20.1/src/main/resources/tlm_companionship.tlm-gecko3.mixins.json`：
 
 | mixin | 为什么非要 mixin |
 | --- | --- |
@@ -147,7 +155,7 @@ flowchart LR
 触发器的 `matches` 拿统计量比阈值。这也意味着阈值类进度会随女仆实体跨存档迁移，
 而完成状态本身留在存档文件里。
 
-等级、好感等级与经验这三条每 20 tick 会重放一次（`MaidCriteria#replaceStanding`），
+等级、好感等级与经验这三条每 20 tick 会重放一次（`MaidProgressCriteria#replaceStanding`），
 所以系统上线前就已经是高等级的女仆不需要再升一级才补上，根进度 `maid/root` 也挂在等级触发器上，
 同时兼作「我是一只女仆」的判定。
 

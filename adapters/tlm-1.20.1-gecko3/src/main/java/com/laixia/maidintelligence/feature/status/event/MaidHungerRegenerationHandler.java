@@ -1,13 +1,13 @@
 package com.laixia.maidintelligence.feature.status.event;
 
 import com.github.tartaricacid.touhoulittlemaid.api.event.MaidTickEvent;
-import com.laixia.maidintelligence.feature.status.service.DefaultMaidStatusService;
+import com.laixia.maidintelligence.feature.status.tlm.TlmMaidStatusService;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 public final class MaidHungerRegenerationHandler {
-    private final DefaultMaidStatusService statusService;
+    private final TlmMaidStatusService statusService;
 
-    public MaidHungerRegenerationHandler(DefaultMaidStatusService statusService) {
+    public MaidHungerRegenerationHandler(TlmMaidStatusService statusService) {
         this.statusService = statusService;
     }
 

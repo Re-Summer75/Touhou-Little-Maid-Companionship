@@ -1,10 +1,16 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
 
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
+
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
 final class BoneAttachmentFrameVerification {
@@ -12,7 +18,7 @@ final class BoneAttachmentFrameVerification {
     }
 
     static void run() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {
                   "format_version":"1.12.0",
                   "minecraft:geometry":[{
@@ -52,7 +58,7 @@ final class BoneAttachmentFrameVerification {
                   }]
                 }
                 """);
-        AnimatedGeoBone head = model.bones().get("Head");
+        BoneModelSnapshot.Bone head = model.bones().get("Head");
         requireAxis(model, head, "Upward", 1, 0.80F);
         requireAxis(model, head, "CenteredUpward", 1, 0.80F);
         requireAxis(
@@ -80,8 +86,8 @@ final class BoneAttachmentFrameVerification {
     }
 
     private static void requireAmbiguousSupport(
-            AnimatedGeoModel model,
-            AnimatedGeoBone head
+            BoneModelSnapshot model,
+            BoneModelSnapshot.Bone head
     ) {
         BoneKinematics.Metrics metrics = BoneKinematics.measure(
                 model.bones().get("AmbiguousRibbon"),
@@ -102,10 +108,10 @@ final class BoneAttachmentFrameVerification {
     }
 
     private static void requireAnchoredBang(
-            AnimatedGeoModel model,
-            AnimatedGeoBone head
+            BoneModelSnapshot model,
+            BoneModelSnapshot.Bone head
     ) {
-        AnimatedGeoBone bone = model.bones().get("AnchoredBang");
+        BoneModelSnapshot.Bone bone = model.bones().get("AnchoredBang");
         BoneKinematics.Metrics metrics = BoneKinematics.measure(
                 bone,
                 model.bones().get("BangAnchor"),
@@ -122,8 +128,8 @@ final class BoneAttachmentFrameVerification {
     }
 
     private static void requireAxis(
-            AnimatedGeoModel model,
-            AnimatedGeoBone parent,
+            BoneModelSnapshot model,
+            BoneModelSnapshot.Bone parent,
             String name,
             int component,
             float threshold
@@ -132,14 +138,14 @@ final class BoneAttachmentFrameVerification {
     }
 
     private static void requireAxis(
-            AnimatedGeoModel model,
-            AnimatedGeoBone parent,
-            AnimatedGeoBone nearestSolidAncestor,
+            BoneModelSnapshot model,
+            BoneModelSnapshot.Bone parent,
+            BoneModelSnapshot.Bone nearestSolidAncestor,
             String name,
             int component,
             float threshold
     ) {
-        AnimatedGeoBone bone = model.bones().get(name);
+        BoneModelSnapshot.Bone bone = model.bones().get(name);
         BoneKinematics.Metrics metrics = BoneKinematics.measure(
                 bone,
                 parent,
@@ -164,11 +170,11 @@ final class BoneAttachmentFrameVerification {
     }
 
     private static void requireRestDirection(
-            AnimatedGeoModel model,
-            AnimatedGeoBone parent,
+            BoneModelSnapshot model,
+            BoneModelSnapshot.Bone parent,
             String name
     ) {
-        AnimatedGeoBone bone = model.bones().get(name);
+        BoneModelSnapshot.Bone bone = model.bones().get(name);
         BoneKinematics.Metrics metrics = BoneKinematics.measure(
                 bone,
                 parent,

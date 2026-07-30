@@ -1,5 +1,6 @@
 package com.laixia.maidintelligence.feature.advancement.server;
 
+import com.laixia.maidintelligence.feature.advancement.codec.MinecraftResourceIds;
 import com.laixia.maidintelligence.feature.advancement.domain.MaidAdvancementScope;
 import com.mojang.datafixers.DataFixer;
 import net.minecraft.advancements.Advancement;
@@ -73,7 +74,9 @@ public final class MaidAdvancementTracker {
         List<Advancement> visible = new ArrayList<>();
         Map<ResourceLocation, AdvancementProgress> progress = new LinkedHashMap<>();
         for (Advancement root : manager.getAllAdvancements()) {
-            if (root.getParent() != null || !MaidAdvancementScope.includes(root)) {
+            if (root.getParent() != null || !MaidAdvancementScope.includes(
+                    MinecraftResourceIds.toCore(root.getId())
+            )) {
                 continue;
             }
             AdvancementVisibilityEvaluator.evaluateVisibility(
@@ -114,7 +117,11 @@ public final class MaidAdvancementTracker {
 
         @Override
         public boolean award(Advancement advancement, String criterion) {
-            return MaidAdvancementScope.includes(advancement) && super.award(advancement, criterion);
+            return MaidAdvancementScope.includes(
+                    MinecraftResourceIds.toCore(
+                            advancement.getId()
+                    )
+            ) && super.award(advancement, criterion);
         }
     }
 }

@@ -1,14 +1,20 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.core.snapshot.BoneSnapshot;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 import org.joml.Vector3f;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.MODEL_DIRECTORY;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadGeoModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.requireNear;
@@ -25,7 +31,7 @@ final class BundledChainJointVerification {
     }
 
     private static void verifyModel(String fileName) throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(loadGeoModel(
+        BoneModelSnapshot model = coreModel(loadGeoModel(
                 MODEL_DIRECTORY.resolve(fileName)
         ));
         PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
@@ -33,8 +39,8 @@ final class BundledChainJointVerification {
                 model,
                 PhysicsMetadata.EMPTY
         );
-        AnimatedGeoBone[] left = chain(model, "LeftMWX");
-        AnimatedGeoBone[] right = chain(model, "RightMWX");
+        BoneModelSnapshot.Bone[] left = chain(model, "LeftMWX");
+        BoneModelSnapshot.Bone[] right = chain(model, "RightMWX");
         verifyBakedJoints(plan, left, fileName + " left");
         verifyBakedJoints(plan, right, fileName + " right");
 
@@ -77,7 +83,7 @@ final class BundledChainJointVerification {
 
     private static void verifyBakedJoints(
             PhysicsBoneSelectionPlan plan,
-            AnimatedGeoBone[] bones,
+            BoneModelSnapshot.Bone[] bones,
             String label
     ) {
         for (int index = 0; index < bones.length; index++) {
@@ -114,7 +120,7 @@ final class BundledChainJointVerification {
     private static void verifyRuntimeJoints(
             PhysicsSolverLayout layout,
             SpringBoneSolver solver,
-            AnimatedGeoBone[] bones,
+            BoneModelSnapshot.Bone[] bones,
             String label
     ) {
         Vector3f tip = new Vector3f();
@@ -132,11 +138,11 @@ final class BundledChainJointVerification {
         }
     }
 
-    private static AnimatedGeoBone[] chain(
-            AnimatedGeoModel model,
+    private static BoneModelSnapshot.Bone[] chain(
+            BoneModelSnapshot model,
             String root
     ) {
-        return new AnimatedGeoBone[]{
+        return new BoneModelSnapshot.Bone[]{
                 model.bones().get(root),
                 model.bones().get(root + "2"),
                 model.bones().get(root + "3")
@@ -145,7 +151,7 @@ final class BundledChainJointVerification {
 
     private static int indexOf(
             PhysicsSolverLayout layout,
-            AnimatedGeoBone bone
+            BoneModelSnapshot.Bone bone
     ) {
         for (int index = 0; index < layout.activeNodeCount(); index++) {
             if (layout.node(index).bone() == bone) {
@@ -155,7 +161,7 @@ final class BundledChainJointVerification {
         return -1;
     }
 
-    private static Vector3f authoredPivot(AnimatedGeoBone bone) {
+    private static Vector3f authoredPivot(BoneModelSnapshot.Bone bone) {
         return new Vector3f(
                 bone.getPivotX(),
                 bone.getPivotY(),
@@ -163,7 +169,7 @@ final class BundledChainJointVerification {
         ).div(PIXELS_PER_BLOCK);
     }
 
-    private static Vector3f rotation(AnimatedGeoBone bone) {
+    private static Vector3f rotation(BoneModelSnapshot.Bone bone) {
         return new Vector3f(
                 bone.getRotationX(),
                 bone.getRotationY(),
@@ -171,14 +177,14 @@ final class BundledChainJointVerification {
         );
     }
 
-    private static void restore(AnimatedGeoModel model) {
-        for (AnimatedGeoBone bone : model.topLevelBones()) {
+    private static void restore(BoneModelSnapshot model) {
+        for (BoneModelSnapshot.Bone bone : model.topLevelBones()) {
             restore(bone);
         }
     }
 
-    private static void restore(AnimatedGeoBone bone) {
-        BoneSnapshot initial = bone.getInitialSnapshot();
+    private static void restore(BoneModelSnapshot.Bone bone) {
+        BoneModelSnapshot.RestPose initial = bone.getInitialSnapshot();
         bone.setRotationX(initial.rotationValueX);
         bone.setRotationY(initial.rotationValueY);
         bone.setRotationZ(initial.rotationValueZ);
@@ -188,7 +194,7 @@ final class BundledChainJointVerification {
         bone.setScaleX(initial.scaleValueX);
         bone.setScaleY(initial.scaleValueY);
         bone.setScaleZ(initial.scaleValueZ);
-        for (AnimatedGeoBone child : bone.children()) {
+        for (BoneModelSnapshot.Bone child : bone.children()) {
             restore(child);
         }
     }

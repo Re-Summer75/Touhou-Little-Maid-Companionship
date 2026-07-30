@@ -1,17 +1,24 @@
 package com.laixia.maidintelligence.feature.interaction.client;
 
+import com.laixia.maidintelligence.feature.interaction.api.FaceSelectionApi;
+import com.laixia.maidintelligence.feature.interaction.application.FaceCandidateSelector;
+import com.laixia.maidintelligence.feature.interaction.domain.FaceBoneClassifier;
+import com.laixia.maidintelligence.feature.interaction.domain.FaceGeometry;
+import com.laixia.maidintelligence.feature.interaction.domain.MaidFacePlane;
 import com.laixia.maidintelligence.feature.interaction.domain.MouthTargetRegion;
-import net.minecraft.world.phys.Vec3;
+import com.laixia.maidintelligence.shared.geometry.Vec3d;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public final class FaceTrackingVerification {
+    private static final FaceSelectionApi SELECTOR =
+            new FaceCandidateSelector();
     private static final FaceGeometry.Frame FRAME = new FaceGeometry.Frame(
-            Vec3.ZERO,
-            new Vec3(1.0D, 0.0D, 0.0D),
-            new Vec3(0.0D, 1.0D, 0.0D),
-            new Vec3(0.0D, 0.0D, -1.0D)
+            Vec3d.ZERO,
+            new Vec3d(1.0D, 0.0D, 0.0D),
+            new Vec3d(0.0D, 1.0D, 0.0D),
+            new Vec3d(0.0D, 0.0D, -1.0D)
     );
 
     private FaceTrackingVerification() {
@@ -36,37 +43,37 @@ public final class FaceTrackingVerification {
     private static void verifiesInvalidFramesAreRejected() {
         require(
                 FaceGeometry.Frame.tryCreate(
-                        Vec3.ZERO,
-                        new Vec3(1.0D, 0.0D, 0.0D),
-                        new Vec3(0.0D, 1.0D, 0.0D),
-                        new Vec3(0.0D, 0.0D, -1.0D)
+                        Vec3d.ZERO,
+                        new Vec3d(1.0D, 0.0D, 0.0D),
+                        new Vec3d(0.0D, 1.0D, 0.0D),
+                        new Vec3d(0.0D, 0.0D, -1.0D)
                 ).isPresent(),
                 "Valid face frame was rejected"
         );
         require(
                 FaceGeometry.Frame.tryCreate(
-                        Vec3.ZERO,
-                        Vec3.ZERO,
-                        new Vec3(0.0D, 1.0D, 0.0D),
-                        new Vec3(0.0D, 0.0D, -1.0D)
+                        Vec3d.ZERO,
+                        Vec3d.ZERO,
+                        new Vec3d(0.0D, 1.0D, 0.0D),
+                        new Vec3d(0.0D, 0.0D, -1.0D)
                 ).isEmpty(),
                 "Zero-length face axis was accepted"
         );
         require(
                 FaceGeometry.Frame.tryCreate(
-                        Vec3.ZERO,
-                        new Vec3(Double.NaN, 0.0D, 0.0D),
-                        new Vec3(0.0D, 1.0D, 0.0D),
-                        new Vec3(0.0D, 0.0D, -1.0D)
+                        Vec3d.ZERO,
+                        new Vec3d(Double.NaN, 0.0D, 0.0D),
+                        new Vec3d(0.0D, 1.0D, 0.0D),
+                        new Vec3d(0.0D, 0.0D, -1.0D)
                 ).isEmpty(),
                 "Non-finite face axis was accepted"
         );
         require(
                 FaceGeometry.Frame.tryCreate(
-                        Vec3.ZERO,
-                        new Vec3(1.0D, 0.0D, 0.0D),
-                        new Vec3(2.0D, 0.0D, 0.0D),
-                        new Vec3(0.0D, 0.0D, -1.0D)
+                        Vec3d.ZERO,
+                        new Vec3d(1.0D, 0.0D, 0.0D),
+                        new Vec3d(2.0D, 0.0D, 0.0D),
+                        new Vec3d(0.0D, 0.0D, -1.0D)
                 ).isEmpty(),
                 "Singular face basis was accepted"
         );
@@ -150,10 +157,10 @@ public final class FaceTrackingVerification {
     }
 
     private static void verifiesStableQuadOrdering() {
-        List<Vec3> expected = frontQuad(1.0D, 1.0D, -0.5D);
-        List<List<Vec3>> permutations = new ArrayList<>();
+        List<Vec3d> expected = frontQuad(1.0D, 1.0D, -0.5D);
+        List<List<Vec3d>> permutations = new ArrayList<>();
         permute(new ArrayList<>(expected), 0, permutations);
-        for (List<Vec3> permutation : permutations) {
+        for (List<Vec3d> permutation : permutations) {
             FaceGeometry.OrderedQuad ordered = FaceGeometry
                     .orderQuad(permutation, FRAME)
                     .orElseThrow(() -> new AssertionError("Valid quad was rejected"));
@@ -171,7 +178,7 @@ public final class FaceTrackingVerification {
                 2,
                 FaceBoneClassifier.Role.HEAD,
                 frontQuad(1.0D, 1.0D, -0.5D),
-                new Vec3(0.0D, 0.0D, -1.0D),
+                new Vec3d(0.0D, 0.0D, -1.0D),
                 1.0D,
                 1.0D,
                 1.0D,
@@ -183,14 +190,14 @@ public final class FaceTrackingVerification {
                 3,
                 FaceBoneClassifier.Role.HEAD,
                 frontQuad(1.0D, 1.0D, 0.5D),
-                new Vec3(0.0D, 0.0D, 1.0D),
+                new Vec3d(0.0D, 0.0D, 1.0D),
                 1.0D,
                 1.0D,
                 1.0D,
                 false
         );
 
-        FaceGeometry.Selection selection = FaceCandidateSelector.select(
+        FaceGeometry.Selection selection = SELECTOR.select(
                 List.of(back, front),
                 FRAME
         );
@@ -208,7 +215,7 @@ public final class FaceTrackingVerification {
                 2,
                 FaceBoneClassifier.Role.HEAD,
                 frontQuad(1.0D, 1.0D, -0.5D),
-                new Vec3(0.0D, 0.0D, -1.0D),
+                new Vec3d(0.0D, 0.0D, -1.0D),
                 1.0D,
                 1.0D,
                 1.0D,
@@ -220,14 +227,14 @@ public final class FaceTrackingVerification {
                 2,
                 FaceBoneClassifier.Role.HEAD,
                 frontQuad(1.15D, 1.15D, -0.575D),
-                new Vec3(0.0D, 0.0D, -1.0D),
+                new Vec3d(0.0D, 0.0D, -1.0D),
                 1.15D,
                 1.15D,
                 1.15D,
                 false
         );
 
-        FaceGeometry.Selection selection = FaceCandidateSelector.select(
+        FaceGeometry.Selection selection = SELECTOR.select(
                 List.of(outerShell, head),
                 FRAME
         );
@@ -245,13 +252,13 @@ public final class FaceTrackingVerification {
                 2,
                 FaceBoneClassifier.Role.FACE,
                 frontQuad(1.0D, 1.0D, -0.5D),
-                new Vec3(0.0D, 0.0D, -1.0D),
+                new Vec3d(0.0D, 0.0D, -1.0D),
                 1.0D,
                 1.0D,
                 0.001D,
                 true
         );
-        FaceGeometry.Selection selection = FaceCandidateSelector.select(
+        FaceGeometry.Selection selection = SELECTOR.select(
                 List.of(face),
                 FRAME
         );
@@ -265,7 +272,7 @@ public final class FaceTrackingVerification {
                 2,
                 FaceBoneClassifier.Role.HEAD,
                 frontQuad(1.0D, 1.0D, -0.5D),
-                new Vec3(0.0D, 0.0D, -1.0D),
+                new Vec3d(0.0D, 0.0D, -1.0D),
                 1.0D,
                 1.0D,
                 1.0D,
@@ -277,7 +284,7 @@ public final class FaceTrackingVerification {
                 2,
                 FaceBoneClassifier.Role.BLINK,
                 frontQuad(1.0D, 1.0D, -0.501D),
-                new Vec3(0.0D, 0.0D, -1.0D),
+                new Vec3d(0.0D, 0.0D, -1.0D),
                 1.0D,
                 1.0D,
                 0.001D,
@@ -285,7 +292,7 @@ public final class FaceTrackingVerification {
         );
 
         FaceGeometry.Selection selection =
-                FaceCandidateSelector.selectPrioritizingSemanticSurface(
+                SELECTOR.selectPrioritizingSemanticSurface(
                         List.of(head, blink),
                         FRAME
                 );
@@ -310,7 +317,7 @@ public final class FaceTrackingVerification {
                 2,
                 FaceBoneClassifier.Role.HEAD,
                 frontQuad(1.0D, 1.0D, -0.5D),
-                new Vec3(0.0D, 0.0D, -1.0D),
+                new Vec3d(0.0D, 0.0D, -1.0D),
                 1.0D,
                 1.0D,
                 1.0D,
@@ -322,13 +329,13 @@ public final class FaceTrackingVerification {
                 2,
                 FaceBoneClassifier.Role.HEAD,
                 translate(frontQuad(1.0D, 1.0D, -0.5D), 0.04D, 0.0D, 0.0D),
-                new Vec3(0.0D, 0.0D, -1.0D),
+                new Vec3d(0.0D, 0.0D, -1.0D),
                 1.0D,
                 1.0D,
                 1.0D,
                 false
         );
-        FaceGeometry.Selection selection = FaceCandidateSelector.select(
+        FaceGeometry.Selection selection = SELECTOR.select(
                 List.of(first, second),
                 FRAME
         );
@@ -341,20 +348,26 @@ public final class FaceTrackingVerification {
     }
 
     private static void verifiesRotatedMirroredOrdering() {
-        Vec3 right = new Vec3(1.0D, 0.0D, -1.0D).normalize();
-        Vec3 up = new Vec3(0.0D, 1.0D, 0.0D);
-        Vec3 forward = up.cross(right).normalize();
+        Vec3d right = new Vec3d(
+                1.0D,
+                0.0D,
+                -1.0D
+        ).normalize();
+        Vec3d up = new Vec3d(0.0D, 1.0D, 0.0D);
+        Vec3d forward = up.cross(right).normalize();
         FaceGeometry.Frame rotatedFrame = new FaceGeometry.Frame(
-                Vec3.ZERO,
+                Vec3d.ZERO,
                 right,
                 up,
                 forward
         );
-        Vec3 center = forward.scale(0.5D);
-        Vec3 leftBottom = center.subtract(right.scale(0.5D)).subtract(up.scale(0.5D));
-        Vec3 rightBottom = leftBottom.add(right);
-        Vec3 leftTop = leftBottom.add(up);
-        Vec3 rightTop = rightBottom.add(up);
+        Vec3d center = forward.scale(0.5D);
+        Vec3d leftBottom = center
+                .subtract(right.scale(0.5D))
+                .subtract(up.scale(0.5D));
+        Vec3d rightBottom = leftBottom.add(right);
+        Vec3d leftTop = leftBottom.add(up);
+        Vec3d rightTop = rightBottom.add(up);
         FaceGeometry.OrderedQuad ordered = FaceGeometry.orderQuad(
                 List.of(rightTop, leftTop, rightBottom, leftBottom),
                 rotatedFrame
@@ -368,10 +381,10 @@ public final class FaceTrackingVerification {
     }
 
     private static void verifiesSkewedPlaneCoordinates() {
-        Vec3 origin = new Vec3(-0.53D, -0.10D, -2.0D);
-        Vec3 right = new Vec3(1.0D, 0.0D, 0.0D);
-        Vec3 up = new Vec3(0.30D, 1.0D, 0.0D);
-        List<Vec3> vertices = List.of(
+        Vec3d origin = new Vec3d(-0.53D, -0.10D, -2.0D);
+        Vec3d right = new Vec3d(1.0D, 0.0D, 0.0D);
+        Vec3d up = new Vec3d(0.30D, 1.0D, 0.0D);
+        List<Vec3d> vertices = List.of(
                 origin,
                 origin.add(right),
                 origin.add(right).add(up),
@@ -380,7 +393,8 @@ public final class FaceTrackingVerification {
         MaidFacePlane plane = MaidFacePlane
                 .fromVertices(vertices, FRAME)
                 .orElseThrow(() -> new AssertionError("Skewed face plane was rejected"));
-        Vec3 expectedTarget = new Vec3(0.0D, 0.0D, -2.0D);
+        Vec3d expectedTarget =
+                new Vec3d(0.0D, 0.0D, -2.0D);
         require(
                 plane.point(
                         MouthTargetRegion.CENTER_U,
@@ -389,8 +403,8 @@ public final class FaceTrackingVerification {
                 "Skewed face point mapping changed"
         );
         MaidFacePlane.TargetHit hit = plane.intersectTarget(
-                Vec3.ZERO,
-                new Vec3(0.0D, 0.0D, -1.0D),
+                Vec3d.ZERO,
+                new Vec3d(0.0D, 0.0D, -1.0D),
                 8.0D
         ).orElseThrow(() -> new AssertionError("Skewed mouth target was missed"));
         require(
@@ -408,7 +422,7 @@ public final class FaceTrackingVerification {
                         3,
                         FaceBoneClassifier.Role.HEAD,
                         frontQuad(1.0D, 1.0D, 0.5D),
-                        new Vec3(0.0D, 0.0D, 1.0D),
+                        new Vec3d(0.0D, 0.0D, 1.0D),
                         1.0D,
                         1.0D,
                         1.0D,
@@ -420,7 +434,7 @@ public final class FaceTrackingVerification {
                         2,
                         FaceBoneClassifier.Role.HEAD,
                         frontQuad(1.0D, 1.0D, -0.5D),
-                        new Vec3(0.0D, 0.0D, -1.0D),
+                        new Vec3d(0.0D, 0.0D, -1.0D),
                         1.0D,
                         1.0D,
                         1.0D,
@@ -432,7 +446,7 @@ public final class FaceTrackingVerification {
                         2,
                         FaceBoneClassifier.Role.HEAD,
                         frontQuad(1.15D, 1.15D, -0.575D),
-                        new Vec3(0.0D, 0.0D, -1.0D),
+                        new Vec3d(0.0D, 0.0D, -1.0D),
                         1.15D,
                         1.15D,
                         1.15D,
@@ -463,8 +477,11 @@ public final class FaceTrackingVerification {
             ));
         }
 
-        FaceGeometry.Selection expected = FaceCandidateSelector.select(plain, FRAME);
-        FaceGeometry.Selection actual = FaceCandidateSelector.select(
+        FaceGeometry.Selection expected = SELECTOR.select(
+                plain,
+                FRAME
+        );
+        FaceGeometry.Selection actual = SELECTOR.select(
                 precomputed,
                 FRAME
         );
@@ -502,8 +519,8 @@ public final class FaceTrackingVerification {
             int cubeIndex,
             int faceIndex,
             FaceBoneClassifier.Role role,
-            List<Vec3> vertices,
-            Vec3 outward,
+            List<Vec3d> vertices,
+            Vec3d outward,
             double width,
             double height,
             double depth,
@@ -519,7 +536,7 @@ public final class FaceTrackingVerification {
                 role,
                 vertices,
                 outward,
-                Vec3.ZERO,
+                Vec3d.ZERO,
                 width,
                 height,
                 depth,
@@ -527,31 +544,35 @@ public final class FaceTrackingVerification {
         );
     }
 
-    private static List<Vec3> frontQuad(double width, double height, double z) {
+    private static List<Vec3d> frontQuad(
+            double width,
+            double height,
+            double z
+    ) {
         double halfWidth = width * 0.5D;
         double halfHeight = height * 0.5D;
         return List.of(
-                new Vec3(-halfWidth, -halfHeight, z),
-                new Vec3(halfWidth, -halfHeight, z),
-                new Vec3(halfWidth, halfHeight, z),
-                new Vec3(-halfWidth, halfHeight, z)
+                new Vec3d(-halfWidth, -halfHeight, z),
+                new Vec3d(halfWidth, -halfHeight, z),
+                new Vec3d(halfWidth, halfHeight, z),
+                new Vec3d(-halfWidth, halfHeight, z)
         );
     }
 
-    private static List<Vec3> translate(
-            List<Vec3> vertices,
+    private static List<Vec3d> translate(
+            List<Vec3d> vertices,
             double x,
             double y,
             double z
     ) {
-        Vec3 offset = new Vec3(x, y, z);
+        Vec3d offset = new Vec3d(x, y, z);
         return vertices.stream().map(vertex -> vertex.add(offset)).toList();
     }
 
     private static void permute(
-            List<Vec3> values,
+            List<Vec3d> values,
             int index,
-            List<List<Vec3>> output
+            List<List<Vec3d>> output
     ) {
         if (index == values.size()) {
             output.add(List.copyOf(values));

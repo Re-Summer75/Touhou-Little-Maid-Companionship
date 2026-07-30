@@ -1,13 +1,20 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySource;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionScratch;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.runtime.CollisionProxyDebugData;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.runtime.PreparedCollisionProxy;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxyKind;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySource;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionScratch;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.CollisionProxyDebugData;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.PreparedCollisionProxy;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -103,7 +110,7 @@ final class CollisionProxyDebugDataVerification {
     }
 
     private static void verifiesSolverResetInvalidatesPreparedCopies() {
-        AnimatedGeoModel model = RuntimeEndpointHierarchyFixture.model();
+        BoneModelSnapshot model = RuntimeEndpointHierarchyFixture.model();
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(
                 model,
                 PhysicsBoneDiscoverer.discover(

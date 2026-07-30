@@ -86,13 +86,29 @@ Shift + 右键这些物品时统一打开女仆界面，不再执行喂食或药
 ## 主要源码
 
 ```text
-src/main/java/com/laixia/maidintelligence/feature/interaction/
-├─ MaidInteractionFeature.java
-└─ event/
-   ├─ MaidAutomaticEatingParticleHandler.java
-   ├─ MaidInteractionHandler.java
-   └─ MaidDirectItemInteractionHandler.java
+features/interaction/src/main/java/com/laixia/maidintelligence/feature/interaction/
+├─ api/FaceSelectionApi.java
+├─ application/FaceCandidateSelector.java
+├─ domain/
+├─ event/MaidFedEvent.java
+└─ port/
 
-src/main/java/com/laixia/maidintelligence/mixin/
+adapters/forge-1.20.1/src/main/java/com/laixia/maidintelligence/feature/interaction/
+├─ bridge/EatingParticlePolicy.java
+├─ client/ClientInteractionSetup.java
+├─ forge/InteractionForgeInstaller.java
+└─ network/
+
+adapters/tlm-1.20.1-gecko3/src/main/java/com/laixia/maidintelligence/feature/interaction/
+├─ client/
+├─ event/
+│  ├─ MaidAutomaticEatingParticleHandler.java
+│  ├─ MaidInteractionHandler.java
+│  └─ MaidDirectItemInteractionHandler.java
+├─ service/MaidFeedingService.java
+├─ service/MaidMouthFeedRequestHandler.java
+└─ tlm/InteractionTlmModule.java
+
+adapters/forge-1.20.1/src/main/java/com/laixia/maidintelligence/mixin/client/
 └─ LivingEntityEatingParticleMixin.java
 ```

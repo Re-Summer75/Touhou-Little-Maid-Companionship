@@ -1,12 +1,19 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySet;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxyKind;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySet;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.MODEL_DIRECTORY;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadGeoModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.requireDriven;
@@ -244,7 +251,7 @@ final class ClothAccessoryDiscoveryVerification {
     }
 
     private static void requireDangling(Fixture fixture, String name) {
-        AnimatedGeoBone bone = fixture.bone(name);
+        BoneModelSnapshot.Bone bone = fixture.bone(name);
         requireDriven(
                 fixture.plan(),
                 bone,
@@ -276,7 +283,7 @@ final class ClothAccessoryDiscoveryVerification {
     }
 
     private static void requireRigid(Fixture fixture, String name) {
-        AnimatedGeoBone bone = fixture.bone(name);
+        BoneModelSnapshot.Bone bone = fixture.bone(name);
         require(
                 bone != null && !fixture.plan().isDriven(bone),
                 name + " should remain rigid: " + fixture.plan().decision(bone)
@@ -298,7 +305,7 @@ final class ClothAccessoryDiscoveryVerification {
 
     private static PhysicsSolverLayout.Node layoutNode(
             PhysicsSolverLayout layout,
-            AnimatedGeoBone bone
+            BoneModelSnapshot.Bone bone
     ) {
         for (int index = 0; index < layout.activeNodeCount(); index++) {
             if (layout.node(index).bone() == bone) {
@@ -309,7 +316,7 @@ final class ClothAccessoryDiscoveryVerification {
     }
 
     private static Fixture discover(String fileName) throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(loadGeoModel(
+        BoneModelSnapshot model = coreModel(loadGeoModel(
                 MODEL_DIRECTORY.resolve(fileName)
         ));
         PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
@@ -320,8 +327,10 @@ final class ClothAccessoryDiscoveryVerification {
         return new Fixture(model, plan);
     }
 
-    private record Fixture(AnimatedGeoModel model,
+    private record Fixture(BoneModelSnapshot model,
                            PhysicsBoneSelectionPlan plan) {
-        AnimatedGeoBone bone(String name) { return model.bones().get(name); }
+        BoneModelSnapshot.Bone bone(String name) {
+            return model.bones().get(name);
+        }
     }
 }

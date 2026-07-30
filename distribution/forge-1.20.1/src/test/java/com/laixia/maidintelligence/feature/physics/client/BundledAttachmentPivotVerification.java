@@ -1,11 +1,18 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
 import org.joml.Quaternionf;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.MODEL_DIRECTORY;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadGeoModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
@@ -17,7 +24,7 @@ final class BundledAttachmentPivotVerification {
     }
 
     static void run() throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(loadGeoModel(
+        BoneModelSnapshot model = coreModel(loadGeoModel(
                 MODEL_DIRECTORY.resolve("zhiban_hanfu.json")
         ));
         PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
@@ -31,11 +38,11 @@ final class BundledAttachmentPivotVerification {
     }
 
     private static void requirePreserved(
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             PhysicsBoneSelectionPlan plan,
             String name
     ) {
-        AnimatedGeoBone bone = model.bones().get(name);
+        BoneModelSnapshot.Bone bone = model.bones().get(name);
         BoneKinematics.Metrics metrics = plan.kinematics(bone);
         PhysicsBoneSelectionPlan.Decision decision = plan.decision(bone);
         require(
@@ -54,11 +61,11 @@ final class BundledAttachmentPivotVerification {
     }
 
     private static void requireRemoteOriginCorrected(
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             PhysicsBoneSelectionPlan plan,
             String name
     ) {
-        AnimatedGeoBone bone = model.bones().get(name);
+        BoneModelSnapshot.Bone bone = model.bones().get(name);
         BoneKinematics.Metrics metrics = plan.kinematics(bone);
         PhysicsBoneSelectionPlan.Decision decision = plan.decision(bone);
         float pivotShift = metrics == null

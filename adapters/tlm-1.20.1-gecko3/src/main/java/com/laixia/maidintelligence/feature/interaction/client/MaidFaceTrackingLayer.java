@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.feature.interaction.client;
 import com.github.tartaricacid.touhoulittlemaid.client.model.bedrock.BedrockModel;
 import com.github.tartaricacid.touhoulittlemaid.client.renderer.entity.EntityMaidRenderer;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.interaction.domain.FaceGeometry;
 import com.laixia.maidintelligence.feature.shading.client.ShadowPassDetector;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;

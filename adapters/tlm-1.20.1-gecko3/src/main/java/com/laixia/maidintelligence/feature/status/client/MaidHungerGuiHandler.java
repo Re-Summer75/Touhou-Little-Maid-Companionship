@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.feature.status.client;
 
 import com.github.tartaricacid.touhoulittlemaid.api.event.client.MaidContainerGuiEvent;
+import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.feature.status.domain.DefaultHungerPolicy;
@@ -51,9 +52,9 @@ public final class MaidHungerGuiHandler {
     private static final float HUNGER_TINT_BLUE = 0.24F;
     private static final int SATURATION_BAR_HEIGHT = 2;
 
-    private final MaidStatusApi statusApi;
+    private final MaidStatusApi<EntityMaid> statusApi;
 
-    public MaidHungerGuiHandler(MaidStatusApi statusApi) {
+    public MaidHungerGuiHandler(MaidStatusApi<EntityMaid> statusApi) {
         this.statusApi = statusApi;
     }
 

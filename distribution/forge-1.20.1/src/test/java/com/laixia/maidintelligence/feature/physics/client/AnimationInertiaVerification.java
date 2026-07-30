@@ -1,13 +1,20 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 import org.joml.Vector3f;
 
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
 final class AnimationInertiaVerification {
@@ -323,7 +330,7 @@ final class AnimationInertiaVerification {
             float headRotationZ,
             float headScaleY
     ) {
-        for (AnimatedGeoBone bone : fixture.model().bones().values()) {
+        for (BoneModelSnapshot.Bone bone : fixture.model().bones().values()) {
             bone.setRotationX(0.0F);
             bone.setRotationY(0.0F);
             bone.setRotationZ(0.0F);
@@ -340,7 +347,7 @@ final class AnimationInertiaVerification {
     }
 
     private static Fixture createFixture() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {
                   "format_version":"1.12.0",
                   "minecraft:geometry":[{
@@ -361,7 +368,7 @@ final class AnimationInertiaVerification {
                   }]
                 }
                 """);
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {
                           "mode":"explicit",
@@ -393,7 +400,7 @@ final class AnimationInertiaVerification {
                 metadata
         );
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(model, plan);
-        AnimatedGeoBone hair = model.bones().get("Hair");
+        BoneModelSnapshot.Bone hair = model.bones().get("Hair");
         PhysicsSolverLayout.Node driven = null;
         for (int index = 0; index < layout.activeNodeCount(); index++) {
             if (layout.node(index).bone() == hair) {
@@ -418,8 +425,8 @@ final class AnimationInertiaVerification {
     }
 
     private record Fixture(
-            AnimatedGeoModel model,
-            AnimatedGeoBone head,
+            BoneModelSnapshot model,
+            BoneModelSnapshot.Bone head,
             PhysicsSolverLayout.Node node,
             SpringBoneSolver solver
     ) {

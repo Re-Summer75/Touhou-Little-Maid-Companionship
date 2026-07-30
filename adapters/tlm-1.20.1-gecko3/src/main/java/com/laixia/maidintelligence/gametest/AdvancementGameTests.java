@@ -2,14 +2,14 @@ package com.laixia.maidintelligence.gametest;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
-import com.laixia.maidintelligence.MaidIntelligence;
-import com.laixia.maidintelligence.feature.advancement.MaidAdvancementFeature;
+import com.laixia.maidintelligence.feature.advancement.api.MaidAdvancementAccess;
+import com.laixia.maidintelligence.feature.advancement.api.MaidProgressAdvancementTriggers;
+import com.laixia.maidintelligence.feature.advancement.api.MaidWorldAdvancementTriggers;
 import com.laixia.maidintelligence.feature.advancement.server.MaidAdvancementSnapshot;
-import com.laixia.maidintelligence.feature.advancement.server.MaidAdvancementTracker;
-import com.laixia.maidintelligence.feature.advancement.server.MaidCriteria;
-import com.laixia.maidintelligence.feature.level.LevelFeature;
+import com.laixia.maidintelligence.feature.level.api.MaidLevelApi;
 import com.laixia.maidintelligence.feature.level.domain.LevelProgress;
 import com.laixia.maidintelligence.platform.resource.ModResources;
+import com.laixia.maidintelligence.platform.runtime.AdapterRuntime;
 import net.minecraft.advancements.Advancement;
 import net.minecraft.advancements.AdvancementProgress;
 import net.minecraft.core.BlockPos;
@@ -31,7 +31,7 @@ import java.util.UUID;
  * 女仆进度系统的端到端验证：原版进度真的会判定给女仆、自定义阈值走统计量、
  * 进度能跨存档往返、奖励经验落在女仆身上、完成只结算一次、本体自己那套进度不算女仆的。
  */
-@GameTestHolder(MaidIntelligence.MOD_ID)
+@GameTestHolder(ModResources.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class AdvancementGameTests {
     private static final ResourceLocation STORY_ROOT =
@@ -55,7 +55,7 @@ public final class AdvancementGameTests {
         EntityMaid maid = ownedMaid(helper);
         ItemStack craftingTable = new ItemStack(Items.CRAFTING_TABLE);
         maid.getMaidInv().setStackInSlot(0, craftingTable);
-        MaidCriteria.inventoryChanged(maid, craftingTable);
+        worldTriggers().inventoryChanged(maid, craftingTable);
 
         helper.assertTrue(
                 isDone(helper, maid, STORY_ROOT),
@@ -67,7 +67,10 @@ public final class AdvancementGameTests {
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void maidRootComesFromOwnLevel(GameTestHelper helper) {
         EntityMaid maid = ownedMaid(helper);
-        MaidCriteria.replaceStanding(maid, LevelFeature.INSTANCE.api().getProgress(maid).level());
+        progressTriggers().replaceStanding(
+                maid,
+                levelApi().getProgress(maid).level()
+        );
 
         helper.assertTrue(
                 isDone(helper, maid, MAID_ROOT),
@@ -90,14 +93,14 @@ public final class AdvancementGameTests {
     public static void statisticsDriveThresholdAdvancements(GameTestHelper helper) {
         EntityMaid maid = ownedMaid(helper);
         for (int index = 0; index < SWEET_TOOTH_GOAL - 1; index++) {
-            MaidCriteria.fed(maid, new ItemStack(Items.CAKE));
+            progressTriggers().fed(maid, new ItemStack(Items.CAKE));
         }
         helper.assertFalse(
                 isDone(helper, maid, SWEET_TOOTH),
                 "Seven cakes must not be enough for the sweet tooth advancement"
         );
 
-        MaidCriteria.fed(maid, new ItemStack(Items.CAKE));
+        progressTriggers().fed(maid, new ItemStack(Items.CAKE));
         helper.assertTrue(
                 isDone(helper, maid, SWEET_TOOTH),
                 "The eighth cake should complete the sweet tooth advancement"
@@ -110,10 +113,10 @@ public final class AdvancementGameTests {
         EntityMaid maid = ownedMaid(helper);
         ItemStack craftingTable = new ItemStack(Items.CRAFTING_TABLE);
         maid.getMaidInv().setStackInSlot(0, craftingTable);
-        MaidCriteria.inventoryChanged(maid, craftingTable);
+        worldTriggers().inventoryChanged(maid, craftingTable);
 
         // 卸载即落盘释放，再取一次就得走读档路径。
-        MaidAdvancementFeature.INSTANCE.manager().release(maid.getUUID());
+        advancements().release(maid.getUUID());
         helper.assertTrue(
                 isDone(helper, maid, STORY_ROOT),
                 "Advancement progress should survive unloading the maid"
@@ -124,25 +127,25 @@ public final class AdvancementGameTests {
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void rewardExperienceGoesToTheMaidExactlyOnce(GameTestHelper helper) {
         EntityMaid maid = ownedMaid(helper);
-        LevelProgress before = LevelFeature.INSTANCE.api().getProgress(maid);
+        LevelProgress before = levelApi().getProgress(maid);
         for (int index = 0; index < REGULAR_MEALS_GOAL; index++) {
-            MaidCriteria.fed(maid, new ItemStack(Items.BREAD));
+            progressTriggers().fed(maid, new ItemStack(Items.BREAD));
         }
         helper.assertTrue(
                 isDone(helper, maid, REGULAR_MEALS),
                 "Thirty-two meals should complete the regular meals advancement"
         );
 
-        LevelProgress rewarded = LevelFeature.INSTANCE.api().getProgress(maid);
+        LevelProgress rewarded = levelApi().getProgress(maid);
         helper.assertFalse(
                 rewarded.equals(before),
                 "The advancement reward experience should land on the maid: " + rewarded
         );
 
         Date firstCompletion = requireProgressOf(helper, maid, REGULAR_MEALS).getFirstProgressDate();
-        MaidCriteria.fed(maid, new ItemStack(Items.BREAD));
+        progressTriggers().fed(maid, new ItemStack(Items.BREAD));
         helper.assertTrue(
-                LevelFeature.INSTANCE.api().getProgress(maid).equals(rewarded),
+                levelApi().getProgress(maid).equals(rewarded),
                 "A completed advancement must not pay out its reward again"
         );
         helper.assertTrue(
@@ -155,16 +158,20 @@ public final class AdvancementGameTests {
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void touhouLittleMaidAdvancementsStayWithThePlayer(GameTestHelper helper) {
         EntityMaid maid = ownedMaid(helper);
-        LevelProgress before = LevelFeature.INSTANCE.api().getProgress(maid);
+        LevelProgress before = levelApi().getProgress(maid);
         // 本体的「制作御币」用的是原版 recipe_crafted，还给 50 点经验，不排除就会真判给女仆。
-        MaidCriteria.recipeCrafted(maid, GOHEI_RECIPE, List.of(new ItemStack(Items.STICK)));
+        worldTriggers().recipeCrafted(
+                maid,
+                GOHEI_RECIPE,
+                List.of(new ItemStack(Items.STICK))
+        );
 
         helper.assertTrue(
                 progressOf(helper, maid, CRAFT_GOHEI).isEmpty(),
                 "The mod's own player advancements must not reach the maid advancement screen"
         );
         helper.assertTrue(
-                LevelFeature.INSTANCE.api().getProgress(maid).equals(before),
+                levelApi().getProgress(maid).equals(before),
                 "An excluded advancement must not pay its reward to the maid"
         );
         helper.succeed();
@@ -207,9 +214,27 @@ public final class AdvancementGameTests {
 
     private static MaidAdvancementSnapshot snapshotOf(GameTestHelper helper, EntityMaid maid) {
         MinecraftServer server = helper.getLevel().getServer();
-        MaidAdvancementTracker tracker = MaidAdvancementFeature.INSTANCE.manager()
-                .tracker(maid)
+        return advancements()
+                .snapshot(maid, server.getAdvancements())
                 .orElseThrow(() -> new AssertionError("The maid has no advancement tracker"));
-        return tracker.snapshot(server.getAdvancements());
+    }
+
+    private static MaidWorldAdvancementTriggers worldTriggers() {
+        return AdapterRuntime.require(MaidWorldAdvancementTriggers.class);
+    }
+
+    private static MaidProgressAdvancementTriggers progressTriggers() {
+        return AdapterRuntime.require(
+                MaidProgressAdvancementTriggers.class
+        );
+    }
+
+    private static MaidAdvancementAccess advancements() {
+        return AdapterRuntime.require(MaidAdvancementAccess.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static MaidLevelApi<EntityMaid> levelApi() {
+        return (MaidLevelApi<EntityMaid>) AdapterRuntime.require(MaidLevelApi.class);
     }
 }

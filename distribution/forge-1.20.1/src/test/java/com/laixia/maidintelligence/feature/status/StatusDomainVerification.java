@@ -1,9 +1,12 @@
 package com.laixia.maidintelligence.feature.status;
 
 import com.google.gson.JsonElement;
+import com.laixia.maidintelligence.feature.status.application.MaidStatusApplication;
 import com.laixia.maidintelligence.feature.status.domain.DefaultHungerPolicy;
 import com.laixia.maidintelligence.feature.status.domain.DefaultToolDurabilityPolicy;
 import com.laixia.maidintelligence.feature.status.domain.MaidStatusState;
+import com.laixia.maidintelligence.feature.status.port.MaidStatusStore;
+import com.laixia.maidintelligence.feature.status.codec.MaidStatusStateCodec;
 import com.mojang.serialization.JsonOps;
 
 public final class StatusDomainVerification {
@@ -12,6 +15,7 @@ public final class StatusDomainVerification {
 
     public static void main(String[] args) {
         verifiesCodecRoundTrip();
+        verifiesStatusApplication();
         verifiesHungerDrainRates();
         verifiesHungerRestorationAndClamp();
         verifiesHungerRegenerationTiers();
@@ -23,17 +27,23 @@ public final class StatusDomainVerification {
 
     private static void verifiesCodecRoundTrip() {
         MaidStatusState expected = new MaidStatusState(37, 12.5F, 3.0F);
-        JsonElement encoded = MaidStatusState.CODEC.encodeStart(JsonOps.INSTANCE, expected)
+        JsonElement encoded = MaidStatusStateCodec.CODEC.encodeStart(
+                JsonOps.INSTANCE,
+                expected
+        )
                 .getOrThrow(false, message -> {
                     throw new AssertionError(message);
                 });
-        MaidStatusState decoded = MaidStatusState.CODEC.parse(JsonOps.INSTANCE, encoded)
+        MaidStatusState decoded = MaidStatusStateCodec.CODEC.parse(
+                JsonOps.INSTANCE,
+                encoded
+        )
                 .getOrThrow(false, message -> {
                     throw new AssertionError(message);
                 });
         require(expected.equals(decoded), "Codec round trip changed maid status");
 
-        MaidStatusState legacy = MaidStatusState.CODEC.parse(
+        MaidStatusState legacy = MaidStatusStateCodec.CODEC.parse(
                 JsonOps.INSTANCE,
                 com.google.gson.JsonParser.parseString("{\"hunger\":42}")
         ).getOrThrow(false, message -> {
@@ -42,6 +52,26 @@ public final class StatusDomainVerification {
         require(
                 legacy.equals(new MaidStatusState(42)),
                 "Legacy hunger-only status did not default saturation to zero"
+        );
+    }
+
+    private static void verifiesStatusApplication() {
+        InMemoryStore store = new InMemoryStore();
+        MaidStatusApplication<String> application = new MaidStatusApplication<>(
+                store,
+                DefaultHungerPolicy.INSTANCE
+        );
+
+        application.setHunger("maid", 25);
+        application.restoreFromFood(
+                "maid",
+                4,
+                0.3F
+        );
+        MaidStatusState restored = application.getState("maid");
+        require(
+                restored.equals(new MaidStatusState(45, 37.0F, 0.0F)),
+                "Status application did not persist pure hunger transitions"
         );
     }
 
@@ -172,6 +202,20 @@ public final class StatusDomainVerification {
     private static void require(boolean condition, String message) {
         if (!condition) {
             throw new AssertionError(message);
+        }
+    }
+
+    private static final class InMemoryStore implements MaidStatusStore<String> {
+        private MaidStatusState state = MaidStatusState.initial();
+
+        @Override
+        public MaidStatusState get(String subject) {
+            return state;
+        }
+
+        @Override
+        public void set(String subject, MaidStatusState state) {
+            this.state = state;
         }
     }
 }

@@ -3,15 +3,14 @@ package com.laixia.maidintelligence.feature.status.tlm;
 import com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.task.MaidCheckRateTask;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.google.common.collect.ImmutableMap;
-import com.laixia.maidintelligence.feature.status.service.DefaultMaidStatusService;
 import net.minecraft.server.level.ServerLevel;
 
 public final class StatusFeedbackBehavior extends MaidCheckRateTask {
     private static final int CHECK_RATE_TICKS = 20;
 
-    private final DefaultMaidStatusService statusService;
+    private final TlmMaidStatusService statusService;
 
-    public StatusFeedbackBehavior(DefaultMaidStatusService statusService) {
+    public StatusFeedbackBehavior(TlmMaidStatusService statusService) {
         super(ImmutableMap.of());
         this.statusService = statusService;
         this.setMaxCheckRate(CHECK_RATE_TICKS);

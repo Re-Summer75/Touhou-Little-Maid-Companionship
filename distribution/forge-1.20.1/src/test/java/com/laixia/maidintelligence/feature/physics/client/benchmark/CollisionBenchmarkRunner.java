@@ -1,8 +1,15 @@
 package com.laixia.maidintelligence.feature.physics.client.benchmark;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 import org.joml.Vector3f;
 
 import static com.laixia.maidintelligence.feature.physics.client.benchmark.CollisionBenchmarkFixture.Scenario;
@@ -116,7 +123,7 @@ final class CollisionBenchmarkRunner {
 
         private void reset(int frame) {
             for (int index = 0; index < layout.activeNodeCount(); index++) {
-                AnimatedGeoBone bone = layout.node(index).bone();
+                BoneModelSnapshot.Bone bone = layout.node(index).bone();
                 float wave = (float) Math.sin(
                         frame * 0.071D + index * 0.193D
                 );

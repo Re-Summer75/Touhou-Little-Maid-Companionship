@@ -1,16 +1,24 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.google.gson.JsonParser;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
 
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import com.google.gson.JsonParser;
+import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 
 final class RuntimeEndpointHierarchyFixture {
     private RuntimeEndpointHierarchyFixture() {
     }
 
-    static AnimatedGeoModel model() {
-        return modelFromJson("""
+    static BoneModelSnapshot model() {
+        return coreModelFromJson("""
                 {
                   "format_version": "1.12.0",
                   "minecraft:geometry": [{
@@ -43,7 +51,7 @@ final class RuntimeEndpointHierarchyFixture {
     }
 
     static PhysicsMetadata metadata() {
-        return PhysicsMetadata.parse(
+        return PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {
                           "schema_version": 2,
@@ -77,7 +85,7 @@ final class RuntimeEndpointHierarchyFixture {
     }
 
     static PhysicsMetadata collisionMetadata() {
-        return PhysicsMetadata.parse(
+        return PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {
                           "schema_version":3,

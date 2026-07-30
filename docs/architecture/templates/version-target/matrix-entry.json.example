@@ -1,0 +1,27 @@
+{
+  "key": "@TARGET_KEY@",
+  "minecraft": {
+    "version": "@MC_VERSION@",
+    "versionRange": "@MC_VERSION_RANGE@"
+  },
+  "forge": {
+    "version": "@FORGE_VERSION@",
+    "versionRange": "@FORGE_VERSION_RANGE@",
+    "loaderVersionRange": "@FORGE_LOADER_RANGE@"
+  },
+  "java": @JAVA_VERSION@,
+  "parchment": {
+    "channel": "parchment",
+    "version": "@PARCHMENT_VERSION@"
+  },
+  "tlm": {
+    "minimumVersion": "@TLM_MINIMUM@",
+    "versionRange": "[@TLM_MINIMUM@,)"
+  },
+  "geckoGeneration": @GECKO_GENERATION@,
+  "projects": {
+    "forgeAdapter": ":adapters:forge-@MC_VERSION@",
+    "tlmAdapter": ":adapters:tlm-@MC_VERSION@-gecko@GECKO_GENERATION@",
+    "distribution": ":distribution:forge-@MC_VERSION@"
+  }
+}

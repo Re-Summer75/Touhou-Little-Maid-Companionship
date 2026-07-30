@@ -18,7 +18,15 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.items.ItemHandlerHelper;
 
+import java.util.Objects;
+
 public final class MaidDirectItemInteractionHandler {
+    private final MaidFeedingService feeding;
+
+    public MaidDirectItemInteractionHandler(MaidFeedingService feeding) {
+        this.feeding = Objects.requireNonNull(feeding, "feeding");
+    }
+
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public void onDirectItemInteraction(InteractMaidEvent event) {
         Player player = event.getPlayer();
@@ -28,7 +36,7 @@ public final class MaidDirectItemInteractionHandler {
         }
 
         ItemStack stack = event.getStack();
-        if (MaidFeedingService.isFeedableFood(maid, stack)) {
+        if (feeding.isFeedableFood(maid, stack)) {
             if (event.getWorld().isClientSide) {
                 DistExecutor.unsafeRunWhenOn(
                         Dist.CLIENT,

@@ -1,14 +1,21 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.physics.client.pose.PoseDriveGustFilter;
-import com.laixia.maidintelligence.feature.physics.client.pose.WorldPoseDriverSource;
-import com.laixia.maidintelligence.feature.physics.client.pose.WorldPoseDriverSources;
-import com.laixia.maidintelligence.feature.physics.client.solver.MotionSignalSampler;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.client.model.GeckoBoneModelPort;
+import com.laixia.maidintelligence.feature.physics.client.pose.MaidPoseDriverPort;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.session.PhysicsSession;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
@@ -60,7 +67,9 @@ public final class MaidBonePhysics {
 
     static SpringBoneSolver lastSolver(Entity maid) {
         MaidState state = STATES.get(maid);
-        return state == null ? null : state.solver;
+        return state == null || state.session == null
+                ? null
+                : state.session.solver();
     }
 
     public static void apply(
@@ -92,23 +101,28 @@ public final class MaidBonePhysics {
                 ? state.plan
                 : PhysicsBonePlanCache.getOrCompute(modelId, model);
         LAST_PLANS.put(maid, plan);
-        state.useModel(modelId, model, plan);
+        state.useModel(maid, modelId, model, plan);
+        state.observePosition(maid);
         boolean paused = minecraft.isPaused();
-        float dt = state.advanceClock(animationTick, paused);
-        state.sampleMotion(maid, maid.getDeltaMovement(), dt);
-        state.samplePoseDrive(maid, animationTick, dt, paused);
-        state.solver.solve(
-                state.modelAcceleration,
-                state.modelPoseDrive,
-                state.yawRate,
-                dt,
+        Vec3 velocity = maid.getDeltaMovement();
+        float dt = state.session.advance(
+                animationTick,
+                velocity.x,
+                velocity.y,
+                velocity.z,
+                maid.onGround(),
+                maid.tickCount,
+                maid.yBodyRot,
+                maid.yBodyRotO,
                 paused
         );
+        state.session.copyModelAcceleration(state.modelAcceleration);
+        state.session.copyModelPoseDrive(state.modelPoseDrive);
         state.recordDiagnostics(
                 maid,
                 state.modelAcceleration,
                 state.modelPoseDrive,
-                state.solver.lastPeakDeflection()
+                state.session.solver().lastPeakDeflection()
         );
         /*
          * Sampled here rather than on a tick, because jitter lives between ticks.
@@ -117,7 +131,7 @@ public final class MaidBonePhysics {
          * entirely — it was reporting hair as the worst offender while the log
          * showed the actual offenders perfectly smooth.
          */
-        PhysicsDisplacementLog.sample(maid, state.solver, dt);
+        PhysicsDisplacementLog.sample(maid, state.session.solver(), dt);
     }
 
     /**
@@ -128,8 +142,8 @@ public final class MaidBonePhysics {
             AnimatedGeoModel model
     ) {
         MaidState state = STATES.get(maid);
-        if (state != null && state.model == model && state.solver != null) {
-            state.solver.restoreAnimationPose();
+        if (state != null && state.model == model && state.session != null) {
+            state.session.restoreAnimationPose();
         }
     }
 
@@ -143,13 +157,6 @@ public final class MaidBonePhysics {
         STATES.clear();
         LAST_MODELS.clear();
         LAST_PLANS.clear();
-    }
-
-    static boolean isDriven(
-            AnimatedGeoBone bone,
-            PhysicsBoneSelectionPlan plan
-    ) {
-        return plan != null && plan.isDriven(bone);
     }
 
     static Vector3f worldAccelerationToModel(
@@ -198,25 +205,14 @@ public final class MaidBonePhysics {
     }
 
     private static final class MaidState {
-        private final MotionSignalSampler motionSampler =
-                new MotionSignalSampler();
-        private final AnimationTimelineClock animationClock =
-                new AnimationTimelineClock();
-        private final WorldPoseDriverSource poseDriverSource =
-                WorldPoseDriverSources.create();
-        private final PoseDriveGustFilter gustFilter =
-                new PoseDriveGustFilter();
-        private final Vector3f worldAcceleration = new Vector3f();
         private final Vector3f modelAcceleration = new Vector3f();
-        private final Vector3f worldPoseDrive = new Vector3f();
         private final Vector3f modelPoseDrive = new Vector3f();
 
         private AnimatedGeoModel model;
         private String modelId;
         private PhysicsBoneSelectionPlan plan;
-        private PhysicsSolverLayout layout;
-        private SpringBoneSolver solver;
-        private float yawRate;
+        private GeckoBoneModelPort modelPort;
+        private PhysicsSession session;
         private double lastX;
         private double lastY;
         private double lastZ;
@@ -237,6 +233,7 @@ public final class MaidBonePhysics {
         }
 
         private void useModel(
+                LivingEntity maid,
                 String currentModelId,
                 AnimatedGeoModel currentModel,
                 PhysicsBoneSelectionPlan currentPlan
@@ -248,17 +245,15 @@ public final class MaidBonePhysics {
             modelId = currentModelId;
             model = currentModel;
             plan = currentPlan;
-            layout = PhysicsSolverLayout.build(currentModel, currentPlan);
-            solver = new SpringBoneSolver(layout);
-            motionSampler.reset();
-            poseDriverSource.reset();
-            gustFilter.reset();
-            worldAcceleration.zero();
+            modelPort = GeckoBoneModelPort.of(currentModel);
+            session = new PhysicsSession(
+                    modelPort,
+                    modelPort,
+                    new MaidPoseDriverPort(maid),
+                    currentPlan
+            );
             modelAcceleration.zero();
-            worldPoseDrive.zero();
             modelPoseDrive.zero();
-            yawRate = 0.0F;
-            animationClock.reset();
             positionInitialized = false;
             diagnosticFrames = 0;
             diagnosticWindows = 0;
@@ -267,11 +262,7 @@ public final class MaidBonePhysics {
             peakPoseDrive = 0.0D;
         }
 
-        private void sampleMotion(
-                LivingEntity maid,
-                Vec3 velocity,
-                float dt
-        ) {
+        private void observePosition(LivingEntity maid) {
             double x = maid.getX();
             double y = maid.getY();
             double z = maid.getZ();
@@ -281,74 +272,13 @@ public final class MaidBonePhysics {
                 double dz = z - lastZ;
                 if (dx * dx + dy * dy + dz * dz
                         > TELEPORT_DISTANCE_SQR) {
-                    resetTransientMotion();
+                    session.resetTransientState();
                 }
             }
             lastX = x;
             lastY = y;
             lastZ = z;
             positionInitialized = true;
-            yawRate = motionSampler.updateInto(
-                    velocity.x,
-                    maid.onGround() ? 0.0D : velocity.y,
-                    velocity.z,
-                    maid.tickCount,
-                    maid.yBodyRot,
-                    maid.yBodyRotO,
-                    MAX_ACCEL,
-                    dt,
-                    worldAcceleration
-            );
-            worldAccelerationToModelInto(
-                    worldAcceleration,
-                    maid.yBodyRot,
-                    modelAcceleration
-            );
-        }
-
-        private void samplePoseDrive(
-                LivingEntity maid,
-                double animationTick,
-                float dt,
-                boolean paused
-        ) {
-            poseDriverSource.sampleInto(
-                    maid,
-                    animationTick,
-                    dt,
-                    paused,
-                    worldPoseDrive
-            );
-            worldAccelerationToModelInto(
-                    worldPoseDrive,
-                    maid.yBodyRot,
-                    modelPoseDrive
-            );
-            // Body-local, so turning into the wind also reads as a gust.
-            gustFilter.isolateGust(modelPoseDrive, dt, paused);
-        }
-
-        private float advanceClock(
-                double animationTick,
-                boolean paused
-        ) {
-            float dt = animationClock.advance(animationTick, paused);
-            if (animationClock.discontinuous()) {
-                resetTransientMotion();
-            }
-            return dt;
-        }
-
-        private void resetTransientMotion() {
-            solver.reset();
-            motionSampler.reset();
-            poseDriverSource.reset();
-            gustFilter.reset();
-            worldAcceleration.zero();
-            modelAcceleration.zero();
-            worldPoseDrive.zero();
-            modelPoseDrive.zero();
-            yawRate = 0.0F;
         }
 
         private void recordDiagnostics(
@@ -379,9 +309,9 @@ public final class MaidBonePhysics {
                             + "peakDeflectionDeg={} peakAccel={} "
                             + "peakPoseDrive={}",
                     maid.getName().getString(),
-                    layout.activeNodeCount(),
-                    layout.fullBoneCount(),
-                    layout.drivenBoneCount(),
+                    session.layout().activeNodeCount(),
+                    session.layout().fullBoneCount(),
+                    session.layout().drivenBoneCount(),
                     String.format(
                             java.util.Locale.ROOT,
                             "%.2f",

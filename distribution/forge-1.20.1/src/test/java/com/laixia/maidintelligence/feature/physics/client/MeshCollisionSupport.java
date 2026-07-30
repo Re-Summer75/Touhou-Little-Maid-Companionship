@@ -1,9 +1,17 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxy;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionScratch;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.runtime.CollisionProxyDebugData;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.runtime.PreparedCollisionProxy;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxy;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionScratch;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.CollisionProxyDebugData;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.PreparedCollisionProxy;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;

@@ -6,7 +6,40 @@ plugins {
 group = mod_group_id
 version = mod_version
 
-def distributionPath = ':distribution:forge-1.20.1'
+def versionMatrixFile = file('gradle/version-matrix.json')
+if (!versionMatrixFile.isFile()) {
+    throw new GradleException(
+            "Missing version matrix: ${versionMatrixFile}"
+    )
+}
+def versionMatrix = new groovy.json.JsonSlurper().parse(versionMatrixFile)
+if (versionMatrix.schemaVersion != 1
+        || !(versionMatrix.defaultTarget instanceof String)
+        || !(versionMatrix.targets instanceof List)
+        || versionMatrix.targets.isEmpty()) {
+    throw new GradleException(
+            "Unsupported or empty version matrix: ${versionMatrixFile}"
+    )
+}
+def versionTargets = versionMatrix.targets
+def requestedTargetKey = providers.gradleProperty('versionTarget')
+        .orElse(versionMatrix.defaultTarget)
+        .get()
+def selectedVersionTarget = versionTargets.find {
+    it.key == requestedTargetKey
+}
+if (selectedVersionTarget == null) {
+    def availableTargets = versionTargets.collect { it.key }.join(', ')
+    throw new GradleException(
+            "Unknown version target '${requestedTargetKey}'. "
+                    + "Available targets: ${availableTargets}. "
+                    + 'Select one with -PversionTarget=<key>.'
+    )
+}
+
+ext.versionMatrix = versionMatrix
+ext.selectedVersionTarget = selectedVersionTarget
+
 def stableModules = [
         ':kernel',
         ':shared:geometry',
@@ -18,19 +51,348 @@ def stableModules = [
         ':features:shading',
         ':features:atmosphere'
 ]
+def distributionPaths = versionTargets.collect {
+    it.projects.distribution.toString()
+}.unique()
+def selectedDistributionPath =
+        selectedVersionTarget.projects.distribution.toString()
+def stableJavaVersion = versionTargets.collect {
+    (it.java as Number).intValue()
+}.min()
+
+stableModules.each { modulePath ->
+    project(modulePath).ext.java_version = stableJavaVersion
+}
+versionTargets.each { target ->
+    def distributionProject = project(target.projects.distribution.toString())
+    [
+            version_target_key         : target.key,
+            minecraft_version          : target.minecraft.version,
+            minecraft_version_range    : target.minecraft.versionRange,
+            forge_version              : target.forge.version,
+            forge_version_range        : target.forge.versionRange,
+            loader_version_range       : target.forge.loaderVersionRange,
+            java_version               : (target.java as Number).intValue(),
+            mapping_channel            : target.parchment.channel,
+            mapping_version            : target.parchment.version,
+            tlm_minimum_version         : target.tlm.minimumVersion,
+            tlm_version_range           : target.tlm.versionRange,
+            gecko_generation            : (
+                    target.geckoGeneration as Number
+            ).intValue(),
+            forge_adapter_project_path : target.projects.forgeAdapter,
+            tlm_adapter_project_path   : target.projects.tlmAdapter
+    ].each { propertyName, propertyValue ->
+        distributionProject.ext.set(propertyName, propertyValue)
+    }
+}
 
 allprojects {
     group = rootProject.group
     version = rootProject.version
 }
 
+tasks.register('verifyVersionMatrix') {
+    group = 'verification'
+    description = 'Validates every declared version target without network access.'
+    inputs.file(versionMatrixFile)
+    outputs.upToDateWhen { false }
+
+    doLast {
+        def parsedMatrix
+        try {
+            parsedMatrix = new groovy.json.JsonSlurper().parse(versionMatrixFile)
+        } catch (Exception exception) {
+            throw new GradleException(
+                    "Cannot parse version matrix ${versionMatrixFile}: "
+                            + exception.message,
+                    exception
+            )
+        }
+
+        def errors = []
+        if (parsedMatrix.schemaVersion != 1) {
+            errors << "schemaVersion must be 1, found '${parsedMatrix.schemaVersion}'."
+        }
+        if (!(parsedMatrix.defaultTarget instanceof String)
+                || parsedMatrix.defaultTarget.isBlank()) {
+            errors << 'defaultTarget must be a non-blank string.'
+        }
+        def targets = parsedMatrix.targets instanceof List
+                ? parsedMatrix.targets
+                : []
+        if (targets.isEmpty()) {
+            errors << 'targets must contain at least one version target.'
+        }
+
+        def expectedProjectKinds = [
+                'forgeAdapter',
+                'tlmAdapter',
+                'distribution'
+        ] as Set
+        def seenKeys = new LinkedHashSet<String>()
+        def seenDistributions = new LinkedHashSet<String>()
+        def forgeGradlePattern = ~/(?m)(?:alias\s*\(\s*libs\.plugins\.forgegradle\s*\)|id\s*(?:\(\s*)?['"]net\.minecraftforge\.gradle['"])/
+        def collectStrings
+        collectStrings = { value, List<String> output ->
+            if (value instanceof Map) {
+                value.values().each { collectStrings(it, output) }
+            } else if (value instanceof Collection) {
+                value.each { collectStrings(it, output) }
+            } else if (value instanceof String) {
+                output << value
+            }
+        }
+
+        targets.eachWithIndex { target, index ->
+            def label = "targets[${index}]"
+            if (!(target instanceof Map)) {
+                errors << "${label} must be an object."
+                return
+            }
+
+            def key = target.key instanceof String ? target.key.trim() : ''
+            if (key.isEmpty()) {
+                errors << "${label}.key must be a non-blank string."
+            } else if (!seenKeys.add(key)) {
+                errors << "Duplicate version target key '${key}'."
+            }
+            def targetLabel = key.isEmpty() ? label : "target '${key}'"
+
+            def minecraft = target.minecraft instanceof Map
+                    ? target.minecraft
+                    : [:]
+            def forge = target.forge instanceof Map ? target.forge : [:]
+            def parchment = target.parchment instanceof Map
+                    ? target.parchment
+                    : [:]
+            def tlm = target.tlm instanceof Map ? target.tlm : [:]
+            def projects = target.projects instanceof Map
+                    ? target.projects
+                    : [:]
+            def minecraftVersion = minecraft.version?.toString()?.trim()
+            def forgeVersion = forge.version?.toString()?.trim()
+            def parchmentChannel = parchment.channel?.toString()?.trim()
+            def parchmentVersion = parchment.version?.toString()?.trim()
+            def tlmMinimum = tlm.minimumVersion?.toString()?.trim()
+            def tlmRange = tlm.versionRange?.toString()?.trim()
+            int javaVersion = target.java instanceof Number
+                    ? target.java.intValue()
+                    : -1
+            int geckoGeneration = target.geckoGeneration instanceof Number
+                    ? target.geckoGeneration.intValue()
+                    : -1
+
+            [
+                    'minecraft.version'     : minecraftVersion,
+                    'minecraft.versionRange': minecraft.versionRange,
+                    'forge.version'         : forgeVersion,
+                    'forge.versionRange'    : forge.versionRange,
+                    'forge.loaderVersionRange':
+                            forge.loaderVersionRange,
+                    'parchment.channel'     : parchmentChannel,
+                    'parchment.version'     : parchmentVersion,
+                    'tlm.minimumVersion'    : tlmMinimum,
+                    'tlm.versionRange'      : tlmRange
+            ].each { field, value ->
+                if (value == null || value.toString().isBlank()) {
+                    errors << "${targetLabel} is missing ${field}."
+                }
+            }
+            if (javaVersion < 8) {
+                errors << "${targetLabel} has invalid Java version '${target.java}'."
+            }
+            if (geckoGeneration < 1) {
+                errors << "${targetLabel} has invalid Gecko generation " +
+                        "'${target.geckoGeneration}'."
+            }
+            if (tlmMinimum && tlmRange
+                    && tlmRange != "[${tlmMinimum},)") {
+                errors << "${targetLabel} TLM range '${tlmRange}' must encode " +
+                        "minimum ${tlmMinimum} as '[${tlmMinimum},)'."
+            }
+
+            def actualProjectKinds = projects.keySet()
+                    .collect { it.toString() }
+                    .toSet()
+            if (actualProjectKinds != expectedProjectKinds) {
+                errors << "${targetLabel} projects must contain exactly " +
+                        "${expectedProjectKinds.sort()} but found " +
+                        "${actualProjectKinds.sort()}."
+            }
+
+            def allStrings = []
+            collectStrings(target, allStrings)
+            allStrings.findAll {
+                it == ':kernel' ||
+                        it.startsWith(':features:') ||
+                        it.startsWith(':shared:')
+            }.each { copiedStablePath ->
+                errors << "${targetLabel} must not copy stable project " +
+                        "'${copiedStablePath}' into the version matrix."
+            }
+
+            def projectKinds = [
+                    'forgeAdapter',
+                    'tlmAdapter',
+                    'distribution'
+            ]
+            def projectPaths = [:]
+            def projectBuildTexts = [:]
+            projectKinds.each { projectKind ->
+                def projectPath = projects[projectKind]
+                if (!(projectPath instanceof String)
+                        || !projectPath.startsWith(':')
+                        || projectPath.endsWith(':')) {
+                    errors << "${targetLabel} has invalid ${projectKind} " +
+                            "project path '${projectPath}'."
+                    return
+                }
+                projectPaths[projectKind] = projectPath
+                def relativeDirectory = projectPath.substring(1)
+                        .replace(':', '/')
+                def projectDirectory = rootProject.file(relativeDirectory)
+                def projectBuildFile = new File(
+                        projectDirectory,
+                        'build.gradle'
+                )
+                if (!projectDirectory.isDirectory()) {
+                    errors << "${targetLabel} ${projectKind} directory does not " +
+                            "exist: ${projectDirectory}."
+                } else if (!projectBuildFile.isFile()) {
+                    errors << "${targetLabel} ${projectKind} has no build.gradle: " +
+                            "${projectBuildFile}."
+                } else {
+                    projectBuildTexts[projectKind] =
+                            projectBuildFile.getText('UTF-8')
+                }
+                if (rootProject.findProject(projectPath) == null) {
+                    errors << "${targetLabel} ${projectKind} is not included: " +
+                            "${projectPath}."
+                }
+            }
+
+            if (minecraftVersion && geckoGeneration > 0) {
+                def expectedForgeAdapter =
+                        ":adapters:forge-${minecraftVersion}"
+                def expectedTlmAdapter = ":adapters:tlm-${minecraftVersion}" +
+                        "-gecko${geckoGeneration}"
+                def expectedDistribution =
+                        ":distribution:forge-${minecraftVersion}"
+                if (projects.forgeAdapter != expectedForgeAdapter) {
+                    errors << "${targetLabel} Forge adapter must be " +
+                            "${expectedForgeAdapter}, found " +
+                            "'${projects.forgeAdapter}'."
+                }
+                if (projects.tlmAdapter != expectedTlmAdapter) {
+                    errors << "${targetLabel} TLM adapter must match Gecko " +
+                            "generation ${geckoGeneration}: " +
+                            "${expectedTlmAdapter}, found " +
+                            "'${projects.tlmAdapter}'."
+                }
+                if (projects.distribution != expectedDistribution) {
+                    errors << "${targetLabel} distribution must be " +
+                            "${expectedDistribution}, found " +
+                            "'${projects.distribution}'."
+                }
+
+                def mixinDescriptor = rootProject.file(
+                        expectedDistribution.substring(1)
+                                .replace(':', '/')
+                                + '/src/main/resources/'
+                                + "tlm_companionship.tlm-gecko${geckoGeneration}"
+                                + '.mixins.json'
+                )
+                if (!mixinDescriptor.isFile()) {
+                    errors << "${targetLabel} is missing Gecko " +
+                            "${geckoGeneration} Mixin descriptor: " +
+                            "${mixinDescriptor}."
+                }
+            }
+
+            def distributionPath = projects.distribution
+            if (distributionPath instanceof String
+                    && !seenDistributions.add(distributionPath)) {
+                errors << "Distribution '${distributionPath}' is assigned to " +
+                        'more than one version target.'
+            }
+
+            def forgeGradleCounts = [:]
+            projectBuildTexts.each { projectKind, buildText ->
+                forgeGradleCounts[projectKind] =
+                        (buildText =~ forgeGradlePattern).count
+            }
+            int forgeGradleCount = 0
+            forgeGradleCounts.values().each {
+                forgeGradleCount += it as int
+            }
+            if (forgeGradleCounts.get('distribution', 0) != 1
+                    || forgeGradleCount != 1) {
+                errors << "${targetLabel} must declare exactly one " +
+                        'ForgeGradle boundary in its distribution; counts: ' +
+                        "${forgeGradleCounts}."
+            }
+        }
+
+        if (parsedMatrix.defaultTarget instanceof String
+                && !seenKeys.contains(parsedMatrix.defaultTarget)) {
+            errors << "defaultTarget '${parsedMatrix.defaultTarget}' does not " +
+                    'name a declared target.'
+        }
+
+        def legacyProperties = [
+                'minecraft_version',
+                'minecraft_version_range',
+                'forge_version',
+                'forge_version_range',
+                'loader_version_range',
+                'mapping_channel',
+                'mapping_version',
+                'java_version'
+        ]
+        def gradlePropertyLines = rootProject.file('gradle.properties')
+                .readLines('UTF-8')
+        legacyProperties.each { propertyName ->
+            if (gradlePropertyLines.any {
+                it ==~ /\s*${propertyName}\s*=.*/
+            }) {
+                errors << "gradle.properties duplicates matrix field " +
+                        "'${propertyName}'."
+            }
+        }
+
+        def catalogFile = rootProject.file('gradle/libs.versions.toml')
+        if (catalogFile.isFile()) {
+            boolean inVersions = false
+            catalogFile.readLines('UTF-8').each { line ->
+                def trimmed = line.trim()
+                if (trimmed.startsWith('[')) {
+                    inVersions = trimmed == '[versions]'
+                } else if (inVersions
+                        && trimmed ==~ /(?:java|minecraft|forge|parchment)\s*=.+/) {
+                    errors << "libs.versions.toml duplicates matrix version: " +
+                            "${trimmed}."
+                }
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            throw new GradleException(
+                    'Version matrix verification failed:\n - '
+                            + errors.join('\n - ')
+            )
+        }
+    }
+}
+
 tasks.named('check') {
     dependsOn stableModules.collect { "${it}:check" }
-    dependsOn "${distributionPath}:check"
+    dependsOn distributionPaths.collect { "${it}:check" }
+    dependsOn tasks.named('verifyVersionMatrix')
 }
 
 tasks.named('assemble') {
-    dependsOn "${distributionPath}:reobfJar"
+    dependsOn distributionPaths.collect { "${it}:reobfJar" }
 }
 
 tasks.register('verifyArchitecture') {
@@ -42,7 +404,8 @@ tasks.register('verifyArchitecture') {
 tasks.register('verifyAll') {
     group = 'verification'
     description = 'Runs every registered functional verification suite.'
-    dependsOn "${distributionPath}:verifyAll"
+    dependsOn distributionPaths.collect { "${it}:verifyAll" }
+    dependsOn tasks.named('verifyVersionMatrix')
 }
 
 [
@@ -56,20 +419,35 @@ tasks.register('verifyAll') {
         'auditMeshPenetration',
         'benchmarkBonePhysics',
         'prepareVSCodeRunClient',
+        'prepareRunClientCompile',
+        'prepareRunServerCompile',
+        'prepareRunGameTestServerCompile',
+        'prepareRunDataCompile',
+        'genVSCodeRuns',
         'runClient',
         'runServer',
         'runGameTestServer',
         'runData'
 ].each { delegatedTask ->
     tasks.register(delegatedTask) {
-        group = delegatedTask.startsWith('run') ? 'forgegradle runs' : 'verification'
-        dependsOn "${distributionPath}:${delegatedTask}"
+        if (delegatedTask.startsWith('run')) {
+            group = 'forgegradle runs'
+        } else if (delegatedTask.startsWith('prepare') ||
+                delegatedTask.startsWith('gen')) {
+            group = 'ide'
+        } else {
+            group = 'verification'
+        }
+        description = "Delegates ${delegatedTask} to version target " +
+                "'${requestedTargetKey}'. Override with " +
+                '-PversionTarget=<key>.'
+        dependsOn "${selectedDistributionPath}:${delegatedTask}"
     }
 }
 
 idea {
     project {
-        jdkName = '17'
-        languageLevel = '17'
+        jdkName = stableJavaVersion.toString()
+        languageLevel = stableJavaVersion.toString()
     }
 }

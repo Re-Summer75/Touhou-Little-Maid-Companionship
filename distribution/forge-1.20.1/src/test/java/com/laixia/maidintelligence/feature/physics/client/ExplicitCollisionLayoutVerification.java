@@ -1,20 +1,26 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.core.snapshot.BoneSnapshot;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxy;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySource;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionScratch;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.runtime.PreparedCollisionProxy;
-import com.laixia.maidintelligence.feature.physics.client.solver.spring.RuntimeCollisionFrames;
+import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxy;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxyKind;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySource;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionScratch;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.PreparedCollisionProxy;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.RuntimeCollisionFrames;
 import org.joml.Vector3f;
 
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.requireNear;
 
@@ -29,7 +35,7 @@ final class ExplicitCollisionLayoutVerification {
     }
 
     private static void verifiesExplicitCapsuleAndReference() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.explicit_collision",
                     "texture_width":64,"texture_height":64},
@@ -105,7 +111,7 @@ final class ExplicitCollisionLayoutVerification {
     }
 
     private static void verifiesInvalidReferencesAreSkipped() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.invalid_reference",
                     "texture_width":64,"texture_height":64},
@@ -149,7 +155,7 @@ final class ExplicitCollisionLayoutVerification {
     }
 
     private static void verifiesPostorderedSiblingReferenceAtRuntime() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.post_reference",
                     "texture_width":64,"texture_height":64},
@@ -198,7 +204,7 @@ final class ExplicitCollisionLayoutVerification {
         );
 
         resetPose(model);
-        AnimatedGeoBone leg = find(model, "ZLeg");
+        BoneModelSnapshot.Bone leg = find(model, "ZLeg");
         require(leg != null, "Postordered Leg reference is missing");
         leg.setPositionX(1.0F);
         leg.setPositionY(0.5F);
@@ -258,14 +264,14 @@ final class ExplicitCollisionLayoutVerification {
                         + ", direction=" + direction);
     }
 
-    private static void resetPose(AnimatedGeoModel model) {
-        for (AnimatedGeoBone root : model.topLevelBones()) {
+    private static void resetPose(BoneModelSnapshot model) {
+        for (BoneModelSnapshot.Bone root : model.topLevelBones()) {
             resetPose(root);
         }
     }
 
-    private static void resetPose(AnimatedGeoBone bone) {
-        BoneSnapshot initial = bone.getInitialSnapshot();
+    private static void resetPose(BoneModelSnapshot.Bone bone) {
+        BoneModelSnapshot.RestPose initial = bone.getInitialSnapshot();
         bone.setRotationX(initial.rotationValueX);
         bone.setRotationY(initial.rotationValueY);
         bone.setRotationZ(initial.rotationValueZ);
@@ -275,31 +281,37 @@ final class ExplicitCollisionLayoutVerification {
         bone.setScaleX(initial.scaleValueX);
         bone.setScaleY(initial.scaleValueY);
         bone.setScaleZ(initial.scaleValueZ);
-        for (AnimatedGeoBone child : bone.children()) resetPose(child);
+        for (BoneModelSnapshot.Bone child : bone.children()) resetPose(child);
     }
 
-    private static AnimatedGeoBone find(AnimatedGeoModel model, String name) {
-        for (AnimatedGeoBone root : model.topLevelBones()) {
-            AnimatedGeoBone found = find(root, name);
+    private static BoneModelSnapshot.Bone find(
+            BoneModelSnapshot model,
+            String name
+    ) {
+        for (BoneModelSnapshot.Bone root : model.topLevelBones()) {
+            BoneModelSnapshot.Bone found = find(root, name);
             if (found != null) return found;
         }
         return null;
     }
 
-    private static AnimatedGeoBone find(AnimatedGeoBone bone, String name) {
+    private static BoneModelSnapshot.Bone find(
+            BoneModelSnapshot.Bone bone,
+            String name
+    ) {
         if (name.equals(bone.getName())) return bone;
-        for (AnimatedGeoBone child : bone.children()) {
-            AnimatedGeoBone found = find(child, name);
+        for (BoneModelSnapshot.Bone child : bone.children()) {
+            BoneModelSnapshot.Bone found = find(child, name);
             if (found != null) return found;
         }
         return null;
     }
 
     private static PhysicsSolverLayout build(
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             String metadataJson
     ) {
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString(metadataJson).getAsJsonObject(),
                 "explicit collision layout verification"
         );

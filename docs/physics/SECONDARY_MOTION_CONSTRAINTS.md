@@ -47,7 +47,7 @@
 
 ## 初始缺口与当前状态
 
-实施约束层前，[`SpringBoneSolver`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/SpringBoneSolver.java)
+实施约束层前，[`SpringBoneSolver`](../../features/physics/src/main/java/com/laixia/maidintelligence/feature/physics/engine/SpringBoneSolver.java)
 已经具备：
 
 - 随动画更新的 `restDirection`；
@@ -64,13 +64,13 @@
 3. 角度只在写入骨骼旋转时截断，积分状态本身没有投影回合法区域，
    且没有任何头部或身体碰撞代理。
 
-上述三项现已由 [`SecondaryMotionConstraint`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/SecondaryMotionConstraint.java)
-和 `solver/collision` 通用代理框架实现：参考骨旋转增量先搬运历史状态，
+上述三项现已由 [`SecondaryMotionConstraint`](../../features/physics/src/main/java/com/laixia/maidintelligence/feature/physics/layout/SecondaryMotionConstraint.java)
+和 `engine/collision` 通用代理框架实现：参考骨旋转增量先搬运历史状态，
 积分后将方向投影到四向摆角椭圆，再依次执行每骨关联的
 Box / Plane / Sphere / Capsule 代理，并把合法方向写回当前和历史状态。
 单纯调整 `STIFFNESS`、`GRAVITY_POWER` 或 `MAX_ANGLE` 仍不能替代
 这些硬约束。摆角上限本身只存在于
-[`SwingRange`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/SwingRange.java)
+[`SwingRange`](../../features/physics/src/main/java/com/laixia/maidintelligence/feature/physics/layout/SwingRange.java)
 一处：layout 烘焙、投影重算、偏转写回和风驱动份额四个消费者必须读到同一
 个值，否则物理按一个上限收敛、渲染按另一个上限截断。风只取其中 `78%`，
 余量留给惯性与行走摆动叠加；上限本身由投影强制，所以这个份额只决定"强风
@@ -326,7 +326,7 @@ Top-K 求解、延后绑定和间隙留存六层结构控制（见性能门槛�
 
 上面这套只认刚性骨，因此两片同为受驱动的布料互相穿过时它无能为力：
 围裙压在裙面上、外褂压在裙撑上，双方都在动，谁也不是对方的碰撞体。
-[`ClothLayerPlanner`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/collision/build/ClothLayerPlanner.java)
+[`ClothLayerPlanner`](../../features/physics/src/main/java/com/laixia/maidintelligence/feature/physics/engine/collision/bake/ClothLayerPlanner.java)
 补这一层，成对关系**严格单向**：外层把内层当碰撞体，内层完全看不见
 外层。这样既保住作者排定的层序，也杜绝两片软布每帧互推形成震荡。
 
@@ -359,7 +359,7 @@ Top-K 求解、延后绑定和间隙留存六层结构控制（见性能门槛�
 对一片 `1 px` 的布会给出接近 `2 px` 的球，把两层顶开一道肉眼可见的缝。
 
 运行时这些代理走与网格 Box 完全相同的共享形状、锥剪枝和 Top-K 路径，
-唯一区别是参考骨是受驱动的，因此 [`RuntimeCollisionFrames`](../../src/main/java/com/laixia/maidintelligence/feature/physics/client/solver/spring/RuntimeCollisionFrames.java)
+唯一区别是参考骨是受驱动的，因此 [`RuntimeCollisionFrames`](../../features/physics/src/main/java/com/laixia/maidintelligence/feature/physics/engine/collision/runtime/RuntimeCollisionFrames.java)
 对它改用 solver 上一趟写出的变换而不是动画姿态——动画姿态并不是网格
 实际所在的位置。滞后一帧在布料上看不出来，换来的是预捕获仍然是单趟
 prepass，不必在节点循环中途重入刷新。`winefox` 由此新增 `9` 个代理，
@@ -733,8 +733,8 @@ deltaLambda =
 
 公共入口 `SpringBoneSolver` 仅作为兼容门面；状态、scratch、姿态组合、
 动画姿态捕获/导数采样、参考空间搬运、积分、约束、偏转写回和端点传播分别位于
-`solver/spring` 子包的独立模块；碰撞形状、固定骨长投影、代理集合和
-自动/显式代理烘焙和准备态位于 `solver/collision` 子包；各模块保持
+`engine/spring` 子包的独立模块；碰撞形状、固定骨长投影、代理集合和
+自动/显式代理烘焙和准备态位于 `engine/collision` 子包；各模块保持
 单一职责。
 
 XPBD 约束乘子按设计不分配，除非以后确有链间柔性关系需求。

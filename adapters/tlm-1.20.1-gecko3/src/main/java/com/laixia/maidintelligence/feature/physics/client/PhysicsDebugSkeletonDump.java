@@ -1,8 +1,17 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.client.model.GeckoBoneModelPort;
 import com.mojang.logging.LogUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -44,8 +53,18 @@ final class PhysicsDebugSkeletonDump {
         ).withStyle(ChatFormatting.AQUA));
 
         int[] counts = new int[2];
+        GeckoBoneModelPort modelPort = GeckoBoneModelPort.of(model);
         for (AnimatedGeoBone bone : model.topLevelBones()) {
-            dumpBone(player, bone, null, null, 0, counts, plan);
+            dumpBone(
+                    player,
+                    bone,
+                    null,
+                    null,
+                    0,
+                    counts,
+                    plan,
+                    modelPort
+            );
         }
         PhysicsCollisionDebugDump.Summary collisions =
                 PhysicsCollisionDebugDump.dump(maid);
@@ -76,11 +95,14 @@ final class PhysicsDebugSkeletonDump {
             AnimatedGeoBone nearestSolidAncestor,
             int depth,
             int[] counts,
-            PhysicsBoneSelectionPlan plan
+            PhysicsBoneSelectionPlan plan,
+            GeckoBoneModelPort modelPort
     ) {
         counts[0]++;
-        PhysicsBoneSelectionPlan.Decision decision = plan.decision(bone);
-        boolean driven = MaidBonePhysics.isDriven(bone, plan);
+        BoneModelSnapshot.Bone coreBone = modelPort.coreBone(bone);
+        PhysicsBoneSelectionPlan.Decision decision =
+                plan.decision(coreBone);
+        boolean driven = plan.isDriven(coreBone);
         if (driven) {
             counts[1]++;
         }
@@ -91,7 +113,8 @@ final class PhysicsDebugSkeletonDump {
                 parent,
                 nearestSolidAncestor,
                 decision,
-                plan
+                plan,
+                modelPort
         )
                 : "";
         int cubes = bone.geoBone().cubes().getCubeCount();
@@ -105,7 +128,7 @@ final class PhysicsDebugSkeletonDump {
                 "  ".repeat(depth),
                 driven ? "[P] " : "",
                 bone.getName(),
-                plan.path(bone),
+                plan.path(coreBone),
                 parentName,
                 bone.getPositionX(),
                 bone.getPositionY(),
@@ -164,7 +187,8 @@ final class PhysicsDebugSkeletonDump {
                     nextSolidAncestor,
                     depth + 1,
                     counts,
-                    plan
+                    plan,
+                    modelPort
             );
         }
     }

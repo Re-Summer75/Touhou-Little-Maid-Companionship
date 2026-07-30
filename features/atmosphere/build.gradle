@@ -4,6 +4,4 @@ plugins {
 
 dependencies {
     api project(':kernel')
-    api project(':features:physics')
-    api libs.joml
 }

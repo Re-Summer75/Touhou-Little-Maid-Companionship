@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.feature.status.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.api.entity.data.TaskDataKey;
 import com.github.tartaricacid.touhoulittlemaid.entity.data.TaskDataRegister;
+import com.laixia.maidintelligence.feature.status.codec.MaidStatusStateCodec;
 import com.laixia.maidintelligence.feature.status.domain.MaidStatusState;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 
@@ -16,10 +17,13 @@ public final class StatusTaskData {
         if (stateKey != null) {
             throw new IllegalStateException("Status task data has already been registered");
         }
-        stateKey = register.register(ModResources.id("status_state"), MaidStatusState.CODEC);
+        stateKey = register.register(
+                ModResources.id("status_state"),
+                MaidStatusStateCodec.CODEC
+        );
         legacyStateKey = register.register(
                 ModResources.legacyId("status_state"),
-                MaidStatusState.CODEC
+                MaidStatusStateCodec.CODEC
         );
     }
 

@@ -1,10 +1,20 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.laixia.maidintelligence.feature.atmosphere.client.wind.EnvironmentalWindField;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.atmosphere.application.EnvironmentalWindField;
+import com.laixia.maidintelligence.feature.atmosphere.client.wind.JomlWindVectorPort;
+import com.laixia.maidintelligence.feature.atmosphere.port.MutableWindVectorPort;
 import com.laixia.maidintelligence.feature.physics.client.SecondaryMotionFixture.Fixture;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxies;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySet;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionScratch;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxies;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySet;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionScratch;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -17,6 +27,8 @@ final class SecondaryMotionAllocationVerification {
     private static final int MEASURED_FRAMES = 4_000;
     private static final Vector3f WIND =
             new Vector3f(0.04F, 0.0F, -0.015F);
+    private static final MutableWindVectorPort<Vector3f> WIND_VECTORS =
+            JomlWindVectorPort.INSTANCE;
 
     private SecondaryMotionAllocationVerification() {
     }
@@ -203,13 +215,15 @@ final class SecondaryMotionAllocationVerification {
                 991,
                 1171,
                 0.06F,
-                target
+                target,
+                WIND_VECTORS
         );
         EnvironmentalWindField.smoothInto(
                 filtered,
                 target,
                 1.0F / 60.0F,
-                filtered
+                filtered,
+                WIND_VECTORS
         );
     }
 

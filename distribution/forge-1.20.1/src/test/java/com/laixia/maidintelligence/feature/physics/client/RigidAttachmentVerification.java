@@ -1,13 +1,18 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
 
 import java.nio.file.Path;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.MODEL_DIRECTORY;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadGeoModel;
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.requireDriven;
 
@@ -60,7 +65,7 @@ final class RigidAttachmentVerification {
     }
 
     private static void verifiesCoincidentFlexibleChild() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.coincident_attachment",
                     "texture_width":32,"texture_height":32},
@@ -97,7 +102,8 @@ final class RigidAttachmentVerification {
 
     private static Verification discover(String fileName) throws Exception {
         Path path = MODEL_DIRECTORY.resolve(fileName);
-        AnimatedGeoModel model = new AnimatedGeoModel(loadGeoModel(path));
+        BoneModelSnapshot model =
+                BonePhysicsVerificationSupport.coreModel(loadGeoModel(path));
         String modelName = fileName.substring(0, fileName.length() - 5);
         PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
                 "geckolib:" + modelName,
@@ -112,7 +118,7 @@ final class RigidAttachmentVerification {
             String boneName,
             String message
     ) {
-        AnimatedGeoBone bone = fixture.model().bones().get(boneName);
+        BoneModelSnapshot.Bone bone = fixture.model().bones().get(boneName);
         require(bone != null, message + " (bone missing)");
         require(
                 !fixture.plan().isDriven(bone),
@@ -139,7 +145,7 @@ final class RigidAttachmentVerification {
     }
 
     private record Verification(
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             PhysicsBoneSelectionPlan plan
     ) {
     }

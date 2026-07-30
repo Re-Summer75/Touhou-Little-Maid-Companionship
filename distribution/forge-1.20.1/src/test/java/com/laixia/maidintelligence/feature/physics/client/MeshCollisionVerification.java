@@ -1,20 +1,28 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySet;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySource;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.runtime.CollisionProxyDebugData;
+import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxyKind;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySet;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySource;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.CollisionProxyDebugData;
 import org.joml.Vector3f;
 
 import java.util.HashSet;
 import java.util.Set;
 
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
 /**
@@ -57,7 +65,7 @@ final class MeshCollisionVerification {
      */
     private static void verifiesEveryBoxIsAnActualCube(String fileName)
             throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(
+        BoneModelSnapshot model = coreModel(
                 BonePhysicsVerificationSupport.loadGeoModel(
                         BonePhysicsVerificationSupport.MODEL_DIRECTORY
                                 .resolve(fileName)
@@ -127,7 +135,7 @@ final class MeshCollisionVerification {
      * endpoint would cross in one step, and they are often model-sized.
      */
     private static void verifiesFlatOverlaysAreIgnored() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.flat_overlay",
                     "texture_width":64,"texture_height":64},
@@ -149,7 +157,7 @@ final class MeshCollisionVerification {
                 PhysicsBoneDiscoverer.discover(
                         "verification:flat_overlay",
                         model,
-                        PhysicsMetadata.parse(
+                        PhysicsMetadataJsonParser.parse(
                                 JsonParser.parseString("""
                                         {"schema_version":3,"mode":"explicit",
                                          "chains":[{"type":"HAIR",
@@ -208,7 +216,7 @@ final class MeshCollisionVerification {
                     .append(16 + index)
                     .append(",-4],\"size\":[8,1,8],\"uv\":[0,0]}");
         }
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.stacked_head",
                     "texture_width":64,"texture_height":64},
@@ -227,7 +235,7 @@ final class MeshCollisionVerification {
                 PhysicsBoneDiscoverer.discover(
                         "verification:stacked_head",
                         model,
-                        PhysicsMetadata.parse(
+                        PhysicsMetadataJsonParser.parse(
                                 JsonParser.parseString("""
                                         {"schema_version":3,"mode":"explicit",
                                          "chains":[{"type":"HAIR",
@@ -318,14 +326,14 @@ final class MeshCollisionVerification {
      * is rejected.
      */
     private static void verifiesAuthoredOverlapIsNotForcedApart() {
-        AnimatedGeoModel model = model();
+        BoneModelSnapshot model = model();
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(
                 model,
                 plan(model, true)
         );
         SpringBoneSolver solver = new SpringBoneSolver(layout);
         solver.solve(new Vector3f(), 0.0F, 0.0F, false);
-        AnimatedGeoBone hair = bone(model, "Hair");
+        BoneModelSnapshot.Bone hair = bone(model, "Hair");
         float minimumSettled = Float.POSITIVE_INFINITY;
         float maximumSettled = Float.NEGATIVE_INFINITY;
         for (int frame = 0; frame < 120; frame++) {
@@ -366,7 +374,7 @@ final class MeshCollisionVerification {
 
     /** Returns the settled swing angle after driving the strand inward. */
     private static float driveIntoHead(boolean auto) {
-        AnimatedGeoModel model = model();
+        BoneModelSnapshot model = model();
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(
                 model,
                 plan(model, auto)
@@ -375,7 +383,7 @@ final class MeshCollisionVerification {
         // Calibrate the rest allowance on the untouched authored pose first.
         solver.solve(new Vector3f(), 0.0F, 0.0F, false);
 
-        AnimatedGeoBone hair = bone(model, "Hair");
+        BoneModelSnapshot.Bone hair = bone(model, "Hair");
         for (int frame = 0; frame < 90; frame++) {
             solver.restoreAnimationPose();
             hair.setRotationZ(CONTACT);
@@ -422,15 +430,15 @@ final class MeshCollisionVerification {
     }
 
     private static PhysicsSolverLayout layout(boolean auto) {
-        AnimatedGeoModel model = model();
+        BoneModelSnapshot model = model();
         return PhysicsSolverLayout.build(model, plan(model, auto));
     }
 
     private static PhysicsBoneSelectionPlan plan(
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             boolean auto
     ) {
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {"schema_version":3,"mode":"explicit","chains":[{
                           "id":"mesh_collision","type":"HAIR",
@@ -451,8 +459,8 @@ final class MeshCollisionVerification {
      * A skull with a strand hanging beside it, torso and arms in reach, plus
      * a lantern far off to the side that must stay out of the plan.
      */
-    private static AnimatedGeoModel model() {
-        return modelFromJson("""
+    private static BoneModelSnapshot model() {
+        return coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.mesh_collision",
                     "texture_width":64,"texture_height":64},
@@ -504,14 +512,12 @@ final class MeshCollisionVerification {
         return -1;
     }
 
-    private static AnimatedGeoBone bone(AnimatedGeoModel model, String name) {
-        AnimatedGeoBone[] found = new AnimatedGeoBone[1];
-        BonePhysicsVerificationSupport.forEachBone(model, bone -> {
-            if (name.equals(bone.getName())) {
-                found[0] = bone;
-            }
-        });
-        require(found[0] != null, "Missing bone " + name);
-        return found[0];
+    private static BoneModelSnapshot.Bone bone(
+            BoneModelSnapshot model,
+            String name
+    ) {
+        BoneModelSnapshot.Bone bone = model.bones().get(name);
+        require(bone != null, "Missing bone " + name);
+        return bone;
     }
 }

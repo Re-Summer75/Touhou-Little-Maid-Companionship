@@ -1,15 +1,21 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.core.snapshot.BoneSnapshot;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 
 import java.util.Locale;
 
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
 final class SecondaryMotionFixture {
@@ -22,7 +28,7 @@ final class SecondaryMotionFixture {
             boolean backstop,
             boolean headCollision
     ) {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {
                   "format_version": "1.12.0",
                   "minecraft:geometry": [{
@@ -76,7 +82,7 @@ final class SecondaryMotionFixture {
                 backstop,
                 headCollision
         );
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString(metadataJson).getAsJsonObject(),
                 "secondary motion verification"
         );
@@ -85,8 +91,8 @@ final class SecondaryMotionFixture {
                 model,
                 metadata
         );
-        AnimatedGeoBone head = find(model, "Head");
-        AnimatedGeoBone hair = find(model, "HairTip");
+        BoneModelSnapshot.Bone head = find(model, "Head");
+        BoneModelSnapshot.Bone hair = find(model, "HairTip");
         require(
                 hair != null
                         && Math.abs(
@@ -125,32 +131,32 @@ final class SecondaryMotionFixture {
             float headRotationX,
             float headRotationZ
     ) {
-        for (AnimatedGeoBone root : fixture.model().topLevelBones()) {
+        for (BoneModelSnapshot.Bone root : fixture.model().topLevelBones()) {
             resetBone(root);
         }
         fixture.head().setRotationX(headRotationX);
         fixture.head().setRotationZ(headRotationZ);
     }
 
-    private static void resetBone(AnimatedGeoBone bone) {
-        BoneSnapshot initial = bone.getInitialSnapshot();
+    private static void resetBone(BoneModelSnapshot.Bone bone) {
+        BoneModelSnapshot.RestPose initial = bone.getInitialSnapshot();
         bone.setRotationX(initial.rotationValueX);
         bone.setRotationY(initial.rotationValueY);
         bone.setRotationZ(initial.rotationValueZ);
         bone.setPositionX(0.0F);
         bone.setPositionY(0.0F);
         bone.setPositionZ(0.0F);
-        for (AnimatedGeoBone child : bone.children()) {
+        for (BoneModelSnapshot.Bone child : bone.children()) {
             resetBone(child);
         }
     }
 
-    private static AnimatedGeoBone find(
-            AnimatedGeoModel model,
+    private static BoneModelSnapshot.Bone find(
+            BoneModelSnapshot model,
             String name
     ) {
-        for (AnimatedGeoBone root : model.topLevelBones()) {
-            AnimatedGeoBone found = find(root, name);
+        for (BoneModelSnapshot.Bone root : model.topLevelBones()) {
+            BoneModelSnapshot.Bone found = find(root, name);
             if (found != null) {
                 return found;
             }
@@ -158,15 +164,15 @@ final class SecondaryMotionFixture {
         return null;
     }
 
-    private static AnimatedGeoBone find(
-            AnimatedGeoBone bone,
+    private static BoneModelSnapshot.Bone find(
+            BoneModelSnapshot.Bone bone,
             String name
     ) {
         if (bone.getName().equals(name)) {
             return bone;
         }
-        for (AnimatedGeoBone child : bone.children()) {
-            AnimatedGeoBone found = find(child, name);
+        for (BoneModelSnapshot.Bone child : bone.children()) {
+            BoneModelSnapshot.Bone found = find(child, name);
             if (found != null) {
                 return found;
             }
@@ -175,9 +181,9 @@ final class SecondaryMotionFixture {
     }
 
     record Fixture(
-            AnimatedGeoModel model,
-            AnimatedGeoBone head,
-            AnimatedGeoBone hair,
+            BoneModelSnapshot model,
+            BoneModelSnapshot.Bone head,
+            BoneModelSnapshot.Bone hair,
             PhysicsSolverLayout layout,
             PhysicsSolverLayout.Node hairNode,
             SpringBoneSolver solver

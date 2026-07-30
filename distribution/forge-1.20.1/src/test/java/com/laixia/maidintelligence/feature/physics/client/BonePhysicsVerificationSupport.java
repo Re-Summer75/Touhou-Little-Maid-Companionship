@@ -1,5 +1,13 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.raw.pojo.Converter;
@@ -8,8 +16,9 @@ import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.raw.tree.RawGeomet
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.GeoBuilder;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoModel;
-import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneClassifier.ChainType;
-import com.laixia.maidintelligence.feature.physics.client.PhysicsBoneClassifier.Classification;
+import com.laixia.maidintelligence.feature.physics.client.model.GeckoBoneModelPort;
+import com.laixia.maidintelligence.feature.physics.discovery.PhysicsBoneClassifier.ChainType;
+import com.laixia.maidintelligence.feature.physics.discovery.PhysicsBoneClassifier.Classification;
 import org.joml.Vector3f;
 
 import java.io.InputStream;
@@ -95,6 +104,15 @@ final class BonePhysicsVerificationSupport {
             PhysicsBoneSelectionPlan.PartType type,
             String message
     ) {
+        requireDriven(plan, coreBone(bone), type, message);
+    }
+
+    static void requireDriven(
+            PhysicsBoneSelectionPlan plan,
+            BoneModelSnapshot.Bone bone,
+            PhysicsBoneSelectionPlan.PartType type,
+            String message
+    ) {
         require(bone != null, message + " (bone missing)");
         PhysicsBoneSelectionPlan.Decision decision = plan.decision(bone);
         require(decision.driven() && decision.type() == type, message
@@ -104,6 +122,120 @@ final class BonePhysicsVerificationSupport {
 
     static AnimatedGeoModel modelFromJson(String json) {
         return new AnimatedGeoModel(geoModelFromJson(json));
+    }
+
+    static BoneModelSnapshot coreModel(AnimatedGeoModel model) {
+        return GeckoBoneModelPort.snapshotOf(model);
+    }
+
+    static BoneModelSnapshot coreModel(GeoModel model) {
+        return coreModel(new AnimatedGeoModel(model));
+    }
+
+    static BoneModelSnapshot.Bone coreBone(AnimatedGeoBone bone) {
+        return GeckoBoneModelPort.coreBoneOf(bone);
+    }
+
+    static BoneModelSnapshot coreModelFromJson(String json) {
+        return coreModel(modelFromJson(json));
+    }
+
+    static PhysicsBoneSelectionPlan discover(
+            String modelId,
+            AnimatedGeoModel model,
+            PhysicsMetadata metadata
+    ) {
+        return PhysicsBoneDiscoverer.discover(
+                modelId,
+                coreModel(model),
+                metadata
+        );
+    }
+
+    static PhysicsBoneSelectionPlan discover(
+            String modelId,
+            BoneModelSnapshot model,
+            PhysicsMetadata metadata
+    ) {
+        return PhysicsBoneDiscoverer.discover(modelId, model, metadata);
+    }
+
+    static PhysicsSolverLayout layout(
+            AnimatedGeoModel model,
+            PhysicsBoneSelectionPlan plan
+    ) {
+        return PhysicsSolverLayout.build(coreModel(model), plan);
+    }
+
+    static PhysicsSolverLayout layout(
+            BoneModelSnapshot model,
+            PhysicsBoneSelectionPlan plan
+    ) {
+        return PhysicsSolverLayout.build(model, plan);
+    }
+
+    static PhysicsBoneGeometry.Analysis analyze(AnimatedGeoModel model) {
+        return PhysicsBoneGeometry.analyze(coreModel(model));
+    }
+
+    static PhysicsBoneGeometry.Analysis analyze(BoneModelSnapshot model) {
+        return PhysicsBoneGeometry.analyze(model);
+    }
+
+    static PhysicsBoneSelectionPlan.Decision decision(
+            PhysicsBoneSelectionPlan plan,
+            AnimatedGeoBone bone
+    ) {
+        return plan.decision(coreBone(bone));
+    }
+
+    static PhysicsBoneSelectionPlan.Decision decision(
+            PhysicsBoneSelectionPlan plan,
+            BoneModelSnapshot.Bone bone
+    ) {
+        return plan.decision(bone);
+    }
+
+    static boolean isDriven(
+            PhysicsBoneSelectionPlan plan,
+            AnimatedGeoBone bone
+    ) {
+        return plan.isDriven(coreBone(bone));
+    }
+
+    static boolean isDriven(
+            PhysicsBoneSelectionPlan plan,
+            BoneModelSnapshot.Bone bone
+    ) {
+        return plan.isDriven(bone);
+    }
+
+    static BoneKinematics.Metrics kinematics(
+            PhysicsBoneSelectionPlan plan,
+            AnimatedGeoBone bone
+    ) {
+        return plan.kinematics(coreBone(bone));
+    }
+
+    static BoneKinematics.Metrics kinematics(
+            PhysicsBoneSelectionPlan plan,
+            BoneModelSnapshot.Bone bone
+    ) {
+        return plan.kinematics(bone);
+    }
+
+    static String path(
+            PhysicsBoneSelectionPlan plan,
+            AnimatedGeoBone bone
+    ) {
+        return plan.path(coreBone(bone));
+    }
+
+    static String path(
+            PhysicsBoneSelectionPlan plan,
+            BoneModelSnapshot.Bone bone
+    ) {
+        return plan.path(bone);
     }
 
     static GeoModel geoModelFromJson(String json) {

@@ -5,6 +5,4 @@ plugins {
 dependencies {
     api project(':kernel')
     api project(':shared:geometry')
-    api project(':features:status')
-    api project(':features:advancement')
 }

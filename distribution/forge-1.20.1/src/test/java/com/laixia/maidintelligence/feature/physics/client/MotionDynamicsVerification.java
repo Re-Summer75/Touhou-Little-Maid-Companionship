@@ -1,8 +1,17 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.laixia.maidintelligence.feature.physics.client.solver.AdaptiveMotionFilter;
-import com.laixia.maidintelligence.feature.physics.client.solver.MotionNoiseGate;
-import com.laixia.maidintelligence.feature.physics.client.solver.MotionSignalSampler;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.engine.AdaptiveMotionFilter;
+import com.laixia.maidintelligence.feature.physics.engine.MotionNoiseGate;
+import com.laixia.maidintelligence.feature.physics.engine.MotionSignalSampler;
+import com.laixia.maidintelligence.shared.geometry.Vec3d;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -155,13 +164,13 @@ final class MotionDynamicsVerification {
         );
 
         MotionSignalSampler sampler = new MotionSignalSampler();
-        sampler.update(Vec3.ZERO, 0, 0.0F, 0.0F, 0.5F, dt);
+        sampler.update(Vec3d.ZERO, 0, 0.0F, 0.0F, 0.5F, dt);
         float firstTickSample = sampler.update(
-                new Vec3(0.02D, 0.0D, 0.0D),
+                new Vec3d(0.02D, 0.0D, 0.0D),
                 1, 0.0F, 0.0F, 0.5F, dt
         ).worldAcceleration().x;
         float heldRenderSample = sampler.update(
-                new Vec3(0.02D, 0.0D, 0.0D),
+                new Vec3d(0.02D, 0.0D, 0.0D),
                 1, 0.0F, 0.0F, 0.5F, dt
         ).worldAcceleration().x;
         require(
@@ -169,7 +178,7 @@ final class MotionDynamicsVerification {
                 "Tick acceleration was replaced by zero between render frames"
         );
         float releaseSample = sampler.update(
-                new Vec3(0.02D, 0.0D, 0.0D),
+                new Vec3d(0.02D, 0.0D, 0.0D),
                 2, 0.0F, 0.0F, 0.5F, dt
         ).worldAcceleration().x;
         require(

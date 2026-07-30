@@ -1,8 +1,14 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
 import net.minecraft.util.Mth;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -35,13 +41,13 @@ final class ReferenceSpringBoneSolver {
     private static final float REFERENCE_DELTA_SECONDS = 1.0F / 60.0F;
     private static final double EPSILON = 1.0E-5D;
 
-    private final AnimatedGeoModel model;
+    private final BoneModelSnapshot model;
     private final PhysicsBoneSelectionPlan plan;
-    private final Map<AnimatedGeoBone, BoneData> bones =
+    private final Map<BoneModelSnapshot.Bone, BoneData> bones =
             new IdentityHashMap<>();
 
     ReferenceSpringBoneSolver(
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             PhysicsBoneSelectionPlan plan
     ) {
         this.model = model;
@@ -59,14 +65,14 @@ final class ReferenceSpringBoneSolver {
                 yawRate
         );
         Quaternionf root = new Quaternionf();
-        for (AnimatedGeoBone bone : model.topLevelBones()) {
+        for (BoneModelSnapshot.Bone bone : model.topLevelBones()) {
             solve(bone, null, root, motion, dt, paused);
         }
     }
 
     private void solve(
-            AnimatedGeoBone bone,
-            AnimatedGeoBone parentBone,
+            BoneModelSnapshot.Bone bone,
+            BoneModelSnapshot.Bone parentBone,
             Quaternionf parentRenderedOrientation,
             MotionSignals motion,
             float dt,
@@ -159,7 +165,7 @@ final class ReferenceSpringBoneSolver {
                 bone.getRotationY(),
                 bone.getRotationZ()
         );
-        for (AnimatedGeoBone child : bone.children()) {
+        for (BoneModelSnapshot.Bone child : bone.children()) {
             solve(
                     child,
                     bone,
@@ -172,7 +178,7 @@ final class ReferenceSpringBoneSolver {
     }
 
     private void applyDeflection(
-            AnimatedGeoBone bone,
+            BoneModelSnapshot.Bone bone,
             Quaternionf animationOrientation,
             BoneData data,
             float rx,
@@ -226,7 +232,7 @@ final class ReferenceSpringBoneSolver {
     }
 
     private void compensatePivot(
-            AnimatedGeoBone bone,
+            BoneModelSnapshot.Bone bone,
             BoneData data,
             float rx,
             float ry,
@@ -256,8 +262,8 @@ final class ReferenceSpringBoneSolver {
     }
 
     private BoneData dataFor(
-            AnimatedGeoBone bone,
-            AnimatedGeoBone parent,
+            BoneModelSnapshot.Bone bone,
+            BoneModelSnapshot.Bone parent,
             PhysicsBoneSelectionPlan.Decision decision
     ) {
         if (!decision.driven()) {
@@ -281,7 +287,7 @@ final class ReferenceSpringBoneSolver {
     }
 
     boolean copyCurrentDirection(
-            AnimatedGeoBone bone,
+            BoneModelSnapshot.Bone bone,
             Vector3f output
     ) {
         BoneData data = bones.get(bone);

@@ -1,10 +1,16 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
 
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
+
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
 final class PivotRolePolicyVerification {
@@ -12,7 +18,7 @@ final class PivotRolePolicyVerification {
     }
 
     static void run() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.pivot_role_policy",
                     "texture_width":32,"texture_height":32},
@@ -25,7 +31,7 @@ final class PivotRolePolicyVerification {
                      "cubes":[{"origin":[1,23,-.5],"size":[2,4,1],"uv":[0,0]}]}
                   ]}]}
                 """);
-        AnimatedGeoBone head = model.bones().get("Head");
+        BoneModelSnapshot.Bone head = model.bones().get("Head");
         BoneKinematics.Metrics moderate = BoneKinematics.measure(
                 model.bones().get("Moderate"),
                 head,

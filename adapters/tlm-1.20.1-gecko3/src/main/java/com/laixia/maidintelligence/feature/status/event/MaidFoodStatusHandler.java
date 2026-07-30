@@ -2,14 +2,14 @@ package com.laixia.maidintelligence.feature.status.event;
 
 import com.github.tartaricacid.touhoulittlemaid.api.event.MaidAfterEatEvent;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.status.service.DefaultMaidStatusService;
+import com.laixia.maidintelligence.feature.status.tlm.TlmMaidStatusService;
 import net.minecraftforge.event.entity.living.LivingEntityUseItemEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 public final class MaidFoodStatusHandler {
-    private final DefaultMaidStatusService statusService;
+    private final TlmMaidStatusService statusService;
 
-    public MaidFoodStatusHandler(DefaultMaidStatusService statusService) {
+    public MaidFoodStatusHandler(TlmMaidStatusService statusService) {
         this.statusService = statusService;
     }
 

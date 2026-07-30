@@ -1,5 +1,6 @@
 package com.laixia.maidintelligence.feature.interaction.client;
 
+import com.laixia.maidintelligence.feature.interaction.domain.FaceGeometry;
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 

@@ -4,8 +4,13 @@ import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedG
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoMesh;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.util.RenderUtils;
+import com.laixia.maidintelligence.feature.interaction.api.FaceSelectionApi;
+import com.laixia.maidintelligence.feature.interaction.application.FaceCandidateSelector;
+import com.laixia.maidintelligence.feature.interaction.domain.FaceBoneClassifier;
+import com.laixia.maidintelligence.feature.interaction.domain.FaceGeometry;
+import com.laixia.maidintelligence.feature.interaction.domain.MaidFacePlane;
+import com.laixia.maidintelligence.shared.geometry.Vec3d;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -19,6 +24,8 @@ import java.util.Optional;
 final class GeckoFaceGeometryAdapter {
     private static final double THIN_RATIO = 0.015D;
     private static final int MIRROR_MASK = 0b1000000;
+    private static final FaceSelectionApi FACE_SELECTOR =
+            new FaceCandidateSelector();
     private static final ThreadLocal<PoseStack> SCRATCH_POSE =
             ThreadLocal.withInitial(PoseStack::new);
     private static final ThreadLocal<Vector3f> SCRATCH_CORNER =
@@ -70,7 +77,7 @@ final class GeckoFaceGeometryAdapter {
             if (!isVisible(handle.ownerHierarchy(), handle.owner())) {
                 continue;
             }
-            List<Vec3> facePositions = captureFacePositions(handle, basePose);
+            List<Vec3d> facePositions = captureFacePositions(handle, basePose);
             if (facePositions == null) {
                 stalePlan = true;
                 continue;
@@ -140,7 +147,7 @@ final class GeckoFaceGeometryAdapter {
                     candidates
             );
 
-            FaceGeometry.Selection selection = FaceCandidateSelector.select(
+            FaceGeometry.Selection selection = FACE_SELECTOR.select(
                     candidates,
                     frame
             );
@@ -230,7 +237,7 @@ final class GeckoFaceGeometryAdapter {
      * instead of rebuilding every candidate of the cube. Returns {@code null}
      * when the cube or face is no longer present in the mesh.
      */
-    private static List<Vec3> captureFacePositions(
+    private static List<Vec3d> captureFacePositions(
             Handle handle,
             PoseStack basePose
     ) {
@@ -259,7 +266,7 @@ final class GeckoFaceGeometryAdapter {
         );
     }
 
-    private static Vec3 corner(
+    private static Vec3d corner(
             Matrix4f pose,
             Vector3f position,
             Vector3f dx,
@@ -278,7 +285,7 @@ final class GeckoFaceGeometryAdapter {
             corner.add(dz);
         }
         corner.mulPosition(pose);
-        return new Vec3(corner.x(), corner.y(), corner.z());
+        return new Vec3d(corner.x(), corner.y(), corner.z());
     }
 
     private static List<FaceGeometry.Candidate> captureCube(
@@ -293,8 +300,14 @@ final class GeckoFaceGeometryAdapter {
         Vector3f dx = new Vector3f(mesh.dx(cubeIndex));
         Vector3f dy = new Vector3f(mesh.dy(cubeIndex));
         Vector3f dz = new Vector3f(mesh.dz(cubeIndex));
-        List<Vec3> corners = transformedCorners(ownerPose, position, dx, dy, dz);
-        Vec3 groupCenter = FaceGeometry.average(corners);
+        List<Vec3d> corners = transformedCorners(
+                ownerPose,
+                position,
+                dx,
+                dy,
+                dz
+        );
+        Vec3d groupCenter = FaceGeometry.average(corners);
         double groupWidth = projectionRange(corners, frame.right());
         double groupHeight = projectionRange(corners, frame.up());
         double groupDepth = projectionRange(corners, frame.forward());
@@ -309,8 +322,9 @@ final class GeckoFaceGeometryAdapter {
             if ((faces & (1 << faceIndex)) == 0) {
                 continue;
             }
-            List<Vec3> face = face(corners, faceIndex);
-            Vec3 outward = FaceGeometry.average(face).subtract(groupCenter);
+            List<Vec3d> face = face(corners, faceIndex);
+            Vec3d outward = FaceGeometry.average(face)
+                    .subtract(groupCenter);
             candidates.add(new FaceGeometry.Candidate(
                     new FaceGeometry.Key(
                             FaceGeometry.Source.GECKO,
@@ -331,7 +345,7 @@ final class GeckoFaceGeometryAdapter {
         return candidates;
     }
 
-    private static List<Vec3> transformedCorners(
+    private static List<Vec3d> transformedCorners(
             PoseStack pose,
             Vector3f position,
             Vector3f dx,
@@ -358,15 +372,18 @@ final class GeckoFaceGeometryAdapter {
         );
     }
 
-    private static List<Vec3> face(List<Vec3> corners, int faceIndex) {
-        Vec3 p000 = corners.get(0);
-        Vec3 p100 = corners.get(1);
-        Vec3 p010 = corners.get(2);
-        Vec3 p001 = corners.get(3);
-        Vec3 p110 = corners.get(4);
-        Vec3 p101 = corners.get(5);
-        Vec3 p011 = corners.get(6);
-        Vec3 p111 = corners.get(7);
+    private static List<Vec3d> face(
+            List<Vec3d> corners,
+            int faceIndex
+    ) {
+        Vec3d p000 = corners.get(0);
+        Vec3d p100 = corners.get(1);
+        Vec3d p010 = corners.get(2);
+        Vec3d p001 = corners.get(3);
+        Vec3d p110 = corners.get(4);
+        Vec3d p101 = corners.get(5);
+        Vec3d p011 = corners.get(6);
+        Vec3d p111 = corners.get(7);
         return switch (faceIndex) {
             case 0 -> List.of(p101, p001, p000, p100);
             case 1 -> List.of(p110, p010, p011, p111);
@@ -459,13 +476,20 @@ final class GeckoFaceGeometryAdapter {
         return copy;
     }
 
-    private static Vec3 toRender(PoseStack pose, Vector3f localPosition) {
+    private static Vec3d toRender(
+            PoseStack pose,
+            Vector3f localPosition
+    ) {
         Vector3f transformed = new Vector3f(localPosition)
                 .mulPosition(pose.last().pose());
-        return new Vec3(transformed.x(), transformed.y(), transformed.z());
+        return new Vec3d(
+                transformed.x(),
+                transformed.y(),
+                transformed.z()
+        );
     }
 
-    private static Vec3 transformedPosition(
+    private static Vec3d transformedPosition(
             PoseStack pose,
             float x,
             float y,
@@ -474,7 +498,7 @@ final class GeckoFaceGeometryAdapter {
         return toRender(pose, new Vector3f(x, y, z));
     }
 
-    private static Vec3 transformedDirection(
+    private static Vec3d transformedDirection(
             PoseStack pose,
             float x,
             float y,
@@ -483,13 +507,20 @@ final class GeckoFaceGeometryAdapter {
         Vector3f transformed = new Vector3f(x, y, z)
                 .mulDirection(pose.last().pose())
                 .normalize();
-        return new Vec3(transformed.x(), transformed.y(), transformed.z());
+        return new Vec3d(
+                transformed.x(),
+                transformed.y(),
+                transformed.z()
+        );
     }
 
-    private static double projectionRange(List<Vec3> vertices, Vec3 axis) {
+    private static double projectionRange(
+            List<Vec3d> vertices,
+            Vec3d axis
+    ) {
         double minimum = Double.POSITIVE_INFINITY;
         double maximum = Double.NEGATIVE_INFINITY;
-        for (Vec3 vertex : vertices) {
+        for (Vec3d vertex : vertices) {
             double projection = vertex.dot(axis);
             minimum = Math.min(minimum, projection);
             maximum = Math.max(maximum, projection);

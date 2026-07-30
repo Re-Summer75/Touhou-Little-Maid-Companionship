@@ -125,14 +125,25 @@
 ## 主要源码
 
 ```text
-src/main/java/com/laixia/maidintelligence/feature/status/
-├─ StatusFeedbackFeature.java
+features/status/src/main/java/com/laixia/maidintelligence/feature/status/
 ├─ api/MaidStatusApi.java
+├─ application/MaidStatusApplication.java
 ├─ domain/
+└─ port/
+
+adapters/forge-1.20.1/src/main/java/com/laixia/maidintelligence/feature/status/
+├─ codec/MaidStatusStateCodec.java
+├─ forge/StatusForgeInstaller.java
+└─ service/ToolReplacementResult.java
+
+adapters/tlm-1.20.1-gecko3/src/main/java/com/laixia/maidintelligence/feature/status/
+├─ client/MaidHungerGuiHandler.java
 ├─ event/MaidFoodStatusHandler.java
 ├─ event/MaidHungerRegenerationHandler.java
-├─ service/
+├─ service/ToolReplacementService.java
 └─ tlm/
+   ├─ StatusFeedbackBehavior.java
+   └─ StatusTlmModule.java
 ```
 
 相关基础文档：

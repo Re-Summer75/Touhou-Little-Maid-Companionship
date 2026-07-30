@@ -1,7 +1,16 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoModel;
 import com.google.gson.JsonParser;
+import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.geoModelFromJson;
 
@@ -41,7 +50,7 @@ final class AnonymousGoldenFixture {
     }
 
     static PhysicsMetadata metadata() {
-        return PhysicsMetadata.parse(
+        return PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {
                           "mode": "explicit",

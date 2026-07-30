@@ -9,14 +9,18 @@ repositories {
     mavenCentral()
 }
 
+def targetJavaVersion = project.property('java_version')
+        .toString()
+        .toInteger()
+
 java {
-    toolchain.languageVersion = JavaLanguageVersion.of(17)
+    toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
     withSourcesJar()
 }
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-    options.release = 17
+    options.release = targetJavaVersion
 }
 
 tasks.withType(Test).configureEach {

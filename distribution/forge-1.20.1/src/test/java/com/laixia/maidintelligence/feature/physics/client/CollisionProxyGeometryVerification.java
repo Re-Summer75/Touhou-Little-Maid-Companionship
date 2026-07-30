@@ -1,17 +1,24 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SecondaryMotionConstraint;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySource;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionScratch;
+import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.layout.SecondaryMotionConstraint;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxyKind;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySource;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionScratch;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
 final class CollisionProxyGeometryVerification {
@@ -19,7 +26,7 @@ final class CollisionProxyGeometryVerification {
     }
 
     static void run() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {
                   "format_version":"1.12.0",
                   "minecraft:geometry":[{
@@ -37,7 +44,7 @@ final class CollisionProxyGeometryVerification {
                   }]
                 }
                 """);
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {"schema_version":3,"mode":"explicit","chains":[{
                           "id":"detached","type":"HAIR",
@@ -56,7 +63,7 @@ final class CollisionProxyGeometryVerification {
                 model,
                 metadata
         );
-        AnimatedGeoBone hair = model.topLevelBones().get(0)
+        BoneModelSnapshot.Bone hair = model.topLevelBones().get(0)
                 .children().get(0).children().get(0).children().get(0);
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(model, plan);
         SecondaryMotionConstraint constraint = null;

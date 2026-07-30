@@ -1,9 +1,14 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoMesh;
-import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
 import org.joml.Vector3f;
 
 import java.nio.file.Files;
@@ -11,6 +16,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.MODEL_DIRECTORY;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadGeoModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
@@ -38,15 +44,13 @@ final class BundledAxisPolarityVerification {
         int checked = 0;
         int corrected = 0;
         for (Path path : modelPaths) {
-            AnimatedGeoModel model = new AnimatedGeoModel(
-                    loadGeoModel(path)
-            );
+            BoneModelSnapshot model = coreModel(loadGeoModel(path));
             PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
                     "verification:axis_polarity/" + path.getFileName(),
                     model,
                     PhysicsMetadata.EMPTY
             );
-            for (AnimatedGeoBone bone : model.bones().values()) {
+            for (BoneModelSnapshot.Bone bone : model.bones().values()) {
                 BoneKinematics.Metrics metrics = plan.kinematics(bone);
                 if (metrics == null) {
                     continue;
@@ -62,7 +66,7 @@ final class BundledAxisPolarityVerification {
                 if (metrics.axisPolarityCorrected()) {
                     corrected++;
                 }
-                Vector3f towardMass = massCenter(bone.geoBone().cubes())
+                Vector3f towardMass = massCenter(bone.geometry().cubes())
                         .sub(metrics.effectivePivot());
                 if (towardMass.lengthSquared()
                         <= pixelSquared(0.5F)) {
@@ -97,7 +101,7 @@ final class BundledAxisPolarityVerification {
         );
     }
 
-    private static Vector3f massCenter(GeoMesh mesh) {
+    private static Vector3f massCenter(BoneModelSnapshot.Mesh mesh) {
         Vector3f center = new Vector3f();
         float totalWeight = 0.0F;
         for (int cube = 0; cube < mesh.getCubeCount(); cube++) {

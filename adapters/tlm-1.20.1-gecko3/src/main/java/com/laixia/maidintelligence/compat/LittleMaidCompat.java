@@ -8,7 +8,7 @@ import com.github.tartaricacid.touhoulittlemaid.client.renderer.entity.GeckoEnti
 import com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.ExtraMaidBrainManager;
 import com.github.tartaricacid.touhoulittlemaid.entity.data.TaskDataRegister;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
-import com.laixia.maidintelligence.core.feature.FeatureCatalog;
+import com.laixia.maidintelligence.compat.tlm.TlmAdapterRegistry;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.world.entity.Mob;
 import net.minecraftforge.api.distmarker.Dist;
@@ -24,23 +24,23 @@ public final class LittleMaidCompat implements ILittleMaid {
 
     @Override
     public void registerTaskData(TaskDataRegister register) {
-        FeatureCatalog.tlmFeatures().forEach(feature -> feature.registerTaskData(register));
+        TlmAdapterRegistry.modules().forEach(feature -> feature.registerTaskData(register));
     }
 
     @Override
     public void addMaidTask(TaskManager manager) {
-        FeatureCatalog.tlmFeatures().forEach(feature -> feature.registerTasks(manager));
+        TlmAdapterRegistry.modules().forEach(feature -> feature.registerTasks(manager));
     }
 
     @Override
     public void addExtraMaidBrain(ExtraMaidBrainManager manager) {
-        FeatureCatalog.tlmFeatures().forEach(feature -> feature.registerExtraBrain(manager));
+        TlmAdapterRegistry.modules().forEach(feature -> feature.registerExtraBrain(manager));
     }
 
     @Override
     @OnlyIn(Dist.CLIENT)
     public void addMaidTips(MaidTipsOverlay overlay) {
-        FeatureCatalog.tlmFeatures().forEach(feature -> feature.registerMaidTips(overlay));
+        TlmAdapterRegistry.modules().forEach(feature -> feature.registerMaidTips(overlay));
     }
 
     @Override
@@ -49,7 +49,7 @@ public final class LittleMaidCompat implements ILittleMaid {
             EntityMaidRenderer renderer,
             EntityRendererProvider.Context context
     ) {
-        FeatureCatalog.tlmFeatures().forEach(feature -> feature.registerMaidLayer(renderer, context));
+        TlmAdapterRegistry.modules().forEach(feature -> feature.registerMaidLayer(renderer, context));
     }
 
     @Override
@@ -58,7 +58,7 @@ public final class LittleMaidCompat implements ILittleMaid {
             GeckoEntityMaidRenderer<? extends Mob> renderer,
             EntityRendererProvider.Context context
     ) {
-        FeatureCatalog.tlmFeatures().forEach(feature ->
+        TlmAdapterRegistry.modules().forEach(feature ->
                 feature.registerGeckoMaidLayer(renderer, context)
         );
     }

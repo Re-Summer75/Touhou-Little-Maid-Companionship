@@ -1,16 +1,19 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoBone;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 import org.joml.Vector3f;
 
-import java.util.Map;
-
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.bonesByGeoBone;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadWinefoxGeoModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.requireVectorNear;
@@ -37,8 +40,8 @@ final class SolverEquivalenceVerification {
             GeoModel geoModel,
             PhysicsMetadata metadata
     ) {
-        AnimatedGeoModel referenceModel = new AnimatedGeoModel(geoModel);
-        AnimatedGeoModel optimizedModel = new AnimatedGeoModel(geoModel);
+        BoneModelSnapshot referenceModel = coreModel(geoModel);
+        BoneModelSnapshot optimizedModel = coreModel(geoModel);
         PhysicsBoneSelectionPlan referencePlan =
                 PhysicsBoneDiscoverer.discover(
                         "verification:" + label,
@@ -72,8 +75,6 @@ final class SolverEquivalenceVerification {
                 label + " golden fixture does not cover pivot compensation"
         );
 
-        Map<GeoBone, AnimatedGeoBone> referenceBones =
-                bonesByGeoBone(referenceModel);
         Vector3f acceleration = new Vector3f();
         Vector3f expectedDirection = new Vector3f();
         Vector3f actualDirection = new Vector3f();
@@ -101,7 +102,7 @@ final class SolverEquivalenceVerification {
                     layout,
                     reference,
                     optimized,
-                    referenceBones,
+                    referenceModel,
                     expectedDirection,
                     actualDirection
             );
@@ -119,7 +120,7 @@ final class SolverEquivalenceVerification {
             PhysicsSolverLayout layout,
             ReferenceSpringBoneSolver reference,
             SpringBoneSolver optimized,
-            Map<GeoBone, AnimatedGeoBone> referenceBones,
+            BoneModelSnapshot referenceModel,
             Vector3f expectedDirection,
             Vector3f actualDirection
     ) {
@@ -128,8 +129,8 @@ final class SolverEquivalenceVerification {
             if (!node.driven()) {
                 continue;
             }
-            AnimatedGeoBone referenceBone =
-                    referenceBones.get(node.bone().geoBone());
+            BoneModelSnapshot.Bone referenceBone =
+                    referenceModel.bone(node.bone().index());
             boolean expectedInitialized = reference.copyCurrentDirection(
                     referenceBone,
                     expectedDirection

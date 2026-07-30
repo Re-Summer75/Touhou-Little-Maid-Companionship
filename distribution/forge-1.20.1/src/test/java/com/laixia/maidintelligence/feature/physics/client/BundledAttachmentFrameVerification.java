@@ -1,8 +1,15 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.MODEL_DIRECTORY;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadGeoModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
@@ -11,7 +18,7 @@ final class BundledAttachmentFrameVerification {
     }
 
     static void run() throws Exception {
-        AnimatedGeoModel zhiban = new AnimatedGeoModel(loadGeoModel(
+        BoneModelSnapshot zhiban = coreModel(loadGeoModel(
                 MODEL_DIRECTORY.resolve("zhiban.json")
         ));
         PhysicsBoneSelectionPlan zhibanPlan = PhysicsBoneDiscoverer.discover(
@@ -27,7 +34,7 @@ final class BundledAttachmentFrameVerification {
         requireAxisY(zhibanPlan, zhiban, "bone9", -0.25F);
         requireAxisY(zhibanPlan, zhiban, "bone34", 0.25F);
 
-        AnimatedGeoModel winefox = new AnimatedGeoModel(loadGeoModel(
+        BoneModelSnapshot winefox = coreModel(loadGeoModel(
                 MODEL_DIRECTORY.resolve("winefox.json")
         ));
         PhysicsBoneSelectionPlan winefoxPlan = PhysicsBoneDiscoverer.discover(
@@ -37,7 +44,7 @@ final class BundledAttachmentFrameVerification {
         );
         requireAxisY(winefoxPlan, winefox, "bone5", -0.50F);
 
-        AnimatedGeoModel hanfu = new AnimatedGeoModel(loadGeoModel(
+        BoneModelSnapshot hanfu = coreModel(loadGeoModel(
                 MODEL_DIRECTORY.resolve("winefox_hanfu.json")
         ));
         PhysicsBoneSelectionPlan hanfuPlan = PhysicsBoneDiscoverer.discover(
@@ -53,7 +60,7 @@ final class BundledAttachmentFrameVerification {
                 hanfuPlan, hanfu, "LeftSideHair", 2.40F
         );
 
-        AnimatedGeoModel riceCake = new AnimatedGeoModel(loadGeoModel(
+        BoneModelSnapshot riceCake = coreModel(loadGeoModel(
                 MODEL_DIRECTORY.resolve("rice_cake_fox.json")
         ));
         PhysicsBoneSelectionPlan riceCakePlan = PhysicsBoneDiscoverer.discover(
@@ -70,7 +77,7 @@ final class BundledAttachmentFrameVerification {
 
     private static void requireUpperAttachment(
             PhysicsBoneSelectionPlan plan,
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             String boneName,
             float minimumY
     ) {
@@ -88,7 +95,7 @@ final class BundledAttachmentFrameVerification {
 
     private static void requireRigidWithoutFrame(
             PhysicsBoneSelectionPlan plan,
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             String boneName
     ) {
         require(
@@ -100,7 +107,7 @@ final class BundledAttachmentFrameVerification {
 
     private static void requireAxisY(
             PhysicsBoneSelectionPlan plan,
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             String boneName,
             float threshold
     ) {

@@ -16,10 +16,34 @@ plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.7.0'
 }
 
-// ASCII Gradle identifier for “Touhou Little Maid: Companionship”.
-rootProject.name = 'TLM-Companionship-1.20.1'
+def versionMatrixFile = file('gradle/version-matrix.json')
+if (!versionMatrixFile.isFile()) {
+    throw new GradleException(
+            "Missing version matrix: ${versionMatrixFile}"
+    )
+}
+def versionMatrix = new groovy.json.JsonSlurper().parse(versionMatrixFile)
+if (versionMatrix.schemaVersion != 1
+        || !(versionMatrix.targets instanceof List)
+        || versionMatrix.targets.isEmpty()) {
+    throw new GradleException(
+            "Unsupported or empty version matrix: ${versionMatrixFile}"
+    )
+}
+def defaultVersionTarget = versionMatrix.targets.find {
+    it.key == versionMatrix.defaultTarget
+}
+if (defaultVersionTarget == null) {
+    throw new GradleException(
+            "Version matrix defaultTarget '${versionMatrix.defaultTarget}' "
+                    + 'does not name a declared target.'
+    )
+}
 
-include(
+// ASCII Gradle identifier for “Touhou Little Maid: Companionship”.
+rootProject.name = "TLM-Companionship-${defaultVersionTarget.minecraft.version}"
+
+def stableProjects = [
         'kernel',
         'shared:geometry',
         'features:level',
@@ -28,8 +52,23 @@ include(
         'features:interaction',
         'features:physics',
         'features:shading',
-        'features:atmosphere',
-        'adapters:forge-1.20.1',
-        'adapters:tlm-1.20.1-gecko3',
-        'distribution:forge-1.20.1'
-)
+        'features:atmosphere'
+]
+def versionedProjects = versionMatrix.targets.collectMany { target ->
+    if (!(target.projects instanceof Map)) {
+        throw new GradleException(
+                "Version target '${target.key}' has no projects object."
+        )
+    }
+    ['forgeAdapter', 'tlmAdapter', 'distribution'].collect { projectKind ->
+        def projectPath = target.projects[projectKind]
+        if (!(projectPath instanceof String) || projectPath.isBlank()) {
+            throw new GradleException(
+                    "Version target '${target.key}' has no ${projectKind} path."
+            )
+        }
+        projectPath
+    }
+}
+
+include(*((stableProjects + versionedProjects).unique() as String[]))

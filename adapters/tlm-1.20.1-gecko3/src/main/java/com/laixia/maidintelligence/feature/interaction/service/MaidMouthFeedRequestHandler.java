@@ -2,26 +2,35 @@ package com.laixia.maidintelligence.feature.interaction.service;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.interaction.domain.MouthTargetRegion;
+import com.laixia.maidintelligence.feature.interaction.port.MaidMouthFeedPort;
+import com.laixia.maidintelligence.platform.geometry.MinecraftGeometryAdapter;
+import com.laixia.maidintelligence.shared.geometry.Vec3d;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.ForgeMod;
 
-public final class MaidMouthFeedRequestHandler {
+import java.util.Objects;
+
+public final class MaidMouthFeedRequestHandler
+        implements MaidMouthFeedPort<ServerPlayer> {
     private static final double AIM_VALIDATION_INFLATE = 0.25D;
     private static final double MAX_FACE_CENTER_DISTANCE = 4.0D;
     private static final double REACH_TOLERANCE = 1.0D;
+    private final MaidFeedingService feeding;
 
-    private MaidMouthFeedRequestHandler() {
+    public MaidMouthFeedRequestHandler(MaidFeedingService feeding) {
+        this.feeding = Objects.requireNonNull(feeding, "feeding");
     }
 
-    public static void handle(
+    @Override
+    public void handle(
             ServerPlayer player,
             int maidEntityId,
             float faceU,
             float faceV,
-            Vec3 worldCenter,
-            Vec3 worldNormal
+            Vec3d worldCenter,
+            Vec3d worldNormal
     ) {
         Entity entity = player.serverLevel().getEntity(maidEntityId);
         if (!(entity instanceof EntityMaid maid)
@@ -36,18 +45,32 @@ public final class MaidMouthFeedRequestHandler {
             return;
         }
 
-        MaidFeedingService.feed(player, maid, worldCenter, worldNormal.normalize());
+        feeding.feed(
+                player,
+                maid,
+                MinecraftGeometryAdapter.toMinecraft(worldCenter),
+                MinecraftGeometryAdapter.toMinecraft(
+                        worldNormal.normalize()
+                )
+        );
     }
 
-    private static boolean isValidFaceCenter(EntityMaid maid, Vec3 position) {
+    private static boolean isValidFaceCenter(
+            EntityMaid maid,
+            Vec3d position
+    ) {
         return Double.isFinite(position.x)
                 && Double.isFinite(position.y)
                 && Double.isFinite(position.z)
-                && position.distanceToSqr(maid.getBoundingBox().getCenter())
+                && position.distanceToSqr(
+                        MinecraftGeometryAdapter.toCore(
+                                maid.getBoundingBox().getCenter()
+                        )
+                )
                 <= MAX_FACE_CENTER_DISTANCE * MAX_FACE_CENTER_DISTANCE;
     }
 
-    private static boolean isValidFaceNormal(Vec3 normal) {
+    private static boolean isValidFaceNormal(Vec3d normal) {
         double lengthSquared = normal.lengthSqr();
         return Double.isFinite(normal.x)
                 && Double.isFinite(normal.y)

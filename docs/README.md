@@ -8,6 +8,9 @@
 
 ## 文档索引
 
+- [多版本架构与版本矩阵](architecture/README.md)
+  - 稳定 feature API/Port 与 adapter/distribution 依赖边界
+  - target 路由、Mixin/refmap、网络兼容和新增版本模板
 - [车万女仆界面分析手册](MAID_GUI_ANALYSIS.md)
 - [车万女仆表情系统](expressions/README.md)
   - 图片表情池

@@ -3,7 +3,6 @@ package com.laixia.maidintelligence.feature.status.tlm;
 import com.github.tartaricacid.touhoulittlemaid.api.entity.ai.IExtraMaidBrain;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.mojang.datafixers.util.Pair;
-import com.laixia.maidintelligence.feature.status.service.DefaultMaidStatusService;
 import net.minecraft.world.entity.ai.behavior.BehaviorControl;
 
 import java.util.List;
@@ -11,9 +10,9 @@ import java.util.List;
 public final class StatusExtraBrain implements IExtraMaidBrain {
     private static final int CORE_PRIORITY = 4;
 
-    private final DefaultMaidStatusService statusService;
+    private final TlmMaidStatusService statusService;
 
-    public StatusExtraBrain(DefaultMaidStatusService statusService) {
+    public StatusExtraBrain(TlmMaidStatusService statusService) {
         this.statusService = statusService;
     }
 

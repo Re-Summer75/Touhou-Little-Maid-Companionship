@@ -18,9 +18,9 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 @OnlyIn(Dist.CLIENT)
 public final class LevelGuiHandler {
-    private final MaidLevelApi levelApi;
+    private final MaidLevelApi<EntityMaid> levelApi;
 
-    public LevelGuiHandler(MaidLevelApi levelApi) {
+    public LevelGuiHandler(MaidLevelApi<EntityMaid> levelApi) {
         this.levelApi = levelApi;
     }
 

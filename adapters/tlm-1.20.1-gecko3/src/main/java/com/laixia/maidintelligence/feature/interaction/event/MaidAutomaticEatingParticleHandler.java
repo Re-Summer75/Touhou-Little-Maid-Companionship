@@ -1,7 +1,7 @@
 package com.laixia.maidintelligence.feature.interaction.event;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.platform.network.ModNetwork;
+import com.laixia.maidintelligence.feature.interaction.network.InteractionNetwork;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.event.entity.living.LivingEntityUseItemEvent;
@@ -37,6 +37,9 @@ public final class MaidAutomaticEatingParticleHandler {
 
         ItemStack particleFood = food.copy();
         particleFood.setCount(1);
-        ModNetwork.sendMaidEatingParticlesFromTrackedFace(maid, particleFood);
+        InteractionNetwork.sendTrackedFaceEatingParticles(
+                maid,
+                particleFood
+        );
     }
 }

@@ -2,11 +2,11 @@ package com.laixia.maidintelligence.feature.advancement.event;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.advancement.menu.MaidAdvancementContainer;
+import com.laixia.maidintelligence.feature.advancement.network.AdvancementNetwork;
 import com.laixia.maidintelligence.feature.advancement.server.MaidAdvancementManager;
 import com.laixia.maidintelligence.feature.advancement.server.MaidAdvancementSnapshot;
 import com.laixia.maidintelligence.feature.advancement.server.MaidBridgeMemory;
 import com.laixia.maidintelligence.feature.advancement.server.MaidMirrorPlayer;
-import com.laixia.maidintelligence.platform.network.ModNetwork;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -71,7 +71,11 @@ public final class MaidAdvancementLifecycleHandlers {
         }
         manager.tracker(maid).ifPresent(tracker -> {
             MaidAdvancementSnapshot snapshot = tracker.snapshot(server.getAdvancements());
-            viewers.forEach(player -> ModNetwork.sendMaidAdvancements(player, maid.getId(), snapshot));
+            viewers.forEach(player -> AdvancementNetwork.sendSnapshot(
+                    player,
+                    maid.getId(),
+                    snapshot
+            ));
         });
     }
 

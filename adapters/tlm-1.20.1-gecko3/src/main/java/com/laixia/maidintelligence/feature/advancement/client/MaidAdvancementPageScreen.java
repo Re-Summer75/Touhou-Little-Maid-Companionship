@@ -1,9 +1,9 @@
 package com.laixia.maidintelligence.feature.advancement.client;
 
 import com.github.tartaricacid.touhoulittlemaid.client.gui.entity.maid.AbstractMaidContainerGui;
-import com.laixia.maidintelligence.MaidIntelligence;
+import com.laixia.maidintelligence.feature.advancement.application.layout.AdvancementStripLayout;
 import com.laixia.maidintelligence.feature.advancement.menu.MaidAdvancementContainer;
-import com.laixia.maidintelligence.platform.network.ModNetwork;
+import com.laixia.maidintelligence.feature.advancement.network.AdvancementNetwork;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.advancements.Advancement;
 import net.minecraft.advancements.AdvancementProgress;
@@ -71,7 +71,7 @@ public final class MaidAdvancementPageScreen extends AbstractMaidContainerGui<Ma
     protected void init() {
         super.init();
         if (maid != null) {
-            ModNetwork.sendRequestMaidAdvancements(maid.getId());
+            AdvancementNetwork.requestSnapshot(maid.getId());
         }
     }
 
@@ -343,7 +343,7 @@ public final class MaidAdvancementPageScreen extends AbstractMaidContainerGui<Ma
     /** 女仆专属的那棵排最前——这本来就是女仆自己的页面，然后原版，最后其它模组。 */
     private static int rootOrder(Advancement root) {
         String namespace = root.getId().getNamespace();
-        if (MaidIntelligence.MOD_ID.equals(namespace)) {
+        if (ModResources.MOD_ID.equals(namespace)) {
             return 0;
         }
         return "minecraft".equals(namespace) ? 1 : 2;

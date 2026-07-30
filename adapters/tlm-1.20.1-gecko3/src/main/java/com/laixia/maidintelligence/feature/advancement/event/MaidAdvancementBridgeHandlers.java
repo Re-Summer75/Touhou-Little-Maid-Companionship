@@ -10,9 +10,11 @@ import com.github.tartaricacid.touhoulittlemaid.api.event.MaidPickupEvent;
 import com.github.tartaricacid.touhoulittlemaid.api.event.MaidTickEvent;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.inventory.container.AbstractMaidContainer;
+import com.laixia.maidintelligence.feature.advancement.api.MaidCombatAdvancementTriggers;
+import com.laixia.maidintelligence.feature.advancement.api.MaidProgressAdvancementTriggers;
+import com.laixia.maidintelligence.feature.advancement.api.MaidWorldAdvancementTriggers;
+import com.laixia.maidintelligence.feature.advancement.port.MaidLevelQueryPort;
 import com.laixia.maidintelligence.feature.advancement.server.MaidBridgeMemory;
-import com.laixia.maidintelligence.feature.advancement.server.MaidCriteria;
-import com.laixia.maidintelligence.feature.level.api.MaidLevelApi;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
@@ -63,14 +65,26 @@ public final class MaidAdvancementBridgeHandlers {
     private static final float MIN_REPORTED_FALL = 3.0F;
 
     private final MaidBridgeMemory memory;
-    private final MaidLevelApi levelApi;
+    private final MaidWorldAdvancementTriggers worldTriggers;
+    private final MaidCombatAdvancementTriggers combatTriggers;
+    private final MaidProgressAdvancementTriggers progressTriggers;
+    private final MaidLevelQueryPort<EntityMaid> levelQuery;
     /** {@code LivingHurtEvent} 到 {@code LivingDamageEvent} 之间记一下减伤前的伤害值。 */
     private int pendingHurtVictim = -1;
     private float pendingHurtAmount;
 
-    public MaidAdvancementBridgeHandlers(MaidBridgeMemory memory, MaidLevelApi levelApi) {
+    public MaidAdvancementBridgeHandlers(
+            MaidBridgeMemory memory,
+            MaidWorldAdvancementTriggers worldTriggers,
+            MaidCombatAdvancementTriggers combatTriggers,
+            MaidProgressAdvancementTriggers progressTriggers,
+            MaidLevelQueryPort<EntityMaid> levelQuery
+    ) {
         this.memory = memory;
-        this.levelApi = levelApi;
+        this.worldTriggers = worldTriggers;
+        this.combatTriggers = combatTriggers;
+        this.progressTriggers = progressTriggers;
+        this.levelQuery = levelQuery;
     }
 
     @SubscribeEvent
@@ -82,25 +96,32 @@ public final class MaidAdvancementBridgeHandlers {
         // 按实体错开相位，几十只女仆时不会挤在同一 tick 全量扫描。
         int phase = Math.floorMod(maid.tickCount + maid.getId(), SCAN_INTERVAL);
         if (phase == LOCATION_PHASE) {
-            MaidCriteria.location(maid);
+            worldTriggers.location(maid);
             return;
         }
         if (phase == STANDING_PHASE) {
             // 女仆自己那条根进度也挂在等级触发器上，所以定时重放同时兼作「我是女仆」的判定。
-            MaidCriteria.replaceStanding(maid, levelApi.getProgress(maid).level());
+            progressTriggers.replaceStanding(
+                    maid,
+                    levelQuery.currentLevel(maid)
+            );
             return;
         }
         if (phase != SNAPSHOT_PHASE) {
             return;
         }
         if (memory.inventoryChanged(maid)) {
-            MaidCriteria.inventoryChanged(maid);
+            worldTriggers.inventoryChanged(maid);
         }
         if (memory.effectsChanged(maid)) {
-            MaidCriteria.effectsChanged(maid, null);
+            worldTriggers.effectsChanged(maid, null);
         }
         memory.toolWearChanged(maid).ifPresent(damage ->
-                MaidCriteria.toolDurabilityChanged(maid, maid.getMainHandItem(), damage));
+                worldTriggers.toolDurabilityChanged(
+                        maid,
+                        maid.getMainHandItem(),
+                        damage
+                ));
         reportOccupiedBlock(maid);
     }
 
@@ -115,10 +136,10 @@ public final class MaidAdvancementBridgeHandlers {
             return;
         }
         if (!feet.isAir()) {
-            MaidCriteria.enteredBlock(maid, feet);
+            worldTriggers.enteredBlock(maid, feet);
         }
         if (!eyes.isAir() && !eyes.equals(feet)) {
-            MaidCriteria.enteredBlock(maid, eyes);
+            worldTriggers.enteredBlock(maid, eyes);
         }
     }
 
@@ -174,10 +195,16 @@ public final class MaidAdvancementBridgeHandlers {
         DamageSource source = event.getSource();
 
         if (event.getEntity() instanceof EntityMaid victim) {
-            MaidCriteria.hurtByEntity(victim, source, dealt, taken, victim.isBlocking());
+            combatTriggers.hurtByEntity(
+                    victim,
+                    source,
+                    dealt,
+                    taken,
+                    victim.isBlocking()
+            );
         }
         if (source.getEntity() instanceof EntityMaid attacker && attacker != event.getEntity()) {
-            MaidCriteria.hurtEntity(
+            combatTriggers.hurtEntity(
                     attacker,
                     event.getEntity(),
                     source,
@@ -196,38 +223,42 @@ public final class MaidAdvancementBridgeHandlers {
         DamageSource source = event.getSource();
         Entity killer = source.getEntity();
         if (event.getEntity() instanceof EntityMaid victim && killer != null) {
-            MaidCriteria.killedByEntity(victim, killer, source);
+            combatTriggers.killedByEntity(victim, killer, source);
         }
         if (killer instanceof EntityMaid attacker && attacker != event.getEntity()) {
-            MaidCriteria.killedEntity(attacker, event.getEntity(), source);
+            combatTriggers.killedEntity(
+                    attacker,
+                    event.getEntity(),
+                    source
+            );
         }
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onEffectAdded(MobEffectEvent.Added event) {
         if (event.getEntity() instanceof EntityMaid maid) {
-            MaidCriteria.effectsChanged(maid, event.getEffectSource());
+            worldTriggers.effectsChanged(maid, event.getEffectSource());
         }
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onEffectRemoved(MobEffectEvent.Remove event) {
         if (event.getEntity() instanceof EntityMaid maid) {
-            MaidCriteria.effectsChanged(maid, null);
+            worldTriggers.effectsChanged(maid, null);
         }
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onEffectExpired(MobEffectEvent.Expired event) {
         if (event.getEntity() instanceof EntityMaid maid) {
-            MaidCriteria.effectsChanged(maid, null);
+            worldTriggers.effectsChanged(maid, null);
         }
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onItemUseFinish(LivingEntityUseItemEvent.Finish event) {
         if (event.getEntity() instanceof EntityMaid maid) {
-            MaidCriteria.consumedItem(maid, event.getItem());
+            worldTriggers.consumedItem(maid, event.getItem());
         }
     }
 
@@ -241,7 +272,7 @@ public final class MaidAdvancementBridgeHandlers {
             return;
         }
         if (event.getDuration() % USING_ITEM_INTERVAL == 0) {
-            MaidCriteria.usingItem(maid, event.getItem());
+            worldTriggers.usingItem(maid, event.getItem());
         }
     }
 
@@ -255,7 +286,12 @@ public final class MaidAdvancementBridgeHandlers {
         if (!rod.is(Items.FISHING_ROD)) {
             rod = maid.getOffhandItem();
         }
-        MaidCriteria.fishingRodHooked(maid, rod, event.getHook().position(), event.getDrops());
+        worldTriggers.fishingRodHooked(
+                maid,
+                rod,
+                event.getHook().position(),
+                event.getDrops()
+        );
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
@@ -268,7 +304,7 @@ public final class MaidAdvancementBridgeHandlers {
         }
         // 原版记的是起跳点，女仆这边没人记，按落点加落差还原一个等效高度。
         Vec3 start = maid.position().add(0.0D, event.getDistance(), 0.0D);
-        MaidCriteria.fellFromHeight(maid, start);
+        worldTriggers.fellFromHeight(maid, start);
     }
 
     /**
@@ -289,7 +325,11 @@ public final class MaidAdvancementBridgeHandlers {
         // 这个事件在扣材料之前发，配方还能从格子里反查出来。
         player.level().getRecipeManager()
                 .getRecipeFor(RecipeType.CRAFTING, grid, player.level())
-                .ifPresent(recipe -> MaidCriteria.recipeCrafted(maid, recipe.getId(), grid.getItems()));
+                .ifPresent(recipe -> worldTriggers.recipeCrafted(
+                        maid,
+                        recipe.getId(),
+                        grid.getItems()
+                ));
     }
 
     /**
@@ -308,7 +348,12 @@ public final class MaidAdvancementBridgeHandlers {
             return;
         }
         if (level.getEntity(matchmaker) instanceof EntityMaid maid) {
-            MaidCriteria.bredAnimals(maid, parent, partner, event.getChild());
+            worldTriggers.bredAnimals(
+                    maid,
+                    parent,
+                    partner,
+                    event.getChild()
+            );
         }
     }
 
@@ -320,7 +365,7 @@ public final class MaidAdvancementBridgeHandlers {
     public void onAfterEat(MaidAfterEatEvent event) {
         ItemStack rest = event.getFoodAfterEat();
         if (!rest.isEmpty() && rest.isEdible()) {
-            MaidCriteria.consumedItem(event.getMaid(), rest);
+            worldTriggers.consumedItem(event.getMaid(), rest);
         }
     }
 
@@ -330,7 +375,7 @@ public final class MaidAdvancementBridgeHandlers {
         if (maid.level().isClientSide() || event.getNewLevel() <= 0) {
             return;
         }
-        MaidCriteria.favorabilityLevel(maid, event.getNewLevel());
+        progressTriggers.favorabilityLevel(maid, event.getNewLevel());
     }
 
     /**
@@ -343,7 +388,7 @@ public final class MaidAdvancementBridgeHandlers {
         if (maid.level().isClientSide() || !orb.isAlive() || orb.tickCount <= 2 || orb.value <= 0) {
             return;
         }
-        MaidCriteria.experienceGained(maid, orb.value);
+        progressTriggers.experienceGained(maid, orb.value);
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
@@ -362,10 +407,11 @@ public final class MaidAdvancementBridgeHandlers {
         }
         ResourceKey<Level> from = maid.level().dimension();
         ResourceKey<Level> to = event.getDimension();
-        MaidCriteria.changedDimension(maid, from, to);
+        worldTriggers.changedDimension(maid, from, to);
         if (from.equals(Level.NETHER) && to.equals(Level.OVERWORLD)) {
             memory.takeNetherEntry(maid.getUUID())
-                    .ifPresent(entry -> MaidCriteria.netherTravel(maid, entry));
+                    .ifPresent(entry ->
+                            worldTriggers.netherTravel(maid, entry));
         }
     }
 
@@ -373,7 +419,7 @@ public final class MaidAdvancementBridgeHandlers {
         if (maid.level().isClientSide()) {
             return;
         }
-        MaidCriteria.inventoryChanged(maid, changed);
+        worldTriggers.inventoryChanged(maid, changed);
         memory.refreshInventory(maid);
     }
 
@@ -381,7 +427,7 @@ public final class MaidAdvancementBridgeHandlers {
         if (maid.level().isClientSide()) {
             return;
         }
-        MaidCriteria.inventoryChanged(maid);
+        worldTriggers.inventoryChanged(maid);
         memory.refreshInventory(maid);
     }
 }

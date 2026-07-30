@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.feature.advancement.server;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.advancement.port.MaidCourtshipMemory;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -20,7 +21,8 @@ import java.util.UUID;
  * 以及女仆撮合过、还没生出幼崽的动物（{@code bred_animals} 判定要用）。
  * 这些都不入档，女仆卸载时随 {@link #forget} 丢掉。
  */
-public final class MaidBridgeMemory {
+public final class MaidBridgeMemory
+        implements MaidCourtshipMemory<EntityMaid> {
     private static final EquipmentSlot[] ARMOR_SLOTS = {
             EquipmentSlot.HEAD,
             EquipmentSlot.CHEST,
@@ -88,6 +90,7 @@ public final class MaidBridgeMemory {
         return previous == null || previous != blockPrint;
     }
 
+    @Override
     public void rememberCourtedAnimal(EntityMaid maid, int animalEntityId) {
         courtedAnimals.put(animalEntityId, maid.getUUID());
     }

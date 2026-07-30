@@ -1,8 +1,17 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.github.tartaricacid.touhoulittlemaid.client.resource.CustomPackLoader;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
 import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
@@ -234,7 +243,13 @@ final class PhysicsMetadataLoader {
             if (!parsed.isJsonObject()) {
                 throw new IllegalArgumentException("metadata root must be an object");
             }
-            output.put(modelId, PhysicsMetadata.parse(parsed.getAsJsonObject(), origin));
+            output.put(
+                    modelId,
+                    PhysicsMetadataJsonParser.parse(
+                            parsed.getAsJsonObject(),
+                            origin
+                    )
+            );
         } catch (IOException | RuntimeException exception) {
             LOGGER.warn(
                     "Failed to parse maid physics metadata {} for model {}",

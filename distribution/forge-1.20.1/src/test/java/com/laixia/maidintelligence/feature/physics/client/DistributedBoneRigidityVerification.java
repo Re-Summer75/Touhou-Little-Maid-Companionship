@@ -1,17 +1,25 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
+import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.MODEL_DIRECTORY;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadGeoModel;
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
 final class DistributedBoneRigidityVerification {
@@ -33,7 +41,7 @@ final class DistributedBoneRigidityVerification {
             String fileName,
             String boneName
     ) throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(loadGeoModel(
+        BoneModelSnapshot model = coreModel(loadGeoModel(
                 MODEL_DIRECTORY.resolve(fileName)
         ));
         PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
@@ -41,7 +49,7 @@ final class DistributedBoneRigidityVerification {
                 model,
                 PhysicsMetadata.EMPTY
         );
-        AnimatedGeoBone bone = model.bones().get(boneName);
+        BoneModelSnapshot.Bone bone = model.bones().get(boneName);
         PhysicsBoneSelectionPlan.Decision decision = plan.decision(bone);
         require(
                 BoneKinematics.hasDistributedGeometry(bone)
@@ -56,7 +64,7 @@ final class DistributedBoneRigidityVerification {
     }
 
     private static void verifiesGeometryPolicy() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.distributed_bone",
                     "texture_width":32,"texture_height":32},
@@ -82,8 +90,10 @@ final class DistributedBoneRigidityVerification {
                 model,
                 PhysicsMetadata.EMPTY
         );
-        AnimatedGeoBone distributed = model.bones().get("DistributedHair");
-        AnimatedGeoBone connected = model.bones().get("ConnectedHair");
+        BoneModelSnapshot.Bone distributed =
+                model.bones().get("DistributedHair");
+        BoneModelSnapshot.Bone connected =
+                model.bones().get("ConnectedHair");
         require(
                 BoneKinematics.hasDistributedGeometry(distributed)
                         && !plan.isDriven(distributed),
@@ -94,7 +104,7 @@ final class DistributedBoneRigidityVerification {
                         && plan.isDriven(connected),
                 "Connected hair geometry was rejected as distributed"
         );
-        PhysicsMetadata explicit = PhysicsMetadata.parse(
+        PhysicsMetadata explicit = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {"schema_version":3,"mode":"auto","chains":[{
                           "id":"explicit_distributed","type":"HAIR",
@@ -129,13 +139,13 @@ final class DistributedBoneRigidityVerification {
                     .toList();
         }
         for (Path path : paths) {
-            AnimatedGeoModel model = new AnimatedGeoModel(loadGeoModel(path));
+            BoneModelSnapshot model = coreModel(loadGeoModel(path));
             PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
                     "verification:distributed_" + path.getFileName(),
                     model,
                     PhysicsMetadata.EMPTY
             );
-            for (AnimatedGeoBone bone : model.bones().values()) {
+            for (BoneModelSnapshot.Bone bone : model.bones().values()) {
                 require(
                         !BoneKinematics.hasDistributedGeometry(bone)
                                 || !plan.isDriven(bone),

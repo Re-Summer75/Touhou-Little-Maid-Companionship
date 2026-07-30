@@ -1,8 +1,7 @@
 package com.laixia.maidintelligence.feature.advancement.server;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.level.LevelFeature;
-import com.laixia.maidintelligence.feature.level.api.ExperienceSource;
+import com.laixia.maidintelligence.feature.advancement.port.MaidExperienceRewardPort;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -54,19 +53,34 @@ public final class MaidMirrorPlayer extends ServerPlayer {
 
     private EntityMaid maid;
     private PlayerAdvancements maidAdvancements;
+    private final MaidExperienceRewardPort<EntityMaid> experienceRewards;
 
-    private MaidMirrorPlayer(MinecraftServer server, ServerLevel level, GameProfile profile) {
+    private MaidMirrorPlayer(
+            MinecraftServer server,
+            ServerLevel level,
+            GameProfile profile,
+            MaidExperienceRewardPort<EntityMaid> experienceRewards
+    ) {
         super(server, level, profile);
+        this.experienceRewards = experienceRewards;
     }
 
-    static MaidMirrorPlayer create(ServerLevel level) {
+    static MaidMirrorPlayer create(
+            ServerLevel level,
+            MaidExperienceRewardPort<EntityMaid> experienceRewards
+    ) {
         MinecraftServer server = level.getServer();
         if (server == null) {
             throw new IllegalStateException("Maid mirror player requires a server level");
         }
         String seed = "tlm_companionship:maid_mirror/" + level.dimension().location();
         UUID id = UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8));
-        return new MaidMirrorPlayer(server, level, new GameProfile(id, PROFILE_NAME));
+        return new MaidMirrorPlayer(
+                server,
+                level,
+                new GameProfile(id, PROFILE_NAME),
+                experienceRewards
+        );
     }
 
     /**
@@ -162,7 +176,7 @@ public final class MaidMirrorPlayer extends ServerPlayer {
     @Override
     public void giveExperiencePoints(int points) {
         if (maid != null && points > 0) {
-            LevelFeature.INSTANCE.api().awardExperience(maid, points, ExperienceSource.ADVANCEMENT);
+            experienceRewards.reward(maid, points);
         }
     }
 

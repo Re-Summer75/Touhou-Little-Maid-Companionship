@@ -7,6 +7,9 @@ import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.GeoBuilder;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoMesh;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoModel;
+import com.laixia.maidintelligence.feature.shading.api.FaceNormalTemplate;
+import com.laixia.maidintelligence.feature.shading.application.FaceNormalTemplateBuilder;
+import com.laixia.maidintelligence.feature.shading.domain.CubeFaceTopology;
 import org.joml.Vector3f;
 
 import java.io.InputStream;
@@ -46,10 +49,10 @@ public final class ModelShadingVerification {
     }
 
     private static void verifiesFaceTopologyMatchesTlm() {
-        for (int face = 0; face < GeoCubeFaceTable.FACE_COUNT; face++) {
+        for (int face = 0; face < CubeFaceTopology.FACE_COUNT; face++) {
             for (int vertex = 0; vertex < 4; vertex++) {
                 require(
-                        GeoCubeFaceTable.corner(face, vertex)
+                        CubeFaceTopology.corner(face, vertex)
                                 == VANILLA_FACE_CORNERS[face][vertex],
                         "Face topology diverged from TLM at "
                                 + face + "/" + vertex
@@ -66,7 +69,7 @@ public final class ModelShadingVerification {
                 new Vector3f(0.2F, 0.4F, 4.0F),
                 false
         );
-        GeoMeshNormalTemplate template = GeoMeshNormalBuilder.build(mesh);
+        FaceNormalTemplate template = buildTemplate(mesh);
         require(
                 !template.hasWindingCorrections(),
                 "Positive cube unnecessarily left the Sodium fast path"
@@ -82,12 +85,12 @@ public final class ModelShadingVerification {
                 new Vector3f(0.0F, 0.0F, 4.0F),
                 true
         );
-        GeoMeshNormalTemplate template = GeoMeshNormalBuilder.build(mesh);
+        FaceNormalTemplate template = buildTemplate(mesh);
         require(
                 template.hasWindingCorrections(),
                 "Mirrored cube did not request the outside-normal writer"
         );
-        for (int face = 0; face < GeoCubeFaceTable.FACE_COUNT; face++) {
+        for (int face = 0; face < CubeFaceTopology.FACE_COUNT; face++) {
             require(
                     template.shouldReverseWinding(0, face),
                     "Mirrored face winding was not reversed outside"
@@ -112,8 +115,7 @@ public final class ModelShadingVerification {
             for (Path modelPath : models) {
                 GeoModel model = loadGeoModel(modelPath);
                 for (GeoMesh mesh : collectMeshes(model)) {
-                    GeoMeshNormalTemplate template =
-                            GeoMeshNormalBuilder.build(mesh);
+                    FaceNormalTemplate template = buildTemplate(mesh);
                     if (template.hasWindingCorrections()) {
                         correctedMeshes++;
                     }
@@ -135,7 +137,7 @@ public final class ModelShadingVerification {
 
     private static void requireCubeNormals(
             GeoMesh mesh,
-            GeoMeshNormalTemplate template,
+            FaceNormalTemplate template,
             int cube
     ) {
         Vector3f[] corners = corners(mesh, cube);
@@ -143,7 +145,7 @@ public final class ModelShadingVerification {
                 .fma(0.5F, mesh.dx(cube))
                 .fma(0.5F, mesh.dy(cube))
                 .fma(0.5F, mesh.dz(cube));
-        for (int face = 0; face < GeoCubeFaceTable.FACE_COUNT; face++) {
+        for (int face = 0; face < CubeFaceTopology.FACE_COUNT; face++) {
             if ((mesh.faces(cube) & (1 << face)) == 0) {
                 continue;
             }
@@ -152,8 +154,8 @@ public final class ModelShadingVerification {
             requireNear(normal.length(), 1.0F, 2.0E-4F, "Normal is not unit");
 
             Vector3f faceCenter = new Vector3f(
-                    corners[GeoCubeFaceTable.diagonalStart(face)]
-            ).add(corners[GeoCubeFaceTable.diagonalEnd(face)]).mul(0.5F);
+                    corners[CubeFaceTopology.diagonalStart(face)]
+            ).add(corners[CubeFaceTopology.diagonalEnd(face)]).mul(0.5F);
             Vector3f outward = faceCenter.sub(center);
             if (outward.lengthSquared() > 1.0E-12F) {
                 require(
@@ -162,17 +164,17 @@ public final class ModelShadingVerification {
                 );
             }
 
-            Vector3f first = corners[GeoCubeFaceTable.corner(face, 0)];
+            Vector3f first = corners[CubeFaceTopology.corner(face, 0)];
             requirePerpendicular(
                     normal,
                     new Vector3f(
-                            corners[GeoCubeFaceTable.corner(face, 1)]
+                            corners[CubeFaceTopology.corner(face, 1)]
                     ).sub(first)
             );
             requirePerpendicular(
                     normal,
                     new Vector3f(
-                            corners[GeoCubeFaceTable.corner(face, 3)]
+                            corners[CubeFaceTopology.corner(face, 3)]
                     ).sub(first)
             );
         }
@@ -194,7 +196,7 @@ public final class ModelShadingVerification {
     }
 
     private static void verifiesWeakTemplateCache() {
-        GeoMeshNormalCache.clear();
+        GeckoMeshNormalTemplates.clear();
         GeoMesh mesh = mesh(
                 new Vector3f(),
                 new Vector3f(1.0F, 0.0F, 0.0F),
@@ -202,12 +204,15 @@ public final class ModelShadingVerification {
                 new Vector3f(0.0F, 0.0F, 1.0F),
                 false
         );
-        GeoMeshNormalTemplate first = GeoMeshNormalCache.getOrBuild(mesh);
-        GeoMeshNormalTemplate second = GeoMeshNormalCache.getOrBuild(mesh);
+        FaceNormalTemplate first = GeckoMeshNormalTemplates.getOrBuild(mesh);
+        FaceNormalTemplate second = GeckoMeshNormalTemplates.getOrBuild(mesh);
         require(first == second, "Normal template cache missed by identity");
-        require(GeoMeshNormalCache.size() == 1, "Unexpected cache size");
-        GeoMeshNormalCache.clear();
-        require(GeoMeshNormalCache.size() == 0, "Normal cache did not clear");
+        require(GeckoMeshNormalTemplates.size() == 1, "Unexpected cache size");
+        GeckoMeshNormalTemplates.clear();
+        require(
+                GeckoMeshNormalTemplates.size() == 0,
+                "Normal cache did not clear"
+        );
     }
 
     private static GeoModel loadGeoModel(Path path) throws Exception {
@@ -274,7 +279,7 @@ public final class ModelShadingVerification {
     }
 
     private static Vector3f normal(
-            GeoMeshNormalTemplate template,
+            FaceNormalTemplate template,
             int cube,
             int face
     ) {
@@ -282,6 +287,13 @@ public final class ModelShadingVerification {
                 template.normalX(cube, face),
                 template.normalY(cube, face),
                 template.normalZ(cube, face)
+        );
+    }
+
+    private static FaceNormalTemplate buildTemplate(GeoMesh mesh) {
+        return FaceNormalTemplateBuilder.build(
+                mesh,
+                GeckoCubeGeometrySource.INSTANCE
         );
     }
 

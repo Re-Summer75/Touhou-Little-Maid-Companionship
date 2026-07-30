@@ -1,14 +1,15 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoBone;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import org.joml.Vector3f;
 
-import java.util.Map;
-
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.bonesByGeoBone;
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.forEachBone;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.requireNear;
 
@@ -16,11 +17,15 @@ final class GoldenMotionFixture {
     private GoldenMotionFixture() {
     }
 
-    static void applyAnimationPose(AnimatedGeoModel model, int frame) {
-        int[] ordinal = {0};
-        forEachBone(model, bone -> {
-            int index = ordinal[0]++;
-            Vector3f base = bone.geoBone().rotation();
+    static void applyAnimationPose(BoneModelSnapshot model, int frame) {
+        for (int index = 0; index < model.boneCount(); index++) {
+            BoneModelSnapshot.Bone bone = model.bone(index);
+            BoneModelSnapshot.RestPose initial = bone.getInitialSnapshot();
+            Vector3f base = new Vector3f(
+                    initial.rotationValueX,
+                    initial.rotationValueY,
+                    initial.rotationValueZ
+            );
             float wave = (float) Math.sin(
                     frame * 0.071D + index * 0.193D
             );
@@ -33,7 +38,7 @@ final class GoldenMotionFixture {
             bone.setPositionX(wave * 0.013F);
             bone.setPositionY(counterWave * 0.009F);
             bone.setPositionZ((wave + counterWave) * 0.007F);
-        });
+        }
     }
 
     static void motion(int frame, Vector3f output) {
@@ -78,15 +83,21 @@ final class GoldenMotionFixture {
     static void compareModelPose(
             String label,
             int frame,
-            AnimatedGeoModel expectedModel,
-            AnimatedGeoModel actualModel,
+            BoneModelSnapshot expectedModel,
+            BoneModelSnapshot actualModel,
             float tolerance
     ) {
-        Map<GeoBone, AnimatedGeoBone> actualBones =
-                bonesByGeoBone(actualModel);
-        forEachBone(expectedModel, expected -> {
-            AnimatedGeoBone actual = actualBones.get(expected.geoBone());
-            require(actual != null, label + " optimized model lost a bone");
+        require(
+                actualModel.boneCount() == expectedModel.boneCount(),
+                label + " optimized model lost a bone"
+        );
+        for (int index = 0; index < expectedModel.boneCount(); index++) {
+            BoneModelSnapshot.Bone expected = expectedModel.bone(index);
+            BoneModelSnapshot.Bone actual = actualModel.bone(index);
+            require(
+                    actual.getName().equals(expected.getName()),
+                    label + " optimized model reordered a bone"
+            );
             String prefix = label + " frame " + frame + " bone "
                     + expected.getName();
             requireNear(
@@ -125,6 +136,6 @@ final class GoldenMotionFixture {
                     tolerance,
                     prefix + " positionZ"
             );
-        });
+        }
     }
 }

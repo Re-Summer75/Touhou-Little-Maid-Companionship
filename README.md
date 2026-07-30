@@ -113,7 +113,7 @@
 2. 从 [Releases](https://github.com/Re-Summer75/Touhou-Little-Maid-Companionship/releases) 下载 `tlm-companionship-1.20.1-forge-x.x.x.jar`，放入游戏根目录的 `mods` 文件夹。
 3. 启动游戏即可，旧存档的 `maid_intelligence` 数据会静默迁移。
 
-> 当前处于 `v0.0.1` 测试阶段，功能可用但仍在快速迭代，建议先备份存档。
+> 当前处于 `v0.0.2` 测试阶段，功能可用但仍在快速迭代，建议先备份存档。
 
 ---
 
@@ -124,6 +124,7 @@
 | 文档 | 内容 |
 | --- | --- |
 | [文档主页](./docs/README.md) | 全部模块索引与维护约定 |
+| [多版本架构与版本矩阵](./docs/architecture/README.md) | feature/adapter/distribution 边界、target 路由与新增版本模板 |
 | [界面分析手册](./docs/MAID_GUI_ANALYSIS.md) | 本体 GUI 坐标、区域与附属扩展位置 |
 | [女仆原版进度系统](./docs/advancements/README.md) | 镜像玩家、桥接表、自定义触发器与界面 |
 | [状态反馈与饥饿系统](./docs/status-feedback/README.md) | 饥饿规则、双通道回血、气泡与请求动作 |

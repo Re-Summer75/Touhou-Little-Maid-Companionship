@@ -1,7 +1,16 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
+import com.laixia.maidintelligence.feature.physics.client.model.GeckoBoneModelPort;
+import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
 
 import java.util.Locale;
 
@@ -17,14 +26,16 @@ final class PhysicsKinematicsDebugText {
             AnimatedGeoBone parent,
             AnimatedGeoBone nearestSolidAncestor,
             PhysicsBoneSelectionPlan.Decision decision,
-            PhysicsBoneSelectionPlan plan
+            PhysicsBoneSelectionPlan plan,
+            GeckoBoneModelPort modelPort
     ) {
-        BoneKinematics.Metrics metrics = plan.kinematics(bone);
+        BoneModelSnapshot.Bone coreBone = modelPort.coreBone(bone);
+        BoneKinematics.Metrics metrics = plan.kinematics(coreBone);
         if (metrics == null) {
             metrics = BoneKinematics.measure(
-                    bone,
-                    parent,
-                    nearestSolidAncestor,
+                    coreBone,
+                    modelPort.coreBone(parent),
+                    modelPort.coreBone(nearestSolidAncestor),
                     decision.type(),
                     decision.structureRole()
             );

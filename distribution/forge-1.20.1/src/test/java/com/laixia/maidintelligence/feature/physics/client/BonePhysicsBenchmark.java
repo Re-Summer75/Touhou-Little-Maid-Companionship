@@ -1,15 +1,21 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.raw.pojo.Converter;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.raw.pojo.RawGeoModel;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.raw.tree.RawGeometryTree;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.GeoBuilder;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoModel;
 import com.laixia.maidintelligence.feature.physics.client.benchmark.CollisionBreakdownBenchmark;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 import org.joml.Vector3f;
 
 import java.io.InputStream;
@@ -37,7 +43,7 @@ public final class BonePhysicsBenchmark {
      * fastest rounds compares the code rather than the machine's mood.
      */
     private static final int MEASURED_ROUNDS = 5;
-    private static final IdentityHashMap<AnimatedGeoBone, Vector3f>
+    private static final IdentityHashMap<BoneModelSnapshot.Bone, Vector3f>
             INITIAL_ROTATIONS = new IdentityHashMap<>();
     private static volatile double blackhole;
 
@@ -46,9 +52,12 @@ public final class BonePhysicsBenchmark {
 
     public static void main(String[] args) throws Exception {
         GeoModel geoModel = loadWinefoxGeoModel();
-        AnimatedGeoModel referenceModel = new AnimatedGeoModel(geoModel);
-        AnimatedGeoModel legacyModel = new AnimatedGeoModel(geoModel);
-        AnimatedGeoModel constrainedModel = new AnimatedGeoModel(geoModel);
+        BoneModelSnapshot referenceModel =
+                BonePhysicsVerificationSupport.coreModel(geoModel);
+        BoneModelSnapshot legacyModel =
+                BonePhysicsVerificationSupport.coreModel(geoModel);
+        BoneModelSnapshot constrainedModel =
+                BonePhysicsVerificationSupport.coreModel(geoModel);
         PhysicsBoneSelectionPlan referencePlan =
                 PhysicsBoneDiscoverer.discover(
                         "geckolib:winefox",
@@ -163,7 +172,7 @@ public final class BonePhysicsBenchmark {
     }
 
     private static void warmReference(
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             ReferenceSpringBoneSolver solver,
             int frames
     ) {
@@ -181,7 +190,7 @@ public final class BonePhysicsBenchmark {
     }
 
     private static void warmOptimized(
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             SpringBoneSolver solver,
             int frames
     ) {
@@ -199,7 +208,7 @@ public final class BonePhysicsBenchmark {
     }
 
     private static BenchmarkResult measureReference(
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             ReferenceSpringBoneSolver solver,
             AllocationMeter allocations,
             int frames
@@ -238,7 +247,7 @@ public final class BonePhysicsBenchmark {
     }
 
     private static BenchmarkResult measureOptimized(
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             SpringBoneSolver solver,
             AllocationMeter allocations,
             int frames
@@ -280,15 +289,15 @@ public final class BonePhysicsBenchmark {
         return Math.max(1, frames / MEASURED_ROUNDS);
     }
 
-    private static void resetPose(AnimatedGeoModel model, int frame) {
+    private static void resetPose(BoneModelSnapshot model, int frame) {
         int ordinal = 0;
-        for (AnimatedGeoBone root : model.topLevelBones()) {
+        for (BoneModelSnapshot.Bone root : model.topLevelBones()) {
             ordinal = resetPose(root, frame, ordinal);
         }
     }
 
     private static int resetPose(
-            AnimatedGeoBone bone,
+            BoneModelSnapshot.Bone bone,
             int frame,
             int ordinal
     ) {
@@ -303,16 +312,21 @@ public final class BonePhysicsBenchmark {
         bone.setPositionY(0.0F);
         bone.setPositionZ(0.0F);
         int next = ordinal + 1;
-        for (AnimatedGeoBone child : bone.children()) {
+        for (BoneModelSnapshot.Bone child : bone.children()) {
             next = resetPose(child, frame, next);
         }
         return next;
     }
 
-    private static Vector3f initialRotation(AnimatedGeoBone bone) {
+    private static Vector3f initialRotation(BoneModelSnapshot.Bone bone) {
         Vector3f rotation = INITIAL_ROTATIONS.get(bone);
         if (rotation == null) {
-            rotation = bone.geoBone().rotation();
+            BoneModelSnapshot.RestPose initial = bone.getInitialSnapshot();
+            rotation = new Vector3f(
+                    initial.rotationValueX,
+                    initial.rotationValueY,
+                    initial.rotationValueZ
+            );
             INITIAL_ROTATIONS.put(bone, rotation);
         }
         return rotation;

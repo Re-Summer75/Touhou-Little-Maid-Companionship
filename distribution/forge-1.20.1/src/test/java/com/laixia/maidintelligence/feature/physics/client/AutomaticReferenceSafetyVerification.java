@@ -1,10 +1,18 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
 
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import com.google.gson.JsonParser;
+import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
 final class AutomaticReferenceSafetyVerification {
@@ -17,7 +25,7 @@ final class AutomaticReferenceSafetyVerification {
     }
 
     private static void verifiesDirectSelfReference() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.self_reference",
                     "texture_width":64,"texture_height":64},
@@ -27,7 +35,7 @@ final class AutomaticReferenceSafetyVerification {
                      "cubes":[{"origin":[-4,16,-4],"size":[8,8,8],"uv":[0,0]}]}
                   ]}]}
                 """);
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {"schema_version":3,"mode":"explicit","chains":[{
                           "type":"HAIR","root":"Root/Head",
@@ -58,7 +66,7 @@ final class AutomaticReferenceSafetyVerification {
     }
 
     private static void verifiesDrivenBoundsContributor() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.bounds_reference",
                     "texture_width":64,"texture_height":64},
@@ -69,7 +77,7 @@ final class AutomaticReferenceSafetyVerification {
                      "cubes":[{"origin":[-4,16,-4],"size":[8,8,8],"uv":[0,0]}]}
                   ]}]}
                 """);
-        PhysicsMetadata metadata = PhysicsMetadata.parse(
+        PhysicsMetadata metadata = PhysicsMetadataJsonParser.parse(
                 JsonParser.parseString("""
                         {"schema_version":3,"mode":"explicit","chains":[{
                           "type":"HAIR","root":"Root/Head/Hair",

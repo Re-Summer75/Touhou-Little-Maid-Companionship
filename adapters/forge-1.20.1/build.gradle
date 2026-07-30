@@ -8,8 +8,54 @@ tasks.register('verifyAdapterLayout') {
     group = 'verification'
     inputs.files(fileTree('src/main/java') { include '**/*.java' })
     doLast {
-        if (inputs.files.files.isEmpty()) {
-            throw new GradleException('Forge adapter contains no source files.')
+        def sources = inputs.files.files
+        if (sources.size() < 25) {
+            throw new GradleException(
+                    "Forge adapter must contain real version infrastructure; found ${sources.size()} sources."
+            )
+        }
+
+        def required = [
+                'platform/network/ModNetwork.java',
+                'feature/level/command/LevelCommands.java',
+                'feature/level/network/LevelPacketRegistrar.java',
+                'feature/interaction/network/InteractionPacketRegistrar.java',
+                'feature/advancement/network/AdvancementPacketRegistrar.java',
+                'feature/advancement/network/ForgeAdvancementPacketHandler.java',
+                'feature/advancement/menu/AdvancementMenus.java',
+                'feature/advancement/client/AdvancementClientSetup.java',
+                'feature/interaction/client/ClientInteractionSetup.java',
+                'feature/physics/client/pose/MaidPoseDriverPort.java',
+                'feature/shading/client/ShadingClientSetup.java',
+                'feature/status/service/ToolReplacementResult.java',
+                'mixin/common/HoneyBlockSlideMixin.java',
+                'mixin/client/LivingEntityRendererAccessor.java'
+        ]
+        required.each { relative ->
+            if (!file("src/main/java/com/laixia/maidintelligence/${relative}").isFile()) {
+                throw new GradleException(
+                        "Missing Forge adapter boundary source: ${relative}"
+                )
+            }
+        }
+
+        sources.each { source ->
+            def text = source.getText('UTF-8')
+            if (text.contains('com.github.tartaricacid')
+                    || text.contains('software.bernie')) {
+                throw new GradleException(
+                        "Forge adapter imports TLM/Gecko implementation: ${source}"
+                )
+            }
+        }
+
+        def channel = file(
+                'src/main/java/com/laixia/maidintelligence/platform/network/ModNetwork.java'
+        ).getText('UTF-8')
+        if (channel.contains('com.laixia.maidintelligence.feature.')) {
+            throw new GradleException(
+                    'Shared Forge channel must not import feature implementations.'
+            )
         }
     }
 }

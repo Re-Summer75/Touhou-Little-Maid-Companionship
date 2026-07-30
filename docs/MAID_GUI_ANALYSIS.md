@@ -409,7 +409,7 @@ y = 5
 当前实现文件：
 
 ```text
-src/main/java/com/laixia/maidintelligence/feature/level/client/LevelGuiHandler.java
+adapters/tlm-1.20.1-gecko3/src/main/java/com/laixia/maidintelligence/feature/level/client/LevelGuiHandler.java
 ```
 
 当前流程：
@@ -633,7 +633,7 @@ inventory/container/MaidMainContainer.java
 ### 当前等级 GUI 扩展
 
 ```text
-src/main/java/com/laixia/maidintelligence/feature/level/client/LevelGuiHandler.java
+adapters/tlm-1.20.1-gecko3/src/main/java/com/laixia/maidintelligence/feature/level/client/LevelGuiHandler.java
 ```
 
 关键行：

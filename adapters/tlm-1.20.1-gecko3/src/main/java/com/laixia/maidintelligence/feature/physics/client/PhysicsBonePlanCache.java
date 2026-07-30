@@ -1,10 +1,19 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
+import com.laixia.maidintelligence.feature.physics.client.model.GeckoBoneModelPort;
+import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -36,6 +45,7 @@ final class PhysicsBonePlanCache {
         if (cached != null && Objects.equals(cached.modelId(), modelId)) {
             return cached.plan();
         }
+        GeckoBoneModelPort modelPort = GeckoBoneModelPort.of(model);
 
         Map<String, Template> byModelId = TEMPLATES.computeIfAbsent(
                 model.geoModel(),
@@ -44,13 +54,17 @@ final class PhysicsBonePlanCache {
         Template template = byModelId.get(modelId);
         PhysicsBoneSelectionPlan plan = template == null
                 ? null
-                : template.bind(model);
+                : template.bind(model, modelPort);
         if (plan != null) {
             templateBindingCount++;
         } else {
             PhysicsMetadata metadata = PhysicsMetadataLoader.find(modelId);
-            plan = PhysicsBoneDiscoverer.discover(modelId, model, metadata);
-            byModelId.put(modelId, Template.capture(model, plan));
+            plan = PhysicsBoneDiscoverer.discover(
+                    modelId,
+                    modelPort.model(),
+                    metadata
+            );
+            byModelId.put(modelId, Template.capture(model, modelPort, plan));
             fullDiscoveryCount++;
         }
         PLANS.put(model, new Entry(modelId, plan));
@@ -62,6 +76,7 @@ final class PhysicsBonePlanCache {
         TEMPLATES.clear();
         fullDiscoveryCount = 0;
         templateBindingCount = 0;
+        GeckoBoneModelPort.clearCache();
     }
 
     static synchronized int fullDiscoveryCount() {
@@ -91,40 +106,45 @@ final class PhysicsBonePlanCache {
 
         private static Template capture(
                 AnimatedGeoModel model,
+                GeckoBoneModelPort modelPort,
                 PhysicsBoneSelectionPlan plan
         ) {
             IdentityHashMap<GeoBone, TemplateBone> bones =
                     new IdentityHashMap<>();
             for (AnimatedGeoBone bone : model.topLevelBones()) {
-                captureBone(bone, plan, bones);
+                captureBone(bone, modelPort, plan, bones);
             }
             return new Template(plan.modelId(), bones);
         }
 
         private static void captureBone(
                 AnimatedGeoBone bone,
+                GeckoBoneModelPort modelPort,
                 PhysicsBoneSelectionPlan plan,
                 IdentityHashMap<GeoBone, TemplateBone> output
         ) {
             output.put(
                     bone.geoBone(),
                     new TemplateBone(
-                            plan.decision(bone),
-                            plan.path(bone),
-                            plan.kinematics(bone)
+                            plan.decision(modelPort.coreBone(bone)),
+                            plan.path(modelPort.coreBone(bone)),
+                            plan.kinematics(modelPort.coreBone(bone))
                     )
             );
             for (AnimatedGeoBone child : bone.children()) {
-                captureBone(child, plan, output);
+                captureBone(child, modelPort, plan, output);
             }
         }
 
-        private PhysicsBoneSelectionPlan bind(AnimatedGeoModel model) {
+        private PhysicsBoneSelectionPlan bind(
+                AnimatedGeoModel model,
+                GeckoBoneModelPort modelPort
+        ) {
             PhysicsBoneSelectionPlan.Builder output =
                     PhysicsBoneSelectionPlan.builder(modelId);
             Binding binding = new Binding(output);
             for (AnimatedGeoBone bone : model.topLevelBones()) {
-                if (!bindBone(bone, binding)) {
+                if (!bindBone(bone, modelPort, binding)) {
                     return null;
                 }
             }
@@ -136,18 +156,20 @@ final class PhysicsBonePlanCache {
 
         private boolean bindBone(
                 AnimatedGeoBone bone,
+                GeckoBoneModelPort modelPort,
                 Binding binding
         ) {
             TemplateBone templateBone = bones.get(bone.geoBone());
             if (templateBone == null) {
                 return false;
             }
-            binding.output.path(bone, templateBone.path());
-            binding.output.decide(bone, templateBone.decision());
-            binding.output.kinematics(bone, templateBone.kinematics());
+            BoneModelSnapshot.Bone coreBone = modelPort.coreBone(bone);
+            binding.output.path(coreBone, templateBone.path());
+            binding.output.decide(coreBone, templateBone.decision());
+            binding.output.kinematics(coreBone, templateBone.kinematics());
             binding.boundCount++;
             for (AnimatedGeoBone child : bone.children()) {
-                if (!bindBone(child, binding)) {
+                if (!bindBone(child, modelPort, binding)) {
                     return false;
                 }
             }

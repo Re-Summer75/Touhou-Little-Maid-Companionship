@@ -2,9 +2,9 @@ package com.laixia.maidintelligence.feature.status.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.status.domain.MaidStatusState;
-import com.laixia.maidintelligence.feature.status.service.MaidStatusStore;
+import com.laixia.maidintelligence.feature.status.port.MaidStatusStore;
 
-public final class TlmMaidStatusStore implements MaidStatusStore {
+public final class TlmMaidStatusStore implements MaidStatusStore<EntityMaid> {
     @Override
     public MaidStatusState get(EntityMaid maid) {
         MaidStatusState state = maid.getData(StatusTaskData.stateKey());

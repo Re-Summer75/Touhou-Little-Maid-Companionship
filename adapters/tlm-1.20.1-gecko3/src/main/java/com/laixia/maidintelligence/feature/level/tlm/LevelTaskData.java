@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.feature.level.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.api.entity.data.TaskDataKey;
 import com.github.tartaricacid.touhoulittlemaid.entity.data.TaskDataRegister;
+import com.laixia.maidintelligence.feature.level.codec.LevelProgressCodec;
 import com.laixia.maidintelligence.feature.level.domain.LevelProgress;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 
@@ -16,10 +17,13 @@ public final class LevelTaskData {
         if (progressKey != null) {
             throw new IllegalStateException("Level task data has already been registered");
         }
-        progressKey = register.register(ModResources.id("level_progress"), LevelProgress.CODEC);
+        progressKey = register.register(
+                ModResources.id("level_progress"),
+                LevelProgressCodec.CODEC
+        );
         legacyProgressKey = register.register(
                 ModResources.legacyId("level_progress"),
-                LevelProgress.CODEC
+                LevelProgressCodec.CODEC
         );
     }
 

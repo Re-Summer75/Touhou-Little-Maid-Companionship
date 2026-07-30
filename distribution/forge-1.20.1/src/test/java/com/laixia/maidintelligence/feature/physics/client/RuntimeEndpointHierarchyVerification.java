@@ -1,13 +1,18 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.core.snapshot.BoneSnapshot;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxy;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionScratch;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.runtime.PreparedCollisionProxy;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxy;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionScratch;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.PreparedCollisionProxy;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
@@ -23,7 +28,7 @@ final class RuntimeEndpointHierarchyVerification {
     }
 
     static void run() {
-        AnimatedGeoModel model = RuntimeEndpointHierarchyFixture.model();
+        BoneModelSnapshot model = RuntimeEndpointHierarchyFixture.model();
         PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
                 "verification:runtime_endpoints",
                 model,
@@ -71,7 +76,7 @@ final class RuntimeEndpointHierarchyVerification {
     }
 
     private static void verifiesRuntimeSegmentCollision() {
-        AnimatedGeoModel model = RuntimeEndpointHierarchyFixture.model();
+        BoneModelSnapshot model = RuntimeEndpointHierarchyFixture.model();
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(
                 model,
                 PhysicsBoneDiscoverer.discover(
@@ -165,7 +170,7 @@ final class RuntimeEndpointHierarchyVerification {
         Vector3f axis = new Vector3f();
         for (int index = 0; index < layout.activeNodeCount(); index++) {
             PhysicsSolverLayout.Node node = layout.node(index);
-            AnimatedGeoBone bone = node.bone();
+            BoneModelSnapshot.Bone bone = node.bone();
             Matrix4f parent = node.parentIndex() < 0
                     ? identity
                     : transforms[node.parentIndex()];
@@ -215,12 +220,12 @@ final class RuntimeEndpointHierarchyVerification {
         }
     }
 
-    private static void applyAnimationPose(AnimatedGeoModel model) {
-        for (AnimatedGeoBone root : model.topLevelBones()) {
+    private static void applyAnimationPose(BoneModelSnapshot model) {
+        for (BoneModelSnapshot.Bone root : model.topLevelBones()) {
             resetBone(root);
         }
-        AnimatedGeoBone head = find(model, "Head");
-        AnimatedGeoBone parent = find(model, "ParentHair");
+        BoneModelSnapshot.Bone head = find(model, "Head");
+        BoneModelSnapshot.Bone parent = find(model, "ParentHair");
         require(head != null && parent != null,
                 "Runtime endpoint animation bones are missing");
         head.setRotationX(0.18F);
@@ -235,8 +240,8 @@ final class RuntimeEndpointHierarchyVerification {
         parent.setScaleZ(1.05F);
     }
 
-    private static void resetBone(AnimatedGeoBone bone) {
-        BoneSnapshot initial = bone.getInitialSnapshot();
+    private static void resetBone(BoneModelSnapshot.Bone bone) {
+        BoneModelSnapshot.RestPose initial = bone.getInitialSnapshot();
         bone.setRotationX(initial.rotationValueX);
         bone.setRotationY(initial.rotationValueY);
         bone.setRotationZ(initial.rotationValueZ);
@@ -246,7 +251,7 @@ final class RuntimeEndpointHierarchyVerification {
         bone.setScaleX(initial.scaleValueX);
         bone.setScaleY(initial.scaleValueY);
         bone.setScaleZ(initial.scaleValueZ);
-        for (AnimatedGeoBone child : bone.children()) {
+        for (BoneModelSnapshot.Bone child : bone.children()) {
             resetBone(child);
         }
     }
@@ -260,9 +265,12 @@ final class RuntimeEndpointHierarchyVerification {
         return -1;
     }
 
-    private static AnimatedGeoBone find(AnimatedGeoModel model, String name) {
-        for (AnimatedGeoBone root : model.topLevelBones()) {
-            AnimatedGeoBone found = find(root, name);
+    private static BoneModelSnapshot.Bone find(
+            BoneModelSnapshot model,
+            String name
+    ) {
+        for (BoneModelSnapshot.Bone root : model.topLevelBones()) {
+            BoneModelSnapshot.Bone found = find(root, name);
             if (found != null) {
                 return found;
             }
@@ -270,12 +278,15 @@ final class RuntimeEndpointHierarchyVerification {
         return null;
     }
 
-    private static AnimatedGeoBone find(AnimatedGeoBone bone, String name) {
+    private static BoneModelSnapshot.Bone find(
+            BoneModelSnapshot.Bone bone,
+            String name
+    ) {
         if (bone.getName().equals(name)) {
             return bone;
         }
-        for (AnimatedGeoBone child : bone.children()) {
-            AnimatedGeoBone found = find(child, name);
+        for (BoneModelSnapshot.Bone child : bone.children()) {
+            BoneModelSnapshot.Bone found = find(child, name);
             if (found != null) {
                 return found;
             }

@@ -54,7 +54,7 @@ textures/chat_bubble/maid_emoji/
 附属可直接添加资源：
 
 ```text
-src/main/resources/assets/tlm_companionship/
+distribution/forge-1.20.1/src/main/resources/assets/tlm_companionship/
 textures/chat_bubble/maid_emoji/happy.png
 ```
 

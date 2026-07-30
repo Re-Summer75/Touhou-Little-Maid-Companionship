@@ -1,20 +1,29 @@
 package com.laixia.maidintelligence.feature.physics.client.benchmark;
 
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.raw.pojo.Converter;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.raw.pojo.RawGeoModel;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.raw.tree.RawGeometryTree;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.GeoBuilder;
 import com.laixia.maidintelligence.feature.physics.client.CollisionBenchmarkAccess;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.client.model.GeckoBoneModelPort;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 
 final class CollisionBenchmarkFixture {
     private CollisionBenchmarkFixture() {
     }
 
     static Scenario create(Kind kind, int schema) {
-        AnimatedGeoModel model = model(kind.geometry);
+        BoneModelSnapshot model = model(kind.geometry);
         String modelId = "benchmark:" + kind.name().toLowerCase()
                 + "_schema" + schema;
         PhysicsSolverLayout layout = CollisionBenchmarkAccess.buildLayout(
@@ -39,13 +48,13 @@ final class CollisionBenchmarkFixture {
         );
     }
 
-    private static AnimatedGeoModel model(String json) {
+    private static BoneModelSnapshot model(String json) {
         RawGeoModel raw = Converter.fromJsonString(json);
-        return new AnimatedGeoModel(
+        return GeckoBoneModelPort.snapshotOf(new AnimatedGeoModel(
                 GeoBuilder.getGeoBuilder().constructGeoModel(
                         RawGeometryTree.parseHierarchy(raw)
                 )
-        );
+        ));
     }
 
     private static String metadata(Kind kind, int schema) {
@@ -113,7 +122,7 @@ final class CollisionBenchmarkFixture {
 
     record Scenario(
             String label,
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             PhysicsSolverLayout layout,
             SpringBoneSolver solver
     ) {

@@ -1,9 +1,15 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -60,7 +66,7 @@ final class SeatedOverlapVerification {
     }
 
     private static void verifiesHeldOverlapComesToRest() throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(
+        BoneModelSnapshot model = BonePhysicsVerificationSupport.coreModel(
                 BonePhysicsVerificationSupport.loadGeoModel(
                         BonePhysicsVerificationSupport.MODEL_DIRECTORY
                                 .resolve(MODEL)
@@ -72,7 +78,7 @@ final class SeatedOverlapVerification {
                         "verification:seated", model, PhysicsMetadata.EMPTY
                 )
         );
-        List<AnimatedGeoBone> legs = legs(model);
+        List<BoneModelSnapshot.Bone> legs = legs(model);
         require(!legs.isEmpty(), MODEL + " has no leg bones to seat");
         int[] skirt = skirtSegments(layout);
         require(skirt.length > 0, MODEL + " has no driven skirt segments");
@@ -135,23 +141,25 @@ final class SeatedOverlapVerification {
     }
 
     /** Holds a seated pose: thighs forward, shins hanging down. */
-    private static void seat(List<AnimatedGeoBone> legs) {
-        for (AnimatedGeoBone leg : legs) {
+    private static void seat(List<BoneModelSnapshot.Bone> legs) {
+        for (BoneModelSnapshot.Bone leg : legs) {
             boolean lower = leg.getName().contains("Lower");
             leg.setRotationX(lower ? -THIGH_RADIANS : THIGH_RADIANS);
         }
     }
 
-    private static List<AnimatedGeoBone> legs(AnimatedGeoModel model) {
-        List<AnimatedGeoBone> found = new ArrayList<>();
-        BonePhysicsVerificationSupport.forEachBone(model, bone -> {
+    private static List<BoneModelSnapshot.Bone> legs(
+            BoneModelSnapshot model
+    ) {
+        List<BoneModelSnapshot.Bone> found = new ArrayList<>();
+        for (BoneModelSnapshot.Bone bone : model.boneList()) {
             String name = bone.getName();
             if (name.equals("LeftLeg") || name.equals("RightLeg")
                     || name.equals("LeftLowerLeg")
                     || name.equals("RightLowerLeg")) {
                 found.add(bone);
             }
-        });
+        }
         return found;
     }
 

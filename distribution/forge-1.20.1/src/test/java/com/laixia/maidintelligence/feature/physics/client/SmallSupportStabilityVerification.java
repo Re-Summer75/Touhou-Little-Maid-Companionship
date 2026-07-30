@@ -1,10 +1,16 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.BoneKinematics;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
 
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
+import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
+
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
 /**
@@ -21,8 +27,8 @@ final class SmallSupportStabilityVerification {
     }
 
     private static void verifiesTinySingleCubeCorrection() {
-        AnimatedGeoModel model = tinyModel(0.0F, "TinyRibbon");
-        AnimatedGeoBone attachment = model.bones().get("TinyRibbon");
+        BoneModelSnapshot model = tinyModel(0.0F, "TinyRibbon");
+        BoneModelSnapshot.Bone attachment = model.bones().get("TinyRibbon");
         PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
                 "verification:tiny_supported_mount",
                 model,
@@ -48,8 +54,8 @@ final class SmallSupportStabilityVerification {
     }
 
     private static void verifiesTinyUnsupportedMountRemainsRigid() {
-        AnimatedGeoModel model = tinyUnsupportedDanglingModel();
-        AnimatedGeoBone attachment = model.bones().get("RibbonMount");
+        BoneModelSnapshot model = tinyUnsupportedDanglingModel();
+        BoneModelSnapshot.Bone attachment = model.bones().get("RibbonMount");
         PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
                 "verification:tiny_unsupported_mount",
                 model,
@@ -67,7 +73,7 @@ final class SmallSupportStabilityVerification {
     }
 
     private static void verifiesUpwardHairKeepsItsCantileverRoot() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.tiny_cantilever",
                     "texture_width":16,"texture_height":16},
@@ -78,7 +84,7 @@ final class SmallSupportStabilityVerification {
                      "cubes":[{"origin":[-.5,20,-.5],"size":[1,2,1],"uv":[0,0]}]}
                   ]}]}
                 """);
-        AnimatedGeoBone head = model.bones().get("Head");
+        BoneModelSnapshot.Bone head = model.bones().get("Head");
         BoneKinematics.Metrics metrics = BoneKinematics.measure(
                 model.bones().get("Ahoge"),
                 head,
@@ -93,11 +99,11 @@ final class SmallSupportStabilityVerification {
         );
     }
 
-    private static AnimatedGeoModel tinyModel(
+    private static BoneModelSnapshot tinyModel(
             float depthOffset,
             String name
     ) {
-        return modelFromJson("""
+        return coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.tiny_support",
                     "texture_width":16,"texture_height":16},
@@ -110,8 +116,8 @@ final class SmallSupportStabilityVerification {
                 """.formatted(name, depthOffset, depthOffset));
     }
 
-    private static AnimatedGeoModel tinyUnsupportedDanglingModel() {
-        return modelFromJson("""
+    private static BoneModelSnapshot tinyUnsupportedDanglingModel() {
+        return coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.tiny_unsupported",
                     "texture_width":16,"texture_height":16},

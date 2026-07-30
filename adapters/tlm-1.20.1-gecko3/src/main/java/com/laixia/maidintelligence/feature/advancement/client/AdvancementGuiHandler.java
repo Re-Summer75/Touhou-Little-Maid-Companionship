@@ -3,7 +3,8 @@ package com.laixia.maidintelligence.feature.advancement.client;
 import com.github.tartaricacid.touhoulittlemaid.api.event.client.MaidContainerGuiEvent;
 import com.github.tartaricacid.touhoulittlemaid.client.gui.entity.maid.AbstractMaidContainerGui;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.platform.network.ModNetwork;
+import com.laixia.maidintelligence.feature.advancement.application.layout.AdvancementTabSlots;
+import com.laixia.maidintelligence.feature.advancement.network.AdvancementNetwork;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraftforge.api.distmarker.Dist;
@@ -37,7 +38,7 @@ public final class AdvancementGuiHandler {
 
         MaidAdvancementTabButton button = new MaidAdvancementTabButton(
                 gui instanceof MaidAdvancementPageScreen,
-                ignored -> ModNetwork.sendOpenMaidAdvancementPage(maid.getId())
+                ignored -> AdvancementNetwork.openPage(maid.getId())
         );
         place(button, gui, event.getLeftPos(), event.getTopPos());
         event.addButton(BUTTON_NAME, button);

@@ -5,6 +5,7 @@ import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.GeoLayerRenderer;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.IGeoEntityRenderer;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.ILocationModel;
+import com.laixia.maidintelligence.feature.interaction.domain.FaceGeometry;
 import com.laixia.maidintelligence.feature.shading.client.ShadowPassDetector;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;

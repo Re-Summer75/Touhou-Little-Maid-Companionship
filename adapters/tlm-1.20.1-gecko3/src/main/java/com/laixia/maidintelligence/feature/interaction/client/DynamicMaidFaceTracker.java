@@ -1,7 +1,10 @@
 package com.laixia.maidintelligence.feature.interaction.client;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.interaction.domain.MaidFacePlane;
 import com.laixia.maidintelligence.feature.interaction.domain.MouthTargetRegion;
+import com.laixia.maidintelligence.platform.geometry.MinecraftGeometryAdapter;
+import com.laixia.maidintelligence.shared.geometry.Vec3d;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -13,7 +16,8 @@ import java.util.WeakHashMap;
 @OnlyIn(Dist.CLIENT)
 public final class DynamicMaidFaceTracker {
     private static final double MAX_TRACE_DISTANCE = 8.0D;
-    private static final Vec3 CROSSHAIR_RAY_DIRECTION = new Vec3(0.0D, 0.0D, -1.0D);
+    private static final Vec3d CROSSHAIR_RAY_DIRECTION =
+            new Vec3d(0.0D, 0.0D, -1.0D);
     private static final long MAX_REGION_AGE_NANOS = 1_000_000_000L;
     private static final Map<EntityMaid, FaceRegion> REGIONS = new WeakHashMap<>();
 
@@ -21,18 +25,22 @@ public final class DynamicMaidFaceTracker {
     }
 
     public static void update(EntityMaid maid, MaidFacePlane plane) {
-        Vec3 renderCenter = plane.point(
+        Vec3d renderCenter = plane.point(
                 MouthTargetRegion.CENTER_U,
                 MouthTargetRegion.CENTER_V
         );
-        Vec3 renderNormal = plane.normal();
+        Vec3d renderNormal = plane.normal();
         if (renderNormal.dot(renderCenter.scale(-1.0D)) < 0.0D) {
             renderNormal = renderNormal.scale(-1.0D);
         }
         REGIONS.put(maid, new FaceRegion(
                 plane,
-                ViewSpaceWorldPosition.fromRenderPosition(renderCenter),
-                ViewSpaceWorldPosition.fromRenderDirection(renderNormal),
+                ViewSpaceWorldPosition.fromRenderPosition(
+                        MinecraftGeometryAdapter.toMinecraft(renderCenter)
+                ),
+                ViewSpaceWorldPosition.fromRenderDirection(
+                        MinecraftGeometryAdapter.toMinecraft(renderNormal)
+                ),
                 System.nanoTime()
         ));
     }
@@ -45,7 +53,7 @@ public final class DynamicMaidFaceTracker {
 
         return region.plane()
                 .intersectTarget(
-                        Vec3.ZERO,
+                        Vec3d.ZERO,
                         CROSSHAIR_RAY_DIRECTION,
                         MAX_TRACE_DISTANCE
                 )

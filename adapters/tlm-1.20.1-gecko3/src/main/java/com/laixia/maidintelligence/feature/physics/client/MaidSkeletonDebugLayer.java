@@ -1,5 +1,14 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.client.model.GeckoBoneModelPort;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.GeoLayerRenderer;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.IGeoEntityRenderer;
@@ -87,8 +96,9 @@ public final class MaidSkeletonDebugLayer<T extends Mob, R extends IGeoEntityRen
                 lines,
                 MaidBonePhysics.lastSolver(maid)
         );
+        GeckoBoneModelPort modelPort = GeckoBoneModelPort.of(model);
         for (AnimatedGeoBone bone : model.topLevelBones()) {
-            renderBone(poseStack, lines, bone, plan);
+            renderBone(poseStack, lines, bone, plan, modelPort);
         }
     }
 
@@ -96,15 +106,18 @@ public final class MaidSkeletonDebugLayer<T extends Mob, R extends IGeoEntityRen
             PoseStack poseStack,
             VertexConsumer lines,
             AnimatedGeoBone bone,
-            PhysicsBoneSelectionPlan plan
+            PhysicsBoneSelectionPlan plan,
+            GeckoBoneModelPort modelPort
     ) {
         poseStack.pushPose();
         RenderUtils.prepMatrixForBone(poseStack, bone);
         Matrix4f pose = poseStack.last().pose();
 
-        PhysicsBoneSelectionPlan.Decision decision = plan.decision(bone);
-        boolean driven = MaidBonePhysics.isDriven(bone, plan);
-        var metrics = driven ? plan.kinematics(bone) : null;
+        BoneModelSnapshot.Bone coreBone = modelPort.coreBone(bone);
+        PhysicsBoneSelectionPlan.Decision decision =
+                plan.decision(coreBone);
+        boolean driven = plan.isDriven(coreBone);
+        var metrics = driven ? plan.kinematics(coreBone) : null;
         float size = driven ? DRIVEN_ORIGIN_SIZE : ORIGIN_SIZE;
         int[] originColor = !driven
                 ? IDLE_ORIGIN
@@ -170,7 +183,7 @@ public final class MaidSkeletonDebugLayer<T extends Mob, R extends IGeoEntityRen
         }
 
         for (AnimatedGeoBone child : bone.children()) {
-            renderBone(poseStack, lines, child, plan);
+            renderBone(poseStack, lines, child, plan, modelPort);
         }
         poseStack.popPose();
     }

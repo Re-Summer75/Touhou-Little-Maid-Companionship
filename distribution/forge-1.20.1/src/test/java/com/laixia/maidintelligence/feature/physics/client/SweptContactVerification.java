@@ -1,9 +1,15 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -77,7 +83,7 @@ final class SweptContactVerification {
     }
 
     private static void verifiesSweptLegDrivesTheSkirt() throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(
+        BoneModelSnapshot model = BonePhysicsVerificationSupport.coreModel(
                 BonePhysicsVerificationSupport.loadGeoModel(
                         BonePhysicsVerificationSupport.MODEL_DIRECTORY
                                 .resolve(MODEL)
@@ -89,7 +95,7 @@ final class SweptContactVerification {
                         "verification:swept", model, PhysicsMetadata.EMPTY
                 )
         );
-        List<AnimatedGeoBone> legs = legs(model);
+        List<BoneModelSnapshot.Bone> legs = legs(model);
         require(!legs.isEmpty(), MODEL + " has no leg bones to swing");
         int[] skirt = skirtSegments(layout);
         require(skirt.length > 0, MODEL + " has no driven skirt segments");
@@ -117,8 +123,8 @@ final class SweptContactVerification {
     /** Furthest the skirt is driven off its settled pose at one stride rate. */
     private static float deflection(
             PhysicsSolverLayout layout,
-            AnimatedGeoModel model,
-            List<AnimatedGeoBone> legs,
+            BoneModelSnapshot model,
+            List<BoneModelSnapshot.Bone> legs,
             int[] skirt,
             float stride
     ) {
@@ -164,24 +170,29 @@ final class SweptContactVerification {
         return driven;
     }
 
-    private static void swing(List<AnimatedGeoBone> legs, float angle) {
-        for (AnimatedGeoBone leg : legs) {
+    private static void swing(
+            List<BoneModelSnapshot.Bone> legs,
+            float angle
+    ) {
+        for (BoneModelSnapshot.Bone leg : legs) {
             boolean lower = leg.getName().contains("Lower");
             boolean right = leg.getName().startsWith("Right");
             leg.setRotationX((right ? -angle : angle) * (lower ? -0.6F : 1.0F));
         }
     }
 
-    private static List<AnimatedGeoBone> legs(AnimatedGeoModel model) {
-        List<AnimatedGeoBone> found = new ArrayList<>();
-        BonePhysicsVerificationSupport.forEachBone(model, bone -> {
+    private static List<BoneModelSnapshot.Bone> legs(
+            BoneModelSnapshot model
+    ) {
+        List<BoneModelSnapshot.Bone> found = new ArrayList<>();
+        for (BoneModelSnapshot.Bone bone : model.boneList()) {
             String name = bone.getName();
             if (name.equals("LeftLeg") || name.equals("RightLeg")
                     || name.equals("LeftLowerLeg")
                     || name.equals("RightLowerLeg")) {
                 found.add(bone);
             }
-        });
+        }
         return found;
     }
 

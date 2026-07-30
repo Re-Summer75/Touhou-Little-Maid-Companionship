@@ -1,14 +1,21 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 import org.joml.Vector3f;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.MODEL_DIRECTORY;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadGeoModel;
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.modelFromJson;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
 final class AccessoryChainIndependenceVerification {
@@ -23,7 +30,7 @@ final class AccessoryChainIndependenceVerification {
     }
 
     private static void verifiesZhibanSegmentGradient() throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(loadGeoModel(
+        BoneModelSnapshot model = coreModel(loadGeoModel(
                 MODEL_DIRECTORY.resolve("zhiban_hanfu.json")
         ));
         PhysicsBoneSelectionPlan plan = discover(model, "zhiban_hanfu");
@@ -52,7 +59,7 @@ final class AccessoryChainIndependenceVerification {
     }
 
     private static void verifiesWinefoxSegmentGradient() throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(loadGeoModel(
+        BoneModelSnapshot model = coreModel(loadGeoModel(
                 MODEL_DIRECTORY.resolve("winefox.json")
         ));
         PhysicsBoneSelectionPlan plan = discover(model, "winefox");
@@ -66,7 +73,7 @@ final class AccessoryChainIndependenceVerification {
     }
 
     private static void verifiesSegmentsRespondIndependently() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.segment_response",
                     "texture_width":32,"texture_height":32},
@@ -89,8 +96,8 @@ final class AccessoryChainIndependenceVerification {
             resetPose(model);
             solver.solve(released, 0.0F, 1.0F / 60.0F, false);
         }
-        AnimatedGeoBone root = model.bones().get("HairRoot");
-        AnimatedGeoBone tip = model.bones().get("HairTip");
+        BoneModelSnapshot.Bone root = model.bones().get("HairRoot");
+        BoneModelSnapshot.Bone tip = model.bones().get("HairTip");
         Vector3f controlRoot = rotation(root, new Vector3f());
         Vector3f controlTip = rotation(tip, new Vector3f());
 
@@ -119,7 +126,7 @@ final class AccessoryChainIndependenceVerification {
     }
 
     private static void verifiesVisibleRigidGapBreaksChain() {
-        AnimatedGeoModel model = modelFromJson("""
+        BoneModelSnapshot model = coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
                   "description":{"identifier":"geometry.visible_chain_gap",
                     "texture_width":32,"texture_height":32},
@@ -151,9 +158,9 @@ final class AccessoryChainIndependenceVerification {
 
     private static void verifyGradient(
             PhysicsBoneSelectionPlan plan,
-            AnimatedGeoBone root,
-            AnimatedGeoBone middle,
-            AnimatedGeoBone tip,
+            BoneModelSnapshot.Bone root,
+            BoneModelSnapshot.Bone middle,
+            BoneModelSnapshot.Bone tip,
             String label
     ) {
         require(root != null && tip != null, label + " fixture is incomplete");
@@ -199,7 +206,7 @@ final class AccessoryChainIndependenceVerification {
     }
 
     private static PhysicsBoneSelectionPlan discover(
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             String id
     ) {
         return PhysicsBoneDiscoverer.discover(
@@ -209,8 +216,8 @@ final class AccessoryChainIndependenceVerification {
         );
     }
 
-    private static void resetPose(AnimatedGeoModel model) {
-        for (AnimatedGeoBone bone : model.bones().values()) {
+    private static void resetPose(BoneModelSnapshot model) {
+        for (BoneModelSnapshot.Bone bone : model.bones().values()) {
             bone.setRotationX(0.0F);
             bone.setRotationY(0.0F);
             bone.setRotationZ(0.0F);
@@ -224,7 +231,7 @@ final class AccessoryChainIndependenceVerification {
     }
 
     private static Vector3f rotation(
-            AnimatedGeoBone bone,
+            BoneModelSnapshot.Bone bone,
             Vector3f output
     ) {
         return output.set(

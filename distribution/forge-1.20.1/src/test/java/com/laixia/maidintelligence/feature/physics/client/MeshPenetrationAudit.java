@@ -1,15 +1,21 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
-import com.laixia.maidintelligence.feature.physics.client.solver.SwingRange;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxy;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxyKind;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySet;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.CollisionProxySource;
-import com.laixia.maidintelligence.feature.physics.client.solver.collision.runtime.CollisionProxyDebugData;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.layout.SwingRange;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxy;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxyKind;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySet;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySource;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.CollisionProxyDebugData;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -124,7 +130,7 @@ public final class MeshPenetrationAudit {
 
     /** Lists the exact collider references attached to one driven segment. */
     private static void proxies(String model, String bone) throws Exception {
-        AnimatedGeoModel geo = new AnimatedGeoModel(
+        BoneModelSnapshot geo = BonePhysicsVerificationSupport.coreModel(
                 BonePhysicsVerificationSupport.loadGeoModel(
                         BonePhysicsVerificationSupport.MODEL_DIRECTORY
                                 .resolve(model)
@@ -132,7 +138,7 @@ public final class MeshPenetrationAudit {
         );
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(
                 geo,
-                PhysicsBoneDiscoverer.discover(
+                BonePhysicsVerificationSupport.discover(
                         "audit:proxies:" + model,
                         geo,
                         PhysicsMetadata.EMPTY
@@ -182,7 +188,7 @@ public final class MeshPenetrationAudit {
      * and same window as the summary, so the figures are comparable to it.
      */
     private static void chain(String model, String prefix) throws Exception {
-        AnimatedGeoModel geo = new AnimatedGeoModel(
+        BoneModelSnapshot geo = BonePhysicsVerificationSupport.coreModel(
                 BonePhysicsVerificationSupport.loadGeoModel(
                         BonePhysicsVerificationSupport.MODEL_DIRECTORY
                                 .resolve(model)
@@ -190,23 +196,24 @@ public final class MeshPenetrationAudit {
         );
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(
                 geo,
-                PhysicsBoneDiscoverer.discover(
+                BonePhysicsVerificationSupport.discover(
                         "chain:" + model, geo, PhysicsMetadata.EMPTY
                 )
         );
         chainReport(
-                layout, geo, PhysicsBoneGeometry.analyze(geo), prefix, model
+                layout, geo, BonePhysicsVerificationSupport.analyze(geo),
+                prefix, model
         );
     }
 
     private static void chainReport(
             PhysicsSolverLayout layout,
-            AnimatedGeoModel geo,
+            BoneModelSnapshot geo,
             PhysicsBoneGeometry.Analysis geometry,
             String prefix,
             String model
     ) {
-        List<AnimatedGeoBone> legs = legs(geo);
+        List<BoneModelSnapshot.Bone> legs = legs(geo);
         List<Integer> picked = new ArrayList<>();
         for (int index = 0; index < layout.activeNodeCount(); index++) {
             PhysicsSolverLayout.Node node = layout.node(index);
@@ -233,7 +240,7 @@ public final class MeshPenetrationAudit {
             PhysicsSolverLayout layout,
             PhysicsBoneGeometry.Analysis geometry,
             List<Integer> picked,
-            List<AnimatedGeoBone> legs
+            List<BoneModelSnapshot.Bone> legs
     ) {
         SpringBoneSolver solver = new SpringBoneSolver(layout);
         int size = picked.size();
@@ -275,7 +282,7 @@ public final class MeshPenetrationAudit {
             SpringBoneSolver solver,
             PhysicsSolverLayout layout,
             List<Integer> picked,
-            List<AnimatedGeoBone> legs,
+            List<BoneModelSnapshot.Bone> legs,
             Vector3f[] previous,
             Vector3f[] lastStep,
             float[] path,
@@ -482,7 +489,7 @@ public final class MeshPenetrationAudit {
      * sources were penetrating, and the depth each was at.
      */
     private static void trace(String model, String bone) throws Exception {
-        AnimatedGeoModel geo = new AnimatedGeoModel(
+        BoneModelSnapshot geo = BonePhysicsVerificationSupport.coreModel(
                 BonePhysicsVerificationSupport.loadGeoModel(
                         BonePhysicsVerificationSupport.MODEL_DIRECTORY
                                 .resolve(model)
@@ -490,7 +497,7 @@ public final class MeshPenetrationAudit {
         );
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(
                 geo,
-                PhysicsBoneDiscoverer.discover(
+                BonePhysicsVerificationSupport.discover(
                         "trace:" + model, geo, PhysicsMetadata.EMPTY
                 )
         );
@@ -520,9 +527,9 @@ public final class MeshPenetrationAudit {
             }
             return;
         }
-        List<AnimatedGeoBone> legs = legs(geo);
+        List<BoneModelSnapshot.Bone> legs = legs(geo);
         PhysicsBoneGeometry.Analysis geometry =
-                PhysicsBoneGeometry.analyze(geo);
+                BonePhysicsVerificationSupport.analyze(geo);
         SpringBoneSolver solver = new SpringBoneSolver(layout);
         int slot = layout.node(node).drivenSlot();
         solver.solve(new Vector3f(), 0.0F, 0.0F, false);
@@ -651,12 +658,12 @@ public final class MeshPenetrationAudit {
 
     private static Row audit(Path path) throws Exception {
         String name = path.getFileName().toString();
-        AnimatedGeoModel model = new AnimatedGeoModel(
+        BoneModelSnapshot model = BonePhysicsVerificationSupport.coreModel(
                 BonePhysicsVerificationSupport.loadGeoModel(path)
         );
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(
                 model,
-                PhysicsBoneDiscoverer.discover(
+                BonePhysicsVerificationSupport.discover(
                         "audit:" + name, model, PhysicsMetadata.EMPTY
                 )
         );
@@ -666,7 +673,7 @@ public final class MeshPenetrationAudit {
          * matched back by bone identity.
          */
         PhysicsBoneGeometry.Analysis geometry =
-                PhysicsBoneGeometry.analyze(model);
+                BonePhysicsVerificationSupport.analyze(model);
         Row row = measure(layout, geometry, model);
         print(name.replace(".json", ""), row);
         return row;
@@ -675,10 +682,10 @@ public final class MeshPenetrationAudit {
     private static Row measure(
             PhysicsSolverLayout layout,
             PhysicsBoneGeometry.Analysis geometry,
-            AnimatedGeoModel model
+            BoneModelSnapshot model
     ) {
         SpringBoneSolver solver = new SpringBoneSolver(layout);
-        List<AnimatedGeoBone> legs = legs(model);
+        List<BoneModelSnapshot.Bone> legs = legs(model);
         int[] driven = drivenSegments(layout);
         Row row = new Row();
         row.segments = driven.length;
@@ -861,8 +868,8 @@ public final class MeshPenetrationAudit {
      * puts the legs somewhere the panels were never drawn to accommodate and
      * measures a configuration the model never renders.
      */
-    private static void sit(List<AnimatedGeoBone> bones) {
-        for (AnimatedGeoBone bone : bones) {
+    private static void sit(List<BoneModelSnapshot.Bone> bones) {
+        for (BoneModelSnapshot.Bone bone : bones) {
             Float degrees = SIT_POSE.get(bone.getName());
             if (degrees != null) {
                 bone.setRotationX((float) Math.toRadians(degrees));
@@ -961,13 +968,13 @@ public final class MeshPenetrationAudit {
     }
 
     /** Every bone the sit pose keyframes, whichever of them a model has. */
-    private static List<AnimatedGeoBone> legs(AnimatedGeoModel model) {
-        List<AnimatedGeoBone> found = new ArrayList<>();
-        BonePhysicsVerificationSupport.forEachBone(model, bone -> {
+    private static List<BoneModelSnapshot.Bone> legs(BoneModelSnapshot model) {
+        List<BoneModelSnapshot.Bone> found = new ArrayList<>();
+        for (BoneModelSnapshot.Bone bone : model.boneList()) {
             if (SIT_POSE.containsKey(bone.getName())) {
                 found.add(bone);
             }
-        });
+        }
         return found;
     }
 

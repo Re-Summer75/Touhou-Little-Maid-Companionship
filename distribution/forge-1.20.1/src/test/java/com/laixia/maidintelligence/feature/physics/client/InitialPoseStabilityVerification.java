@@ -1,9 +1,15 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
-import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
-import com.laixia.maidintelligence.feature.physics.client.solver.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.client.solver.SpringBoneSolver;
+import com.laixia.maidintelligence.feature.physics.api.*;
+import com.laixia.maidintelligence.feature.physics.metadata.*;
+import com.laixia.maidintelligence.feature.physics.discovery.*;
+import com.laixia.maidintelligence.feature.physics.geometry.*;
+import com.laixia.maidintelligence.feature.physics.layout.*;
+import com.laixia.maidintelligence.feature.physics.engine.*;
+import com.laixia.maidintelligence.feature.physics.session.*;
+
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 import org.joml.Vector3f;
 
 import java.nio.file.Files;
@@ -12,7 +18,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.MODEL_DIRECTORY;
-import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.forEachBone;
+import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.loadGeoModel;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.require;
 
@@ -38,7 +44,7 @@ final class InitialPoseStabilityVerification {
     }
 
     private static void verifyModel(Path modelPath) throws Exception {
-        AnimatedGeoModel model = new AnimatedGeoModel(loadGeoModel(modelPath));
+        BoneModelSnapshot model = coreModel(loadGeoModel(modelPath));
         String fileName = modelPath.getFileName().toString();
         PhysicsBoneSelectionPlan plan = PhysicsBoneDiscoverer.discover(
                 "verification:initial_pose_" + fileName,
@@ -55,11 +61,11 @@ final class InitialPoseStabilityVerification {
 
     private static void verifyUnchanged(
             String label,
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             PhysicsBoneSelectionPlan plan,
             SpringBoneSolver solver
     ) {
-        IdentityHashMap<AnimatedGeoBone, Transform> before =
+        IdentityHashMap<BoneModelSnapshot.Bone, Transform> before =
                 captureDriven(model, plan);
         solver.solve(new Vector3f(), 0.0F, 0.0F, false);
         before.forEach((bone, transform) -> require(
@@ -71,35 +77,35 @@ final class InitialPoseStabilityVerification {
         ));
     }
 
-    private static IdentityHashMap<AnimatedGeoBone, Transform> captureDriven(
-            AnimatedGeoModel model,
+    private static IdentityHashMap<BoneModelSnapshot.Bone, Transform> captureDriven(
+            BoneModelSnapshot model,
             PhysicsBoneSelectionPlan plan
     ) {
-        IdentityHashMap<AnimatedGeoBone, Transform> output =
+        IdentityHashMap<BoneModelSnapshot.Bone, Transform> output =
                 new IdentityHashMap<>();
-        forEachBone(model, bone -> {
+        for (BoneModelSnapshot.Bone bone : model.boneList()) {
             if (plan.isDriven(bone)) {
                 output.put(bone, Transform.capture(bone));
             }
-        });
+        }
         return output;
     }
 
     private static void applyAnimatedPose(
-            AnimatedGeoModel model,
+            BoneModelSnapshot model,
             PhysicsBoneSelectionPlan plan
     ) {
         int[] ordinal = {0};
-        forEachBone(model, bone -> {
+        for (BoneModelSnapshot.Bone bone : model.boneList()) {
             if (!plan.isDriven(bone)) {
-                return;
+                continue;
             }
             float sign = (ordinal[0]++ & 1) == 0 ? 1.0F : -1.0F;
             bone.setRotationX(bone.getRotationX() + sign * 0.013F);
             bone.setRotationY(bone.getRotationY() - sign * 0.009F);
             bone.setPositionX(bone.getPositionX() + sign * 0.05F);
             bone.setPositionZ(bone.getPositionZ() - sign * 0.03F);
-        });
+        }
     }
 
     private record Transform(
@@ -110,7 +116,7 @@ final class InitialPoseStabilityVerification {
             float positionY,
             float positionZ
     ) {
-        static Transform capture(AnimatedGeoBone bone) {
+        static Transform capture(BoneModelSnapshot.Bone bone) {
             return new Transform(
                     bone.getRotationX(),
                     bone.getRotationY(),
@@ -121,7 +127,7 @@ final class InitialPoseStabilityVerification {
             );
         }
 
-        boolean matches(AnimatedGeoBone bone) {
+        boolean matches(BoneModelSnapshot.Bone bone) {
             return near(rotationX, bone.getRotationX())
                     && near(rotationY, bone.getRotationY())
                     && near(rotationZ, bone.getRotationZ())

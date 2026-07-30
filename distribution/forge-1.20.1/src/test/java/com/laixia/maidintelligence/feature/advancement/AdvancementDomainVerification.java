@@ -3,17 +3,19 @@ package com.laixia.maidintelligence.feature.advancement;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.advancement.client.AdvancementStripLayout;
-import com.laixia.maidintelligence.feature.advancement.client.AdvancementTreeLayout;
+import com.laixia.maidintelligence.feature.advancement.application.layout.AdvancementStripLayout;
+import com.laixia.maidintelligence.feature.advancement.application.layout.AdvancementTreeLayout;
 import com.laixia.maidintelligence.feature.advancement.criterion.MaidCriteriaTriggers;
+import com.laixia.maidintelligence.feature.advancement.domain.ItemId;
 import com.laixia.maidintelligence.feature.advancement.domain.MaidAdvancementScope;
 import com.laixia.maidintelligence.feature.advancement.domain.MaidStatistics;
+import com.laixia.maidintelligence.feature.advancement.domain.ResourceId;
+import com.laixia.maidintelligence.feature.advancement.codec.MaidStatisticsCodec;
 import com.mojang.serialization.JsonOps;
 import io.netty.buffer.Unpooled;
 import net.minecraft.advancements.AdvancementProgress;
 import net.minecraft.advancements.Criterion;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.ResourceLocation;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -37,8 +39,10 @@ public final class AdvancementDomainVerification {
             Path.of("src/main/resources/data/tlm_companionship/advancements/maid");
     private static final Path LANG = Path.of("src/main/resources/assets/tlm_companionship/lang");
     private static final String ROOT_ID = "tlm_companionship:maid/root";
-    private static final ResourceLocation CAKE = ResourceLocation.fromNamespaceAndPath("minecraft", "cake");
-    private static final ResourceLocation BREAD = ResourceLocation.fromNamespaceAndPath("minecraft", "bread");
+    private static final ItemId CAKE =
+            ItemId.of("minecraft", "cake");
+    private static final ItemId BREAD =
+            ItemId.of("minecraft", "bread");
 
     private AdvancementDomainVerification() {
     }
@@ -64,17 +68,23 @@ public final class AdvancementDomainVerification {
                 .withFeed(BREAD)
                 .withFeed(CAKE)
                 .withExperience(37);
-        JsonElement encoded = MaidStatistics.CODEC.encodeStart(JsonOps.INSTANCE, expected)
+        JsonElement encoded = MaidStatisticsCodec.CODEC.encodeStart(
+                JsonOps.INSTANCE,
+                expected
+        )
                 .getOrThrow(false, message -> {
                     throw new AssertionError(message);
                 });
-        MaidStatistics decoded = MaidStatistics.CODEC.parse(JsonOps.INSTANCE, encoded)
+        MaidStatistics decoded = MaidStatisticsCodec.CODEC.parse(
+                JsonOps.INSTANCE,
+                encoded
+        )
                 .getOrThrow(false, message -> {
                     throw new AssertionError(message);
                 });
         require(expected.equals(decoded), "Codec round trip changed maid statistics");
 
-        MaidStatistics fresh = MaidStatistics.CODEC.parse(
+        MaidStatistics fresh = MaidStatisticsCodec.CODEC.parse(
                 JsonOps.INSTANCE,
                 JsonParser.parseString("{}")
         ).getOrThrow(false, message -> {
@@ -193,7 +203,7 @@ public final class AdvancementDomainVerification {
     private static void verifiesBundledAdvancementsAreInScope() throws IOException {
         for (String id : bundledAdvancements().keySet()) {
             require(
-                    MaidAdvancementScope.includes(ResourceLocation.parse(id)),
+                    MaidAdvancementScope.includes(ResourceId.parse(id)),
                     id + " is bundled for maids but excluded from their scope"
             );
         }
@@ -207,14 +217,20 @@ public final class AdvancementDomainVerification {
         for (String path : List.of("base/craft_gohei", "base/tamed_maid", "give_smart_slab")) {
             require(
                     !MaidAdvancementScope.includes(
-                            ResourceLocation.fromNamespaceAndPath("touhou_little_maid", path)
+                            new ResourceId(
+                                    "touhou_little_maid",
+                                    path
+                            )
                     ),
                     "touhou_little_maid:" + path + " should not count as a maid advancement"
             );
         }
         require(
                 MaidAdvancementScope.includes(
-                        ResourceLocation.fromNamespaceAndPath("minecraft", "story/mine_diamond")
+                        new ResourceId(
+                                "minecraft",
+                                "story/mine_diamond"
+                        )
                 ),
                 "Vanilla advancements must stay in scope"
         );
