@@ -1,0 +1,3 @@
+plugins {
+    id 'tlm.java-library-conventions'
+}

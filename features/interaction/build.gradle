@@ -1,0 +1,10 @@
+plugins {
+    id 'tlm.java-library-conventions'
+}
+
+dependencies {
+    api project(':kernel')
+    api project(':shared:geometry')
+    api project(':features:status')
+    api project(':features:advancement')
+}

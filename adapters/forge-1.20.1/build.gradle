@@ -1,0 +1,19 @@
+plugins {
+    id 'base'
+}
+
+description = 'Forge 1.20.1 event, networking, command, GUI and resource adapters.'
+
+tasks.register('verifyAdapterLayout') {
+    group = 'verification'
+    inputs.files(fileTree('src/main/java') { include '**/*.java' })
+    doLast {
+        if (inputs.files.files.isEmpty()) {
+            throw new GradleException('Forge adapter contains no source files.')
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifyAdapterLayout')
+}

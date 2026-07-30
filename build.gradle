@@ -1,336 +1,75 @@
-buildscript {
-    repositories {
-        maven {
-            url = 'https://repo.spongepowered.org/repository/maven-public/'
-        }
-    }
-    dependencies {
-        classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'
-    }
-}
-
 plugins {
-    id 'eclipse'
+    id 'base'
     id 'idea'
-    id 'net.minecraftforge.gradle' version '[6.0.16,6.2)'
-    id 'org.parchmentmc.librarian.forgegradle' version '1.+'
 }
-
-apply plugin: 'org.spongepowered.mixin'
 
 group = mod_group_id
 version = mod_version
-archivesBaseName = "tlm-companionship-${minecraft_version}-forge"
 
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(17)
-}
+def distributionPath = ':distribution:forge-1.20.1'
+def stableModules = [
+        ':kernel',
+        ':shared:geometry',
+        ':features:level',
+        ':features:status',
+        ':features:advancement',
+        ':features:interaction',
+        ':features:physics',
+        ':features:shading',
+        ':features:atmosphere'
+]
 
-minecraft {
-    mappings channel: mapping_channel, version: mapping_version
-    // accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
-    copyIdeResources = true
-    runs {
-        configureEach {
-            jvmArgs = [
-                    "-XX:+IgnoreUnrecognizedVMOptions",
-                    "-XX:+AllowEnhancedClassRedefinition"
-            ]
-            workingDirectory project.file('run')
-            property 'forge.logging.markers', 'REGISTRIES'
-            property 'forge.logging.console.level', 'debug'
-            property 'mixin.env.remapRefMap', 'true'
-            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
-            mods {
-                "${mod_id}" {
-                    source sourceSets.main
-                }
-            }
-        }
-        client {
-            property 'forge.enabledGameTestNamespaces', mod_id
-        }
-        server {
-            property 'forge.enabledGameTestNamespaces', mod_id
-            args '--nogui'
-        }
-        gameTestServer {
-            property 'forge.enabledGameTestNamespaces', "${mod_id},minecraft"
-        }
-        data {
-            workingDirectory project.file('run')
-            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
-        }
-    }
-}
-
-sourceSets.main.resources { srcDir 'src/generated/resources' }
-
-mixin {
-    add sourceSets.main, 'tlm_companionship.refmap.json'
-    config 'tlm_companionship.mixins.json'
-}
-
-repositories {
-    maven {
-        url "https://cursemaven.com"
-        content {
-            includeGroup "curse.maven"
-        }
-    }
-}
-
-dependencies {
-    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
-    // 目前只有 CurseForge Maven 能够支持同时下载模组和源码，方便开发
-    // Current Only CurseForge Maven can support downloading both mod and source code, which is convenient for development
-    implementation fg.deobf('curse.maven:touhou-little-maid-355044:8061847-sources-8061848')
-    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
-
-}
-
-processResources {
-    var replaceProperties = [
-            minecraft_version      : minecraft_version,
-            minecraft_version_range: minecraft_version_range,
-            forge_version          : forge_version,
-            forge_version_range    : forge_version_range,
-            loader_version_range   : loader_version_range,
-            mod_id                 : mod_id,
-            mod_license            : mod_license,
-            mod_version            : mod_version
-    ]
-    inputs.properties replaceProperties
-    doLast {
-        def metadataFile = new File(destinationDir, 'META-INF/mods.toml')
-        def metadata = metadataFile.getText('UTF-8')
-        replaceProperties.each { key, value ->
-            metadata = metadata.replace('${' + key + '}', value.toString())
-        }
-        metadataFile.setText(metadata, 'UTF-8')
-    }
-}
-
-jar {
-    manifest {
-        attributes([
-                "Implementation-Title"  : mod_name_en,
-                "Implementation-Version": "${version}"
-        ])
-    }
-    finalizedBy 'reobfJar'
-}
-
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-}
-
-tasks.register('prepareVSCodeTlmMod', Sync) {
-    group = 'ide'
-    description = 'Stages Touhou Little Maid as an exploded mod for VS Code F5.'
-    from {
-        def tlmRuntimeJar = configurations.runtimeClasspath.files.find {
-            it.name.toLowerCase().contains('touhou-little-maid')
-        }
-        if (tlmRuntimeJar == null) {
-            throw new GradleException('Touhou Little Maid runtime dependency was not resolved.')
-        }
-        zipTree(tlmRuntimeJar)
-    }
-    into layout.buildDirectory.dir('vscodeMods/touhou_little_maid')
-    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA'
-}
-
-tasks.register('prepareVSCodeRunClient') {
-    group = 'ide'
-    description = 'Regenerates VS Code run metadata and compiles before F5.'
-    dependsOn 'genVSCodeRuns', 'prepareRunClientCompile', 'prepareVSCodeTlmMod'
-}
-
-tasks.matching { it.name == 'genVSCodeRuns' }.configureEach {
-    doLast {
-        // Loaded reflectively: the VS Code/Cursor Gradle language server
-        // compiles this script without the groovy-json module and flags
-        // static groovy.json references, even though Gradle always ships
-        // the module at runtime.
-        def jsonSlurper = Class.forName('groovy.json.JsonSlurper')
-                .getDeclaredConstructor()
-                .newInstance()
-        def jsonOutput = Class.forName('groovy.json.JsonOutput')
-
-        // Keep F5 Gradle tasks on the same cache JDT imports
-        // (.vscode/settings.json -> java.import.gradle.user.home).
-        def settingsFile = file('.vscode/settings.json')
-        def gradleUserHome = null
-        if (settingsFile.exists()) {
-            def settingsJson = jsonSlurper.parse(settingsFile)
-            gradleUserHome = settingsJson['java.import.gradle.user.home']
-        }
-        if (!gradleUserHome) {
-            gradleUserHome = System.getenv('GRADLE_USER_HOME')
-        }
-
-        def tasksFile = file('.vscode/tasks.json')
-        if (tasksFile.exists()) {
-            def tasksJson = jsonSlurper.parse(tasksFile)
-            tasksJson.tasks.findAll { it.label == 'prepareRunClientCompile' }.each {
-                it.command = '${workspaceFolder}\\gradlew.bat --offline prepareVSCodeRunClient'
-            }
-            if (gradleUserHome) {
-                tasksJson.tasks.each {
-                    it.options = it.options ?: [:]
-                    it.options.env = it.options.env ?: [:]
-                    it.options.env['GRADLE_USER_HOME'] = gradleUserHome.toString()
-                }
-            }
-            tasksFile.setText(
-                    jsonOutput.prettyPrint(jsonOutput.toJson(tasksJson)),
-                    'UTF-8'
-            )
-        }
-
-        def launchFile = file('.vscode/launch.json')
-        if (launchFile.exists()) {
-            def launchJson = jsonSlurper.parse(launchFile)
-            // Buildship/JDT registers as "<rootProject.name>-<folder>" when they differ.
-            // Current workspace project: TLM-Companionship-1.20.1-6_CWNPmod
-            def javaProjectName = rootProject.name == rootDir.name
-                    ? rootProject.name
-                    : "${rootProject.name}-${rootDir.name}"
-            launchJson.configurations.each {
-                it.projectName = javaProjectName
-            }
-            // Debugger for Java auto-resolves modular jars onto modulePaths.
-            // Forge's fmlloader then appears on both module path and classpath:
-            // "Module fmlloader reads another module named fmlloader".
-            // Force an empty modulePaths and a single deduplicated classpath.
-            def seenJarNames = new HashSet<String>()
-            def runClientClasspath = []
-            sourceSets.main.runtimeClasspath.files.findAll { it.exists() }.each { file ->
-                def key = file.name.toLowerCase()
-                if (seenJarNames.add(key) || file.isDirectory()) {
-                    runClientClasspath << file.absolutePath
-                }
-            }
-            def tlmModClasses = 'touhou_little_maid%%${workspaceFolder}\\build\\vscodeMods\\touhou_little_maid'
-            launchJson.configurations.findAll { it.name == 'runClient' }.each {
-                def modClasses = (it.env.MOD_CLASSES ?: '')
-                        .split(';')
-                        .findAll { entry -> entry && !entry.startsWith('touhou_little_maid%%') }
-                if (!modClasses.contains(tlmModClasses)) {
-                    modClasses += tlmModClasses
-                }
-                it.env.MOD_CLASSES = modClasses.join(';')
-                it.modulePaths = []
-                it.classPaths = runClientClasspath
-                it.shortenCommandLine = 'argfile'
-            }
-            launchFile.setText(
-                    jsonOutput.prettyPrint(jsonOutput.toJson(launchJson)),
-                    'UTF-8'
-            )
-        }
-    }
-}
-
-tasks.register('verifyLevelDomain', JavaExec) {
-    group = 'verification'
-    description = 'Runs dependency-free verification for the level domain and codec.'
-    dependsOn testClasses
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.laixia.maidintelligence.feature.level.LevelDomainVerification'
-}
-
-tasks.register('verifyStatusDomain', JavaExec) {
-    group = 'verification'
-    description = 'Runs verification for hunger and tool durability status policies.'
-    dependsOn testClasses
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.laixia.maidintelligence.feature.status.StatusDomainVerification'
-}
-
-tasks.register('verifyAdvancementDomain', JavaExec) {
-    group = 'verification'
-    description = 'Runs verification for maid statistics, bundled advancement data, and progress UI layout.'
-    dependsOn testClasses
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.laixia.maidintelligence.feature.advancement.AdvancementDomainVerification'
-}
-
-tasks.register('verifyFaceTracking', JavaExec) {
-    group = 'verification'
-    description = 'Runs verification for generalized maid face geometry selection.'
-    dependsOn testClasses
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.laixia.maidintelligence.feature.interaction.client.FaceTrackingVerification'
-}
-
-tasks.register('verifyBonePhysics', JavaExec) {
-    group = 'verification'
-    description = 'Runs verification for physics metadata, geometry discovery, and bone selection.'
-    dependsOn testClasses
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerification'
-}
-
-tasks.register('verifyModelShading', JavaExec) {
-    group = 'verification'
-    description = 'Verifies Gecko outside face normals and winding.'
-    dependsOn testClasses
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.laixia.maidintelligence.feature.shading.client.ModelShadingVerification'
-}
-
-tasks.register('auditMeshColliders', JavaExec) {
-    group = 'verification'
-    description = 'Temporary: reports mesh collider counts per shipped model.'
-    dependsOn testClasses
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.laixia.maidintelligence.feature.physics.client.MeshColliderAudit'
-}
-
-tasks.register('auditMeshPenetration', JavaExec) {
-    group = 'verification'
-    description = 'Diagnostic: reports axis vs surface penetration depth per model.'
-    dependsOn testClasses
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.laixia.maidintelligence.feature.physics.client.MeshPenetrationAudit'
-    if (project.hasProperty('auditArgs')) {
-        args project.property('auditArgs').toString().split(' ')
-    }
-    if (project.hasProperty('dumpDepth')) {
-        systemProperty 'tlm.dumpDepth', 'true'
-    }
-}
-
-tasks.register('benchmarkBonePhysics', JavaExec) {
-    group = 'verification'
-    description = 'Reports warmed spring-bone frame time, visited nodes, and thread allocation.'
-    dependsOn testClasses
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.laixia.maidintelligence.feature.physics.client.BonePhysicsBenchmark'
+allprojects {
+    group = rootProject.group
+    version = rootProject.version
 }
 
 tasks.named('check') {
-    dependsOn tasks.named('verifyBonePhysics')
-    dependsOn tasks.named('verifyAdvancementDomain')
-    dependsOn tasks.named('verifyModelShading')
+    dependsOn stableModules.collect { "${it}:check" }
+    dependsOn "${distributionPath}:check"
 }
 
-tasks.register('prepareGameTestStructures', Copy) {
-    from 'src/test/resources/gameteststructures'
-    into 'run/gameteststructures'
+tasks.named('assemble') {
+    dependsOn "${distributionPath}:reobfJar"
 }
 
-tasks.configureEach {
-    if (name == 'runGameTestServer') {
-        dependsOn prepareGameTestStructures
+tasks.register('verifyArchitecture') {
+    group = 'verification'
+    description = 'Runs dependency-boundary checks for every stable module.'
+    dependsOn stableModules.collect { "${it}:verifyArchitecture" }
+}
+
+tasks.register('verifyAll') {
+    group = 'verification'
+    description = 'Runs every registered functional verification suite.'
+    dependsOn "${distributionPath}:verifyAll"
+}
+
+[
+        'verifyLevelDomain',
+        'verifyStatusDomain',
+        'verifyAdvancementDomain',
+        'verifyFaceTracking',
+        'verifyBonePhysics',
+        'verifyModelShading',
+        'auditMeshColliders',
+        'auditMeshPenetration',
+        'benchmarkBonePhysics',
+        'prepareVSCodeRunClient',
+        'runClient',
+        'runServer',
+        'runGameTestServer',
+        'runData'
+].each { delegatedTask ->
+    tasks.register(delegatedTask) {
+        group = delegatedTask.startsWith('run') ? 'forgegradle runs' : 'verification'
+        dependsOn "${distributionPath}:${delegatedTask}"
     }
 }
 
 idea {
-    module {
-        downloadSources = true
-        downloadJavadoc = true
+    project {
+        jdkName = '17'
+        languageLevel = '17'
     }
 }

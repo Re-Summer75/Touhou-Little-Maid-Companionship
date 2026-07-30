@@ -1,0 +1,59 @@
+plugins {
+    id 'java-library'
+}
+
+group = providers.gradleProperty('mod_group_id').get()
+version = providers.gradleProperty('mod_version').get()
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+    withSourcesJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 17
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+
+def forbiddenCoreImports = [
+        'net.minecraft.',
+        'net.minecraftforge.',
+        'com.github.tartaricacid.',
+        'software.bernie.geckolib'
+]
+
+tasks.register('verifyArchitecture') {
+    group = 'verification'
+    description = 'Rejects game-loader and model-library imports in stable modules.'
+    inputs.files(fileTree('src/main/java') { include '**/*.java' })
+
+    doLast {
+        def violations = []
+        inputs.files.files.sort().each { source ->
+            source.readLines('UTF-8').eachWithIndex { line, index ->
+                if (line.stripLeading().startsWith('import ')
+                        && forbiddenCoreImports.any { line.contains(it) }) {
+                    violations << "${source}:${index + 1}: ${line.trim()}"
+                }
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException(
+                    "Stable module ${project.path} imports version APIs:\n"
+                            + violations.join('\n')
+            )
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifyArchitecture')
+}

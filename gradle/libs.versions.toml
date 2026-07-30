@@ -1,0 +1,17 @@
+[versions]
+java = "17"
+minecraft = "1.20.1"
+forge = "47.4.0"
+parchment = "2023.08.20-1.20.1"
+mixin = "0.8.5"
+joml = "1.10.5"
+junit = "5.10.2"
+
+[libraries]
+joml = { module = "org.joml:joml", version.ref = "joml" }
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+
+[plugins]
+forgegradle = { id = "net.minecraftforge.gradle", version = "6.0.54" }
+parchment = { id = "org.parchmentmc.librarian.forgegradle", version = "1.2.0" }

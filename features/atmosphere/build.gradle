@@ -1,0 +1,9 @@
+plugins {
+    id 'tlm.java-library-conventions'
+}
+
+dependencies {
+    api project(':kernel')
+    api project(':features:physics')
+    api libs.joml
+}

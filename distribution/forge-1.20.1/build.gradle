@@ -1,0 +1,298 @@
+buildscript {
+    repositories {
+        maven {
+            url = 'https://repo.spongepowered.org/repository/maven-public/'
+        }
+    }
+    dependencies {
+        classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'
+    }
+}
+
+plugins {
+    id 'eclipse'
+    id 'idea'
+    alias(libs.plugins.forgegradle)
+    alias(libs.plugins.parchment)
+}
+
+apply plugin: 'org.spongepowered.mixin'
+
+description = 'Forge 1.20.1 distribution and the only ForgeGradle compilation boundary.'
+archivesBaseName = "tlm-companionship-${minecraft_version}-forge"
+
+def stableModules = [
+        project(':kernel'),
+        project(':shared:geometry'),
+        project(':features:level'),
+        project(':features:status'),
+        project(':features:advancement'),
+        project(':features:interaction'),
+        project(':features:physics'),
+        project(':features:shading'),
+        project(':features:atmosphere')
+]
+def forgeAdapter = project(':adapters:forge-1.20.1')
+def tlmAdapter = project(':adapters:tlm-1.20.1-gecko3')
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src/main/java'
+            srcDir forgeAdapter.file('src/main/java')
+            srcDir tlmAdapter.file('src/main/java')
+        }
+        resources {
+            srcDir 'src/main/resources'
+            srcDir 'src/generated/resources'
+        }
+    }
+}
+
+minecraft {
+    mappings channel: mapping_channel, version: mapping_version
+    copyIdeResources = true
+    runs {
+        configureEach {
+            jvmArgs = [
+                    '-XX:+IgnoreUnrecognizedVMOptions',
+                    '-XX:+AllowEnhancedClassRedefinition'
+            ]
+            workingDirectory rootProject.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile',
+                    "${projectDir}/build/createSrgToMcp/output.srg"
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                    stableModules.each { module ->
+                        source module.sourceSets.main
+                    }
+                }
+            }
+        }
+        client {
+            property 'forge.enabledGameTestNamespaces', mod_id
+        }
+        server {
+            property 'forge.enabledGameTestNamespaces', mod_id
+            args '--nogui'
+        }
+        gameTestServer {
+            property 'forge.enabledGameTestNamespaces', "${mod_id},minecraft"
+        }
+        data {
+            args '--mod', mod_id,
+                    '--all',
+                    '--output', file('src/generated/resources/'),
+                    '--existing', file('src/main/resources/')
+        }
+    }
+}
+
+mixin {
+    add sourceSets.main, 'tlm_companionship.refmap.json'
+    config 'tlm_companionship.mixins.json'
+}
+
+repositories {
+    maven {
+        url = 'https://cursemaven.com'
+        content {
+            includeGroup 'curse.maven'
+        }
+    }
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    implementation fg.deobf(
+            'curse.maven:touhou-little-maid-355044:8061847-sources-8061848'
+    )
+    stableModules.each { module ->
+        implementation project(module.path)
+    }
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+
+processResources {
+    def replaceProperties = [
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            forge_version          : forge_version,
+            forge_version_range    : forge_version_range,
+            loader_version_range   : loader_version_range,
+            mod_id                 : mod_id,
+            mod_license            : mod_license,
+            mod_version            : mod_version
+    ]
+    inputs.properties replaceProperties
+    filesMatching('META-INF/mods.toml') {
+        expand replaceProperties
+    }
+}
+
+jar {
+    stableModules.each { module ->
+        dependsOn module.tasks.named('classes')
+        from module.sourceSets.main.output
+    }
+    duplicatesStrategy = DuplicatesStrategy.FAIL
+    manifest {
+        attributes([
+                'Implementation-Title'  : mod_name_en,
+                'Implementation-Version': "${version}"
+        ])
+    }
+    finalizedBy 'reobfJar'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.matching {
+    it.name.startsWith('prepareRun') && it.name.endsWith('Compile')
+}.configureEach {
+    dependsOn stableModules.collect { it.tasks.named('classes') }
+}
+
+def verificationEntrypoints = [
+        verifyLevelDomain      : [
+                'Verifies dependency-free level policies and persistence behavior.',
+                'com.laixia.maidintelligence.feature.level.LevelDomainVerification'
+        ],
+        verifyStatusDomain     : [
+                'Verifies hunger and tool durability status policies.',
+                'com.laixia.maidintelligence.feature.status.StatusDomainVerification'
+        ],
+        verifyAdvancementDomain: [
+                'Verifies maid statistics, advancement data and progress layouts.',
+                'com.laixia.maidintelligence.feature.advancement.AdvancementDomainVerification'
+        ],
+        verifyFaceTracking     : [
+                'Verifies generalized maid face geometry selection.',
+                'com.laixia.maidintelligence.feature.interaction.client.FaceTrackingVerification'
+        ],
+        verifyBonePhysics      : [
+                'Verifies physics metadata, discovery, spring and collision behavior.',
+                'com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerification'
+        ],
+        verifyModelShading     : [
+                'Verifies Gecko outside-face normals and winding.',
+                'com.laixia.maidintelligence.feature.shading.client.ModelShadingVerification'
+        ]
+]
+
+verificationEntrypoints.each { taskName, definition ->
+    tasks.register(taskName, JavaExec) {
+        group = 'verification'
+        description = definition[0]
+        dependsOn testClasses
+        classpath = sourceSets.test.runtimeClasspath
+        mainClass = definition[1]
+    }
+}
+
+tasks.register('verifyTestInventory') {
+    group = 'verification'
+    description = 'Guards the 81-file pre-migration verification inventory.'
+    inputs.files(fileTree('src/test/java') { include '**/*.java' })
+    doLast {
+        def actual = inputs.files.files.size()
+        if (actual != 81) {
+            throw new GradleException(
+                    "Verification inventory changed: expected 81 Java files, found ${actual}."
+            )
+        }
+    }
+}
+
+tasks.register('verifyAll') {
+    group = 'verification'
+    description = 'Runs all registered functional verification entrypoints.'
+    dependsOn verificationEntrypoints.keySet()
+    dependsOn tasks.named('verifyTestInventory')
+    dependsOn stableModules.collect { "${it.path}:verifyArchitecture" }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifyAll')
+    dependsOn forgeAdapter.tasks.named('verifyAdapterLayout')
+    dependsOn tlmAdapter.tasks.named('verifyAdapterLayout')
+}
+
+tasks.register('auditMeshColliders', JavaExec) {
+    group = 'verification'
+    description = 'Reports mesh collider counts per shipped model.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.laixia.maidintelligence.feature.physics.client.MeshColliderAudit'
+}
+
+tasks.register('auditMeshPenetration', JavaExec) {
+    group = 'verification'
+    description = 'Reports axis and surface penetration depth per model.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.laixia.maidintelligence.feature.physics.client.MeshPenetrationAudit'
+    if (project.hasProperty('auditArgs')) {
+        args project.property('auditArgs').toString().split(' ')
+    }
+}
+
+tasks.register('benchmarkBonePhysics', JavaExec) {
+    group = 'verification'
+    description = 'Reports warmed spring-bone timing and allocation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.laixia.maidintelligence.feature.physics.client.BonePhysicsBenchmark'
+}
+
+tasks.register('prepareGameTestStructures', Copy) {
+    from 'src/test/resources/gameteststructures'
+    into rootProject.file('run/gameteststructures')
+}
+
+tasks.configureEach {
+    if (name == 'runGameTestServer') {
+        dependsOn prepareGameTestStructures
+    }
+}
+
+tasks.register('prepareVSCodeTlmMod', Sync) {
+    group = 'ide'
+    description = 'Stages Touhou Little Maid as an exploded mod for VS Code F5.'
+    from {
+        def tlmRuntimeJar = configurations.runtimeClasspath.files.find {
+            it.name.toLowerCase().contains('touhou-little-maid')
+        }
+        if (tlmRuntimeJar == null) {
+            throw new GradleException(
+                    'Touhou Little Maid runtime dependency was not resolved.'
+            )
+        }
+        zipTree(tlmRuntimeJar)
+    }
+    into layout.buildDirectory.dir('vscodeMods/touhou_little_maid')
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA'
+}
+
+tasks.register('prepareVSCodeRunClient') {
+    group = 'ide'
+    description = 'Regenerates run metadata and compiles before F5.'
+    dependsOn 'genVSCodeRuns', 'prepareRunClientCompile', 'prepareVSCodeTlmMod'
+}
+
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}
