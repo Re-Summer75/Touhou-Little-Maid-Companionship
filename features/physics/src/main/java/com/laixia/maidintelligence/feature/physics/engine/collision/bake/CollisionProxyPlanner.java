@@ -3,6 +3,8 @@ package com.laixia.maidintelligence.feature.physics.engine.collision.bake;
 import com.laixia.maidintelligence.feature.physics.geometry.BoneModelSnapshot;
 import com.laixia.maidintelligence.feature.physics.geometry.PhysicsBoneGeometry;
 import com.laixia.maidintelligence.feature.physics.api.PhysicsBoneSelectionPlan;
+import com.laixia.maidintelligence.feature.physics.engine.collision.bake.planner.BodyCollisionGeometry;
+import com.laixia.maidintelligence.feature.physics.engine.collision.bake.planner.CollisionReferencePolicy;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -153,7 +155,7 @@ public final class CollisionProxyPlanner {
         }
         PhysicsBoneGeometry.Node referenceNode =
                 geometry.node(reference.bone());
-        return CollisionReferenceSafety.isSafe(
+        return CollisionReferencePolicy.isSafe(
                 referenceNode,
                 drivenNode,
                 selectionPlan,

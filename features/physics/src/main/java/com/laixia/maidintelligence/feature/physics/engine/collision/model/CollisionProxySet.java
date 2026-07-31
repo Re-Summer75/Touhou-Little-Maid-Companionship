@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.feature.physics.engine.collision.model;
 
 
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.projection.CollisionProjectionPrimitives;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -109,8 +110,8 @@ public final class CollisionProxySet {
             corrected |= passCorrected;
             if (!passCorrected || direction.distanceSquared(
                     scratch.passStart
-            ) <= CollisionProjectionMath.EPSILON
-                    * CollisionProjectionMath.EPSILON) {
+            ) <= CollisionProjectionPrimitives.EPSILON
+                    * CollisionProjectionPrimitives.EPSILON) {
                 break;
             }
         }

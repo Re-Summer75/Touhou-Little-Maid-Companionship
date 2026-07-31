@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.feature.physics.engine.collision.bake;
 
 import com.laixia.maidintelligence.feature.physics.geometry.PhysicsBoneGeometry;
 import com.laixia.maidintelligence.feature.physics.api.PhysicsBoneSelectionPlan;
+import com.laixia.maidintelligence.feature.physics.engine.collision.bake.planner.BodyCollisionGeometry;
 import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.SwingCone;
 import org.joml.Vector3f;
 

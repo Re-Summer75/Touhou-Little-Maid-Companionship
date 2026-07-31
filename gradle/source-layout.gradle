@@ -1,0 +1,166 @@
+def sourceLayoutRoot = rootProject.projectDir
+def maximumPhysicalLines = 500
+def defaultProductionFilesPerDirectory = 12
+def maximumBusinessModulesPerParent = 8
+
+def normalizedRelativePath = { File file ->
+    sourceLayoutRoot.toPath()
+            .relativize(file.toPath())
+            .toString()
+            .replace('\\', '/')
+}
+
+def excludedTreePatterns = [
+        '.git/**',
+        '**/.git/**',
+        '.gradle/**',
+        '**/.gradle/**',
+        'build/**',
+        '**/build/**',
+        'bin/**',
+        '**/bin/**',
+        'run/**',
+        '**/run/**',
+        'generated/**',
+        '**/generated/**',
+        '_reference/**',
+        '**/_reference/**',
+        '*_reference/**',
+        '**/*_reference/**',
+        'docs/architecture/templates/**'
+]
+
+def governedImplementationFiles = rootProject.fileTree(sourceLayoutRoot) {
+    include '*.java', '*.groovy', '*.gradle'
+    include '**/*.java', '**/*.groovy', '**/*.gradle'
+    excludedTreePatterns.each { excludedPattern ->
+        exclude excludedPattern
+    }
+}
+
+// These explicit exceptions apply only to direct production-file density.
+def productionDirectoryLimitExceptions = [
+        ('features/physics/src/main/java/com/laixia/maidintelligence/feature/' +
+                'physics/engine/spring')                  : [
+                rationale: 'docs/physics/README.md',
+                marker   : 'package-private 零分配状态机'
+        ],
+        ('features/physics/src/main/java/com/laixia/maidintelligence/feature/' +
+                'physics/engine/collision/runtime')       : [
+                rationale: 'docs/physics/README.md',
+                marker   : 'package-private 零分配状态机'
+        ]
+]
+
+tasks.register('verifySourceLayout') {
+    group = 'verification'
+    description = 'Enforces physical line, source-directory and module density limits.'
+    inputs.files(governedImplementationFiles)
+    inputs.files(productionDirectoryLimitExceptions.values().collect {
+        rootProject.file(it.rationale)
+    })
+    outputs.upToDateWhen { false }
+
+    doLast {
+        def violations = []
+        def governedFiles = governedImplementationFiles.files.sort {
+            normalizedRelativePath(it)
+        }
+
+        governedFiles.each { implementationFile ->
+            int physicalLines = implementationFile.readLines('UTF-8').size()
+            if (physicalLines > maximumPhysicalLines) {
+                violations << "${normalizedRelativePath(implementationFile)}: " +
+                        "${physicalLines} physical lines " +
+                        "(limit ${maximumPhysicalLines})"
+            }
+        }
+
+        def productionFilesByDirectory = [:].withDefault { [] }
+        governedFiles.findAll { implementationFile ->
+            if (!implementationFile.name.endsWith('.java')) {
+                return false
+            }
+            def relativePath = normalizedRelativePath(implementationFile)
+            relativePath.startsWith('src/main/java/') ||
+                    relativePath.contains('/src/main/java/')
+        }.each { productionFile ->
+            productionFilesByDirectory[
+                    normalizedRelativePath(productionFile.parentFile)
+            ] << productionFile
+        }
+
+        productionFilesByDirectory.keySet().sort().each { directoryPath ->
+            def directFiles = productionFilesByDirectory[directoryPath]
+            def exception = productionDirectoryLimitExceptions[directoryPath]
+            if (exception == null &&
+                    directFiles.size() > defaultProductionFilesPerDirectory) {
+                violations << "${directoryPath}: ${directFiles.size()} direct " +
+                        "production Java files " +
+                        "(limit ${defaultProductionFilesPerDirectory})"
+            }
+        }
+
+        productionDirectoryLimitExceptions.each { directoryPath, exception ->
+            def exceptionDirectory = rootProject.file(directoryPath)
+            def rationaleFile = rootProject.file(exception.rationale)
+            if (!exceptionDirectory.isDirectory()) {
+                violations << "${directoryPath}: configured directory exception " +
+                        'path does not exist'
+            }
+            if (!rationaleFile.isFile()) {
+                violations << "${exception.rationale}: missing rationale for " +
+                        "directory exception ${directoryPath}"
+            } else if (!rationaleFile.getText('UTF-8').contains(exception.marker)) {
+                violations << "${exception.rationale}: missing marker " +
+                        "'${exception.marker}' for directory exception " +
+                        directoryPath
+            }
+        }
+
+        def governedModuleRoots =
+                ['features', 'shared', 'adapters', 'distribution'] as Set
+        def businessProjectsByParent = [:].withDefault { [] }
+        rootProject.subprojects.findAll { candidate ->
+            def projectPath = normalizedRelativePath(candidate.projectDir)
+            def pathSegments = projectPath.tokenize('/')
+            !pathSegments.isEmpty() &&
+                    governedModuleRoots.contains(pathSegments.first()) &&
+                    candidate.buildFile.isFile()
+        }.each { businessProject ->
+            businessProjectsByParent[
+                    normalizedRelativePath(businessProject.projectDir.parentFile)
+            ] << businessProject
+        }
+
+        businessProjectsByParent.keySet().sort().each { parentPath ->
+            def directProjects = businessProjectsByParent[parentPath]
+            if (directProjects.size() > maximumBusinessModulesPerParent) {
+                def projectPaths = directProjects.collect {
+                    normalizedRelativePath(it.projectDir)
+                }.sort().join(', ')
+                violations << "${parentPath}: ${directProjects.size()} direct " +
+                        "business Gradle subprojects " +
+                        "(limit ${maximumBusinessModulesPerParent}; " +
+                        "projects: ${projectPaths})"
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException(
+                    "Source layout verification failed " +
+                            "(${violations.size()} violations):\n - " +
+                            violations.join('\n - ')
+            )
+        }
+
+        logger.lifecycle(
+                "Source layout verification passed: " +
+                        "${governedFiles.size()} implementation files checked."
+        )
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifySourceLayout')
+}

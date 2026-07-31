@@ -54,6 +54,8 @@
 - `SpringBoneMath` 统一保存解算常量和无分配数学工具。
 - `WorldPoseDriverSource` / `WorldPoseDriverSources` 是可选氛围动画的注册边界；物理核心只汇总世界空间姿态信号、转换到模型空间并生成移动的 `restDirection`，不依赖具体风场实现。
 
+源码布局门禁仅为 `engine/spring` 和 `engine/collision/runtime` 提供显式的直接生产 Java 文件数例外。二者组成 package-private 零分配状态机；保持同包协作可避免公开内部 API、访问桥和临时对象，并维持 JIT 对热调用链的局部性。该例外不适用于任何文件的 500 物理行上限，也不允许继续混入无关职责。
+
 ## 力臂归一化（解决大块几何过摆）
 
 有些骨骼支点在几何边缘、几何体很大（如 `BaseHair` 头盖式整块头发）。同样的旋转角,几何越大末端扫得越远。[`BoneKinematics.measure`](../../features/physics/src/main/java/com/laixia/maidintelligence/feature/physics/layout/BoneKinematics.java) 算出每根骨骼**支点到几何最远角的力臂**,把偏转角上限按反比压低:

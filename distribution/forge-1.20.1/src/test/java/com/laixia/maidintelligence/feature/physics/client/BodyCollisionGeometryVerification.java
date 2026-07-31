@@ -1,16 +1,10 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.laixia.maidintelligence.feature.physics.api.*;
-import com.laixia.maidintelligence.feature.physics.metadata.*;
-import com.laixia.maidintelligence.feature.physics.discovery.*;
 import com.laixia.maidintelligence.feature.physics.geometry.*;
-import com.laixia.maidintelligence.feature.physics.layout.*;
-import com.laixia.maidintelligence.feature.physics.engine.*;
-import com.laixia.maidintelligence.feature.physics.session.*;
 
-import com.laixia.maidintelligence.feature.physics.engine.collision.bake.BodyCollisionGeometry;
-import com.laixia.maidintelligence.feature.physics.engine.collision.bake.BodyCollisionGeometryAnalyzer;
-import com.laixia.maidintelligence.feature.physics.engine.collision.bake.CapsuleFit;
+import com.laixia.maidintelligence.feature.physics.engine.collision.bake.automatic.CapsuleFit;
+import com.laixia.maidintelligence.feature.physics.engine.collision.bake.planner.BodyCollisionGeometry;
+import com.laixia.maidintelligence.feature.physics.engine.collision.bake.planner.BodyCollisionGeometryAnalyzer;
 import org.joml.Vector3f;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModel;

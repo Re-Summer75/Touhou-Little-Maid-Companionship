@@ -1,10 +1,10 @@
 package com.laixia.maidintelligence.feature.physics.layout;
 
 import com.laixia.maidintelligence.feature.physics.api.PhysicsBoneSelectionPlan;
-import com.laixia.maidintelligence.feature.physics.engine.collision.bake.BodyCollisionGeometry;
-import com.laixia.maidintelligence.feature.physics.engine.collision.bake.BodyCollisionGeometryAnalyzer;
 import com.laixia.maidintelligence.feature.physics.engine.collision.bake.CollisionProxyPlan;
 import com.laixia.maidintelligence.feature.physics.engine.collision.bake.CollisionProxyPlanner;
+import com.laixia.maidintelligence.feature.physics.engine.collision.bake.planner.BodyCollisionGeometry;
+import com.laixia.maidintelligence.feature.physics.engine.collision.bake.planner.BodyCollisionGeometryAnalyzer;
 import com.laixia.maidintelligence.feature.physics.geometry.BoneModelSnapshot;
 import com.laixia.maidintelligence.feature.physics.geometry.PhysicsBoneGeometry;
 
@@ -48,7 +48,7 @@ record PhysicsLayoutSelection(
                 BoneModelSnapshot.Bone
                 > parents = new IdentityHashMap<>();
         for (BoneModelSnapshot.Bone bone : model.topLevelBones()) {
-            PhysicsSolverLayout.collect(bone, null, preorder, parents);
+            PhysicsLayoutPlanning.collect(bone, null, preorder, parents);
         }
 
         Set<BoneModelSnapshot.Bone> active = Collections.newSetFromMap(
@@ -74,18 +74,18 @@ record PhysicsLayoutSelection(
             if (!plan.isDriven(bone)) {
                 continue;
             }
-            PhysicsSolverLayout.addPath(bone, active, parents);
+            PhysicsLayoutPlanning.addPath(bone, active, parents);
             PhysicsBoneSelectionPlan.SimulationSpace space =
-                    PhysicsSolverLayout.resolveSimulationSpace(
+                    PhysicsLayoutPlanning.resolveSimulationSpace(
                             plan.decision(bone),
                             geometry.node(bone),
                             geometry
                     );
             spaces.put(bone, space);
             BoneModelSnapshot.Bone reference =
-                    PhysicsSolverLayout.referenceBone(space, geometry);
+                    PhysicsLayoutPlanning.referenceBone(space, geometry);
             if (reference != null) {
-                PhysicsSolverLayout.addPath(reference, active, parents);
+                PhysicsLayoutPlanning.addPath(reference, active, parents);
             }
             CollisionProxyPlan collisionPlan = collisionPlanner.plan(
                     bone,
@@ -95,7 +95,7 @@ record PhysicsLayoutSelection(
             collisionPlans.put(bone, collisionPlan);
             for (BoneModelSnapshot.Bone collisionReference
                     : collisionPlan.referenceBones()) {
-                PhysicsSolverLayout.addPath(
+                PhysicsLayoutPlanning.addPath(
                         collisionReference,
                         active,
                         parents
@@ -106,7 +106,7 @@ record PhysicsLayoutSelection(
                 geometry,
                 collisionGeometry,
                 List.copyOf(preorder),
-                PhysicsSolverLayout.orderActive(
+                PhysicsLayoutPlanning.orderActive(
                         preorder,
                         active,
                         parents,

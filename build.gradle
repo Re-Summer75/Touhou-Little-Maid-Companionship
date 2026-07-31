@@ -92,6 +92,8 @@ allprojects {
     version = rootProject.version
 }
 
+apply from: rootProject.file('gradle/source-layout.gradle')
+
 tasks.register('verifyVersionMatrix') {
     group = 'verification'
     description = 'Validates every declared version target without network access.'

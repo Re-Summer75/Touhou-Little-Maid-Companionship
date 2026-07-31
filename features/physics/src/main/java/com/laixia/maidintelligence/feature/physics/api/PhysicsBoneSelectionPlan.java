@@ -1,8 +1,7 @@
 package com.laixia.maidintelligence.feature.physics.api;
 
-
-import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
 import com.laixia.maidintelligence.feature.physics.geometry.BoneModelSnapshot;
+import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
 
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -25,52 +24,43 @@ public final class PhysicsBoneSelectionPlan {
     private final Map<BoneModelSnapshot.Bone, String> paths;
     private final Map<BoneModelSnapshot.Bone, BoneKinematics.Metrics> kinematics;
 
-    private PhysicsBoneSelectionPlan(
+    PhysicsBoneSelectionPlan(
             String modelId,
             IdentityHashMap<BoneModelSnapshot.Bone, Decision> decisions,
             IdentityHashMap<BoneModelSnapshot.Bone, String> paths,
             IdentityHashMap<BoneModelSnapshot.Bone, BoneKinematics.Metrics> kinematics
     ) {
         this.modelId = modelId;
-        this.decisions = Collections.unmodifiableMap(new IdentityHashMap<>(decisions));
+        this.decisions = Collections.unmodifiableMap(
+                new IdentityHashMap<>(decisions)
+        );
         this.paths = Collections.unmodifiableMap(new IdentityHashMap<>(paths));
-        this.kinematics = Collections.unmodifiableMap(new IdentityHashMap<>(kinematics));
+        this.kinematics = Collections.unmodifiableMap(
+                new IdentityHashMap<>(kinematics)
+        );
     }
 
     public String modelId() {
         return modelId;
     }
-
     public Decision decision(BoneModelSnapshot.Bone bone) {
         return decisions.getOrDefault(bone, Decision.REJECTED);
     }
-
     public boolean isDriven(BoneModelSnapshot.Bone bone) {
         return decision(bone).driven();
     }
-
     public String path(BoneModelSnapshot.Bone bone) {
         return paths.getOrDefault(bone, bone.getName());
     }
-
     public BoneKinematics.Metrics kinematics(BoneModelSnapshot.Bone bone) {
         return kinematics.get(bone);
     }
-
     public static Builder builder(String modelId) {
         return new Builder(modelId);
     }
 
     public enum PartType {
-        HEAD_SHELL,
-        HAIR,
-        TAIL,
-        EAR,
-        SKIRT,
-        RIBBON,
-        CAPE,
-        WING,
-        GENERIC;
+        HEAD_SHELL, HAIR, TAIL, EAR, SKIRT, RIBBON, CAPE, WING, GENERIC;
 
         public static PartType parse(String value, PartType fallback) {
             if (value == null || value.isBlank()) {
@@ -85,9 +75,7 @@ public final class PhysicsBoneSelectionPlan {
     }
 
     public enum Source {
-        METADATA("META"),
-        AUTO("AUTO"),
-        NONE("NONE");
+        METADATA("META"), AUTO("AUTO"), NONE("NONE");
 
         private final String label;
 
@@ -108,13 +96,8 @@ public final class PhysicsBoneSelectionPlan {
         COMPOUND_SINGLE_BONE
     }
 
-    public record ChainSegment(
-            String rootPath,
-            int index,
-            int count
-    ) {
-        private static final ChainSegment NONE =
-                new ChainSegment("", 0, 0);
+    public record ChainSegment(String rootPath, int index, int count) {
+        private static final ChainSegment NONE = new ChainSegment("", 0, 0);
 
         public ChainSegment {
             rootPath = rootPath == null ? "" : rootPath;
@@ -138,15 +121,9 @@ public final class PhysicsBoneSelectionPlan {
     }
 
     public enum SimulationSpace {
-        AUTO,
-        HEAD_LOCAL,
-        BODY_LOCAL,
-        MODEL;
+        AUTO, HEAD_LOCAL, BODY_LOCAL, MODEL;
 
-        static SimulationSpace parse(
-                String value,
-                SimulationSpace fallback
-        ) {
+        static SimulationSpace parse(String value, SimulationSpace fallback) {
             if (value == null || value.isBlank()) {
                 return fallback;
             }
@@ -159,37 +136,17 @@ public final class PhysicsBoneSelectionPlan {
     }
 
     public record SwingLimits(
-            float left,
-            float right,
-            float outward,
-            float inward
+            float left, float right, float outward, float inward
     ) {
         private static final float MAX_LIMIT = 1.55F;
 
         public SwingLimits {
-            left = clampAngle(left);
-            right = clampAngle(right);
-            outward = clampAngle(outward);
-            inward = clampAngle(inward);
+            left = clampAngle(left); right = clampAngle(right);
+            outward = clampAngle(outward); inward = clampAngle(inward);
         }
 
         private static SwingLimits defaults(PartType type) {
-            if (type == PartType.SKIRT) {
-                return new SwingLimits(
-                        0.45F,
-                        0.45F,
-                        0.55F,
-                        0.14F
-                );
-            }
-            float inward = switch (type) {
-                case HEAD_SHELL -> 0.08F;
-                case HAIR -> 0.28F;
-                case EAR -> 0.22F;
-                case RIBBON -> 0.45F;
-                default -> 0.80F;
-            };
-            return new SwingLimits(0.80F, 0.80F, 0.80F, inward);
+            return PhysicsProfileDefaults.swingLimits(type);
         }
 
         private static float clampAngle(float value) {
@@ -206,19 +163,12 @@ public final class PhysicsBoneSelectionPlan {
      */
     public record CollisionVector(float x, float y, float z) {
         public CollisionVector {
-            if (!Float.isFinite(x)
-                    || !Float.isFinite(y)
-                    || !Float.isFinite(z)) {
-                throw new IllegalArgumentException(
-                        "Collision vector components must be finite"
-                );
-            }
+            PhysicsCollisionValidation.vector(x, y, z);
         }
     }
 
     public sealed interface CollisionShape
-            permits CollisionShape.Plane,
-            CollisionShape.Sphere,
+            permits CollisionShape.Plane, CollisionShape.Sphere,
             CollisionShape.Capsule {
         record Plane(
                 CollisionVector point,
@@ -227,13 +177,7 @@ public final class PhysicsBoneSelectionPlan {
             public Plane {
                 point = Objects.requireNonNull(point, "point");
                 normal = Objects.requireNonNull(normal, "normal");
-                if (normal.x() == 0.0F
-                        && normal.y() == 0.0F
-                        && normal.z() == 0.0F) {
-                    throw new IllegalArgumentException(
-                            "Collision plane normal must be non-zero"
-                    );
-                }
+                PhysicsCollisionValidation.normal(normal);
             }
         }
 
@@ -243,7 +187,10 @@ public final class PhysicsBoneSelectionPlan {
         ) implements CollisionShape {
             public Sphere {
                 center = Objects.requireNonNull(center, "center");
-                requireRadius(radius);
+                PhysicsCollisionValidation.radius(
+                        radius,
+                        "Collision radius must be finite and non-negative"
+                );
             }
         }
 
@@ -255,13 +202,8 @@ public final class PhysicsBoneSelectionPlan {
             public Capsule {
                 start = Objects.requireNonNull(start, "start");
                 end = Objects.requireNonNull(end, "end");
-                requireRadius(radius);
-            }
-        }
-
-        private static void requireRadius(float radius) {
-            if (!Float.isFinite(radius) || radius < 0.0F) {
-                throw new IllegalArgumentException(
+                PhysicsCollisionValidation.radius(
+                        radius,
                         "Collision radius must be finite and non-negative"
                 );
             }
@@ -274,22 +216,9 @@ public final class PhysicsBoneSelectionPlan {
             Optional<Float> hitRadius
     ) {
         public CollisionProxySpec {
-            reference = Objects.requireNonNull(reference, "reference").trim();
-            if (reference.isEmpty()) {
-                throw new IllegalArgumentException(
-                        "Collision reference must not be blank"
-                );
-            }
+            reference = PhysicsCollisionValidation.reference(reference);
             shape = Objects.requireNonNull(shape, "shape");
-            hitRadius = hitRadius == null ? Optional.empty() : hitRadius;
-            if (hitRadius.isPresent()) {
-                float radius = hitRadius.get();
-                if (!Float.isFinite(radius) || radius < 0.0F) {
-                    throw new IllegalArgumentException(
-                            "Collision hit radius must be finite and non-negative"
-                    );
-                }
-            }
+            hitRadius = PhysicsCollisionValidation.hitRadius(hitRadius);
         }
     }
 
@@ -303,10 +232,7 @@ public final class PhysicsBoneSelectionPlan {
         private static final CollisionProfile LEGACY =
                 new CollisionProfile(true, false, List.of());
 
-        public CollisionProfile(
-                boolean auto,
-                List<CollisionProxySpec> proxies
-        ) {
+        public CollisionProfile(boolean auto, List<CollisionProxySpec> proxies) {
             this(auto, true, proxies);
         }
 
@@ -327,30 +253,20 @@ public final class PhysicsBoneSelectionPlan {
             SimulationSpace simulationSpace,
             float rotationInertiaScale,
             SwingLimits swingLimits,
-            boolean backstop,
-            boolean headCollision,
-            float hitRadiusScale,
-            CollisionProfile collision,
-            boolean enabled
+            boolean backstop, boolean headCollision, float hitRadiusScale,
+            CollisionProfile collision, boolean enabled
     ) {
         public ConstraintProfile(
                 SimulationSpace simulationSpace,
                 float rotationInertiaScale,
                 SwingLimits swingLimits,
-                boolean backstop,
-                boolean headCollision,
-                float hitRadiusScale,
-                boolean enabled
+                boolean backstop, boolean headCollision,
+                float hitRadiusScale, boolean enabled
         ) {
             this(
-                    simulationSpace,
-                    rotationInertiaScale,
-                    swingLimits,
-                    backstop,
-                    headCollision,
-                    hitRadiusScale,
-                    CollisionProfile.legacyAutomatic(),
-                    enabled
+                    simulationSpace, rotationInertiaScale, swingLimits,
+                    backstop, headCollision, hitRadiusScale,
+                    CollisionProfile.legacyAutomatic(), enabled
             );
         }
 
@@ -365,46 +281,15 @@ public final class PhysicsBoneSelectionPlan {
             hitRadiusScale = Float.isFinite(hitRadiusScale)
                     ? Math.max(0.0F, Math.min(4.0F, hitRadiusScale))
                     : 1.0F;
-            collision = collision == null
-                    ? CollisionProfile.defaults()
-                    : collision;
+            collision = collision == null ? CollisionProfile.defaults() : collision;
         }
 
         public static ConstraintProfile defaults(PartType type) {
-            float rotationInertia = switch (type) {
-                case HEAD_SHELL -> 0.05F;
-                case HAIR -> 0.35F;
-                case EAR -> 0.15F;
-                case RIBBON -> 0.45F;
-                case SKIRT, CAPE -> 0.65F;
-                default -> 1.0F;
-            };
-            boolean collideWithHead = type == PartType.HAIR
-                    || type == PartType.EAR
-                    || type == PartType.RIBBON;
-            return new ConstraintProfile(
-                    SimulationSpace.AUTO,
-                    rotationInertia,
-                    SwingLimits.defaults(type),
-                    collideWithHead,
-                    collideWithHead,
-                    1.0F,
-                    CollisionProfile.defaults(),
-                    true
-            );
+            return PhysicsProfileDefaults.constraints(type);
         }
 
         public static ConstraintProfile legacy() {
-            return new ConstraintProfile(
-                    SimulationSpace.MODEL,
-                    1.0F,
-                    new SwingLimits(1.55F, 1.55F, 1.55F, 1.55F),
-                    false,
-                    false,
-                    1.0F,
-                    CollisionProfile.defaults(),
-                    false
-            );
+            return PhysicsProfileDefaults.legacyConstraints();
         }
 
         private static float clamp01(float value) {
@@ -421,58 +306,29 @@ public final class PhysicsBoneSelectionPlan {
      * wind field itself.
      */
     public record SpringProfile(
-            float stiffnessScale,
-            float gravityScale,
-            float windScale,
-            float massScale,
-            float dragScale,
-            float inertiaScale,
-            float turnScale,
-            float angleScale,
-            float tipDisplacementScale
+            float stiffnessScale, float gravityScale, float windScale,
+            float massScale, float dragScale, float inertiaScale,
+            float turnScale, float angleScale, float tipDisplacementScale
     ) {
         public SpringProfile(
-                float stiffnessScale,
-                float gravityScale,
-                float dragScale,
-                float inertiaScale,
-                float turnScale,
-                float angleScale,
+                float stiffnessScale, float gravityScale, float dragScale,
+                float inertiaScale, float turnScale, float angleScale,
                 float tipDisplacementScale
         ) {
             this(
-                    stiffnessScale,
-                    gravityScale,
-                    1.0F,
-                    1.0F,
-                    dragScale,
-                    inertiaScale,
-                    turnScale,
-                    angleScale,
-                    tipDisplacementScale
+                    stiffnessScale, gravityScale, 1.0F, 1.0F, dragScale,
+                    inertiaScale, turnScale, angleScale, tipDisplacementScale
             );
         }
 
         public SpringProfile(
-                float stiffnessScale,
-                float gravityScale,
-                float windScale,
-                float dragScale,
-                float inertiaScale,
-                float turnScale,
-                float angleScale,
-                float tipDisplacementScale
+                float stiffnessScale, float gravityScale, float windScale,
+                float dragScale, float inertiaScale, float turnScale,
+                float angleScale, float tipDisplacementScale
         ) {
             this(
-                    stiffnessScale,
-                    gravityScale,
-                    windScale,
-                    1.0F,
-                    dragScale,
-                    inertiaScale,
-                    turnScale,
-                    angleScale,
-                    tipDisplacementScale
+                    stiffnessScale, gravityScale, windScale, 1.0F, dragScale,
+                    inertiaScale, turnScale, angleScale, tipDisplacementScale
             );
         }
 
@@ -485,52 +341,13 @@ public final class PhysicsBoneSelectionPlan {
                     : 1.0F;
         }
 
-        /**
-         * Solver-facing name for the optional procedural pose channel.
-         */
+        /** Solver-facing name for the optional procedural pose channel. */
         public float poseDriveScale() {
             return windScale;
         }
 
         public static SpringProfile defaults(PartType type) {
-            return switch (type) {
-                case HEAD_SHELL -> new SpringProfile(
-                        2.20F, 0.0F, 0.0F, 1.50F, 1.50F,
-                        0.25F, 0.25F, 0.28F, 0.45F
-                );
-                case HAIR -> new SpringProfile(
-                        1.00F, 1.00F, 1.45F, 0.80F, 1.00F,
-                        1.00F, 1.00F, 1.00F, 1.00F
-                );
-                case TAIL -> new SpringProfile(
-                        0.85F, 0.70F, 1.65F, 1.00F, 0.85F,
-                        1.20F, 1.20F, 1.10F, 1.20F
-                );
-                case EAR -> new SpringProfile(
-                        1.40F, 0.35F, 0.75F, 0.90F, 1.25F,
-                        0.60F, 0.70F, 0.55F, 0.65F
-                );
-                case SKIRT -> new SpringProfile(
-                        1.20F, 1.15F, 0.90F, 1.35F, 1.10F,
-                        0.70F, 0.80F, 0.70F, 1.00F
-                );
-                case RIBBON -> new SpringProfile(
-                        0.90F, 0.45F, 1.70F, 0.65F, 0.90F,
-                        1.20F, 1.30F, 1.00F, 0.80F
-                );
-                case CAPE -> new SpringProfile(
-                        0.85F, 0.80F, 1.55F, 1.30F, 0.95F,
-                        1.00F, 1.00F, 0.85F, 1.10F
-                );
-                case WING -> new SpringProfile(
-                        1.60F, 0.15F, 0.45F, 1.80F, 1.30F,
-                        0.45F, 0.80F, 0.40F, 0.70F
-                );
-                case GENERIC -> new SpringProfile(
-                        1.00F, 0.70F, 0.55F, 1.00F, 1.00F,
-                        0.85F, 0.85F, 0.75F, 0.90F
-                );
-            };
+            return PhysicsProfileDefaults.spring(type);
         }
 
         public SpringProfile multiply(SpringProfile override) {
@@ -556,34 +373,21 @@ public final class PhysicsBoneSelectionPlan {
     }
 
     public record Decision(
-            boolean driven,
-            PartType type,
-            Source source,
-            String chainId,
-            double confidence,
-            SpringProfile profile,
-            ConstraintProfile constraints,
-            StructureRole structureRole,
-            ChainSegment chainSegment,
-            String reason
+            boolean driven, PartType type, Source source, String chainId,
+            double confidence, SpringProfile profile,
+            ConstraintProfile constraints, StructureRole structureRole,
+            ChainSegment chainSegment, String reason
     ) {
+        private static final Decision REJECTED =
+                PhysicsDecisionFactory.rejectedDefault();
+
         public Decision(
-                boolean driven,
-                PartType type,
-                Source source,
-                String chainId,
-                double confidence,
-                SpringProfile profile,
-                ConstraintProfile constraints,
-                String reason
+                boolean driven, PartType type, Source source, String chainId,
+                double confidence, SpringProfile profile,
+                ConstraintProfile constraints, String reason
         ) {
             this(
-                    driven,
-                    type,
-                    source,
-                    chainId,
-                    confidence,
-                    profile,
+                    driven, type, source, chainId, confidence, profile,
                     constraints,
                     driven
                             ? StructureRole.FLEXIBLE_CHAIN_SEGMENT
@@ -593,33 +397,12 @@ public final class PhysicsBoneSelectionPlan {
             );
         }
 
-        private static final Decision REJECTED = new Decision(
-                false,
-                PartType.GENERIC,
-                Source.NONE,
-                "",
-                0.0D,
-                SpringProfile.defaults(PartType.GENERIC),
-                ConstraintProfile.defaults(PartType.GENERIC),
-                StructureRole.NONE,
-                ChainSegment.none(),
-                "not selected"
-        );
-
         public static Decision driven(
-                PartType type,
-                Source source,
-                String chainId,
-                double confidence,
-                SpringProfile profile,
-                String reason
+                PartType type, Source source, String chainId,
+                double confidence, SpringProfile profile, String reason
         ) {
             return driven(
-                    type,
-                    source,
-                    chainId,
-                    confidence,
-                    profile,
+                    type, source, chainId, confidence, profile,
                     ConstraintProfile.defaults(type),
                     StructureRole.FLEXIBLE_CHAIN_SEGMENT,
                     reason
@@ -627,159 +410,91 @@ public final class PhysicsBoneSelectionPlan {
         }
 
         public static Decision driven(
-                PartType type,
-                Source source,
-                String chainId,
-                double confidence,
-                SpringProfile profile,
-                ConstraintProfile constraints,
-                String reason
+                PartType type, Source source, String chainId,
+                double confidence, SpringProfile profile,
+                ConstraintProfile constraints, String reason
         ) {
             return driven(
-                    type,
-                    source,
-                    chainId,
-                    confidence,
-                    profile,
-                    constraints,
-                    StructureRole.FLEXIBLE_CHAIN_SEGMENT,
-                    reason
+                    type, source, chainId, confidence, profile, constraints,
+                    StructureRole.FLEXIBLE_CHAIN_SEGMENT, reason
             );
         }
 
         public static Decision driven(
-                PartType type,
-                Source source,
-                String chainId,
-                double confidence,
-                SpringProfile profile,
-                ConstraintProfile constraints,
-                StructureRole structureRole,
+                PartType type, Source source, String chainId,
+                double confidence, SpringProfile profile,
+                ConstraintProfile constraints, StructureRole structureRole,
                 String reason
         ) {
-            return new Decision(
-                    true,
-                    type,
-                    source,
-                    chainId,
-                    confidence,
-                    profile,
-                    constraints,
-                    structureRole == null
-                            ? StructureRole.FLEXIBLE_CHAIN_SEGMENT
-                            : structureRole,
-                    ChainSegment.none(),
-                    reason
+            return PhysicsDecisionFactory.driven(
+                    type, source, chainId, confidence, profile, constraints,
+                    structureRole, reason
             );
         }
 
         public static Decision rejected(
-                PartType type,
-                Source source,
-                double confidence,
-                String reason
+                PartType type, Source source, double confidence, String reason
         ) {
             return rejected(
-                    type,
-                    source,
-                    confidence,
-                    StructureRole.NONE,
-                    reason
+                    type, source, confidence, StructureRole.NONE, reason
             );
         }
 
         public static Decision rejected(
-                PartType type,
-                Source source,
-                double confidence,
-                StructureRole structureRole,
-                String reason
+                PartType type, Source source, double confidence,
+                StructureRole structureRole, String reason
         ) {
-            return new Decision(
-                    false,
-                    type,
-                    source,
-                    "",
-                    confidence,
-                    SpringProfile.defaults(type),
-                    ConstraintProfile.defaults(type),
-                    structureRole == null ? StructureRole.NONE : structureRole,
-                    ChainSegment.none(),
-                    reason
+            return PhysicsDecisionFactory.rejected(
+                    type, source, confidence, structureRole, reason
             );
         }
 
         public Decision withDynamics(
                 SpringProfile updatedProfile,
                 ConstraintProfile updatedConstraints,
-                StructureRole updatedRole,
-                ChainSegment updatedSegment
+                StructureRole updatedRole, ChainSegment updatedSegment
         ) {
-            return new Decision(
-                    driven,
-                    type,
-                    source,
-                    chainId,
-                    confidence,
-                    updatedProfile == null ? profile : updatedProfile,
-                    updatedConstraints == null
-                            ? constraints
-                            : updatedConstraints,
-                    updatedRole == null ? structureRole : updatedRole,
-                    updatedSegment == null ? chainSegment : updatedSegment,
-                    reason
+            return PhysicsDecisionFactory.withDynamics(
+                    this, updatedProfile, updatedConstraints,
+                    updatedRole, updatedSegment
             );
         }
     }
 
     public static final class Builder {
-        private final String modelId;
-        private final IdentityHashMap<BoneModelSnapshot.Bone, Decision> decisions =
-                new IdentityHashMap<>();
-        private final IdentityHashMap<BoneModelSnapshot.Bone, String> paths =
-                new IdentityHashMap<>();
-        private final IdentityHashMap<BoneModelSnapshot.Bone, BoneKinematics.Metrics> kinematics =
-                new IdentityHashMap<>();
+        private final PhysicsSelectionPlanBuilderState state;
 
         private Builder(String modelId) {
-            this.modelId = modelId;
+            state = new PhysicsSelectionPlanBuilderState(modelId);
         }
 
         public Builder path(BoneModelSnapshot.Bone bone, String path) {
-            paths.put(bone, path);
+            state.path(bone, path);
             return this;
         }
 
         public Builder decide(BoneModelSnapshot.Bone bone, Decision decision) {
-            decisions.put(bone, decision);
+            state.decide(bone, decision);
             return this;
         }
 
         public Builder kinematics(
-                BoneModelSnapshot.Bone bone,
-                BoneKinematics.Metrics metrics
+                BoneModelSnapshot.Bone bone, BoneKinematics.Metrics metrics
         ) {
-            if (metrics != null) {
-                kinematics.put(bone, metrics);
-            }
+            state.kinematics(bone, metrics);
             return this;
         }
 
         public Decision current(BoneModelSnapshot.Bone bone) {
-            return decisions.get(bone);
+            return state.current(bone);
         }
 
         public String pathOf(BoneModelSnapshot.Bone bone) {
-            return paths.getOrDefault(bone, bone.getName());
+            return state.pathOf(bone);
         }
 
         public PhysicsBoneSelectionPlan build() {
-            return new PhysicsBoneSelectionPlan(
-                    modelId,
-                    decisions,
-                    paths,
-                    kinematics
-            );
+            return state.build();
         }
     }
 }

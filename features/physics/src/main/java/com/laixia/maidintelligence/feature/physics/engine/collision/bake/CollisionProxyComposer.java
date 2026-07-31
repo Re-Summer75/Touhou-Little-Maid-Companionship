@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.feature.physics.engine.collision.bake;
 
 import com.laixia.maidintelligence.feature.physics.geometry.BoneModelSnapshot;
 import com.laixia.maidintelligence.feature.physics.geometry.PhysicsBoneGeometry;
+import com.laixia.maidintelligence.feature.physics.engine.collision.bake.planner.BodyCollisionGeometry;
 import com.laixia.maidintelligence.feature.physics.layout.BoneRestPose;
 import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
 import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxy;

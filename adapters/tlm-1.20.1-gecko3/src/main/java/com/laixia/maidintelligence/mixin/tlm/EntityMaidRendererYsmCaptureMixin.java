@@ -2,7 +2,7 @@ package com.laixia.maidintelligence.mixin.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.client.renderer.entity.EntityMaidRenderer;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.IGeoEntityRenderer;
-import com.laixia.maidintelligence.feature.interaction.client.YsmFaceTrackingCapture;
+import com.laixia.maidintelligence.feature.interaction.client.capture.YsmFaceTrackingCapture;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.world.entity.Entity;

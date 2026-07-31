@@ -1,0 +1,151 @@
+def contractName = 'forgeIdeAssembly'
+if (!project.extensions.extraProperties.has(contractName)) {
+    throw new GradleException(
+            "Missing ${contractName} ext contract before applying " +
+                    'forge-ide-assembly.gradle.'
+    )
+}
+
+def contract = project.extensions.extraProperties.get(contractName)
+def requiredContractKeys = ['stableModules', 'sourceSets', 'projectDir']
+def missingContractKeys = requiredContractKeys.findAll {
+    !contract.containsKey(it) || contract[it] == null
+}
+if (!missingContractKeys.isEmpty()) {
+    throw new GradleException(
+            "${contractName} ext contract is missing: " +
+                    missingContractKeys.join(', ')
+    )
+}
+
+def stableModules = contract.stableModules
+def distributionSourceSets = contract.sourceSets
+def distributionProjectDir = contract.projectDir as File
+
+tasks.register('prepareVSCodeTlmMod', Sync) {
+    group = 'ide'
+    description = 'Stages Touhou Little Maid as an exploded mod for VS Code F5.'
+    from {
+        def tlmRuntimeJar = configurations.runtimeClasspath.files.find {
+            it.name.toLowerCase().contains('touhou-little-maid')
+        }
+        if (tlmRuntimeJar == null) {
+            throw new GradleException(
+                    'Touhou Little Maid runtime dependency was not resolved.'
+            )
+        }
+        zipTree(tlmRuntimeJar)
+    }
+    into layout.buildDirectory.dir('vscodeMods/touhou_little_maid')
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA'
+}
+
+tasks.register('prepareVSCodeRunClient') {
+    group = 'ide'
+    description = 'Regenerates run metadata and compiles before F5.'
+    dependsOn 'genVSCodeRuns', 'prepareRunClientCompile', 'prepareVSCodeTlmMod'
+    doLast {
+        // ForgeGradle writes metadata beside the distribution project.
+        def jsonSlurper = Class.forName('groovy.json.JsonSlurper')
+                .getDeclaredConstructor()
+                .newInstance()
+        def jsonOutput = Class.forName('groovy.json.JsonOutput')
+        def writeJson = { File target, Object value ->
+            target.parentFile.mkdirs()
+            target.setText(
+                    jsonOutput.prettyPrint(jsonOutput.toJson(value)),
+                    'UTF-8'
+            )
+        }
+
+        def generatedLaunch = new File(
+                distributionProjectDir,
+                '.vscode/launch.json'
+        )
+        def generatedTasks = new File(
+                distributionProjectDir,
+                '.vscode/tasks.json'
+        )
+        if (!generatedLaunch.isFile() || !generatedTasks.isFile()) {
+            throw new GradleException(
+                    'ForgeGradle did not generate VS Code run metadata.'
+            )
+        }
+
+        def launchJson = jsonSlurper.parse(generatedLaunch)
+        def seenClasspathEntries = new LinkedHashSet<String>()
+        def runtimeClasspath = []
+        def addClasspath = { File entry ->
+            if (!entry.exists()) {
+                return
+            }
+            def key = entry.isDirectory()
+                    ? entry.absolutePath.toLowerCase(Locale.ROOT)
+                    : entry.name.toLowerCase(Locale.ROOT)
+            if (seenClasspathEntries.add(key)) {
+                runtimeClasspath << entry.absolutePath
+            }
+        }
+        distributionSourceSets.main.output.files.each(addClasspath)
+        stableModules.each { module ->
+            module.sourceSets.main.output.files.each(addClasspath)
+        }
+        distributionSourceSets.main.runtimeClasspath.files.each(addClasspath)
+
+        def tlmModClasses = 'touhou_little_maid%%${workspaceFolder}' +
+                '\\distribution\\forge-1.20.1\\build\\vscodeMods' +
+                '\\touhou_little_maid'
+        launchJson.configurations.findAll {
+            it.name == 'runClient'
+        }.each { configuration ->
+            def modClasses = (configuration.env.MOD_CLASSES ?: '')
+                    .split(';')
+                    .findAll {
+                        it && !it.startsWith('touhou_little_maid%%')
+                    }
+            modClasses += tlmModClasses
+            configuration.env.MOD_CLASSES = modClasses.join(';')
+            // Avoid resolving modular jars twice before ModLauncher starts.
+            configuration.modulePaths = []
+            configuration.classPaths = runtimeClasspath
+            configuration.shortenCommandLine = 'argfile'
+        }
+        writeJson(rootProject.file('.vscode/launch.json'), launchJson)
+
+        def tasksJson = jsonSlurper.parse(generatedTasks)
+        def workspaceSettingsFile = rootProject.file('.vscode/settings.json')
+        def workspaceSettings = workspaceSettingsFile.isFile()
+                ? jsonSlurper.parse(workspaceSettingsFile)
+                : [:]
+        workspaceSettings['java.configuration.updateBuildConfiguration'] =
+                'automatic'
+        workspaceSettings['java.debug.settings.forceBuildBeforeLaunch'] = false
+        workspaceSettings['java.import.gradle.enabled'] = true
+        writeJson(workspaceSettingsFile, workspaceSettings)
+
+        def gradleUserHome =
+                workspaceSettings['java.import.gradle.user.home']
+                        ?: System.getenv('GRADLE_USER_HOME')
+        tasksJson.tasks.findAll {
+            it.label == 'prepareRunClientCompile'
+        }.each { task ->
+            task.command =
+                    '${workspaceFolder}\\gradlew.bat prepareVSCodeRunClient'
+        }
+        if (gradleUserHome) {
+            tasksJson.tasks.each { task ->
+                task.options = task.options ?: [:]
+                task.options.env = task.options.env ?: [:]
+                task.options.env.GRADLE_USER_HOME = gradleUserHome.toString()
+            }
+        }
+        writeJson(rootProject.file('.vscode/tasks.json'), tasksJson)
+    }
+}
+
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}

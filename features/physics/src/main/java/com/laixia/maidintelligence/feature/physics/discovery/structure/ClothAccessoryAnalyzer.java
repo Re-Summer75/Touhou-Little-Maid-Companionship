@@ -3,7 +3,7 @@ package com.laixia.maidintelligence.feature.physics.discovery.structure;
 import com.laixia.maidintelligence.feature.physics.geometry.BoneModelSnapshot;
 
 
-import com.laixia.maidintelligence.feature.physics.discovery.PhysicsBoneClassifier;
+import com.laixia.maidintelligence.feature.physics.discovery.classifier.PhysicsBoneClassifier;
 import com.laixia.maidintelligence.feature.physics.geometry.PhysicsBoneGeometry;
 import org.joml.Vector3f;
 

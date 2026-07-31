@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.feature.physics.engine.collision.model;
 
 
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.projection.CollisionProjectionPrimitives;
 import org.joml.Vector3f;
 
 /**
@@ -133,7 +134,8 @@ public final class CollisionScratch {
      * projected onto that direction.
      */
     float meshReach(Vector3f normal) {
-        if (meshHalf.lengthSquared() <= CollisionProjectionMath.EPSILON) {
+        if (meshHalf.lengthSquared()
+                <= CollisionProjectionPrimitives.EPSILON) {
             return 0.0F;
         }
         return Math.abs(meshAxisX.dot(normal)) * meshHalf.x

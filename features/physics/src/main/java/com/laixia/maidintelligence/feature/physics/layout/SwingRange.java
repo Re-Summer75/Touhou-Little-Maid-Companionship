@@ -1,7 +1,7 @@
 package com.laixia.maidintelligence.feature.physics.layout;
 
 
-import com.laixia.maidintelligence.feature.physics.api.PhysicsBoneSelectionPlan;
+import com.laixia.maidintelligence.feature.physics.layout.pivot.PivotSwingRange;
 
 /**
  * How far a driven segment may leave the pose the animation asked for.
@@ -54,18 +54,6 @@ public final class SwingRange {
             PhysicsSolverLayout.Node node,
             float runtimeSafetyScale
     ) {
-        float scale = Float.isFinite(runtimeSafetyScale)
-                ? Math.max(1.0E-6F, runtimeSafetyScale)
-                : 1.0F;
-        PhysicsBoneSelectionPlan.SpringProfile profile =
-                node.decision().profile();
-        float geometric = Math.min(
-                MAX_ANGLE,
-                node.kinematics().safeAngle()
-        ) * profile.angleScale();
-        float displacement = MAX_TIP_DISPLACEMENT
-                * profile.tipDisplacementScale()
-                / (node.kinematics().leverArm() * scale);
-        return Math.max(0.0F, Math.min(geometric, displacement));
+        return PivotSwingRange.maximum(node, runtimeSafetyScale);
     }
 }

@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.feature.physics.engine.collision.model;
 
 
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.projection.CollisionProjectionPrimitives;
 import org.joml.Vector3f;
 
 /**
@@ -39,7 +40,7 @@ public final class CollisionProjector {
         float pivotDistance = (pivot.x - point.x) * normal.x
                 + (pivot.y - point.y) * normal.y
                 + (pivot.z - point.z) * normal.z;
-        return CollisionProjectionMath.projectMinimumDot(
+        return CollisionProjectionPrimitives.projectMinimumDot(
                 direction,
                 normal,
                 (hitRadius - pivotDistance) / leverArm,
@@ -112,7 +113,7 @@ public final class CollisionProjector {
          * putting a thickness in the hit radius, where it would hold the segment
          * off every other collider too and squeeze it out of the space it needs.
          */
-        return CollisionProjectionMath.projectMinimumDot(
+        return CollisionProjectionPrimitives.projectMinimumDot(
                 direction,
                 scratch.normal,
                 (padded - pivotDistance) / leverArm,
@@ -326,7 +327,7 @@ public final class CollisionProjector {
             scratch.normal.set(scratch.tip).sub(scratch.closest);
         }
         float lengthSquared = scratch.normal.lengthSquared();
-        if (lengthSquared > CollisionProjectionMath.EPSILON) {
+        if (lengthSquared > CollisionProjectionPrimitives.EPSILON) {
             scratch.normal.div((float) Math.sqrt(lengthSquared));
             return;
         }
@@ -382,7 +383,7 @@ public final class CollisionProjector {
             float leverArm,
             CollisionScratch scratch
     ) {
-        return CollisionProjectionMath.projectOutsideSphere(
+        return CollisionProjectionPrimitives.projectOutsideSphere(
                 direction,
                 pivot,
                 center,
@@ -401,7 +402,7 @@ public final class CollisionProjector {
             float leverArm,
             CollisionScratch scratch
     ) {
-        return CollisionProjectionMath.sphereClearance(
+        return CollisionProjectionPrimitives.sphereClearance(
                 direction,
                 pivot,
                 center,
@@ -422,7 +423,7 @@ public final class CollisionProjector {
     ) {
         scratch.segment.set(end).sub(start);
         if (scratch.segment.lengthSquared()
-                <= CollisionProjectionMath.EPSILON) {
+                <= CollisionProjectionPrimitives.EPSILON) {
             return projectSphere(
                     direction,
                     pivot,
@@ -437,7 +438,7 @@ public final class CollisionProjector {
              iteration < MAX_CAPSULE_ITERATIONS;
              iteration++) {
             scratch.tip.set(direction).mul(leverArm).add(pivot);
-            CollisionProjectionMath.closestPointOnSegment(
+            CollisionProjectionPrimitives.closestPointOnSegment(
                     scratch.tip,
                     start,
                     end,
@@ -445,7 +446,7 @@ public final class CollisionProjector {
                     scratch.closest
             );
             scratch.normal.set(scratch.tip).sub(scratch.closest);
-            if (scratch.normal.length() + CollisionProjectionMath.EPSILON
+            if (scratch.normal.length() + CollisionProjectionPrimitives.EPSILON
                     >= combinedRadius) {
                 break;
             }
@@ -459,8 +460,8 @@ public final class CollisionProjector {
             );
             if (!changed
                     && pivot.distanceSquared(scratch.closest)
-                    <= CollisionProjectionMath.EPSILON) {
-                CollisionProjectionMath.fallbackNormal(
+                    <= CollisionProjectionPrimitives.EPSILON) {
+                CollisionProjectionPrimitives.fallbackNormal(
                         scratch.segment,
                         scratch.normal
                 );
@@ -485,7 +486,7 @@ public final class CollisionProjector {
             CollisionScratch scratch
     ) {
         scratch.tip.set(direction).mul(leverArm).add(pivot);
-        CollisionProjectionMath.closestPointOnSegment(
+        CollisionProjectionPrimitives.closestPointOnSegment(
                 scratch.tip,
                 start,
                 end,

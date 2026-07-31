@@ -31,70 +31,56 @@ public final class BoneModelSnapshot {
     private final List<Bone> tacPistolBones;
     private final List<Bone> tacRifleBones;
 
-    private BoneModelSnapshot(
-            List<Bone> roots,
-            List<Bone> bones,
-            Builder builder
-    ) {
-        this.topLevelBones = List.copyOf(roots);
-        this.boneList = List.copyOf(bones);
+    BoneModelSnapshot(BoneModelSnapshotBuilderState state) {
+        this.topLevelBones = List.copyOf(state.roots());
+        this.boneList = List.copyOf(state.bones());
         Map<String, Bone> byName = new LinkedHashMap<>();
-        for (Bone bone : bones) {
+        for (Bone bone : boneList) {
             byName.put(bone.getName(), bone);
         }
         this.bones = Map.copyOf(byName);
-        this.head = builder.head;
-        this.leftArm = builder.leftArm;
-        this.rightArm = builder.rightArm;
-        this.leftHandBones = List.copyOf(builder.leftHandBones);
-        this.rightHandBones = List.copyOf(builder.rightHandBones);
-        this.leftWaistBones = List.copyOf(builder.leftWaistBones);
-        this.rightWaistBones = List.copyOf(builder.rightWaistBones);
-        this.backpackBones = List.copyOf(builder.backpackBones);
-        this.tacPistolBones = List.copyOf(builder.tacPistolBones);
-        this.tacRifleBones = List.copyOf(builder.tacRifleBones);
+        this.head = state.head();
+        this.leftArm = state.leftArm();
+        this.rightArm = state.rightArm();
+        this.leftHandBones = List.copyOf(state.leftHandBones());
+        this.rightHandBones = List.copyOf(state.rightHandBones());
+        this.leftWaistBones = List.copyOf(state.leftWaistBones());
+        this.rightWaistBones = List.copyOf(state.rightWaistBones());
+        this.backpackBones = List.copyOf(state.backpackBones());
+        this.tacPistolBones = List.copyOf(state.tacPistolBones());
+        this.tacRifleBones = List.copyOf(state.tacRifleBones());
     }
 
     public List<Bone> topLevelBones() {
         return topLevelBones;
     }
-
     public Map<String, Bone> bones() {
         return bones;
     }
-
     public List<Bone> boneList() {
         return boneList;
     }
-
     public Bone bone(int index) {
         return boneList.get(index);
     }
-
     public int boneCount() {
         return boneList.size();
     }
-
     public Bone head() {
         return head;
     }
-
     public Bone leftArm() {
         return leftArm;
     }
-
     public Bone rightArm() {
         return rightArm;
     }
-
     public List<Bone> leftHandBones() {
         return leftHandBones;
     }
-
     public List<Bone> rightHandBones() {
         return rightHandBones;
     }
-
     public List<Bone> leftWaistBones() {
         return leftWaistBones;
     }
@@ -129,18 +115,8 @@ public final class BoneModelSnapshot {
     }
 
     public static final class Builder {
-        private final List<Bone> roots = new ArrayList<>();
-        private final List<Bone> bones = new ArrayList<>();
-        private Bone head;
-        private Bone leftArm;
-        private Bone rightArm;
-        private List<Bone> leftHandBones = List.of();
-        private List<Bone> rightHandBones = List.of();
-        private List<Bone> leftWaistBones = List.of();
-        private List<Bone> rightWaistBones = List.of();
-        private List<Bone> backpackBones = List.of();
-        private List<Bone> tacPistolBones = List.of();
-        private List<Bone> tacRifleBones = List.of();
+        private final BoneModelSnapshotBuilderState state =
+                new BoneModelSnapshotBuilderState();
 
         public Bone addBone(
                 Bone parent,
@@ -151,80 +127,63 @@ public final class BoneModelSnapshot {
                 RestPose restPose,
                 RestGeometry geometry
         ) {
-            Bone bone = new Bone(
-                    bones.size(),
-                    parent,
-                    name,
-                    pivotX,
-                    pivotY,
-                    pivotZ,
-                    restPose,
-                    geometry
+            return state.addBone(
+                    parent, name, pivotX, pivotY, pivotZ, restPose, geometry
             );
-            bones.add(bone);
-            if (parent == null) {
-                roots.add(bone);
-            } else {
-                parent.mutableChildren.add(bone);
-            }
-            return bone;
         }
 
         public Builder head(Bone value) {
-            head = value;
+            state.head(value);
             return this;
         }
 
         public Builder leftArm(Bone value) {
-            leftArm = value;
+            state.leftArm(value);
             return this;
         }
 
         public Builder rightArm(Bone value) {
-            rightArm = value;
+            state.rightArm(value);
             return this;
         }
 
         public Builder leftHandBones(List<Bone> value) {
-            leftHandBones = List.copyOf(value);
+            state.leftHandBones(value);
             return this;
         }
 
         public Builder rightHandBones(List<Bone> value) {
-            rightHandBones = List.copyOf(value);
+            state.rightHandBones(value);
             return this;
         }
 
         public Builder leftWaistBones(List<Bone> value) {
-            leftWaistBones = List.copyOf(value);
+            state.leftWaistBones(value);
             return this;
         }
 
         public Builder rightWaistBones(List<Bone> value) {
-            rightWaistBones = List.copyOf(value);
+            state.rightWaistBones(value);
             return this;
         }
 
         public Builder backpackBones(List<Bone> value) {
-            backpackBones = List.copyOf(value);
+            state.backpackBones(value);
             return this;
         }
 
         public Builder tacPistolBones(List<Bone> value) {
-            tacPistolBones = List.copyOf(value);
+            state.tacPistolBones(value);
             return this;
         }
 
         public Builder tacRifleBones(List<Bone> value) {
-            tacRifleBones = List.copyOf(value);
+            state.tacRifleBones(value);
             return this;
         }
 
         public BoneModelSnapshot build() {
-            for (Bone bone : bones) {
-                bone.freeze();
-            }
-            return new BoneModelSnapshot(roots, bones, this);
+            return state.build();
         }
     }
 
@@ -250,7 +209,7 @@ public final class BoneModelSnapshot {
         private float scaleY;
         private float scaleZ;
 
-        private Bone(
+        Bone(
                 int index,
                 Bone parent,
                 String name,
@@ -271,7 +230,11 @@ public final class BoneModelSnapshot {
             resetToRestPose();
         }
 
-        private void freeze() {
+        void addChild(Bone child) {
+            mutableChildren.add(child);
+        }
+
+        void freeze() {
             children = Collections.unmodifiableList(
                     new ArrayList<>(mutableChildren)
             );

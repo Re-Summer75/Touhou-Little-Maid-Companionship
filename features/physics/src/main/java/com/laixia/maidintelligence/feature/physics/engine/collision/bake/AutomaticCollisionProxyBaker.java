@@ -2,6 +2,8 @@ package com.laixia.maidintelligence.feature.physics.engine.collision.bake;
 
 
 import com.laixia.maidintelligence.feature.physics.geometry.PhysicsBoneGeometry;
+import com.laixia.maidintelligence.feature.physics.engine.collision.bake.automatic.CapsuleFit;
+import com.laixia.maidintelligence.feature.physics.engine.collision.bake.planner.BodyCollisionGeometry;
 import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxies;
 import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxy;
 import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySource;

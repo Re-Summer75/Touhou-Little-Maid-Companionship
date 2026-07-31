@@ -4,7 +4,7 @@ import com.github.tartaricacid.touhoulittlemaid.advancements.maid.TriggerType;
 import com.github.tartaricacid.touhoulittlemaid.api.event.InteractMaidEvent;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.init.InitTrigger;
-import com.laixia.maidintelligence.feature.interaction.client.ClientMouthFeedController;
+import com.laixia.maidintelligence.feature.interaction.client.feed.ClientMouthFeedController;
 import com.laixia.maidintelligence.feature.interaction.service.MaidFeedingService;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;

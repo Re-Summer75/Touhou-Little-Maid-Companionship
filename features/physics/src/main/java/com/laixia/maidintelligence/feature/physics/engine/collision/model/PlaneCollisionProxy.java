@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.feature.physics.engine.collision.model;
 
 
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.projection.CollisionProjectionPrimitives;
 import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.PreparedCollisionProxy;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -54,15 +55,15 @@ final class PlaneCollisionProxy implements CollisionProxy {
                 this.normalFromReference.lengthSquared();
         if (!Float.isFinite(normalLengthSquared)
                 || normalLengthSquared
-                <= CollisionProjectionMath.EPSILON
-                * CollisionProjectionMath.EPSILON) {
+                <= CollisionProjectionPrimitives.EPSILON
+                * CollisionProjectionPrimitives.EPSILON) {
             this.normalFromReference.set(0.0F, 1.0F, 0.0F);
         } else {
             this.normalFromReference.normalize();
         }
         this.hitRadius = Math.max(0.0F, hitRadius);
         this.leverArm = Math.max(
-                CollisionProjectionMath.EPSILON,
+                CollisionProjectionPrimitives.EPSILON,
                 leverArm
         );
     }

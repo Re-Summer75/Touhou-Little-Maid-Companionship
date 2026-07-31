@@ -1,8 +1,9 @@
 package com.laixia.maidintelligence.feature.physics.discovery;
 
 
-import com.laixia.maidintelligence.feature.physics.discovery.DiscoveryPlanner;
 import com.laixia.maidintelligence.feature.physics.api.PhysicsBoneSelectionPlan;
+import com.laixia.maidintelligence.feature.physics.discovery.filter.AttachmentMountStabilization;
+import com.laixia.maidintelligence.feature.physics.discovery.planner.DiscoveryPlanner;
 import com.laixia.maidintelligence.feature.physics.geometry.BoneModelSnapshot;
 import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
 import com.laixia.maidintelligence.feature.physics.metadata.PhysicsMetadata;
@@ -92,7 +93,7 @@ public final class PhysicsBoneDiscoverer {
                 );
                 kinematics = null;
             } else {
-                decision = AttachmentMountStabilizer.apply(
+                decision = AttachmentMountStabilization.apply(
                         decision,
                         kinematics
                 );

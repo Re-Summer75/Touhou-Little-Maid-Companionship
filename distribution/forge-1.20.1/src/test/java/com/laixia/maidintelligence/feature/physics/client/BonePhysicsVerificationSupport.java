@@ -5,8 +5,6 @@ import com.laixia.maidintelligence.feature.physics.metadata.*;
 import com.laixia.maidintelligence.feature.physics.discovery.*;
 import com.laixia.maidintelligence.feature.physics.geometry.*;
 import com.laixia.maidintelligence.feature.physics.layout.*;
-import com.laixia.maidintelligence.feature.physics.engine.*;
-import com.laixia.maidintelligence.feature.physics.session.*;
 
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
@@ -17,8 +15,9 @@ import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.GeoBuilder;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoModel;
 import com.laixia.maidintelligence.feature.physics.client.model.GeckoBoneModelPort;
-import com.laixia.maidintelligence.feature.physics.discovery.PhysicsBoneClassifier.ChainType;
-import com.laixia.maidintelligence.feature.physics.discovery.PhysicsBoneClassifier.Classification;
+import com.laixia.maidintelligence.feature.physics.discovery.classifier.PhysicsBoneClassifier;
+import com.laixia.maidintelligence.feature.physics.discovery.classifier.PhysicsBoneClassifier.ChainType;
+import com.laixia.maidintelligence.feature.physics.discovery.classifier.PhysicsBoneClassifier.Classification;
 import org.joml.Vector3f;
 
 import java.io.InputStream;

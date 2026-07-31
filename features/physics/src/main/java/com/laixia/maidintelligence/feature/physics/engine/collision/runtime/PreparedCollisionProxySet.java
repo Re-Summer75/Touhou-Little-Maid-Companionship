@@ -1,8 +1,6 @@
 package com.laixia.maidintelligence.feature.physics.engine.collision.runtime;
 
-
 import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionScratch;
-import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.RuntimeCollisionFrames;
 import org.joml.Vector3f;
 
 /**
@@ -10,7 +8,6 @@ import org.joml.Vector3f;
  * endpoint can reach this frame enter the relaxation loop.
  */
 public final class PreparedCollisionProxySet implements CollisionProjection {
-    private static final int MAX_PASSES = 96;
     /**
      * Colliders one endpoint may be held by at once. Three faces meet at a cube
      * corner, and a hem pinched between a torso and both legs already wants
@@ -20,28 +17,12 @@ public final class PreparedCollisionProxySet implements CollisionProjection {
      * as a pass changes nothing, so an unused slot costs one reject.
      */
     private static final int ACTIVE_LIMIT = 6;
-    /**
-     * Colliders per cull bucket.
-     *
-     * <p>Balanced by measurement, and the balance does not sit where it looks
-     * like it should. A tighter bucket is a better filter, so the obvious move is
-     * to subdivide until the spheres hug their contents — but every bucket costs
-     * an affine transform of its centre and a sweep test whether it rejects or
-     * not, and those fixed costs are paid for the whole tree while only the
-     * surviving buckets pay for their contents. At eight per bucket this model's
-     * 3234 colliders make several hundred buckets and the constraint layer runs
-     * at 8.4 times the unconstrained solver; at thirty-two it is 7.7, and beyond
-     * that the curve is flat, since by then the per-bucket overhead is gone and
-     * only the looser filter remains. Culling accuracy is unaffected either way:
-     * a bucket that survives is still tested collider by collider.
-     */
-    private static final int MAX_GROUP_SIZE = 32;
     public static final PreparedCollisionProxySet EMPTY =
             new PreparedCollisionProxySet(0);
 
-    private final PreparedCollisionProxy[] proxies;
-    private final CollisionSpatialState spatial;
-    private final ContactOwnerState contactOwner = new ContactOwnerState();
+    final PreparedCollisionProxy[] proxies;
+    final CollisionSpatialState spatial;
+    final ContactOwnerState contactOwner = new ContactOwnerState();
     private boolean calibrationPending = true;
     private double poseTime;
     /**
@@ -56,14 +37,14 @@ public final class PreparedCollisionProxySet implements CollisionProjection {
      * so a contact can be padded by the sheet's reach along that one contact
      * normal instead of by a scalar in every direction.
      */
-    private final Vector3f meshHalf = new Vector3f();
-    private final Vector3f meshAxisX = new Vector3f(1.0F, 0.0F, 0.0F);
-    private final Vector3f meshAxisY = new Vector3f(0.0F, 1.0F, 0.0F);
-    private final Vector3f meshAxisZ = new Vector3f(0.0F, 0.0F, 1.0F);
+    final Vector3f meshHalf = new Vector3f();
+    final Vector3f meshAxisX = new Vector3f(1.0F, 0.0F, 0.0F);
+    final Vector3f meshAxisY = new Vector3f(0.0F, 1.0F, 0.0F);
+    final Vector3f meshAxisZ = new Vector3f(0.0F, 0.0F, 1.0F);
     private final SwingCone cone = new SwingCone();
-    private final Vector3f passStart = new Vector3f();
-    private final Vector3f pairBase = new Vector3f();
-    private final Vector3f pairTangent = new Vector3f();
+    final Vector3f passStart = new Vector3f();
+    final Vector3f pairBase = new Vector3f();
+    final Vector3f pairTangent = new Vector3f();
 
     public PreparedCollisionProxySet(int proxyCount) {
         proxies = new PreparedCollisionProxy[Math.max(0, proxyCount)];
@@ -87,151 +68,7 @@ public final class PreparedCollisionProxySet implements CollisionProjection {
      * as before.
      */
     void groupByReference() {
-        spatial.allocateGroups(proxies.length);
-        boolean[] bucketed = new boolean[proxies.length];
-        int written = 0;
-        for (int slot = 0; slot < proxies.length; slot++) {
-            if (bucketed[slot]) {
-                continue;
-            }
-            int reference = proxies[slot].referenceNodeIndex();
-            int start = written;
-            for (int scan = slot; scan < proxies.length; scan++) {
-                if (proxies[scan].referenceNodeIndex() == reference) {
-                    spatial.grouped[written++] = scan;
-                    bucketed[scan] = true;
-                }
-            }
-            subdivide(reference, start, written);
-        }
-        spatial.groupStart[spatial.groupCount] = written;
-        measureGroups();
-    }
-
-    /**
-     * Registers {@code grouped[from, to)} as one group, or splits it and
-     * recurses. The left half is always registered first so group starts stay
-     * ascending, which is what lets {@code groupStart[group + 1]} serve as the
-     * end of a group.
-     */
-    private void subdivide(int reference, int from, int to) {
-        if (to - from <= MAX_GROUP_SIZE) {
-            spatial.groupReference[spatial.groupCount] = reference;
-            spatial.groupStart[spatial.groupCount] = from;
-            spatial.groupCount++;
-            return;
-        }
-        sortByLongestAxis(from, to);
-        int middle = from + (to - from) / 2;
-        subdivide(reference, from, middle);
-        subdivide(reference, middle, to);
-    }
-
-    /**
-     * Orders the slots along whichever axis the group is most spread out on.
-     * Insertion sort because this runs once per model load over a handful of
-     * cubes, not per frame.
-     */
-    private void sortByLongestAxis(int from, int to) {
-        float minX = Float.POSITIVE_INFINITY;
-        float minY = Float.POSITIVE_INFINITY;
-        float minZ = Float.POSITIVE_INFINITY;
-        float maxX = Float.NEGATIVE_INFINITY;
-        float maxY = Float.NEGATIVE_INFINITY;
-        float maxZ = Float.NEGATIVE_INFINITY;
-        for (int cursor = from; cursor < to; cursor++) {
-            Vector3f center =
-                    proxies[spatial.grouped[cursor]].shape().restCenter();
-            minX = Math.min(minX, center.x);
-            minY = Math.min(minY, center.y);
-            minZ = Math.min(minZ, center.z);
-            maxX = Math.max(maxX, center.x);
-            maxY = Math.max(maxY, center.y);
-            maxZ = Math.max(maxZ, center.z);
-        }
-        float spanX = maxX - minX;
-        float spanY = maxY - minY;
-        float spanZ = maxZ - minZ;
-        int axis = spanX >= spanY && spanX >= spanZ
-                ? 0
-                : (spanY >= spanZ ? 1 : 2);
-        for (int cursor = from + 1; cursor < to; cursor++) {
-            int slot = spatial.grouped[cursor];
-            float key = axisValue(slot, axis);
-            int scan = cursor - 1;
-            while (scan >= from
-                    && axisValue(spatial.grouped[scan], axis) > key) {
-                spatial.grouped[scan + 1] = spatial.grouped[scan];
-                scan--;
-            }
-            spatial.grouped[scan + 1] = slot;
-        }
-    }
-
-    private float axisValue(int slot, int axis) {
-        Vector3f center = proxies[slot].shape().restCenter();
-        return switch (axis) {
-            case 0 -> center.x;
-            case 1 -> center.y;
-            default -> center.z;
-        };
-    }
-
-    /**
-     * One group is rigid: all of its colliders ride the same bone, so a rest
-     * bounding sphere stays valid under animation once its centre is carried
-     * by that bone's transform. That turns a whole bone's worth of cubes into
-     * a single test.
-     */
-    private void measureGroups() {
-        for (int group = 0; group < spatial.groupCount; group++) {
-            float minX = Float.POSITIVE_INFINITY;
-            float minY = Float.POSITIVE_INFINITY;
-            float minZ = Float.POSITIVE_INFINITY;
-            float maxX = Float.NEGATIVE_INFINITY;
-            float maxY = Float.NEGATIVE_INFINITY;
-            float maxZ = Float.NEGATIVE_INFINITY;
-            float hit = 0.0F;
-            boolean bounded = true;
-            for (int cursor = spatial.groupStart[group];
-                 cursor < spatial.groupStart[group + 1];
-                 cursor++) {
-                PreparedCollisionProxy proxy =
-                        proxies[spatial.grouped[cursor]];
-                PreparedCollisionShape shape = proxy.shape();
-                float extent = shape.restCullRadius();
-                hit = Math.max(hit, proxy.restHitRadius());
-                if (!Float.isFinite(extent)) {
-                    bounded = false;
-                    break;
-                }
-                Vector3f center = shape.restCenter();
-                minX = Math.min(minX, center.x - extent);
-                minY = Math.min(minY, center.y - extent);
-                minZ = Math.min(minZ, center.z - extent);
-                maxX = Math.max(maxX, center.x + extent);
-                maxY = Math.max(maxY, center.y + extent);
-                maxZ = Math.max(maxZ, center.z + extent);
-            }
-            if (!bounded) {
-                spatial.groupCenter[group] = null;
-                continue;
-            }
-            float sizeX = maxX - minX;
-            float sizeY = maxY - minY;
-            float sizeZ = maxZ - minZ;
-            spatial.groupCenter[group] = new Vector3f(
-                    minX + sizeX * 0.5F,
-                    minY + sizeY * 0.5F,
-                    minZ + sizeZ * 0.5F
-            );
-            spatial.groupRadius[group] = 0.5F * (float) Math.sqrt(
-                    (double) sizeX * sizeX
-                            + (double) sizeY * sizeY
-                            + (double) sizeZ * sizeZ
-            );
-            spatial.groupHitRadius[group] = hit;
-        }
+        PreparedCollisionSpatialGroups.build(proxies, spatial);
     }
 
     public int proxyCount() {
@@ -253,7 +90,6 @@ public final class PreparedCollisionProxySet implements CollisionProjection {
         meshAxisY.set(axisY);
         meshAxisZ.set(axisZ);
     }
-
 
     public PreparedCollisionProxy proxy(int index) {
         return proxies[index];
@@ -370,92 +206,9 @@ public final class PreparedCollisionProxySet implements CollisionProjection {
             CollisionScratch scratch,
             int maxPasses
     ) {
-        int count = liveCount();
-        if (count == 0) {
-            return false;
-        }
-        scratch.setMeshExtent(meshHalf, meshAxisX, meshAxisY, meshAxisZ);
-        boolean corrected = false;
-        int passes = count == 1
-                ? 1
-                : Math.max(1, Math.min(MAX_PASSES, maxPasses));
-        boolean settled = true;
-        releaseSuppressed(direction, count, scratch);
-        for (int pass = 0; pass < passes; pass++) {
-            passStart.set(direction);
-            boolean passCorrected = false;
-            for (int slot = 0; slot < count; slot++) {
-                if (liveProxy(slot).project(direction, scratch)) {
-                    passCorrected = true;
-                    contactOwner.recordResponder(slot);
-                }
-            }
-            if (passCorrected && count == 2) {
-                boolean pairCorrected = PreparedPlanePairProjector.project(
-                        liveProxy(0),
-                        liveProxy(1),
-                        direction,
-                        scratch,
-                        pairBase,
-                        pairTangent
-                );
-                passCorrected |= pairCorrected;
-                if (pairCorrected) {
-                    // The coupled answer cannot be attributed to either plane.
-                    contactOwner.clearResponder();
-                }
-            }
-            corrected |= passCorrected;
-            if (!passCorrected
-                    || direction.distanceSquared(passStart) <= 1.0E-12F) {
-                break;
-            }
-            /*
-             * Still moving on the final pass, so relaxation never converged.
-             * One collider is satisfied in a single pass and stays satisfied;
-             * two that want opposite things take turns undoing each other for
-             * as many passes as they are given.
-             */
-            settled = pass < passes - 1;
-        }
-        /*
-         * Only once relaxation has failed to converge. Suppressing on any resolved
-         * overlap was tried and is too eager: a collider that was merely holding
-         * cloth up gets silenced along with the ones that were fighting, and wind
-         * then pushed the cloth of winefox_little straight through — its worst axis
-         * went from -1.10 to -1.56 and winefox_matured's buzz from 0.5 to 2.0.
-         * Non-convergence is the one moment there is evidence the demands cannot
-         * all be met.
-         */
-        if (!settled) {
-            suppressLosers(direction, count, scratch);
-        }
-        /*
-         * The pose the last pass reached is handed back as it stands, even when
-         * the passes never agreed. Averaging the poses they visited was tried, on
-         * the reasoning that which one the count stops on is arbitrary — single
-         * passes here move the direction by up to 1.03 rad, and one slot reported
-         * an identical 0.606 pass after pass. It is arbitrary, but the mean is
-         * worse: it satisfies no bound exactly, so cloth settles further inside
-         * every collider it is caught between. Contacts rose across the models
-         * and the buzz it was aimed at did not move at all.
-         */
-        if (!settled) {
-            scratch.setUnresolved(true);
-        }
-        /*
-         * Whether the segment still lies against anything, asked separately from
-         * whether anything pushed it. Contact support keys on the push, and a
-         * segment held exactly on a surface is pushed by nothing at all, so the
-         * push alone cannot distinguish resting contact from a collider that has
-         * moved away. Measured in game on winefox's FR1: support sat between 0.67
-         * and 1.00 for a second and a half with no projection whatsoever, and the
-         * stale surface it kept cancelling the spring against let the segment
-         * wander 38 px from its equilibrium.
-         */
-        scratch.setRestClearance(nearestClearance(direction, count, scratch));
-        scratch.clearMeshExtent();
-        return corrected;
+        return PreparedCollisionProjectionLoop.project(
+                this, direction, scratch, maxPasses
+        );
     }
 
     /**
@@ -485,38 +238,9 @@ public final class PreparedCollisionProxySet implements CollisionProjection {
             Vector3f projectedDirection,
             CollisionScratch scratch
     ) {
-        if (!recurringContact) {
-            contactOwner.clearResponder();
-            return false;
-        }
-        int count = liveCount();
-        int responder = contactOwner.seriesResponderSlot();
-        if (responder < 0 || responder >= count) {
-            return false;
-        }
-        scratch.setMeshExtent(meshHalf, meshAxisX, meshAxisY, meshAxisZ);
-        boolean suppressed = false;
-        for (int slot = 0; slot < count; slot++) {
-            if (slot == responder) {
-                continue;
-            }
-            PreparedCollisionProxy competitor = liveProxy(slot);
-            if (!competitor.isSuppressed()
-                    && competitor.clearance(projectedDirection, scratch) < 0.0F) {
-                competitor.suppress();
-                suppressed = true;
-            }
-        }
-        if (suppressed) {
-            contactOwner.retain(spatial.proxyIndex(responder));
-            scratch.setRestClearance(
-                    nearestClearance(projectedDirection, count, scratch)
-            );
-        } else {
-            contactOwner.clearResponder();
-        }
-        scratch.clearMeshExtent();
-        return suppressed;
+        return PreparedCollisionProjectionLoop.resolveRecurringContact(
+                this, recurringContact, projectedDirection, scratch
+        );
     }
 
     public float clearance(
@@ -528,6 +252,10 @@ public final class PreparedCollisionProxySet implements CollisionProjection {
         float result = proxies[proxyIndex].clearance(direction, scratch);
         scratch.clearMeshExtent();
         return result;
+    }
+
+    void applyMeshExtent(CollisionScratch scratch) {
+        scratch.setMeshExtent(meshHalf, meshAxisX, meshAxisY, meshAxisZ);
     }
 
     public ContactOwnerState contactOwnerState() {
@@ -542,26 +270,6 @@ public final class PreparedCollisionProxySet implements CollisionProjection {
         for (PreparedCollisionProxy proxy : proxies) {
             proxy.resetRestAllowance();
         }
-    }
-
-    /** Clearance to whichever live collider the segment sits nearest to. */
-    private float nearestClearance(
-            Vector3f direction,
-            int count,
-            CollisionScratch scratch
-    ) {
-        float nearest = Float.MAX_VALUE;
-        for (int slot = 0; slot < count; slot++) {
-            PreparedCollisionProxy proxy = liveProxy(slot);
-            if (proxy.isSuppressed()) {
-                continue;
-            }
-            nearest = Math.min(
-                    nearest,
-                    proxy.clearance(direction, scratch)
-            );
-        }
-        return nearest;
     }
 
     /** Whether any collider on this bone is within the endpoint's sweep. */
@@ -622,73 +330,6 @@ public final class PreparedCollisionProxySet implements CollisionProjection {
         }
         spatial.active[position] = slot;
         spatial.activeSlack[position] = slack;
-    }
-
-    /** Lets go of any collider the segment has since left. */
-    private void releaseSuppressed(
-            Vector3f direction,
-            int count,
-            CollisionScratch scratch
-    ) {
-        boolean held = false;
-        for (int slot = 0; slot < count; slot++) {
-            held |= liveProxy(slot).holdSuppression(direction, scratch);
-        }
-        if (!held) {
-            contactOwner.release();
-        }
-    }
-
-    /**
-     * Silences every overlapped collider but the deepest.
-     *
-     * <p>Called only when relaxation failed to converge, which is the signature of
-     * colliders that cannot all be satisfied: one is answered in a single pass and
-     * stays answered, while two wanting opposite things take turns undoing each
-     * other for as many passes as they are given, and the segment shakes between
-     * them. Resolving one and letting the segment sit inside the rest trades a
-     * shake for an overlap. That is the better trade here — a seated pose overlaps
-     * by design, and an overlap that holds still reads as cloth resting on a body
-     * while the same depth alternating reads as a buzz.
-     *
-     * <p>The deepest keeps its voice because it is the one whose overlap would be
-     * most visible, and because a limb arriving into a settled skirt arrives deep.
-     */
-    private void suppressLosers(
-            Vector3f direction,
-            int count,
-            CollisionScratch scratch
-    ) {
-        int deepest = -1;
-        float worst = 0.0F;
-        for (int slot = 0; slot < count; slot++) {
-            PreparedCollisionProxy proxy = liveProxy(slot);
-            if (proxy.isSuppressed()) {
-                continue;
-            }
-            float gap = proxy.clearance(direction, scratch);
-            if (gap < worst) {
-                worst = gap;
-                deepest = slot;
-            }
-        }
-        if (deepest < 0) {
-            return;
-        }
-        boolean suppressed = false;
-        for (int slot = 0; slot < count; slot++) {
-            PreparedCollisionProxy proxy = liveProxy(slot);
-            if (slot == deepest || proxy.isSuppressed()) {
-                continue;
-            }
-            if (proxy.clearance(direction, scratch) < 0.0F) {
-                proxy.suppress();
-                suppressed = true;
-            }
-        }
-        if (suppressed) {
-            contactOwner.retain(spatial.proxyIndex(deepest));
-        }
     }
 
     /**

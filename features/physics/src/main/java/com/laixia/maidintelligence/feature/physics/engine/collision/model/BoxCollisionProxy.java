@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.feature.physics.engine.collision.model;
 
 
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.projection.CollisionProjectionPrimitives;
 import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.PreparedCollisionProxy;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -56,7 +57,10 @@ final class BoxCollisionProxy implements CollisionProxy {
         this.openAxis = openAxis >= 0 && openAxis <= 2
                 ? openAxis
                 : CollisionProjector.CLOSED_BOX;
-        this.leverArm = Math.max(CollisionProjectionMath.EPSILON, leverArm);
+        this.leverArm = Math.max(
+                CollisionProjectionPrimitives.EPSILON,
+                leverArm
+        );
     }
 
     @Override
@@ -180,7 +184,7 @@ final class BoxCollisionProxy implements CollisionProxy {
         Vector3f copy = new Vector3f(axis);
         float lengthSquared = copy.lengthSquared();
         if (!Float.isFinite(lengthSquared)
-                || lengthSquared <= CollisionProjectionMath.EPSILON) {
+                || lengthSquared <= CollisionProjectionPrimitives.EPSILON) {
             return new Vector3f(fallbackX, fallbackY, fallbackZ);
         }
         return copy.div((float) Math.sqrt(lengthSquared));
