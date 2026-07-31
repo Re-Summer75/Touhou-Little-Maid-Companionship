@@ -24,11 +24,14 @@ tasks.register('verifyAdapterLayout') {
                 'feature/advancement/network/ForgeAdvancementPacketHandler.java',
                 'feature/advancement/menu/AdvancementMenus.java',
                 'feature/advancement/client/AdvancementClientSetup.java',
+                'feature/advancement/server/MirrorPlayerCacheBridge.java',
                 'feature/interaction/client/ClientInteractionSetup.java',
                 'feature/physics/client/pose/MaidPoseDriverPort.java',
                 'feature/shading/client/ShadingClientSetup.java',
                 'feature/status/service/ToolReplacementResult.java',
                 'mixin/common/HoneyBlockSlideMixin.java',
+                'mixin/common/PlayerListAccessor.java',
+                'mixin/common/ServerPlayerAccessor.java',
                 'mixin/client/LivingEntityRendererAccessor.java'
         ]
         required.each { relative ->

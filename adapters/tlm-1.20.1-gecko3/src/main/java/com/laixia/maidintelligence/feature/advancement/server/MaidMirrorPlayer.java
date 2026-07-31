@@ -3,14 +3,20 @@ package com.laixia.maidintelligence.feature.advancement.server;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.advancement.port.MaidExperienceRewardPort;
 import com.mojang.authlib.GameProfile;
+import net.minecraft.network.Connection;
+import net.minecraft.network.PacketSendListener;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.PlayerAdvancements;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -23,15 +29,18 @@ import net.minecraftforge.items.ItemHandlerHelper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
+import java.util.Map;
 import java.util.OptionalInt;
 import java.util.UUID;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 /**
  * 女仆的镜像玩家：原版所有 criteria 触发器都只接受 {@link ServerPlayer}，且分发是按
  * {@code player.getAdvancements()} 找监听者的，所以要让女仆用上原版进度系统，就得有一个
  * 状态与女仆同步的玩家替身。
  * <p>
- * 它每个维度只有一个，不加入世界、不进玩家列表、不 tick，只在触发器调用期间被绑定到某只女仆：
+ * 它与女仆一一对应，不加入世界、不进玩家列表、不 tick，只在触发器调用期间绑定女仆：
  * <ul>
  *     <li>{@link #getAdvancements()} 返回当前女仆自己的进度，原版分发因此落到该女仆名下；</li>
  *     <li>{@link #getDisplayName()} 指向女仆，原版 {@code PlayerAdvancements#award} 的聊天广播
@@ -53,6 +62,8 @@ public final class MaidMirrorPlayer extends ServerPlayer {
 
     private EntityMaid maid;
     private PlayerAdvancements maidAdvancements;
+    @Nullable
+    private PlayerAdvancements bootstrapAdvancements;
     private final MaidExperienceRewardPort<EntityMaid> experienceRewards;
 
     private MaidMirrorPlayer(
@@ -63,18 +74,27 @@ public final class MaidMirrorPlayer extends ServerPlayer {
     ) {
         super(server, level, profile);
         this.experienceRewards = experienceRewards;
+        this.connection = new DiscardingPacketListener(server, this);
+        this.bootstrapAdvancements =
+                MirrorPlayerCacheBridge.detachBootstrap(this);
     }
 
     static MaidMirrorPlayer create(
             ServerLevel level,
+            UUID maidId,
             MaidExperienceRewardPort<EntityMaid> experienceRewards
     ) {
         MinecraftServer server = level.getServer();
         if (server == null) {
             throw new IllegalStateException("Maid mirror player requires a server level");
         }
-        String seed = "tlm_companionship:maid_mirror/" + level.dimension().location();
+        String seed = "tlm_companionship:maid_mirror/" + maidId;
         UUID id = UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8));
+        if (server.getPlayerList().getPlayer(id) != null) {
+            throw new IllegalStateException(
+                    "Maid mirror profile collides with an online player: " + id
+            );
+        }
         return new MaidMirrorPlayer(
                 server,
                 level,
@@ -90,17 +110,37 @@ public final class MaidMirrorPlayer extends ServerPlayer {
         Binding previous = new Binding(this.maid, this.maidAdvancements);
         this.maid = maid;
         this.maidAdvancements = advancements;
-        syncFrom(maid);
-        return previous;
+        try {
+            syncFrom(maid);
+            return previous;
+        } catch (RuntimeException | Error failure) {
+            restore(previous);
+            throw failure;
+        }
     }
 
     void bindAdvancements(PlayerAdvancements advancements) {
+        MirrorPlayerCacheBridge.installAdvancements(
+                this,
+                bootstrapAdvancements,
+                advancements
+        );
+        bootstrapAdvancements = null;
         this.maidAdvancements = advancements;
     }
 
     void restore(Binding binding) {
         this.maid = binding.maid();
         this.maidAdvancements = binding.advancements();
+    }
+
+    /** 释放原版缓存与第三方 Capability；女仆 Tracker 由管理器单独管理。 */
+    void dispose() {
+        MirrorPlayerCacheBridge.release(this);
+        maid = null;
+        maidAdvancements = null;
+        bootstrapAdvancements = null;
+        invalidateCaps();
     }
 
     private void syncFrom(EntityMaid maid) {
@@ -122,11 +162,11 @@ public final class MaidMirrorPlayer extends ServerPlayer {
     }
 
     private void copyEffects(EntityMaid maid) {
-        if (!getActiveEffects().isEmpty()) {
-            removeAllEffects();
-        }
+        // 这里只投影判定状态；行为接口会发布 Forge 效果事件，把离线镜像暴露给第三方模组。
+        Map<MobEffect, MobEffectInstance> effects = getActiveEffectsMap();
+        effects.clear();
         for (MobEffectInstance effect : maid.getActiveEffects()) {
-            addEffect(new MobEffectInstance(effect));
+            effects.put(effect.getEffect(), new MobEffectInstance(effect));
         }
     }
 
@@ -206,7 +246,7 @@ public final class MaidMirrorPlayer extends ServerPlayer {
 
     @Override
     public void awardRecipesByKey(ResourceLocation[] keys) {
-        // 原版实现会经 connection 下发配方解锁包，镜像玩家没有连接。
+        // 女仆没有玩家配方簿，不产生无意义的配方解锁包。
     }
 
     @Override
@@ -216,7 +256,7 @@ public final class MaidMirrorPlayer extends ServerPlayer {
 
     @Override
     public void initMenu(AbstractContainerMenu menu) {
-        // 保持容器同步器为空，否则奖励发放里的 broadcastChanges 会走 connection。
+        // 镜像没有客户端容器，保持同步器为空。
     }
 
     @Override
@@ -297,6 +337,56 @@ public final class MaidMirrorPlayer extends ServerPlayer {
      */
     public EntityMaid boundMaid() {
         return maid;
+    }
+
+    /**
+     * 镜像没有真实客户端，但仍满足 {@link ServerPlayer#connection} 的非空约束。
+     * 监听器与底层连接都丢弃数据包，兼容直接绕过监听器发包的模组。
+     */
+    private static final class DiscardingPacketListener extends ServerGamePacketListenerImpl {
+        private DiscardingPacketListener(MinecraftServer server, ServerPlayer player) {
+            super(server, new DiscardingConnection(), player);
+        }
+
+        @Override
+        public void tick() {
+        }
+
+        @Override
+        public void disconnect(@Nonnull Component reason) {
+        }
+
+        @Override
+        public void send(@Nonnull Packet<?> packet) {
+        }
+
+        @Override
+        public void send(
+                @Nonnull Packet<?> packet,
+                @Nullable PacketSendListener listener
+        ) {
+        }
+    }
+
+    private static final class DiscardingConnection extends Connection {
+        private DiscardingConnection() {
+            super(PacketFlow.CLIENTBOUND);
+        }
+
+        @Override
+        public void send(@Nonnull Packet<?> packet) {
+        }
+
+        @Override
+        public void send(
+                @Nonnull Packet<?> packet,
+                @Nullable PacketSendListener listener
+        ) {
+        }
+
+        @Override
+        public void disconnect(@Nonnull Component reason) {
+        }
     }
 
     record Binding(EntityMaid maid, PlayerAdvancements advancements) {

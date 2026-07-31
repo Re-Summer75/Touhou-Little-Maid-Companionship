@@ -19,11 +19,13 @@
 （见 `SimpleCriterionTrigger#trigger`）。要做到「玩家有什么女仆就有什么」，
 只能让原版自己去分发，而不是给四十多种触发器逐个写适配。
 
-- **镜像玩家**（`MaidMirrorPlayer`）：每个维度一个 `ServerPlayer` 子类，不入世界、不进玩家列表、不 tick。
+- **镜像玩家**（`MaidMirrorPlayer`）：每只女仆一个 `ServerPlayer` 子类，不入世界、不进玩家列表、不 tick。
   调用触发器前把「当前女仆」的位置、朝向、血量、着火与冰冻计时、药水效果、姿态与全部物品同步进去。
 - **不能继承 Forge 的 `FakePlayer`**：Forge 在 `PlayerAdvancements#award` 开头对假玩家直接返回 false，
-  会静默吞掉全部进度。所以直接继承 `ServerPlayer`，并把 `FakePlayer` 里防崩溃的重写抄了一份。
-- **每只女仆一份真实的 `PlayerAdvancements`**，由本模组自己创建与释放，不经 `PlayerList` 缓存。
+  会静默吞掉全部进度。所以直接继承 `ServerPlayer`，并安装不会入队或发包的空网络连接。
+- **每只女仆一份真实的 `PlayerAdvancements`**，由本模组自己创建与释放，不进入
+  `PlayerList` 缓存。`ServerPlayer` 构造时产生的默认进度与统计缓存会立即按对象身份驱逐并停止监听，
+  父类字段随后复用这份女仆 tracker，不保留第二套进度树。
 
 ```mermaid
 flowchart LR
@@ -46,10 +48,10 @@ flowchart LR
 聊天提示与经验都不用自己写：`award` 里原版会用 `player.getDisplayName()` 广播并尊重
 `announceAdvancements` 游戏规则，`AdvancementRewards#grant` 会调 `giveExperiencePoints` /
 `addItem` / `awardRecipesByKey`。前两个重写成转发给女仆（经验来源为 `ExperienceSource.ADVANCEMENT`），
-最后一个必须是空实现——它会碰 `connection`，而镜像玩家没有连接。
+最后一个仍是空实现，因为女仆没有玩家配方簿；其余意外发向镜像的包由空连接丢弃。
 
 `MaidAdvancementManager#fire` 还带一个递归深度上限：奖励发经验可能引出升级，升级又可能触发进度，
-四层之后直接丢弃。
+四层之后直接丢弃。绑定、状态同步和触发执行处于同一个异常边界内，失败会恢复上一次绑定。
 
 ## 3. 进度存哪
 
@@ -67,6 +69,7 @@ flowchart LR
 | --- | --- |
 | 女仆首次需要进度 | 懒创建 tracker，并在首次创建时静默迁移旧成就（见第 6 节） |
 | 女仆离开世界 | `stopListening()` + 落盘后释放 |
+| 镜像创建 / 跨维度替换 | 驱逐构造期原版缓存，并把父类进度字段切换到女仆 tracker |
 | 世界保存 / 服务器停止 | 落盘所有脏 tracker |
 | `/reload` | 对所有 tracker 调 `reload`，对齐原版对在线玩家的处理 |
 
@@ -268,9 +271,11 @@ Tab 按钮的槽位避让沿用成就页那套两步定位（`Init` 里挑空位
 ## 9. 已知取舍
 
 - 每只女仆的 `PlayerAdvancements` 会为全部进度（含约 1100 条配方进度）注册监听，
-  内存开销约等于多一个在线玩家。对策是懒创建加卸载即释放。
+  这是完整原版判定的主要固定成本。镜像仍逐女仆独立，以避免未知第三方 Capability 和玩家标记串数据；
+  但不会再保留 `ServerPlayer` 构造出的第二份进度。512 个镜像、5 轮 Full GC 实测中，
+  星月/Xfox 环境的额外镜像壳由约 746.8 KiB/只降至约 24.0 KiB/只，释放后的最大正向漂移仅 4.8 KiB/批。
 - 镜像玩家不是 `FakePlayer`，别的模组若靠 `instanceof FakePlayer` 过滤假玩家将不会过滤它。
-  缓解方式是镜像玩家只在触发器调用期间同步存在，不入世界、不进玩家列表、不 tick。
+  镜像的效果同步不发布 Forge 行为事件，并提供非空的丢弃型网络连接作为兼容边界。
 - 定时对账是按实体错开相位的（`tickCount + entityId` 取模），几十只女仆不会挤在同一 tick 全量扫描。
 
 ## 10. 验证
@@ -279,6 +284,6 @@ Tab 按钮的槽位避让沿用成就页那套两步定位（`Init` 里挑空位
 | --- | --- |
 | `gradlew verifyAdvancementDomain` | `MaidStatistics` codec 与累计、旧数据抬升、内置进度 JSON 的父子链与触发器与两份语言文件、内置进度都在女仆范围内而本体命名空间不在、进度网络包字节流往返（含「补回 requirements 才算完成」这一步）、图标条翻页与树视图平移换算 |
 | `gradlew check` | 包含上面这条 |
-| `gradlew runGameTestServer` | 女仆背包塞工作台后拿到 `minecraft:story/root`、根进度来自女仆自己的等级且新女仆一开始就可见（连带露出下一级）、统计量驱动阈值进度、进度跨卸载重载往返、奖励经验落在女仆身上且只结算一次、本体的「制作御币」既不同步也不给女仆经验 |
+| `gradlew runGameTestServer` | 女仆背包塞工作台后拿到 `minecraft:story/root`、镜像效果投影不泄漏 Forge 事件且网络包安全丢弃、不同女仆的镜像与 Capability 状态隔离、父类复用女仆 tracker 且镜像 UUID 不残留在 `PlayerList` 缓存、释放与跨维度替换保持缓存脱离、根进度来自女仆自己的等级且新女仆一开始就可见（连带露出下一级）、统计量驱动阈值进度、进度跨卸载重载往返、奖励经验落在女仆身上且只结算一次、本体的「制作御币」既不同步也不给女仆经验 |
 
 网络协议版本已提升到 `13`，客户端与服务端必须同时更新。

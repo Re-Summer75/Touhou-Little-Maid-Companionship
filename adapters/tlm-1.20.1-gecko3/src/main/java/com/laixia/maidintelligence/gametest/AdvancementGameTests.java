@@ -5,7 +5,10 @@ import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
 import com.laixia.maidintelligence.feature.advancement.api.MaidAdvancementAccess;
 import com.laixia.maidintelligence.feature.advancement.api.MaidProgressAdvancementTriggers;
 import com.laixia.maidintelligence.feature.advancement.api.MaidWorldAdvancementTriggers;
+import com.laixia.maidintelligence.feature.advancement.server.MaidAdvancementManager;
 import com.laixia.maidintelligence.feature.advancement.server.MaidAdvancementSnapshot;
+import com.laixia.maidintelligence.feature.advancement.server.MaidMirrorPlayer;
+import com.laixia.maidintelligence.feature.advancement.server.MirrorPlayerCacheBridge;
 import com.laixia.maidintelligence.feature.level.api.MaidLevelApi;
 import com.laixia.maidintelligence.feature.level.domain.LevelProgress;
 import com.laixia.maidintelligence.platform.resource.ModResources;
@@ -15,16 +18,26 @@ import net.minecraft.advancements.AdvancementProgress;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.protocol.game.ClientboundSetHealthPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.PlayerAdvancements;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.entity.living.MobEffectEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -60,6 +73,129 @@ public final class AdvancementGameTests {
         helper.assertTrue(
                 isDone(helper, maid, STORY_ROOT),
                 "A maid carrying a crafting table should earn minecraft:story/root"
+        );
+        helper.succeed();
+    }
+
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void mirrorProjectionIsSideEffectFreeAndIsolated(GameTestHelper helper) {
+        EntityMaid first = ownedMaid(helper);
+        EntityMaid second = ownedMaid(helper);
+        first.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 200));
+
+        MirrorIsolationProbe probe = new MirrorIsolationProbe(Set.of(
+                first.getUUID(),
+                second.getUUID()
+        ));
+        MinecraftForge.EVENT_BUS.register(probe);
+        try {
+            advancementManager().fire(first, probe::captureFirst);
+            first.removeEffect(MobEffects.REGENERATION);
+            advancementManager().fire(first, probe::captureRepeated);
+            advancementManager().fire(second, probe::captureSecond);
+        } finally {
+            MinecraftForge.EVENT_BUS.unregister(probe);
+        }
+
+        helper.assertTrue(
+                probe.mirrorEffectEvents == 0,
+                "Projecting effects into a mirror must not publish Forge gameplay events"
+        );
+        helper.assertTrue(probe.copiedEffect, "The mirror should still expose copied effects");
+        helper.assertTrue(probe.clearedEffect, "Removed maid effects must leave the mirror");
+        helper.assertTrue(
+                probe.firstMirror != null && probe.firstMirror == probe.repeatedMirror,
+                "Repeated dispatches for one maid should reuse its mirror"
+        );
+        helper.assertTrue(
+                probe.secondMirror != null && probe.firstMirror != probe.secondMirror,
+                "Different maids must not share capability-bearing mirror players"
+        );
+        helper.assertTrue(
+                !probe.firstMirror.getUUID().equals(probe.secondMirror.getUUID()),
+                "Every maid mirror should have an isolated game profile"
+        );
+        helper.assertTrue(
+                probe.networkAvailable && probe.packetFailure == null,
+                "The mirror should safely discard listener and raw-connection packets"
+        );
+        helper.assertTrue(
+                probe.cacheDetached,
+                "Mirror profiles must not remain in vanilla player caches"
+        );
+        helper.assertTrue(
+                probe.trackerInstalled,
+                "The ServerPlayer field must reuse the maid advancement tracker"
+        );
+        helper.assertTrue(
+                probe.firstMirror.boundMaid() == null
+                        && probe.secondMirror.boundMaid() == null,
+                "Dispatch sessions must restore mirror bindings"
+        );
+
+        // Third-party code may recreate the vanilla cache through PlayerList.
+        // Release must remove that entry without stopping the maid tracker early.
+        probe.firstMirror.server.getPlayerList()
+                .getPlayerAdvancements(probe.firstMirror);
+        probe.firstMirror.server.getPlayerList()
+                .getPlayerStats(probe.firstMirror);
+        helper.assertFalse(
+                MirrorPlayerCacheBridge.isDetached(probe.firstMirror),
+                "The defensive release fixture should recreate a vanilla cache entry"
+        );
+        advancementManager().release(first.getUUID());
+        helper.assertTrue(
+                MirrorPlayerCacheBridge.isDetached(probe.firstMirror),
+                "Releasing a mirror must evict recreated vanilla cache entries"
+        );
+        advancementManager().release(second.getUUID());
+        helper.succeed();
+    }
+
+    @GameTest(templateNamespace = "minecraft", template = "empty", timeoutTicks = 200)
+    public static void dimensionReplacementKeepsTrackersDetached(GameTestHelper helper) {
+        EntityMaid maid = ownedMaid(helper);
+        MaidMirrorPlayer[] mirrors = new MaidMirrorPlayer[2];
+        advancementManager().fire(maid, mirror -> mirrors[0] = mirror);
+
+        ServerLevel target = helper.getLevel().getServer().getLevel(Level.NETHER);
+        if (target == null) {
+            throw new AssertionError("The GameTest server has no nether level");
+        }
+        EntityMaid moved = InitEntities.MAID.get().create(target);
+        if (moved == null) {
+            throw new AssertionError("The destination maid could not be created");
+        }
+        moved.setUUID(maid.getUUID());
+        moved.setOwnerUUID(maid.getOwnerUUID());
+        moved.moveTo(maid.getX(), maid.getY(), maid.getZ());
+        advancementManager().fire(moved, mirror -> mirrors[1] = mirror);
+
+        helper.assertTrue(
+                mirrors[0] != null && mirrors[1] != null && mirrors[0] != mirrors[1],
+                "Changing dimension must replace the level-bound mirror"
+        );
+        helper.assertTrue(
+                mirrors[0].serverLevel() != mirrors[1].serverLevel(),
+                "The replacement mirror must belong to the destination level"
+        );
+        helper.assertTrue(
+                MirrorPlayerCacheBridge.isDetached(mirrors[0])
+                        && MirrorPlayerCacheBridge.isDetached(mirrors[1]),
+                "Neither side of a dimension replacement may remain cached"
+        );
+        helper.assertTrue(
+                MirrorPlayerCacheBridge.usesAdvancements(
+                        mirrors[1],
+                        mirrors[1].getAdvancements()
+                ),
+                "The replacement mirror must reuse the reloaded maid tracker"
+        );
+
+        advancementManager().release(moved.getUUID());
+        helper.assertTrue(
+                MirrorPlayerCacheBridge.isDetached(mirrors[1]),
+                "The destination mirror must stay detached after release"
         );
         helper.succeed();
     }
@@ -233,8 +369,88 @@ public final class AdvancementGameTests {
         return AdapterRuntime.require(MaidAdvancementAccess.class);
     }
 
+    private static MaidAdvancementManager advancementManager() {
+        MaidAdvancementAccess access = advancements();
+        if (access instanceof MaidAdvancementManager manager) {
+            return manager;
+        }
+        throw new IllegalStateException("Advancement access is not backed by its server manager");
+    }
+
     @SuppressWarnings("unchecked")
     private static MaidLevelApi<EntityMaid> levelApi() {
         return (MaidLevelApi<EntityMaid>) AdapterRuntime.require(MaidLevelApi.class);
+    }
+
+    private static final class MirrorIsolationProbe {
+        private final Set<UUID> maidIds;
+        private int mirrorEffectEvents;
+        private MaidMirrorPlayer firstMirror;
+        private MaidMirrorPlayer repeatedMirror;
+        private MaidMirrorPlayer secondMirror;
+        private PlayerAdvancements firstAdvancements;
+        private boolean copiedEffect;
+        private boolean clearedEffect;
+        private boolean cacheDetached;
+        private boolean trackerInstalled;
+        private boolean networkAvailable;
+        private RuntimeException packetFailure;
+
+        private MirrorIsolationProbe(Set<UUID> maidIds) {
+            this.maidIds = maidIds;
+        }
+
+        @SubscribeEvent
+        public void onMirrorEffect(MobEffectEvent event) {
+            if (event.getEntity() instanceof MaidMirrorPlayer mirror
+                    && mirror.boundMaid() != null
+                    && maidIds.contains(mirror.boundMaid().getUUID())) {
+                mirrorEffectEvents++;
+            }
+        }
+
+        private void captureFirst(MaidMirrorPlayer mirror) {
+            firstMirror = mirror;
+            firstAdvancements = mirror.getAdvancements();
+            copiedEffect = mirror.hasEffect(MobEffects.REGENERATION);
+            cacheDetached = MirrorPlayerCacheBridge.isDetached(mirror);
+            trackerInstalled = MirrorPlayerCacheBridge.usesAdvancements(
+                    mirror,
+                    firstAdvancements
+            );
+            networkAvailable = mirror.connection != null
+                    && mirror.connection.connection != null;
+            if (!networkAvailable) {
+                return;
+            }
+            try {
+                ClientboundSetHealthPacket packet =
+                        new ClientboundSetHealthPacket(20.0F, 20, 5.0F);
+                mirror.connection.send(packet);
+                mirror.connection.connection.send(packet);
+            } catch (RuntimeException exception) {
+                packetFailure = exception;
+            }
+        }
+
+        private void captureRepeated(MaidMirrorPlayer mirror) {
+            repeatedMirror = mirror;
+            clearedEffect = !mirror.hasEffect(MobEffects.REGENERATION);
+            cacheDetached &= MirrorPlayerCacheBridge.isDetached(mirror);
+            trackerInstalled &= mirror.getAdvancements() == firstAdvancements
+                    && MirrorPlayerCacheBridge.usesAdvancements(
+                    mirror,
+                    firstAdvancements
+            );
+        }
+
+        private void captureSecond(MaidMirrorPlayer mirror) {
+            secondMirror = mirror;
+            cacheDetached &= MirrorPlayerCacheBridge.isDetached(mirror);
+            trackerInstalled &= MirrorPlayerCacheBridge.usesAdvancements(
+                    mirror,
+                    mirror.getAdvancements()
+            );
+        }
     }
 }
