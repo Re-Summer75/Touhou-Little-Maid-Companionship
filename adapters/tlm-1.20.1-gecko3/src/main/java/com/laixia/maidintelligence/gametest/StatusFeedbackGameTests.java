@@ -8,7 +8,6 @@ import com.laixia.maidintelligence.feature.status.domain.DefaultToolDurabilityPo
 import com.laixia.maidintelligence.feature.status.domain.MaidStatusState;
 import com.laixia.maidintelligence.feature.status.service.ToolReplacementResult;
 import com.laixia.maidintelligence.feature.status.service.ToolReplacementService;
-import com.laixia.maidintelligence.feature.status.tlm.StatusTaskData;
 import com.laixia.maidintelligence.platform.runtime.AdapterRuntime;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -43,31 +42,6 @@ public final class StatusFeedbackGameTests {
         helper.assertTrue(
                 actual.equals(expected),
                 "Status data did not survive entity NBT save/load: " + actual
-        );
-        helper.succeed();
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty")
-    public static void legacyStatusDataMigratesToNewModId(GameTestHelper helper) {
-        EntityMaid maid = spawnMaid(helper);
-        MaidStatusState expected = new MaidStatusState(61, 33.0F, 2.0F);
-        maid.setData(StatusTaskData.legacyStateKey(), expected);
-
-        CompoundTag saved = new CompoundTag();
-        maid.saveWithoutId(saved);
-
-        EntityMaid loaded = InitEntities.MAID.get().create(helper.getLevel());
-        helper.assertTrue(loaded != null, "Failed to create maid for legacy status migration");
-        loaded.load(saved);
-
-        MaidStatusState actual = statusApi().getState(loaded);
-        helper.assertTrue(
-                expected.equals(actual),
-                "Legacy status data was not read after the MOD ID migration: " + actual
-        );
-        helper.assertTrue(
-                expected.equals(loaded.getData(StatusTaskData.stateKey())),
-                "Legacy status data was not copied to the new task data key"
         );
         helper.succeed();
     }

@@ -114,7 +114,6 @@
 ## 数据与同步
 
 - 饥饿值、饱和度和消耗度存入 TLM `TaskDataKey`，随女仆 NBT 保存并同步。
-- 旧 `maid_intelligence:status_state` 会在读取时迁移到 `tlm_companionship:status_state`，避免 MOD ID 更名造成状态清零。
 - 旧存档只有饥饿值字段时，饱和度和消耗度默认按 `0` 读取。
 - 气泡、冷却、待恢复营养值和动作计时只保存在服务端运行时。
 - 气泡通过 TLM `ChatBubbleManager` 自动同步。

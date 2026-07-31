@@ -116,7 +116,6 @@ import java.util.List;
 @Mod(ModResources.MOD_ID)
 public final class MaidIntelligence {
     public static final String MOD_ID = ModResources.MOD_ID;
-    public static final String LEGACY_MOD_ID = ModResources.LEGACY_MOD_ID;
 
     public MaidIntelligence() {
         IEventBus modEventBus =

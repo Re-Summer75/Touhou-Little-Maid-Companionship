@@ -112,16 +112,11 @@ final class MaidLegacyAchievementMigration {
         return changed;
     }
 
-    /** 改过 mod id，老存档里的成就 ID 可能还是旧命名空间。 */
     private static boolean isUnlocked(LegacyAchievementData.Progress legacy, String achievement) {
-        return legacy.isUnlocked(ModResources.id(achievement))
-                || legacy.isUnlocked(ModResources.legacyId(achievement));
+        return legacy.isUnlocked(ModResources.id(achievement));
     }
 
     private static int counterOf(LegacyAchievementData.Progress legacy, String achievement) {
-        return Math.max(
-                legacy.counter(ModResources.id(achievement)),
-                legacy.counter(ModResources.legacyId(achievement))
-        );
+        return legacy.counter(ModResources.id(achievement));
     }
 }

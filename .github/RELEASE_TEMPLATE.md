@@ -34,7 +34,7 @@
 
 ### 安装
 
-将 `tlm-companionship-1.20.1-forge-x.x.x.jar` 放入 `mods` 文件夹即可。旧 ID `maid_intelligence` 的存档数据会静默迁移。
+将 `tlm-companionship-1.20.1-forge-x.x.x.jar` 放入 `mods` 文件夹即可。
 
 ### 已知限制
 

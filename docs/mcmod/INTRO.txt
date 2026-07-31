@@ -31,5 +31,5 @@
 [h1=下载与反馈]
 源码与发布：https://github.com/Re-Summer75/Touhou-Little-Maid-Companionship
 问题反馈：https://github.com/Re-Summer75/Touhou-Little-Maid-Companionship/issues
-车万女仆为必需前置，请安装与本模组相同 MC 版本的本体，具体支持的版本见页面上方的版本列表。本模组目前处于早期测试阶段，功能可用但仍在迭代，建议先备份存档。旧版本模组 ID maid_intelligence 的存档数据会在首次加载时静默迁移。自定义模型的物理表现异常时，欢迎附上模型文件一并反馈。
+车万女仆为必需前置，请安装与本模组相同 MC 版本的本体，具体支持的版本见页面上方的版本列表。本模组目前处于早期测试阶段，功能可用但仍在迭代，建议先备份存档。自定义模型的物理表现异常时，欢迎附上模型文件一并反馈。
 本模组代码采用 MIT 协议发布。感谢酒石酸菌等车万女仆本体作者，感谢 Mojang 与 Forge。

@@ -7,17 +7,12 @@ import net.minecraft.resources.ResourceLocation;
  */
 public final class ModResources {
     public static final String MOD_ID = "tlm_companionship";
-    public static final String LEGACY_MOD_ID = "maid_intelligence";
 
     private ModResources() {
     }
 
     public static ResourceLocation id(String path) {
         return ResourceLocation.fromNamespaceAndPath(MOD_ID, path);
-    }
-
-    public static ResourceLocation legacyId(String path) {
-        return ResourceLocation.fromNamespaceAndPath(LEGACY_MOD_ID, path);
     }
 
     public static String translationKey(String category, String path) {

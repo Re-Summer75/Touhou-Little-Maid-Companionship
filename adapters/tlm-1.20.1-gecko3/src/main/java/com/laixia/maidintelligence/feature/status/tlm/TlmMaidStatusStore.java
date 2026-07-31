@@ -7,21 +7,6 @@ import com.laixia.maidintelligence.feature.status.port.MaidStatusStore;
 public final class TlmMaidStatusStore implements MaidStatusStore<EntityMaid> {
     @Override
     public MaidStatusState get(EntityMaid maid) {
-        MaidStatusState state = maid.getData(StatusTaskData.stateKey());
-        if (state != null) {
-            return state;
-        }
-
-        MaidStatusState legacyState = maid.getData(StatusTaskData.legacyStateKey());
-        if (legacyState != null) {
-            if (maid.level().isClientSide()) {
-                maid.setData(StatusTaskData.stateKey(), legacyState);
-            } else {
-                maid.setAndSyncData(StatusTaskData.stateKey(), legacyState);
-            }
-            return legacyState;
-        }
-
         return maid.getOrCreateData(StatusTaskData.stateKey(), MaidStatusState.initial());
     }
 
