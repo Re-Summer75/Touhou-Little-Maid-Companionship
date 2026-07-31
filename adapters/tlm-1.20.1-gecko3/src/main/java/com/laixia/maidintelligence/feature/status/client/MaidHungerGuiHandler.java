@@ -43,6 +43,7 @@ public final class MaidHungerGuiHandler {
     private static final int ICON_X = 53;
     private static final int NUMBER_X = 63;
     private static final int NUMBER_Y = 147;
+    private static final int EMPTY_HUNGER_ICON_U = 16;
     private static final int FULL_HUNGER_ICON_U = 52;
     private static final int HUNGER_ICON_V = 27;
     private static final int TEXTURED_BAR_U = 2;
@@ -171,6 +172,17 @@ public final class MaidHungerGuiHandler {
     }
 
     private static void drawHungerIcon(GuiGraphics graphics, int left, int top) {
+        // Vanilla draws the empty slot first; it supplies the dark outline
+        // that is intentionally absent from the colored full-food sprite.
+        graphics.blit(
+                VANILLA_GUI_ICONS,
+                left + ICON_X,
+                top + ROW_Y,
+                EMPTY_HUNGER_ICON_U,
+                HUNGER_ICON_V,
+                9,
+                9
+        );
         graphics.blit(
                 VANILLA_GUI_ICONS,
                 left + ICON_X,
