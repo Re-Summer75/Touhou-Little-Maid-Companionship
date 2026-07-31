@@ -33,15 +33,27 @@ def forbiddenCoreImports = [
         'com.github.tartaricacid.',
         'software.bernie.geckolib'
 ]
+// Constant-pool form of the same prefixes. Scanning bytecode catches what the
+// source pass cannot: fully qualified references used without an import.
+def forbiddenBinaryNames = forbiddenCoreImports.collect {
+    it.replace('.', '/')
+}
+
+def mainClassesDir = tasks.named('compileJava')
+        .flatMap { it.destinationDirectory }
+
+def javaSources = fileTree('src/main/java') { include '**/*.java' }
 
 tasks.register('verifyArchitecture') {
     group = 'verification'
-    description = 'Rejects game-loader and model-library imports in stable modules.'
-    inputs.files(fileTree('src/main/java') { include '**/*.java' })
+    description = 'Rejects game-loader and model-library references in stable modules.'
+    dependsOn tasks.named('classes')
+    inputs.files(javaSources)
+    inputs.dir(mainClassesDir).optional()
 
     doLast {
         def violations = []
-        inputs.files.files.sort().each { source ->
+        javaSources.files.sort().each { source ->
             source.readLines('UTF-8').eachWithIndex { line, index ->
                 if (line.stripLeading().startsWith('import ')
                         && forbiddenCoreImports.any { line.contains(it) }) {
@@ -49,9 +61,28 @@ tasks.register('verifyArchitecture') {
                 }
             }
         }
+
+        def classesDir = mainClassesDir.get().asFile
+        if (classesDir.isDirectory()) {
+            def compiledClasses = []
+            classesDir.eachFileRecurse { candidate ->
+                if (candidate.isFile() && candidate.name.endsWith('.class')) {
+                    compiledClasses << candidate
+                }
+            }
+            compiledClasses.sort().each { compiled ->
+                // ISO-8859-1 maps every byte to one char, so the constant pool can
+                // be searched as text without decoding the class structure.
+                def constantPool = new String(compiled.bytes, 'ISO-8859-1')
+                forbiddenBinaryNames.findAll { constantPool.contains(it) }.each { found ->
+                    violations << "${compiled}: references ${found.replace('/', '.')}"
+                }
+            }
+        }
+
         if (!violations.isEmpty()) {
             throw new GradleException(
-                    "Stable module ${project.path} imports version APIs:\n"
+                    "Stable module ${project.path} depends on version APIs:\n"
                             + violations.join('\n')
             )
         }

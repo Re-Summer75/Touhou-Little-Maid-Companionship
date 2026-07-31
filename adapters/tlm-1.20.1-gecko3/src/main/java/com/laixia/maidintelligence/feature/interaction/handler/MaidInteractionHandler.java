@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.feature.interaction.event;
+package com.laixia.maidintelligence.feature.interaction.handler;
 
 import com.github.tartaricacid.touhoulittlemaid.api.event.InteractMaidEvent;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;

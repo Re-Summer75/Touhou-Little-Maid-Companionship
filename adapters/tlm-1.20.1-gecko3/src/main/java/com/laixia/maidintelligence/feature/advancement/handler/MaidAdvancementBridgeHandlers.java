@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.feature.advancement.event;
+package com.laixia.maidintelligence.feature.advancement.handler;
 
 import com.github.tartaricacid.touhoulittlemaid.api.event.MaidAfterEatEvent;
 import com.github.tartaricacid.touhoulittlemaid.api.event.MaidBackpackChangeEvent;
@@ -10,9 +10,9 @@ import com.github.tartaricacid.touhoulittlemaid.api.event.MaidPickupEvent;
 import com.github.tartaricacid.touhoulittlemaid.api.event.MaidTickEvent;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.inventory.container.AbstractMaidContainer;
-import com.laixia.maidintelligence.feature.advancement.api.MaidCombatAdvancementTriggers;
-import com.laixia.maidintelligence.feature.advancement.api.MaidProgressAdvancementTriggers;
-import com.laixia.maidintelligence.feature.advancement.api.MaidWorldAdvancementTriggers;
+import com.laixia.maidintelligence.feature.advancement.bridge.MaidCombatAdvancementTriggers;
+import com.laixia.maidintelligence.feature.advancement.bridge.MaidProgressAdvancementTriggers;
+import com.laixia.maidintelligence.feature.advancement.bridge.MaidWorldAdvancementTriggers;
 import com.laixia.maidintelligence.feature.advancement.port.MaidLevelQueryPort;
 import com.laixia.maidintelligence.feature.advancement.server.MaidBridgeMemory;
 import net.minecraft.core.BlockPos;

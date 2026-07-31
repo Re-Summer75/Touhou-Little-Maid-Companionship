@@ -1,7 +1,7 @@
 package com.laixia.maidintelligence.feature.advancement.server;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.advancement.api.MaidWorldAdvancementTriggers;
+import com.laixia.maidintelligence.feature.advancement.bridge.MaidWorldAdvancementTriggers;
 import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;

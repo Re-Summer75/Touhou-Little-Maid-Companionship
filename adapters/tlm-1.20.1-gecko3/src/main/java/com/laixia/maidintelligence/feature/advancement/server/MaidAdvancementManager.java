@@ -1,8 +1,8 @@
 package com.laixia.maidintelligence.feature.advancement.server;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.advancement.api.MaidAdvancementAccess;
 import com.laixia.maidintelligence.feature.advancement.api.MaidStatisticsApi;
+import com.laixia.maidintelligence.feature.advancement.bridge.MaidAdvancementAccess;
 import com.laixia.maidintelligence.feature.advancement.port.MaidExperienceRewardPort;
 import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceKey;

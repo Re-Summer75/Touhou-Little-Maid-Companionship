@@ -38,6 +38,11 @@ def governedImplementationFiles = rootProject.fileTree(sourceLayoutRoot) {
     }
 }
 
+// Package names reserved for stable modules. An adapter type sitting in `api`
+// or `event` would collide with the platform-neutral contracts and domain
+// events that carry those names, so adapters use `bridge` and `handler`.
+def stableOnlyLeafPackages = ['api', 'event']
+
 // These explicit exceptions apply only to direct production-file density.
 def productionDirectoryLimitExceptions = [
         ('features/physics/src/main/java/com/laixia/maidintelligence/feature/' +
@@ -74,6 +79,16 @@ tasks.register('verifySourceLayout') {
                         "${physicalLines} physical lines " +
                         "(limit ${maximumPhysicalLines})"
             }
+        }
+
+        def reservedPackagePattern = ~('^adapters/[^/]+/src/main/java/.*/feature/'
+                + "[^/]+/(${stableOnlyLeafPackages.join('|')})/[^/]+\\.java\$")
+        governedFiles.findAll { implementationFile ->
+            normalizedRelativePath(implementationFile) ==~ reservedPackagePattern
+        }.each { reservedFile ->
+            violations << "${normalizedRelativePath(reservedFile)}: adapter source " +
+                    "in a package reserved for stable modules " +
+                    "(${stableOnlyLeafPackages.join(', ')}); use bridge or handler"
         }
 
         def productionFilesByDirectory = [:].withDefault { [] }

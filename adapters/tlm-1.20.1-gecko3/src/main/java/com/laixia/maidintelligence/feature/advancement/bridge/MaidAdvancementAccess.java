@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.feature.advancement.api;
+package com.laixia.maidintelligence.feature.advancement.bridge;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.advancement.server.MaidAdvancementSnapshot;

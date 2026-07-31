@@ -42,9 +42,14 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
   自动生成代码、大型声明式映射或必须保持局部性的核心算法可以例外，但须在相邻文档中说明原因，
   且不得借例外继续混入无关职责。
 - 拆分必须以领域职责、生命周期或依赖边界为依据，禁止仅按行号把一个内聚流程机械切成多个文件。
-- 源码目录优先按 feature 划分，再按 `api`、`application`、`domain`、`port`、`client`、
-  `server`、`network`、`codec`、`mixin`、`forge`、`tlm` 等职责建立子目录，避免所有实现平铺
-  在同一包层级。
+- 源码目录优先按 feature 划分，再按职责建立子目录，避免所有实现平铺在同一包层级。职责词汇表
+  按层区分，同名包不得跨层复用：
+  - 稳定模块专用：`api`（平台中立的用例入口）、`application`、`domain`、`port`、`event`
+    （领域事件本身）。
+  - adapter 专用：`bridge`（以游戏类型表达、供 Mixin 与 handler 消费的适配契约，对应稳定层的
+    `api`）、`handler`（Forge/TLM 事件订阅者，对应稳定层的 `event`）、`client`、`server`、
+    `network`、`codec`、`mixin`、`forge`、`tlm`。
+  - `verifySourceLayout` 会拒绝出现在 adapter 中的 `feature/*/api` 与 `feature/*/event` 包。
 - 同一源码目录原则上不直接放置超过 **12 个生产源码文件**；超过时应按稳定职责继续分组。
   同一父级原则上不放置超过 **8 个同级业务 Gradle 模块**；超过时应先引入领域分组层，
   版本 target 则继续由版本矩阵组织，不得复制业务模块。

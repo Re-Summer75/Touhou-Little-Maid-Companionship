@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.feature.advancement.event;
+package com.laixia.maidintelligence.feature.advancement.handler;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.advancement.menu.MaidAdvancementContainer;

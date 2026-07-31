@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.feature.level.event;
+package com.laixia.maidintelligence.feature.level.handler;
 
 import com.github.tartaricacid.touhoulittlemaid.api.event.MaidPickupEvent;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;

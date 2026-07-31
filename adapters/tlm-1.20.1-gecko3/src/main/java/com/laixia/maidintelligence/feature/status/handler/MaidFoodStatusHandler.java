@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.feature.status.event;
+package com.laixia.maidintelligence.feature.status.handler;
 
 import com.github.tartaricacid.touhoulittlemaid.api.event.MaidAfterEatEvent;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;

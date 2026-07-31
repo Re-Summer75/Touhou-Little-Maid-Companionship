@@ -2,9 +2,9 @@ package com.laixia.maidintelligence.gametest;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
-import com.laixia.maidintelligence.feature.advancement.api.MaidAdvancementAccess;
-import com.laixia.maidintelligence.feature.advancement.api.MaidProgressAdvancementTriggers;
-import com.laixia.maidintelligence.feature.advancement.api.MaidWorldAdvancementTriggers;
+import com.laixia.maidintelligence.feature.advancement.bridge.MaidAdvancementAccess;
+import com.laixia.maidintelligence.feature.advancement.bridge.MaidProgressAdvancementTriggers;
+import com.laixia.maidintelligence.feature.advancement.bridge.MaidWorldAdvancementTriggers;
 import com.laixia.maidintelligence.feature.advancement.server.MaidAdvancementManager;
 import com.laixia.maidintelligence.feature.advancement.server.MaidAdvancementSnapshot;
 import com.laixia.maidintelligence.feature.advancement.server.MaidMirrorPlayer;

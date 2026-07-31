@@ -221,15 +221,20 @@ verificationEntrypoints.each { taskName, definition ->
     }
 }
 
+// Lower bound only: splitting or adding verifications must never fail the build,
+// but silently dropping them must. Raise the floor when the suite grows durably.
+def minimumVerificationSources = 108
+
 tasks.register('verifyTestInventory') {
     group = 'verification'
-    description = 'Guards the verification source inventory after layout normalization.'
+    description = 'Guards against silent removal of verification sources.'
     inputs.files(fileTree('src/test/java') { include '**/*.java' })
     doLast {
         def actual = inputs.files.files.size()
-        if (actual != 108) {
+        if (actual < minimumVerificationSources) {
             throw new GradleException(
-                    "Verification inventory changed: expected 108 Java files, found ${actual}."
+                    "Verification inventory shrank: expected at least "
+                            + "${minimumVerificationSources} Java files, found ${actual}."
             )
         }
     }
@@ -284,7 +289,6 @@ tasks.register('verifyMixinLayout') {
     inputs.files(configs.keySet().collect { file("src/main/resources/${it}") })
     inputs.file('src/main/resources/META-INF/mods.toml')
     doLast {
-        int total = 0
         configs.each { name, expectedMixins ->
             def configFile = file("src/main/resources/${name}")
             if (!configFile.isFile()) {
@@ -305,7 +309,6 @@ tasks.register('verifyMixinLayout') {
                         "${name} expected ${expectedMixins.size()} Mixins, found ${count}."
                 )
             }
-            total += count
             if (name == tlmMixinConfig) {
                 if (config.contains('"refmap"')) {
                     throw new GradleException(
@@ -319,11 +322,6 @@ tasks.register('verifyMixinLayout') {
                         "${name} must use the generated common refmap."
                 )
             }
-        }
-        if (total != 14) {
-            throw new GradleException(
-                    "Expected 14 Mixins across three configs, found ${total}."
-            )
         }
         def modsToml = file(
                 'src/main/resources/META-INF/mods.toml'

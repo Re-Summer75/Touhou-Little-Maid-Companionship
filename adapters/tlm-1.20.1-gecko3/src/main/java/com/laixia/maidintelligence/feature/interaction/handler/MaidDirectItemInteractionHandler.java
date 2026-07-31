@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.feature.interaction.event;
+package com.laixia.maidintelligence.feature.interaction.handler;
 
 import com.github.tartaricacid.touhoulittlemaid.advancements.maid.TriggerType;
 import com.github.tartaricacid.touhoulittlemaid.api.event.InteractMaidEvent;

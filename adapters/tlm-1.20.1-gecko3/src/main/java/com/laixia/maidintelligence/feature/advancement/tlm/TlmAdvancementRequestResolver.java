@@ -1,7 +1,7 @@
 package com.laixia.maidintelligence.feature.advancement.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.advancement.api.MaidAdvancementAccess;
+import com.laixia.maidintelligence.feature.advancement.bridge.MaidAdvancementAccess;
 import com.laixia.maidintelligence.feature.advancement.server.MaidAdvancementSnapshot;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;

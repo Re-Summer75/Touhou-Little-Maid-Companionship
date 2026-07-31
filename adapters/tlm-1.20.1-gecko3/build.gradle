@@ -62,9 +62,9 @@ tasks.register('verifyAdapterLayout') {
         }
 
         def required = [
-                'feature/advancement/api/MaidWorldAdvancementTriggers.java',
-                'feature/advancement/api/MaidCombatAdvancementTriggers.java',
-                'feature/advancement/api/MaidProgressAdvancementTriggers.java',
+                'feature/advancement/bridge/MaidWorldAdvancementTriggers.java',
+                'feature/advancement/bridge/MaidCombatAdvancementTriggers.java',
+                'feature/advancement/bridge/MaidProgressAdvancementTriggers.java',
                 'feature/advancement/server/MaidVanillaWorldCriteria.java',
                 'feature/advancement/server/MaidVanillaCombatCriteria.java',
                 'feature/advancement/server/MaidProgressCriteria.java',
@@ -81,6 +81,7 @@ tasks.register('verifyAdapterLayout') {
         }
         [
                 'feature/advancement/api/MaidAdvancementTriggers.java',
+                'feature/advancement/bridge/MaidAdvancementTriggers.java',
                 'feature/advancement/server/MaidCriteria.java'
         ].each { relative ->
             if (file(

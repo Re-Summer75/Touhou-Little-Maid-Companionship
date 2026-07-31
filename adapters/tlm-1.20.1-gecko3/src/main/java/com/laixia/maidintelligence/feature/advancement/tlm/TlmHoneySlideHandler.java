@@ -1,8 +1,8 @@
 package com.laixia.maidintelligence.feature.advancement.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.advancement.api.MaidWorldAdvancementTriggers;
 import com.laixia.maidintelligence.feature.advancement.bridge.HoneySlideHandler;
+import com.laixia.maidintelligence.feature.advancement.bridge.MaidWorldAdvancementTriggers;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 

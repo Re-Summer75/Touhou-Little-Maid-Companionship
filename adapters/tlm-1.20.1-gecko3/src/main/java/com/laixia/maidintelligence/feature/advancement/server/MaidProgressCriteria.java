@@ -1,8 +1,8 @@
 package com.laixia.maidintelligence.feature.advancement.server;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.advancement.api.MaidProgressAdvancementTriggers;
 import com.laixia.maidintelligence.feature.advancement.api.MaidStatisticsApi;
+import com.laixia.maidintelligence.feature.advancement.bridge.MaidProgressAdvancementTriggers;
 import com.laixia.maidintelligence.feature.advancement.codec.MinecraftResourceIds;
 import com.laixia.maidintelligence.feature.advancement.criterion.MaidCriteriaTriggers;
 import com.laixia.maidintelligence.feature.advancement.domain.ItemId;

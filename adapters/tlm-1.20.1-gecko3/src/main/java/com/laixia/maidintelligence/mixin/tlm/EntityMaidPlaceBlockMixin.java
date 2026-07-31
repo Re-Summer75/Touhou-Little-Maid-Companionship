@@ -1,7 +1,7 @@
 package com.laixia.maidintelligence.mixin.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.advancement.api.MaidWorldAdvancementTriggers;
+import com.laixia.maidintelligence.feature.advancement.bridge.MaidWorldAdvancementTriggers;
 import com.laixia.maidintelligence.platform.runtime.AdapterRuntime;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
