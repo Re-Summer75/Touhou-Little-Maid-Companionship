@@ -30,8 +30,15 @@ final class SpringCollisionCoordinator {
         SpringBoneScratch scratch = context.scratch;
         scratch.runtimeSafetyScale =
                 context.endpoints.resolveAnimatedScaleBound(nodeIndex);
-        if (!context.constraintsEnabled
-                || !context.collisionCache.hasProxies(nodeIndex)) {
+        scratch.runtimeSegmentLength = 0.0F;
+        if (!context.constraintsEnabled) {
+            return PreparedCollisionProxySet.EMPTY;
+        }
+        boolean hasProxies = context.collisionCache.hasProxies(nodeIndex);
+        boolean needsSkirtCoupling = context.layout
+                .skirtBranchConstraints()
+                .pairForFollowerNode(nodeIndex) >= 0;
+        if (!hasProxies && !needsSkirtCoupling) {
             return PreparedCollisionProxySet.EMPTY;
         }
         scratch.animationRotation.identity().rotateZYX(
@@ -44,16 +51,19 @@ final class SpringCollisionCoordinator {
                 scratch.animationRotation,
                 scratch.pivotScratch
         );
-        float runtimeSegmentLength =
+        scratch.runtimeSegmentLength =
                 context.endpoints.resolveAnimatedSegmentLength(
                         nodeIndex,
                         scratch.pivotScratch,
                         scratch.endpointScratch
                 );
+        if (!hasProxies) {
+            return PreparedCollisionProxySet.EMPTY;
+        }
         return context.collisionCache.prepareNode(
                 nodeIndex,
                 scratch.pivotScratch,
-                runtimeSegmentLength,
+                scratch.runtimeSegmentLength,
                 scratch.authoredRestDirection,
                 SpringConstraintProjector.maximumSwing(
                         context.layout.node(nodeIndex),

@@ -23,6 +23,8 @@ final class SpringBoneScratch {
     final Vector3f poseDriveBinormal = new Vector3f();
     final Vector3f poseDriveBias = new Vector3f();
     final Vector3f nextDirection = new Vector3f();
+    /** Raw Verlet answer before any local or branch constraint. */
+    final Vector3f integratedDirection = new Vector3f();
     /** Pose entering constraint projection, kept to measure what it changed. */
     final Vector3f projectionStart = new Vector3f();
     /** Undamped projection result, retained to identify competing overlaps. */
@@ -53,7 +55,15 @@ final class SpringBoneScratch {
     final Vector3f pivotOffset = new Vector3f();
     final Vector3f pivotScratch = new Vector3f();
     final Vector3f endpointScratch = new Vector3f();
+    final Vector3f couplingLeaderPivot = new Vector3f();
+    final Vector3f couplingLeaderTip = new Vector3f();
+    final Vector3f couplingLeaderRestTip = new Vector3f();
+    final Vector3f couplingFollowerRestTip = new Vector3f();
+    final Vector3f couplingSeparation = new Vector3f();
+    final Vector3f couplingStart = new Vector3f();
     final Vector3f constraintRight = new Vector3f();
     final CollisionScratch collision = new CollisionScratch();
     float runtimeSafetyScale = 1.0F;
+    float runtimeSegmentLength;
+    boolean couplingCorrected;
 }

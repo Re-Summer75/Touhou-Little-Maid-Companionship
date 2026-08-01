@@ -16,6 +16,8 @@ final class CollisionSpatialState {
 
     final int[] active;
     final float[] activeSlack;
+    final int[] previousActiveStamp;
+    int bindingStamp = 1;
     int activeCount;
     boolean bound;
     final Vector3f transformedGroupCenter = new Vector3f();
@@ -23,6 +25,7 @@ final class CollisionSpatialState {
     CollisionSpatialState(int proxyCount, int activeLimit) {
         active = new int[Math.min(proxyCount, activeLimit)];
         activeSlack = new float[active.length];
+        previousActiveStamp = new int[proxyCount];
     }
 
     void allocateGroups(int proxyCount) {
@@ -36,8 +39,25 @@ final class CollisionSpatialState {
     }
 
     void beginBinding() {
+        if (++bindingStamp == 0) {
+            for (int index = 0; index < previousActiveStamp.length; index++) {
+                previousActiveStamp[index] = 0;
+            }
+            bindingStamp = 1;
+        }
+        if (bound) {
+            for (int index = 0; index < activeCount; index++) {
+                previousActiveStamp[active[index]] = bindingStamp;
+            }
+        }
         activeCount = 0;
         bound = true;
+    }
+
+    boolean wasActive(int proxyIndex) {
+        return proxyIndex >= 0
+                && proxyIndex < previousActiveStamp.length
+                && previousActiveStamp[proxyIndex] == bindingStamp;
     }
 
     void reset() {

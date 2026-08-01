@@ -72,6 +72,13 @@ final class SpringContactSupport {
     private SpringContactSupport() {
     }
 
+    /** Drops a contact whose geometry is being crossed during lock recovery. */
+    static void clear(int drivenSlot, SpringBoneState state) {
+        state.contact.normals[drivenSlot].zero();
+        state.contact.support[drivenSlot] = 0.0F;
+        state.contact.hold[drivenSlot] = 0;
+    }
+
     static void record(
             int drivenSlot,
             float dt,

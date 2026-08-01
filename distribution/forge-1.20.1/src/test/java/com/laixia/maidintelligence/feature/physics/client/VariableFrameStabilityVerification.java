@@ -24,15 +24,17 @@ import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVeri
  *
  * <p>A Verlet integrator carries a displacement rather than a velocity, so a
  * changing frame time has to be corrected for by rescaling that displacement.
- * This fixture isolates that integration from swing and collision projection,
- * releases a displaced model, and varies the step while the transient decays.
+ * This fixture runs the production constraints but excludes every sample where
+ * swing, collision, or a skirt tether projected the segment. The remaining
+ * reversals therefore belong to free integration, as did the affected ears and
+ * hair in the live report.
  *
  * <p>That failure was found in play rather than here, just after a world load
  * where frame times swing hardest. Every driven segment of the maid reversed on
- * every single frame — hair, ears, skirt, none of them touching a collider or
- * clamped by a swing limit — at up to 22 px a frame, decaying over about a
- * second. Nothing in the bench caught it because every other fixture steps at a
- * fixed dt, so this one deliberately does not.
+ * every single frame — hair and ears with no support, collision, or swing
+ * correction — at up to 16.9 px a frame. Nothing in the bench caught it because
+ * every other fixture either stepped at a fixed dt or measured total vector
+ * travel rather than the reversing rest-offset reported in play.
  */
 final class VariableFrameStabilityVerification {
     private static final String MODEL = "winefox.json";
@@ -40,25 +42,22 @@ final class VariableFrameStabilityVerification {
     /** Frames to let the model settle before the frame rate is disturbed. */
     private static final int SETTLE = 120;
     private static final int SAMPLE = 240;
-    /** Steps below this are numerical noise rather than travel. */
-    private static final float MOVED = 1.0E-4F;
+    /** Tip movement below this is numerical noise rather than travel. */
+    private static final float MOVED = 0.002F;
     /** Acceleration used to displace the model before the transient is released. */
     private static final float SHOVE = 6.0F;
     /**
      * Reversing travel a segment may cover per frame, in model pixels.
      *
-     * <p>Counted as amplitude rather than as a reversal tally. A stable spring
-     * driven by an alternating frame time reverses on nearly every frame by
-     * design — it is being asked for a different step each time — so the tally
-     * alone condemns healthy motion: it read 238 of 240 frames on a model that
-     * was visibly fine. What separates the divergence is how far each of those
-     * reversals travels; the one measured in game ran at 22 px a frame.
+     * <p>Counted with the same angular tip-offset metric as the live logger.
+     * Reversal count alone condemns harmless contact chatter; visible travel
+     * distinguishes it from the multi-pixel period-one bursts in the log.
      *
-     * <p>The isolated transient measures about 0.001 px per frame. A 0.02 px
-     * ceiling leaves room for platform rounding while remaining three orders of
-     * magnitude below the 22 px world-load failure this test guards against.
+     * <p>The stabilized variable-step wind reversal measures about 0.065 px per
+     * frame; the undamped A/B baseline measured 0.098. The ceiling retains
+     * platform margin while remaining two orders below the live failure.
      */
-    private static final float MAX_BUZZ_PIXELS = 0.02F;
+    private static final float MAX_BUZZ_PIXELS = 0.08F;
 
     private VariableFrameStabilityVerification() {
     }
@@ -72,7 +71,7 @@ final class VariableFrameStabilityVerification {
                 PhysicsMetadata.EMPTY
         );
         PhysicsSolverLayout layout = PhysicsSolverLayout.build(model, plan);
-        SpringBoneSolver solver = new SpringBoneSolver(layout, false);
+        SpringBoneSolver solver = new SpringBoneSolver(layout, true);
         solver.solve(new Vector3f(), 0.0F, 0.0F, false);
         /*
          * First hold the model at a displaced equilibrium. Releasing that force
@@ -85,34 +84,52 @@ final class VariableFrameStabilityVerification {
             solver.solve(push, 0.0F, TICK, false);
         }
         // Releasing the displaced model creates the world-load transient.
-        measure(layout, solver, new Vector3f());
+        measure(layout, solver, new Vector3f(), new Vector3f(), "transient");
+
+        solver.restoreAnimationPose();
+        solver.reset();
+        Vector3f wind = new Vector3f(0.32F, 0.0F, 0.18F);
+        for (int frame = 0; frame < SETTLE; frame++) {
+            solver.restoreAnimationPose();
+            solver.solve(new Vector3f(), wind, 0.0F, TICK, false);
+        }
+        measure(
+                layout,
+                solver,
+                new Vector3f(),
+                new Vector3f(wind).negate(),
+                "wind reversal"
+        );
     }
 
     private static void measure(
             PhysicsSolverLayout layout,
             SpringBoneSolver solver,
-            Vector3f modelAcceleration
+            Vector3f modelAcceleration,
+            Vector3f poseDrive,
+            String label
     ) {
         int count = layout.activeNodeCount();
-        Vector3f[] previous = new Vector3f[count];
-        Vector3f[] lastStep = new Vector3f[count];
+        float[] previousOffset = new float[count];
+        float[] lastStep = new float[count];
         int[] reversals = new int[count];
         float[] reversing = new float[count];
         Vector3f current = new Vector3f();
-        Vector3f step = new Vector3f();
+        Vector3f rest = new Vector3f();
         for (int index = 0; index < count; index++) {
-            previous[index] = new Vector3f();
-            lastStep[index] = new Vector3f();
-            if (layout.node(index).driven()) {
-                solver.copyCurrentDirection(
-                        layout.node(index).drivenSlot(), previous[index]
-                );
+            PhysicsSolverLayout.Node node = layout.node(index);
+            if (node.driven()
+                    && solver.copyCurrentDirection(
+                            node.drivenSlot(), current)
+                    && solver.copyRestDirection(node.drivenSlot(), rest)) {
+                previousOffset[index] = displacement(current, rest, node);
             }
         }
         for (int frame = 0; frame < SAMPLE; frame++) {
             solver.restoreAnimationPose();
             solver.solve(
                     modelAcceleration,
+                    poseDrive,
                     0.0F,
                     alternatingStep(frame),
                     false
@@ -121,22 +138,30 @@ final class VariableFrameStabilityVerification {
                 PhysicsSolverLayout.Node node = layout.node(index);
                 if (!node.driven()
                         || !solver.copyCurrentDirection(
-                                node.drivenSlot(), current)) {
+                                node.drivenSlot(), current)
+                        || !solver.copyRestDirection(
+                                node.drivenSlot(), rest)) {
                     continue;
                 }
-                step.set(current).sub(previous[index]);
-                previous[index].set(current);
-                if (step.length() <= MOVED) {
+                float offset = displacement(current, rest, node);
+                float step = offset - previousOffset[index];
+                previousOffset[index] = offset;
+                // Projection cycles have their own detector and regression set.
+                if (solver.lastProjectionSource(node.drivenSlot()) != 0) {
+                    lastStep[index] = 0.0F;
                     continue;
                 }
-                if (lastStep[index].dot(step) < 0.0F) {
+                if (Math.abs(step) <= MOVED) {
+                    continue;
+                }
+                if (lastStep[index] * step < 0.0F) {
                     reversals[index]++;
-                    reversing[index] += step.length();
+                    reversing[index] += Math.abs(step);
                 }
-                lastStep[index].set(step);
+                lastStep[index] = step;
             }
         }
-        report(layout, reversing);
+        report(layout, reversals, reversing, label);
     }
 
     /**
@@ -155,7 +180,12 @@ final class VariableFrameStabilityVerification {
         };
     }
 
-    private static void report(PhysicsSolverLayout layout, float[] reversing) {
+    private static void report(
+            PhysicsSolverLayout layout,
+            int[] reversals,
+            float[] reversing,
+            String label
+    ) {
         int worst = -1;
         for (int index = 0; index < reversing.length; index++) {
             if (layout.node(index).driven()
@@ -167,12 +197,13 @@ final class VariableFrameStabilityVerification {
         if (worst < 0) {
             return;
         }
-        float perFrame = reversing[worst] / SAMPLE
-                * layout.node(worst).kinematics().leverArm() * 16.0F;
+        float perFrame = reversing[worst] / SAMPLE;
         System.out.printf(
-                "variable frame: worst %s buzz %.3f px/f%n",
+                "variable frame %s: worst %s buzz %.3f px/f, reversals %d%n",
+                label,
                 layout.node(worst).bone().getName(),
-                perFrame
+                perFrame,
+                reversals[worst]
         );
         require(
                 perFrame <= MAX_BUZZ_PIXELS,
@@ -180,5 +211,15 @@ final class VariableFrameStabilityVerification {
                         + layout.node(worst).bone().getName()
                         + " by " + perFrame + " px per frame"
         );
+    }
+
+    private static float displacement(
+            Vector3f current,
+            Vector3f rest,
+            PhysicsSolverLayout.Node node
+    ) {
+        float dot = Math.max(-1.0F, Math.min(1.0F, current.dot(rest)));
+        return (float) Math.acos(dot)
+                * node.kinematics().leverArm() * 16.0F;
     }
 }

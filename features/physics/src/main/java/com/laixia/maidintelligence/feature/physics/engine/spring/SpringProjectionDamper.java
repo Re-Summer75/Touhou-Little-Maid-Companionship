@@ -289,6 +289,11 @@ final class SpringProjectionDamper {
 
     /** Clears damping once the selected responder owns the contact alone. */
     static void competitorsSuppressed(int drivenSlot, SpringBoneState state) {
+        clear(drivenSlot, state);
+    }
+
+    /** Drops projection history that belongs to a discarded contact path. */
+    static void clear(int drivenSlot, SpringBoneState state) {
         SpringOscillationState oscillation = state.oscillation;
         oscillation.projectionCorrections[drivenSlot].zero();
         oscillation.projectionReversals[drivenSlot] = 0;

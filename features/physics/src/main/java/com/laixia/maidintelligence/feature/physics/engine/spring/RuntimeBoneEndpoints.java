@@ -3,7 +3,6 @@ package com.laixia.maidintelligence.feature.physics.engine.spring;
 import com.laixia.maidintelligence.feature.physics.geometry.BoneModelSnapshot;
 import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.CollisionFrameSource;
 import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.geometry.BoneModelSnapshot;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;

@@ -16,6 +16,9 @@ public final class SpringProjectionDamperVerification {
     }
 
     public static void run() {
+        SpringIntegrationDamperVerification.run();
+        SpringLinearCorrectionVerification.run();
+        SpringAuthoredPoseAnchorVerification.run();
         if (SpringProjectionDamper.significantReentry(0.019F * 0.019F)
                 || !SpringProjectionDamper.significantReentry(
                 0.021F * 0.021F
@@ -84,5 +87,6 @@ public final class SpringProjectionDamperVerification {
                     "Slow-cycle history did not clear after a quiet window"
             );
         }
+        SpringInterlockRecoveryVerification.run();
     }
 }

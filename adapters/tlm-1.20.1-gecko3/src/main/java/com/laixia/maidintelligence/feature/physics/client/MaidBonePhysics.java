@@ -29,7 +29,9 @@ import org.joml.Vector3f;
 import org.slf4j.Logger;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.WeakHashMap;
+import java.util.function.BooleanSupplier;
 
 /**
  * Per-entity owner for Gecko spring-bone state. Discovery and static
@@ -53,8 +55,17 @@ public final class MaidBonePhysics {
             new WeakHashMap<>();
     private static final Map<LivingEntity, PhysicsBoneSelectionPlan> LAST_PLANS =
             new WeakHashMap<>();
+    private static BooleanSupplier enabledSupplier = () -> true;
 
     private MaidBonePhysics() {
+    }
+
+    static void configure(BooleanSupplier source) {
+        enabledSupplier = Objects.requireNonNull(source, "source");
+    }
+
+    static boolean enabled() {
+        return enabledSupplier.getAsBoolean();
     }
 
     public static AnimatedGeoModel lastModel(LivingEntity maid) {
@@ -78,6 +89,10 @@ public final class MaidBonePhysics {
             double animationTick
     ) {
         if (maid == null || model == null || !maid.isAlive()) {
+            return;
+        }
+        if (!enabled()) {
+            forget(maid);
             return;
         }
         Minecraft minecraft = Minecraft.getInstance();

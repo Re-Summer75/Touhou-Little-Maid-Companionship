@@ -1,10 +1,10 @@
-"""Summarises the in-game physics displacement log into per-bone statistics.
+"""Summarises the in-game physics jitter log into per-bone statistics.
 
-The log prints every driven segment every 0.1 s, which is far too much to read
-directly. What matters is not any single offset but how much each segment's
-offset moves over time, so this reports swing, reversal rate and who is pushing.
+Both the current half-second ``physics jitter`` windows and the older raw
+``physics displacement`` samples are accepted.
 
-Usage: python analyze_displacement_log.py <log> [--top N] [--bone PREFIX]
+Usage: py -3 analyze_displacement_log.py <log> [--top N] [--bone PREFIX]
+       [--timeline]
 """
 
 import argparse
@@ -21,6 +21,168 @@ SAMPLE = re.compile(
     r"\s+damp=(?P<damp>[-\d.]+)"
 )
 HEADER = re.compile(r"physics displacement \[(?P<maid>[^\]]*)\]")
+JITTER_HEADER = re.compile(
+    r"physics jitter \[(?P<maid>[^\]]*)\]"
+    r"\s+frames=(?P<frames>\d+)\s+shaking=(?P<shaking>\d+)"
+)
+JITTER_SAMPLE = re.compile(
+    r"^\s+(?P<bone>\S+)\s+buzz=\s*(?P<buzz>[-\d.]+)px/f"
+    r"\s+peak=\s*(?P<peak>[-\d.]+)"
+    r"\s+revs=\s*(?P<revs>\d+)"
+    r"\s+per=\s*(?P<period>[-\d.]+)"
+    r"\s+off=\s*(?P<off>[-\d.]+)px"
+    r"\s+sup=\s*(?P<sup>[-\d.]+)"
+    r"\s+damp=\s*(?P<damp>[-\d.]+)/(?P<damp_peak>[-\d.]+)"
+    r"\s+hitF=\s*(?P<hit>\d+)"
+    r"\s+colF=\s*(?P<collision>\d+)"
+    r"\s+swgF=\s*(?P<swing_frames>\d+)"
+)
+TIME = re.compile(r"(?P<time>\d{2}:\d{2}:\d{2}\.\d{3})")
+
+
+class JitterTrack:
+    """Aggregates already reduced in-game windows without inventing samples."""
+
+    def __init__(self):
+        self.frames = 0
+        self.windows = 0
+        self.reversals = 0
+        self.reversing_travel = 0.0
+        self.peak = 0.0
+        self.offset = 0.0
+        self.support = 0.0
+        self.damping = 0.0
+        self.damping_peak = 0.0
+        self.contact_frames = 0
+        self.collision_frames = 0
+        self.swing_frames = 0
+
+    def add(self, row, frames):
+        self.frames += frames
+        self.windows += 1
+        self.reversals += row["revs"]
+        self.reversing_travel += row["buzz"] * frames
+        self.peak = max(self.peak, row["peak"])
+        self.offset = row["off"]
+        self.support += row["sup"] * frames
+        self.damping += row["damp"] * frames
+        self.damping_peak = max(self.damping_peak, row["damp_peak"])
+        self.contact_frames += row["hit"]
+        self.collision_frames += row["collision"]
+        self.swing_frames += row["swing_frames"]
+
+    def mean(self, total):
+        return total / self.frames if self.frames else 0.0
+
+    def buzz(self):
+        return self.mean(self.reversing_travel)
+
+    def period(self):
+        return self.frames / self.reversals if self.reversals else 0.0
+
+
+def read_jitter_windows(path):
+    """Reads current per-frame detector summaries emitted every half second."""
+    tracks = defaultdict(JitterTrack)
+    maids = set()
+    windows = 0
+    total_frames = 0
+    current_frames = 0
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            header = JITTER_HEADER.search(line)
+            if header:
+                current_frames = int(header.group("frames"))
+                maids.add(header.group("maid"))
+                windows += 1
+                total_frames += current_frames
+                continue
+            match = JITTER_SAMPLE.match(line.rstrip("\n"))
+            if not match or current_frames <= 0:
+                continue
+            row = {"bone": match.group("bone")}
+            for key in (
+                "buzz",
+                "peak",
+                "period",
+                "off",
+                "sup",
+                "damp",
+                "damp_peak",
+            ):
+                row[key] = float(match.group(key))
+            for key in ("revs", "hit", "collision", "swing_frames"):
+                row[key] = int(match.group(key))
+            tracks[row["bone"]].add(row, current_frames)
+    return tracks, maids, windows, total_frames
+
+
+def print_jitter_windows(tracks, maids, windows, total_frames, top, bone):
+    print(
+        f"windows={windows}  loggedFrames={total_frames}  "
+        f"bones={len(tracks)}  maids={','.join(sorted(maids))}"
+    )
+    print(
+        f"{'bone':<20}{'buzz':>8}{'peak':>8}{'revs':>6}{'period':>8}"
+        f"{'off':>8}{'sup':>6}{'damp':>7}{'dPeak':>7}"
+        f"{'hit%':>7}{'col%':>7}{'swg%':>7}{'seen':>6}"
+    )
+    items = tracks.items()
+    if bone:
+        items = [(name, track) for name, track in items if name.startswith(bone)]
+    ranked = sorted(items, key=lambda item: -item[1].buzz())[:top]
+    for name, track in ranked:
+        print(
+            f"{name:<20}{track.buzz():>8.3f}{track.peak:>8.3f}"
+            f"{track.reversals:>6}{track.period():>8.1f}"
+            f"{track.offset:>8.2f}{track.mean(track.support):>6.2f}"
+            f"{track.mean(track.damping):>7.2f}{track.damping_peak:>7.2f}"
+            f"{track.mean(track.contact_frames) * 100.0:>7.1f}"
+            f"{track.mean(track.collision_frames) * 100.0:>7.1f}"
+            f"{track.mean(track.swing_frames) * 100.0:>7.1f}"
+            f"{track.windows:>6}"
+        )
+
+
+def print_jitter_timeline(path, prefix):
+    """Prints individual detector windows for one bone-name prefix."""
+    print()
+    print(f"timeline prefix={prefix}")
+    print(
+        f"{'time':<13}{'bone':<20}{'frames':>7}{'buzz':>8}{'peak':>8}"
+        f"{'revs':>6}{'period':>8}{'off':>8}{'sup':>6}{'damp':>7}"
+        f"{'hit':>6}{'col':>6}{'swg':>6}"
+    )
+    current_frames = 0
+    current_time = "-"
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            header = JITTER_HEADER.search(line)
+            if header:
+                current_frames = int(header.group("frames"))
+                timestamp = TIME.search(line)
+                current_time = timestamp.group("time") if timestamp else "-"
+                continue
+            match = JITTER_SAMPLE.match(line.rstrip("\n"))
+            if (
+                not match
+                or current_frames <= 0
+                or not match.group("bone").startswith(prefix)
+            ):
+                continue
+            print(
+                f"{current_time:<13}{match.group('bone'):<20}"
+                f"{current_frames:>7}{float(match.group('buzz')):>8.3f}"
+                f"{float(match.group('peak')):>8.3f}"
+                f"{int(match.group('revs')):>6}"
+                f"{float(match.group('period')):>8.1f}"
+                f"{float(match.group('off')):>8.2f}"
+                f"{float(match.group('sup')):>6.2f}"
+                f"{float(match.group('damp')):>7.2f}"
+                f"{int(match.group('hit')):>6}"
+                f"{int(match.group('collision')):>6}"
+                f"{int(match.group('swing_frames')):>6}"
+            )
 
 
 class Track:
@@ -222,11 +384,33 @@ def parse(path):
 
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        # Forge debug logs can contain replacement characters on GBK consoles.
+        sys.stdout.reconfigure(errors="replace")
     parser = argparse.ArgumentParser()
     parser.add_argument("log")
     parser.add_argument("--top", type=int, default=20)
     parser.add_argument("--bone", default=None)
+    parser.add_argument(
+        "--timeline",
+        action="store_true",
+        help="print each current-format window for --bone",
+    )
     args = parser.parse_args()
+
+    jitter, jitter_maids, windows, total_frames = read_jitter_windows(args.log)
+    if jitter:
+        print_jitter_windows(
+            jitter,
+            jitter_maids,
+            windows,
+            total_frames,
+            args.top,
+            args.bone,
+        )
+        if args.timeline and args.bone:
+            print_jitter_timeline(args.log, args.bone)
+        return 0
 
     tracks, maids, blocks, posed_count = parse(args.log)
     if not tracks:

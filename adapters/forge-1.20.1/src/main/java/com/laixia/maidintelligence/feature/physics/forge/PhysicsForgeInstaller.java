@@ -35,6 +35,7 @@ public final class PhysicsForgeInstaller implements ForgeFeatureInstaller {
             return;
         }
         installed = true;
+        PhysicsClientConfig.register(lifecycle.modEventBus());
         lifecycle.gameEventBus().addListener(commandHandler);
         DistExecutor.unsafeRunWhenOn(
                 Dist.CLIENT,

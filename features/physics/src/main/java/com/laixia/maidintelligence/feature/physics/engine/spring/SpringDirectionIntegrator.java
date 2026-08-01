@@ -57,6 +57,7 @@ final class SpringDirectionIntegrator {
             float yawRate,
             float dt,
             boolean paused,
+            boolean preserveAuthoredPose,
             SpringBoneState state,
             SpringBoneScratch scratch
     ) {
@@ -97,18 +98,18 @@ final class SpringDirectionIntegrator {
         );
         scratch.nextDirection.add(scratch.carriedVelocity);
         /*
-         * Mass enters through k/m; gravity and frame acceleration stay
-         * accelerations and must not be multiplied by mass. Only added mass
+         * Mass enters through k/m; frame acceleration stays an acceleration and
+         * must not be multiplied by mass. Only added mass
          * slows the restoring pull: letting a light part pull harder than the
          * authored baseline would overshoot the collision projection between
          * frames instead of looking livelier.
          */
-        float stiffness = (float) (
+        float restoringRate = (float) (
                 SpringBoneMath.STIFFNESS
                         * profile.stiffnessScale()
                         / Math.max(1.0F, profile.massScale())
-                        * dt
         );
+        float stiffness = restoringRate * dt;
         scratch.nextDirection.add(
                 scratch.restDirection.x() * stiffness,
                 scratch.restDirection.y() * stiffness,
@@ -129,18 +130,18 @@ final class SpringDirectionIntegrator {
          * held against a collider is the one thing a gust must not be able to
          * turn into being pressed through it.
          *
-         * <p>Gravity pulls world-down on every part at all times, so it also
-         * displaces the authored pose: the spring settles where the pull and the
-         * restoring force balance rather than where the model was drawn, and a
-         * raised strand sags. Resolving it against the rest direction removes
-         * that displacement, but it removes the sag that reads as weight along
-         * with it, and the trade was judged the wrong way round.
+         * <p>The constrained production path rejects constant gravity torque.
+         * Otherwise gravity and the spring define a second equilibrium below
+         * the authored silhouette, making every idle raised strand sag forever.
+         * Motion acceleration, turning, and gust bias still provide weight and
+         * lag. The unconstrained oracle retains the legacy gravity response.
          *
          * <p>The restoring pull towards the authored pose is deliberately left
          * out. That pose is the equilibrium, overlap and all — an author may seat
          * a hem inside a hip — and cancelling it would stop the part returning to
          * where the model was drawn.
          */
+        float gravityResponse = preserveAuthoredPose ? 0.0F : 1.0F;
         scratch.appliedForce.set(scratch.poseDriveBias).mul(stiffness);
         scratch.appliedForce.add(
                 ((modelAcceleration.x() + animationAcceleration.x())
@@ -148,7 +149,8 @@ final class SpringDirectionIntegrator {
                 ((modelAcceleration.y() + animationAcceleration.y())
                         * -inertia
                         - SpringBoneMath.GRAVITY_POWER
-                        * profile.gravityScale()) * dt,
+                        * profile.gravityScale()
+                        * gravityResponse) * dt,
                 (modelAcceleration.z() + animationAcceleration.z())
                         * -inertia * dt
         );

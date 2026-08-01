@@ -33,7 +33,9 @@ final class PreparedCollisionProjectionLoop {
             set.passStart.set(direction);
             boolean passCorrected = false;
             for (int slot = 0; slot < count; slot++) {
-                if (set.liveProxy(slot).project(direction, scratch)) {
+                if (set.liveProxy(slot).project(
+                        direction, scratch, set.sweepScratch
+                )) {
                     passCorrected = true;
                     set.contactOwner.recordResponder(slot);
                 }
@@ -101,8 +103,15 @@ final class PreparedCollisionProjectionLoop {
          * stale surface it kept cancelling the spring against let the segment
          * wander 38 px from its equilibrium.
          */
+        /*
+         * A correction already proves contact for this frame, and support uses
+         * that correction before consulting clearance. Measuring every shape
+         * again here only duplicates the narrow phase after a successful pass.
+         */
         scratch.setRestClearance(
-                nearestClearance(set, direction, count, scratch)
+                corrected
+                        ? 0.0F
+                        : nearestClearance(set, direction, count, scratch)
         );
         scratch.clearMeshExtent();
         return corrected;

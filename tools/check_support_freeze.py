@@ -6,7 +6,7 @@ seconds at a time is neither, and it means the inward half of the spring is
 permanently cancelled by that fraction. Written to check the gating that holds
 support while a collider is still measurably in contact.
 
-Usage: python check_support_freeze.py <log>
+Usage: py -3 check_support_freeze.py <log>
 """
 
 import re
@@ -14,21 +14,24 @@ import sys
 from collections import defaultdict
 
 SAMPLE = re.compile(
-    r"^\s+(?P<bone>\S+)\s+off=\s*(?P<off>[-\d.]+)px"
-    r".*?sup=(?P<sup>[-\d.]+)\s+damp=(?P<damp>[-\d.]+)"
+    r"^\s+(?P<bone>\S+)\s+.*?\boff=\s*(?P<off>[-\d.]+)px"
+    r".*?\bsup=\s*(?P<sup>[-\d.]+)"
 )
-HEADER = re.compile(r"physics displacement")
+HEADER = re.compile(r"physics (?:displacement|jitter)")
 
 
 def longest_run(values):
-    """Longest stretch of identical consecutive values, and that value."""
+    """Longest stretch of identical values in adjacent report windows."""
     best_length = 0
     best_value = None
     length = 0
-    previous = object()
-    for value in values:
-        length = length + 1 if value == previous else 1
-        previous = value
+    previous_value = object()
+    previous_window = -2
+    for window, value in values:
+        adjacent = window == previous_window + 1
+        length = length + 1 if adjacent and value == previous_value else 1
+        previous_window = window
+        previous_value = value
         if length > best_length:
             best_length = length
             best_value = value
@@ -36,19 +39,25 @@ def longest_run(values):
 
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
     if len(sys.argv) < 2:
         print(__doc__, file=sys.stderr)
         return 2
     support = defaultdict(list)
     offsets = defaultdict(list)
+    window = -1
     with open(sys.argv[1], encoding="utf-8", errors="replace") as handle:
         for line in handle:
             if HEADER.search(line):
+                window += 1
                 continue
             match = SAMPLE.match(line.rstrip("\n"))
-            if not match:
+            if not match or window < 0:
                 continue
-            support[match.group("bone")].append(float(match.group("sup")))
+            support[match.group("bone")].append(
+                (window, float(match.group("sup")))
+            )
             offsets[match.group("bone")].append(float(match.group("off")))
 
     rows = []

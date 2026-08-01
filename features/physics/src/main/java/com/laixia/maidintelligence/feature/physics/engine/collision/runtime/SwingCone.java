@@ -73,13 +73,39 @@ public final class SwingCone {
         float distanceSquared = dx * dx + dy * dy + dz * dz;
         float outer = leverArm + reach;
         if (distanceSquared > outer * outer) {
-            return Float.POSITIVE_INFINITY;
+            return (float) Math.sqrt(distanceSquared) - outer;
         }
         float inner = leverArm - reach;
         if (inner > 0.0F && distanceSquared < inner * inner) {
-            return Float.POSITIVE_INFINITY;
+            return inner - (float) Math.sqrt(distanceSquared);
         }
         return sweep(dx, dy, dz, distanceSquared, leverArm) - reach;
+    }
+
+    /**
+     * Boolean group reject that preserves the squared shell fast path. Proxy
+     * culling asks for finite slack so it can cache the gap; groups only need
+     * an answer and should not pay a square root for an obvious radial miss.
+     */
+    public boolean reachesSweep(
+            Vector3f pivot,
+            Vector3f target,
+            float leverArm,
+            float reach
+    ) {
+        float dx = target.x - pivot.x;
+        float dy = target.y - pivot.y;
+        float dz = target.z - pivot.z;
+        float distanceSquared = dx * dx + dy * dy + dz * dz;
+        float outer = leverArm + reach;
+        if (distanceSquared > outer * outer) {
+            return false;
+        }
+        float inner = leverArm - reach;
+        if (inner > 0.0F && distanceSquared < inner * inner) {
+            return false;
+        }
+        return sweep(dx, dy, dz, distanceSquared, leverArm) <= reach;
     }
 
     private float sweep(

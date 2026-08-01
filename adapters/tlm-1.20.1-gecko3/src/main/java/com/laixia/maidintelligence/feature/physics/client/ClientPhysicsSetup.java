@@ -26,6 +26,7 @@ import net.minecraftforge.eventbus.api.IEventBus;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 
 @OnlyIn(Dist.CLIENT)
 public final class ClientPhysicsSetup {
@@ -35,7 +36,12 @@ public final class ClientPhysicsSetup {
     private ClientPhysicsSetup() {
     }
 
-    public static void initialize(IEventBus modEventBus, IEventBus gameEventBus) {
+    public static void initialize(
+            IEventBus modEventBus,
+            IEventBus gameEventBus,
+            BooleanSupplier physicsEnabled
+    ) {
+        MaidBonePhysics.configure(physicsEnabled);
         modEventBus.addListener(ClientPhysicsSetup::registerReloadListener);
         gameEventBus.addListener(ClientPhysicsSetup::onEntityInteract);
         gameEventBus.addListener(ClientPhysicsSetup::onEntityLeaveLevel);

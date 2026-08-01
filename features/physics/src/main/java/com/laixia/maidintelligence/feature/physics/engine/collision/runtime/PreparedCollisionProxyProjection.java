@@ -38,10 +38,14 @@ final class PreparedCollisionProxyProjection {
     static boolean project(
             PreparedCollisionProxy proxy,
             Vector3f direction,
-            CollisionScratch scratch
+            CollisionScratch scratch,
+            PreparedCollisionSweepScratch sweepScratch
     ) {
         if (proxy.suppressed) {
             return false;
+        }
+        if (sweepScratch != null) {
+            PreparedCollisionSweep.beginFrame(proxy);
         }
         float bodyArm = bodyLeverArm(proxy, direction);
         PreparedCollisionProxyMotion.spend(proxy, direction, bodyArm);
@@ -54,7 +58,8 @@ final class PreparedCollisionProxyProjection {
                         proxy.projectionRadius,
                         proxy.projectionHitRadius,
                         true,
-                        scratch
+                        scratch,
+                        sweepScratch
                 );
         if (bodyArm <= 0.0F) {
             proxy.bodyExitFace = CollisionProjector.NO_FACE;
@@ -75,7 +80,8 @@ final class PreparedCollisionProxyProjection {
                 proxy.bodyProjectionRadius,
                 proxy.bodyProjectionHitRadius,
                 false,
-                scratch
+                scratch,
+                sweepScratch
         ) || moved;
     }
 
@@ -90,10 +96,18 @@ final class PreparedCollisionProxyProjection {
             float radius,
             float hitRadius,
             boolean tip,
-            CollisionScratch scratch
+            CollisionScratch scratch,
+            PreparedCollisionSweepScratch sweepScratch
     ) {
         float separation = separation(proxy, direction, arm, hitRadius);
         if (separation > 0.0F) {
+            if (sweepScratch != null && PreparedCollisionSweep.project(
+                    proxy, direction, arm, radius, hitRadius, tip,
+                    scratch, sweepScratch
+            )) {
+                clearReserve(proxy, tip);
+                return true;
+            }
             if (tip) {
                 proxy.exitFace = CollisionProjector.NO_FACE;
                 proxy.tipReserve = separation;
@@ -107,6 +121,12 @@ final class PreparedCollisionProxyProjection {
         boolean moved = projectSample(
                 proxy, direction, arm, radius, hitRadius, tip, scratch
         );
+        if (!moved && sweepScratch != null) {
+            moved = PreparedCollisionSweep.project(
+                    proxy, direction, arm, radius, hitRadius, tip,
+                    scratch, sweepScratch
+            );
+        }
         /*
          * A push invalidates the gap it was measured from, and a shape that
          * reports no gap leaves the sentinel behind; both land on zero, which
@@ -121,6 +141,17 @@ final class PreparedCollisionProxyProjection {
             proxy.bodyReserve = measured;
         }
         return moved;
+    }
+
+    private static void clearReserve(
+            PreparedCollisionProxy proxy,
+            boolean tip
+    ) {
+        if (tip) {
+            proxy.tipReserve = 0.0F;
+        } else {
+            proxy.bodyReserve = 0.0F;
+        }
     }
 
     private static boolean projectSample(
@@ -216,7 +247,7 @@ final class PreparedCollisionProxyProjection {
                 direction, proxy.pivot, proxy.shape.pointA(),
                 proxy.shape.axisX(), proxy.shape.axisY(), proxy.shape.axisZ(),
                 proxy.shape.halfExtents(), hitRadius, proxy.shape.openAxis(),
-                arm, scratch
+                proxy.shape.hiddenFaces(), arm, scratch
         );
         if (tip) {
             proxy.exitFace = scratch.exitFace();
@@ -332,7 +363,8 @@ final class PreparedCollisionProxyProjection {
                     direction, proxy.pivot, proxy.shape.pointA(),
                     proxy.shape.axisX(), proxy.shape.axisY(),
                     proxy.shape.axisZ(), proxy.shape.halfExtents(), hitRadius,
-                    proxy.shape.openAxis(), arm, scratch
+                    proxy.shape.openAxis(), proxy.shape.hiddenFaces(),
+                    arm, scratch
             );
         };
     }

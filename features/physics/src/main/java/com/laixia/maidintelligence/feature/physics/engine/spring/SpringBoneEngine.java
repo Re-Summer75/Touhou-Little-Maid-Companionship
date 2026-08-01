@@ -118,7 +118,7 @@ public final class SpringBoneEngine {
         return context.state.integration.lastIntegratorStep[drivenSlot];
     }
 
-    /** Bit 1 for a swing limit, bit 2 for a collider. */
+    /** Bit 1: swing, bit 2: collider, bit 4: skirt branch tether. */
     public int lastProjectionSource(int drivenSlot) {
         return context.state.integration.lastProjectionSource[drivenSlot];
     }

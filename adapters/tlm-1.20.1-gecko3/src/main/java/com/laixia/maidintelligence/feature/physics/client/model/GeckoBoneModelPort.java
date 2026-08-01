@@ -94,6 +94,12 @@ public final class GeckoBoneModelPort
             output.setScaleX(input.getScaleX());
             output.setScaleY(input.getScaleY());
             output.setScaleZ(input.getScaleZ());
+            boolean parentVisible = output.parent() == null
+                    || output.parent().isHierarchyVisible();
+            output.setRenderVisibility(
+                    parentVisible && !input.isHidden(),
+                    !input.cubesAreHidden()
+            );
         }
     }
 

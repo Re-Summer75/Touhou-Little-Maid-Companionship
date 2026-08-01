@@ -28,6 +28,7 @@ public final class CollisionProxyPlanner {
             new HashMap<>();
 
     public CollisionProxyPlanner(
+            BoneModelSnapshot model,
             PhysicsBoneGeometry.Analysis geometry,
             BodyCollisionGeometry bodyGeometry,
             PhysicsBoneSelectionPlan selectionPlan
@@ -36,6 +37,7 @@ public final class CollisionProxyPlanner {
         this.bodyGeometry = bodyGeometry;
         this.selectionPlan = selectionPlan;
         this.meshPlanner = new MeshColliderPlanner(
+                model,
                 geometry,
                 bodyGeometry,
                 selectionPlan

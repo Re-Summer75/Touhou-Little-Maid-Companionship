@@ -1,13 +1,5 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.laixia.maidintelligence.feature.physics.api.*;
-import com.laixia.maidintelligence.feature.physics.metadata.*;
-import com.laixia.maidintelligence.feature.physics.discovery.*;
-import com.laixia.maidintelligence.feature.physics.geometry.*;
-import com.laixia.maidintelligence.feature.physics.layout.*;
-import com.laixia.maidintelligence.feature.physics.engine.*;
-import com.laixia.maidintelligence.feature.physics.session.*;
-
 import com.laixia.maidintelligence.feature.physics.engine.spring.SpringProjectionDamperVerification;
 
 /**
@@ -20,6 +12,7 @@ public final class BonePhysicsVerification {
     public static void main(String[] args) throws Exception {
         BoneClassifierVerification.run();
         MotionDynamicsVerification.run();
+        PhysicsConfigurationVerification.run();
         EnvironmentalWindVerification.run();
         AnimationTimelineClockVerification.run();
         AnimationInertiaVerification.run();
@@ -38,8 +31,11 @@ public final class BonePhysicsVerification {
         SmallSupportStabilityVerification.run();
         BundledAttachmentPivotVerification.run();
         RigidAttachmentVerification.run();
+        RigidEquipmentSelectionVerification.run();
         ClothAccessoryDiscoveryVerification.run();
+        SkirtBranchCouplingVerification.run();
         InitialPoseStabilityVerification.run();
+        AuthoredPoseRecoveryVerification.run();
         SpringProjectionDamperVerification.run();
         VariableFrameStabilityVerification.run();
         DanglingAccessoryStabilityVerification.run();

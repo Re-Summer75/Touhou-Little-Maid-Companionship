@@ -1,8 +1,10 @@
 package com.laixia.maidintelligence.feature.physics.engine.collision.bake;
 
 
+import com.laixia.maidintelligence.feature.physics.geometry.BoneModelSnapshot;
 import com.laixia.maidintelligence.feature.physics.geometry.PhysicsBoneGeometry;
 import com.laixia.maidintelligence.feature.physics.api.PhysicsBoneSelectionPlan;
+import com.laixia.maidintelligence.feature.physics.engine.collision.bake.planner.AutomaticCollisionSourcePolicy;
 import com.laixia.maidintelligence.feature.physics.engine.collision.bake.planner.BodyCollisionGeometry;
 import com.laixia.maidintelligence.feature.physics.engine.collision.bake.planner.CollisionReferencePolicy;
 import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.SwingCone;
@@ -46,6 +48,7 @@ final class MeshColliderPlanner {
     private static final float PIVOT_TOLERANCE = 1.0F / 16.0F;
     private static final float CONTAINMENT_EPSILON = 1.0E-4F;
 
+    private final BoneModelSnapshot model;
     private final PhysicsBoneGeometry.Analysis geometry;
     private final BodyCollisionGeometry bodyGeometry;
     private final PhysicsBoneSelectionPlan selectionPlan;
@@ -54,10 +57,12 @@ final class MeshColliderPlanner {
     private final Vector3f coneAxis = new Vector3f();
 
     MeshColliderPlanner(
+            BoneModelSnapshot model,
             PhysicsBoneGeometry.Analysis geometry,
             BodyCollisionGeometry bodyGeometry,
             PhysicsBoneSelectionPlan selectionPlan
     ) {
+        this.model = model;
         this.geometry = geometry;
         this.bodyGeometry = bodyGeometry;
         this.selectionPlan = selectionPlan;
@@ -138,7 +143,9 @@ final class MeshColliderPlanner {
         Vector3f half = new Vector3f();
         Vector3f corner = new Vector3f();
         for (PhysicsBoneGeometry.Node node : geometry.nodes()) {
-            if (!node.hasGeometry()
+            if (!AutomaticCollisionSourcePolicy.allows(
+                    node, geometry, model
+            )
                     || selectionPlan.isDriven(node.bone())
                     || hasDrivenAncestor(node)) {
                 continue;

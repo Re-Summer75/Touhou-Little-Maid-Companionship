@@ -388,7 +388,13 @@ final class ClothLayerPlanner {
                 next = Math.min(next, half.get(index));
             }
         }
-        return thin <= next * PLATE_RATIO;
+        /*
+         * Cube extents are transformed through float matrices before reaching
+         * this pass. An authored 1:2 sheet can therefore land one ratio ULP
+         * above the exact 0.5 boundary; expanding the ratio itself preserves
+         * the intended inclusive test without admitting thicker parts.
+         */
+        return thin <= next * Math.nextUp(PLATE_RATIO);
     }
 
     private static int minorAxis(Vector3f half) {

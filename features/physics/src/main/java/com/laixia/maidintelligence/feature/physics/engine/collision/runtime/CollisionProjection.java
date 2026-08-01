@@ -16,6 +16,23 @@ public interface CollisionProjection {
     );
 
     /**
+     * Whether a direction is legal against every live collider, without
+     * changing the direction or contact ownership.
+     */
+    boolean isClear(Vector3f direction, CollisionScratch scratch);
+
+    /**
+     * Tolerant target probe used only by severe interlock recovery.
+     */
+    default boolean isClear(
+            Vector3f direction,
+            float penetrationTolerance,
+            CollisionScratch scratch
+    ) {
+        return isClear(direction, scratch);
+    }
+
+    /**
      * Lets collision runtime retain a responder after a recurring-contact
      * signal. The runtime alone owns suppression and contact hysteresis.
      */

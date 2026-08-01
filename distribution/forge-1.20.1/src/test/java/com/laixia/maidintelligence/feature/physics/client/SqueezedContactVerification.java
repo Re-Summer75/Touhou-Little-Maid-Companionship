@@ -1,20 +1,14 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
-import com.laixia.maidintelligence.feature.physics.api.*;
-import com.laixia.maidintelligence.feature.physics.metadata.*;
-import com.laixia.maidintelligence.feature.physics.discovery.*;
-import com.laixia.maidintelligence.feature.physics.geometry.*;
-import com.laixia.maidintelligence.feature.physics.layout.*;
-import com.laixia.maidintelligence.feature.physics.engine.*;
-import com.laixia.maidintelligence.feature.physics.session.*;
-
 import com.google.gson.JsonParser;
 import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
-import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
+import com.laixia.maidintelligence.feature.physics.discovery.PhysicsBoneDiscoverer;
 import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProjector;
 import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionScratch;
 import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.CollisionProxyDebugData;
+import com.laixia.maidintelligence.feature.physics.geometry.BoneModelSnapshot;
+import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
 import org.joml.Vector3f;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.coreModelFromJson;
@@ -42,6 +36,7 @@ final class SqueezedContactVerification {
         verifiesClearlyShallowerFaceStillWins();
         verifiesLeavingTheBoxForgetsTheFace();
         verifiesSqueezedSegmentSettlesInsteadOfBuzzing();
+        verifiesReleasedSqueezeReturnsToRest();
         verifiesOneSidedContactKeepsFullResponse();
     }
 
@@ -146,6 +141,82 @@ final class SqueezedContactVerification {
                 trace.path <= 0.02F,
                 "A squeezed segment never came to rest: travelled "
                         + trace.path + " rad while settled"
+        );
+    }
+
+    /**
+     * Contact history must not keep cancelling the spring after both sides of
+     * an impossible squeeze have physically moved away.
+     */
+    private static void verifiesReleasedSqueezeReturnsToRest() {
+        BoneModelSnapshot model = model();
+        PhysicsSolverLayout layout = PhysicsSolverLayout.build(
+                model,
+                PhysicsBoneDiscoverer.discover(
+                        "verification:released_squeeze",
+                        model,
+                        PhysicsMetadataJsonParser.parse(
+                                JsonParser.parseString(movableSqueeze())
+                                        .getAsJsonObject(),
+                                "released squeeze verification"
+                        )
+                )
+        );
+        int node = indexOf(layout, "Strand");
+        require(node >= 0, "Released squeeze fixture lost its strand");
+        int slot = layout.node(node).drivenSlot();
+        BoneModelSnapshot.Bone left = bone(model, "ColliderLeft");
+        BoneModelSnapshot.Bone right = bone(model, "ColliderRight");
+        if (left == null || right == null) {
+            throw new AssertionError(
+                    "Released squeeze fixture lost its collider bones"
+            );
+        }
+
+        SpringBoneSolver solver = new SpringBoneSolver(layout);
+        solver.solve(new Vector3f(), 0.0F, 0.0F, false);
+        for (int frame = 0; frame < SETTLE; frame++) {
+            solver.restoreAnimationPose();
+            solver.solve(new Vector3f(), 0.0F, DT, false);
+        }
+        Vector3f current = new Vector3f();
+        Vector3f rest = new Vector3f();
+        solver.copyCurrentDirection(slot, current);
+        solver.copyRestDirection(slot, rest);
+        float squeezedDeflection = current.angle(rest);
+        require(
+                squeezedDeflection > 0.04F,
+                "Movable colliders did not squeeze the strand: "
+                        + squeezedDeflection
+        );
+
+        for (int frame = 0; frame < SETTLE; frame++) {
+            solver.restoreAnimationPose();
+            left.setPositionX(-200.0F);
+            right.setPositionX(200.0F);
+            solver.solve(new Vector3f(), 0.0F, DT, false);
+        }
+        solver.copyCurrentDirection(slot, current);
+        solver.copyRestDirection(slot, rest);
+        float recoveredDeflection = current.angle(rest);
+        require(
+                recoveredDeflection < 0.02F,
+                "Released squeeze retained a stale deflection: "
+                        + recoveredDeflection
+        );
+        require(
+                solver.projectionDamping(slot) < 0.01F,
+                "Released squeeze retained projection damping: "
+                        + solver.projectionDamping(slot)
+        );
+        require(
+                solver.contactSupport(slot) < 0.05F,
+                "Released squeeze retained contact support: "
+                        + solver.contactSupport(slot)
+        );
+        require(
+                solver.lastCollisionProjectionCount() == 0,
+                "Moved colliders still projected the released strand"
         );
     }
 
@@ -257,6 +328,20 @@ final class SqueezedContactVerification {
                 """;
     }
 
+    private static String movableSqueeze() {
+        return """
+                {"schema_version":3,"mode":"explicit","chains":[{
+                  "id":"squeeze","type":"RIBBON","root":"Root/Body/Strand",
+                  "include_descendants":false,"constraints":{
+                    "simulation_space":"MODEL",
+                    "collision":{"auto":false,"proxies":[
+                      {"kind":"sphere","reference":"ColliderLeft",
+                       "center":[-1.8,20,0],"radius":2,"hit_radius":0},
+                      {"kind":"sphere","reference":"ColliderRight",
+                       "center":[1.8,20,0],"radius":2,"hit_radius":0}]}}}]}
+                """;
+    }
+
     private static BoneModelSnapshot model() {
         return coreModelFromJson("""
                 {"format_version":"1.12.0","minecraft:geometry":[{
@@ -264,6 +349,8 @@ final class SqueezedContactVerification {
                     "texture_width":64,"texture_height":64},
                   "bones":[
                     {"name":"Root","pivot":[0,0,0]},
+                    {"name":"ColliderLeft","parent":"Root","pivot":[0,0,0]},
+                    {"name":"ColliderRight","parent":"Root","pivot":[0,0,0]},
                     {"name":"Body","parent":"Root","pivot":[0,8,0],
                      "cubes":[{"origin":[-3,8,-2],"size":[6,16,4],
                        "uv":[0,0]}]},
@@ -281,6 +368,35 @@ final class SqueezedContactVerification {
             }
         }
         return -1;
+    }
+
+    private static BoneModelSnapshot.Bone bone(
+            BoneModelSnapshot model,
+            String name
+    ) {
+        for (BoneModelSnapshot.Bone root : model.topLevelBones()) {
+            BoneModelSnapshot.Bone found = bone(root, name);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    private static BoneModelSnapshot.Bone bone(
+            BoneModelSnapshot.Bone current,
+            String name
+    ) {
+        if (current.getName().equals(name)) {
+            return current;
+        }
+        for (BoneModelSnapshot.Bone child : current.children()) {
+            BoneModelSnapshot.Bone found = bone(child, name);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
     }
 
     private static final class Trace {

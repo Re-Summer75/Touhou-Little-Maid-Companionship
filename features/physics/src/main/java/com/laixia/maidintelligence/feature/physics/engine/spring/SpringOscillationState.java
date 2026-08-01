@@ -5,9 +5,15 @@ import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
 import org.joml.Vector3f;
 
 /**
- * Projection-cycle detection and deterministic wind phase state.
+ * Integration/projection cycle detection and deterministic wind phase state.
  */
 final class SpringOscillationState {
+    final float[] integrationOffsetSignals;
+    final Vector3f[] integrationRestDirections;
+    final float[] integrationOffsetSteps;
+    final int[] integrationReversalHistories;
+    final float[] integrationDamping;
+    final boolean[] integrationOffsetValid;
     final Vector3f[] projectionCorrections;
     final int[] projectionReversals;
     final int[] projectionQuiet;
@@ -22,10 +28,17 @@ final class SpringOscillationState {
 
     SpringOscillationState(PhysicsSolverLayout layout) {
         int count = layout.drivenBoneCount();
+        integrationOffsetSignals = new float[count];
+        integrationRestDirections = new Vector3f[count];
+        integrationOffsetSteps = new float[count];
+        integrationDamping = new float[count];
+        integrationOffsetValid = new boolean[count];
         projectionCorrections = new Vector3f[count];
         for (int slot = 0; slot < count; slot++) {
+            integrationRestDirections[slot] = new Vector3f();
             projectionCorrections[slot] = new Vector3f();
         }
+        integrationReversalHistories = new int[count];
         projectionReversals = new int[count];
         projectionQuiet = new int[count];
         projectionReentries = new long[count];
@@ -41,6 +54,12 @@ final class SpringOscillationState {
 
     void reset() {
         for (int slot = 0; slot < projectionCorrections.length; slot++) {
+            integrationOffsetSignals[slot] = 0.0F;
+            integrationRestDirections[slot].zero();
+            integrationOffsetSteps[slot] = 0.0F;
+            integrationReversalHistories[slot] = 0;
+            integrationDamping[slot] = 0.0F;
+            integrationOffsetValid[slot] = false;
             projectionCorrections[slot].zero();
             projectionReversals[slot] = 0;
             projectionQuiet[slot] = 0;

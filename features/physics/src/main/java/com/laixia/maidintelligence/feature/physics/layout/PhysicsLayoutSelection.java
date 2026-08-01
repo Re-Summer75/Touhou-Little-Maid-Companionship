@@ -58,6 +58,7 @@ record PhysicsLayoutSelection(
                 BodyCollisionGeometryAnalyzer.analyze(geometry);
         CollisionProxyPlanner collisionPlanner =
                 new CollisionProxyPlanner(
+                        model,
                         geometry,
                         collisionGeometry,
                         plan

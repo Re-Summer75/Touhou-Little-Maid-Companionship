@@ -51,6 +51,38 @@ final class PreparedCollisionProxyMotion {
     }
 
     /**
+     * Conservative current slack after charging one frame of relative motion.
+     * Used only for a previous Top-K member, so a collider that crossed the
+     * segment and ended clear is retained long enough for selective CCD.
+     */
+    static float sweptSlack(
+            PreparedCollisionProxy proxy,
+            float currentSlack,
+            Vector3f runtimePivotModel,
+            float nextLeverArm,
+            float endpointScale
+    ) {
+        float shapeTravel = proxy.shape.motionBound();
+        if (!proxy.shape.sweepAvailable()
+                || !Float.isFinite(shapeTravel)) {
+            return currentSlack;
+        }
+        float px = runtimePivotModel.x - proxy.shape.referenceOrigin().x;
+        float py = runtimePivotModel.y - proxy.shape.referenceOrigin().y;
+        float pz = runtimePivotModel.z - proxy.shape.referenceOrigin().z;
+        float dx = px - proxy.pivot.x;
+        float dy = py - proxy.pivot.y;
+        float dz = pz - proxy.pivot.z;
+        float nextHitRadius = proxy.shape.hitRadius()
+                * Math.max(0.0F, endpointScale);
+        float travel = shapeTravel
+                + (float) Math.sqrt(dx * dx + dy * dy + dz * dz)
+                + Math.abs(nextLeverArm - proxy.preparedLeverArm)
+                + Math.abs(nextHitRadius - proxy.preparedHitRadius);
+        return currentSlack - travel;
+    }
+
+    /**
      * Drops the measured gaps wherever the pairing stops being updated every
      * frame. A reserve is sound only while all closing motion is charged.
      */

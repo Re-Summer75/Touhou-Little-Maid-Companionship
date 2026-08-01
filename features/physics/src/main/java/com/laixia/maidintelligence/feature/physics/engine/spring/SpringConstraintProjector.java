@@ -47,7 +47,8 @@ final class SpringConstraintProjector {
      * and an ejection that should not have happened has to be stopped where it is
      * decided.
      */
-    private static final float MAX_CORRECTION_RATE = 40.0F;
+    private static final float REFERENCE_LEVER_ARM = 0.25F;
+    private static final float MAX_LINEAR_CORRECTION_RATE = 10.0F;
 
     private SpringConstraintProjector() {
     }
@@ -173,13 +174,74 @@ final class SpringConstraintProjector {
     }
 
     /**
-     * Distance a projected segment may travel this step. A repeated render of
-     * one animation frame carries no budget and therefore cannot move.
+     * Restores the global swing cap and collision legality after a skirt tether.
+     *
+     * <p>The asymmetric authored cone runs before the cross-chain relation.
+     * Reapplying it afterwards can undo the tether entirely when two neighbouring
+     * panels have opposing local inward axes. The model-wide safety cap and body
+     * collision remain final and therefore cannot be weakened by cloth cohesion.
      */
-    static float maximumCorrection(float dt) {
-        return Float.isFinite(dt) && dt > 0.0F
-                ? MAX_CORRECTION_RATE * Math.min(dt, 0.1F)
-                : 0.0F;
+    static boolean reprojectAfterBranch(
+            CollisionProjection collisions,
+            Vector3f direction,
+            Vector3f restDirection,
+            float maximumSwing,
+            SpringBoneScratch scratch,
+            SpringBoneMetrics metrics
+    ) {
+        boolean corrected = false;
+        // The final set no longer contains the asymmetric cone that may have
+        // deadlocked in the first series; collision recomputes this verdict.
+        scratch.collision.setUnresolved(false);
+        scratch.collisionCorrected = false;
+        scratch.collisionNormal.zero();
+        float maximumCosine = (float) Math.cos(maximumSwing);
+        float maximumSine = (float) Math.sin(maximumSwing);
+        if (projectMaximumSwing(
+                direction,
+                restDirection,
+                maximumCosine,
+                maximumSine,
+                scratch.localDirection
+        )) {
+            scratch.swingCorrected = true;
+            metrics.recordConstraintProjection();
+            corrected = true;
+        }
+        scratch.collisionStart.set(direction);
+        if (collisions.project(
+                direction,
+                scratch.collision,
+                COLLISION_PASSES_PER_ITERATION
+        )) {
+            scratch.collisionCorrected = true;
+            scratch.collisionNormal.add(
+                    direction.x() - scratch.collisionStart.x(),
+                    direction.y() - scratch.collisionStart.y(),
+                    direction.z() - scratch.collisionStart.z()
+            );
+            metrics.recordCollisionProjection();
+            corrected = true;
+        }
+        return corrected;
+    }
+
+    /**
+     * Converts a linear tip-travel budget into this segment's angular budget.
+     * Short and long bones therefore depenetrate at the same visible speed. A
+     * repeated render of one animation frame carries no budget.
+     */
+    static float maximumCorrection(float dt, float leverArm) {
+        if (!Float.isFinite(dt) || dt <= 0.0F) {
+            return 0.0F;
+        }
+        float length = Float.isFinite(leverArm)
+                && leverArm > SpringBoneMath.EPSILON
+                ? leverArm
+                : REFERENCE_LEVER_ARM;
+        float linearBudget = MAX_LINEAR_CORRECTION_RATE
+                * Math.min(dt, 0.1F);
+        return Math.min((float) Math.PI, linearBudget / length);
     }
 
     /**
@@ -188,7 +250,7 @@ final class SpringConstraintProjector {
      * only makes the limit safer, and whatever violation is left over is
      * projected again next frame.
      */
-    private static void limitCorrection(
+    static void limitCorrection(
             Vector3f start,
             Vector3f direction,
             float maximumAngle

@@ -28,6 +28,7 @@ public final class PreparedCollisionShape {
     private float radius;
     private float hitRadius;
     private int openAxis = CollisionProjector.CLOSED_BOX;
+    private int hiddenFaces;
 
     private final Vector3f referenceOrigin = new Vector3f();
     private final Vector3f pointA = new Vector3f();
@@ -42,13 +43,21 @@ public final class PreparedCollisionShape {
     private float cullRadius = Float.POSITIVE_INFINITY;
 
     private final Vector3f previousCenter = new Vector3f();
+    private final Vector3f previousCullCenter = new Vector3f();
     private final Vector3f previousHalfX = new Vector3f();
     private final Vector3f previousHalfY = new Vector3f();
     private final Vector3f previousHalfZ = new Vector3f();
     private final Vector3f halfAxis = new Vector3f();
+    private final Vector3f sweepCenter = new Vector3f();
+    private final Vector3f sweepHalfX = new Vector3f();
+    private final Vector3f sweepHalfY = new Vector3f();
+    private final Vector3f sweepHalfZ = new Vector3f();
     private float previousRadius;
+    private float sweepRadius;
     private boolean posed;
+    private boolean sweepAvailable;
     private float motionBound = Float.POSITIVE_INFINITY;
+    private float cullMotionBound = Float.POSITIVE_INFINITY;
 
     void setPlane(
             int referenceIndex,
@@ -160,8 +169,8 @@ public final class PreparedCollisionShape {
     }
 
     /**
-     * How far any point of this collider's surface can have travelled since
-     * the previous frame, as an upper bound.
+     * How far any point of this collider's surface can have travelled relative
+     * to its reference origin since the previous frame, as an upper bound.
      *
      * <p>Measured rather than assumed, because it is what lets a segment reuse
      * a gap it measured earlier instead of re-deriving it: a gap wider than
@@ -173,17 +182,28 @@ public final class PreparedCollisionShape {
      *
      */
     private void measureMotion() {
-        float travel = switch (kind) {
-            case BOX -> previousCenter.distance(pointA)
-                    + halfAxisTravel(axisX, halfExtents.x, previousHalfX)
+        sweepAvailable = posed;
+        if (posed) {
+            sweepCenter.set(previousCenter);
+            sweepHalfX.set(previousHalfX);
+            sweepHalfY.set(previousHalfY);
+            sweepHalfZ.set(previousHalfZ);
+            sweepRadius = previousRadius;
+        }
+        float surfaceChange = switch (kind) {
+            case BOX -> halfAxisTravel(axisX, halfExtents.x, previousHalfX)
                     + halfAxisTravel(axisY, halfExtents.y, previousHalfY)
                     + halfAxisTravel(axisZ, halfExtents.z, previousHalfZ);
-            case SPHERE -> previousCenter.distance(pointA)
-                    + Math.abs(scaledRadius - previousRadius);
+            case SPHERE -> Math.abs(scaledRadius - previousRadius);
             default -> Float.POSITIVE_INFINITY;
         };
+        float travel = previousCenter.distance(pointA) + surfaceChange;
+        float cullTravel = previousCullCenter.distance(centerModel)
+                + surfaceChange;
         motionBound = posed ? travel : Float.POSITIVE_INFINITY;
+        cullMotionBound = posed ? cullTravel : Float.POSITIVE_INFINITY;
         previousCenter.set(pointA);
+        previousCullCenter.set(centerModel);
         previousRadius = scaledRadius;
         posed = true;
     }
@@ -203,6 +223,53 @@ public final class PreparedCollisionShape {
     /** @see #measureMotion() */
     float motionBound() {
         return motionBound;
+    }
+
+    /** Absolute model-space counterpart used by frame-coherent culling. */
+    float cullMotionBound() {
+        return cullMotionBound;
+    }
+
+    boolean sweepAvailable() {
+        return sweepAvailable;
+    }
+
+    Vector3f sweepCenter() {
+        return sweepCenter;
+    }
+
+    Vector3f sweepHalfX() {
+        return sweepHalfX;
+    }
+
+    Vector3f sweepHalfY() {
+        return sweepHalfY;
+    }
+
+    Vector3f sweepHalfZ() {
+        return sweepHalfZ;
+    }
+
+    float sweepRadius() {
+        return sweepRadius;
+    }
+
+    float sweepThickness() {
+        return switch (kind) {
+            case BOX -> 2.0F * Math.min(
+                    Math.min(halfExtents.x, halfExtents.y),
+                    halfExtents.z
+            );
+            case SPHERE -> 2.0F * scaledRadius;
+            default -> Float.POSITIVE_INFINITY;
+        };
+    }
+
+    void resetMotion() {
+        posed = false;
+        sweepAvailable = false;
+        motionBound = Float.POSITIVE_INFINITY;
+        cullMotionBound = Float.POSITIVE_INFINITY;
     }
 
     CollisionProxyKind kind() {
@@ -238,6 +305,10 @@ public final class PreparedCollisionShape {
      */
     int openAxis() {
         return openAxis;
+    }
+
+    int hiddenFaces() {
+        return hiddenFaces;
     }
 
     float scaledRadius() {
@@ -288,6 +359,28 @@ public final class PreparedCollisionShape {
         return halfExtents;
     }
 
+    Vector3f restAxisX() {
+        return restAxisX;
+    }
+
+    Vector3f restAxisY() {
+        return restAxisY;
+    }
+
+    Vector3f restAxisZ() {
+        return restAxisZ;
+    }
+
+    Vector3f restHalfExtents() {
+        return restHalfExtents;
+    }
+
+    void hideFace(int face) {
+        if (face >= 0 && face < 6) {
+            hiddenFaces |= 1 << face;
+        }
+    }
+
     /** Identity of the baked geometry, used to share one shape per collider. */
     Key key() {
         return new Key(
@@ -326,6 +419,7 @@ public final class PreparedCollisionShape {
         radius = 0.0F;
         hitRadius = Math.max(0.0F, endpointRadius);
         openAxis = CollisionProjector.CLOSED_BOX;
+        hiddenFaces = 0;
     }
 
     private static float finiteScale(float scale) {

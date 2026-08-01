@@ -27,6 +27,7 @@ final class SpringBoneFrameRunner {
         context.metrics.beginFrame();
         SpringCollisionCoordinator.beginFrame(context, dt);
         state.beginReferenceFrame(context.constraintsEnabled);
+        state.skirtCoupling.beginFrame();
         if (context.constraintsEnabled) {
             context.animationMotion.sample(state, dt, paused);
         }
@@ -146,6 +147,7 @@ final class SpringBoneFrameRunner {
                 yawRate,
                 dt,
                 paused,
+                context.constraintsEnabled,
                 state,
                 scratch
         );
@@ -157,6 +159,25 @@ final class SpringBoneFrameRunner {
                         ry,
                         rz
                 );
+        boolean recoveryLimited = context.constraintsEnabled
+                && stepped
+                && SpringAuthoredPoseAnchor.undriven(
+                        modelAcceleration,
+                        context.animationMotion.acceleration(
+                                node.drivenSlot()
+                        ),
+                        yawRate,
+                        scratch.poseDriveBias
+                )
+                && SpringAuthoredPoseAnchor.limitRecovery(
+                        state.integration.currentDirections[node.drivenSlot()],
+                        scratch.nextDirection,
+                        scratch.authoredRestDirection,
+                        node.kinematics().leverArm()
+                                * scratch.runtimeSafetyScale,
+                        dt
+                );
+        scratch.integratedDirection.set(scratch.nextDirection);
         boolean corrected = false;
         /*
          * Keep the pre-projection direction even when no constraint runs. The
@@ -164,6 +185,10 @@ final class SpringBoneFrameRunner {
          * collider ejecting a segment again after a gap.
          */
         scratch.projectionStart.set(scratch.nextDirection);
+        float maximumSwing = SpringConstraintProjector.maximumSwing(
+                node,
+                scratch.runtimeSafetyScale
+        );
         if (context.constraintsEnabled
                 && scratch.nextDirection.lengthSquared()
                 > SpringBoneMath.EPSILON) {
@@ -172,15 +197,52 @@ final class SpringBoneFrameRunner {
                     boneBaseOrientation,
                     preparedCollisions,
                     scratch.nextDirection,
-                    SpringConstraintProjector.maximumSwing(
-                            node,
-                            scratch.runtimeSafetyScale
-                    ),
+                    maximumSwing,
                     state.integration.currentDirections[node.drivenSlot()],
-                    SpringConstraintProjector.maximumCorrection(dt),
+                    SpringConstraintProjector.maximumCorrection(
+                            dt, scratch.runtimeSegmentLength
+                    ),
                     scratch,
                     context.metrics
             );
+        }
+        boolean coupled = context.constraintsEnabled
+                && SpringSkirtBranchCoupler.apply(
+                context,
+                nodeIndex,
+                paused ? 0.0F : dt
+        );
+        if (coupled) {
+            context.metrics.recordConstraintProjection();
+            corrected |= SpringConstraintProjector.reprojectAfterBranch(
+                    preparedCollisions,
+                    scratch.nextDirection,
+                    scratch.authoredRestDirection,
+                    maximumSwing,
+                    scratch,
+                    context.metrics
+            );
+        }
+        if (context.constraintsEnabled
+                && stepped
+                && scratch.poseDriveBias.lengthSquared() > 1.0E-8F
+                && SpringAuthoredPoseAnchor.recoverPenetration(
+                        scratch.nextDirection,
+                        scratch.authoredRestDirection,
+                        preparedCollisions,
+                        scratch.collision
+                )) {
+            /*
+             * A suppressed collider may otherwise leave a steady gust balanced
+             * inside the body. The legal authored target wins that conflict.
+             */
+            SpringContactSupport.clear(node.drivenSlot(), state);
+            scratch.collisionCorrected = true;
+            scratch.collisionNormal.zero();
+            scratch.collision.setUnresolved(true);
+            scratch.collision.setRestClearance(Float.MAX_VALUE);
+            corrected = true;
+            context.metrics.recordConstraintProjection();
         }
         scratch.projectedDirection.set(scratch.nextDirection);
         boolean suppressResponder = false;
@@ -208,12 +270,49 @@ final class SpringBoneFrameRunner {
                     state
             );
         }
+        if (SpringInterlockRecovery.apply(
+                node.drivenSlot(),
+                state.integration.currentDirections[node.drivenSlot()],
+                scratch.projectionStart,
+                scratch.nextDirection,
+                scratch.authoredRestDirection,
+                node.kinematics().leverArm() * scratch.runtimeSafetyScale,
+                scratch.collisionCorrected,
+                dt,
+                preparedCollisions,
+                scratch.collision,
+                state.recovery
+        )) {
+            /*
+             * The recovery answer deliberately crosses the obsolete contact
+             * path. Its support normal and oscillation history cannot follow it
+             * to the legal target or they would recreate the same lock.
+             */
+            SpringContactSupport.clear(node.drivenSlot(), state);
+            SpringProjectionDamper.clear(node.drivenSlot(), state);
+            scratch.collisionCorrected = false;
+            scratch.collisionNormal.zero();
+            scratch.collision.setUnresolved(false);
+            scratch.collision.setRestClearance(Float.MAX_VALUE);
+            corrected = true;
+        }
+        boolean integrationDamped = context.constraintsEnabled
+                && SpringIntegrationDamper.apply(
+                        node,
+                        state.integration.currentDirections[node.drivenSlot()],
+                        scratch.nextDirection,
+                        stepped,
+                        corrected || coupled || recoveryLimited,
+                        dt,
+                        state
+                );
         state.integration.lastIntegratorStep[node.drivenSlot()] =
-                scratch.projectionStart.distance(
+                scratch.integratedDirection.distance(
                         state.integration.currentDirections[node.drivenSlot()]
                 );
-        state.integration.lastProjectionStep[node.drivenSlot()] = corrected
-                ? scratch.projectionStart.distance(scratch.nextDirection)
+        state.integration.lastProjectionStep[node.drivenSlot()] =
+                corrected || coupled
+                ? scratch.integratedDirection.distance(scratch.nextDirection)
                 : 0.0F;
         /*
          * Which bound objected, per segment. The projection counters are totalled
@@ -222,12 +321,13 @@ final class SpringBoneFrameRunner {
          */
         state.integration.lastProjectionSource[node.drivenSlot()] =
                 (scratch.swingCorrected ? 1 : 0)
-                        | (scratch.collisionCorrected ? 2 : 0);
+                        | (scratch.collisionCorrected ? 2 : 0)
+                        | (coupled ? 4 : 0);
         SpringContactSupport.record(node.drivenSlot(), dt, state, scratch);
         SpringDirectionIntegrator.commit(
                 node.drivenSlot(),
                 stepped,
-                corrected,
+                corrected || coupled || recoveryLimited || integrationDamped,
                 dt,
                 state,
                 scratch

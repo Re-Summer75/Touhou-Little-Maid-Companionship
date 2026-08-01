@@ -63,6 +63,7 @@ final class SeatedOverlapVerification {
 
     static void run() throws Exception {
         verifiesHeldOverlapComesToRest();
+        verifiesReleasedOverlapReturnsToStandingPose();
     }
 
     private static void verifiesHeldOverlapComesToRest() throws Exception {
@@ -137,6 +138,68 @@ final class SeatedOverlapVerification {
                 "Segment " + worstBone + " of " + MODEL + " trembled against"
                         + " its collider, travelling " + worst + " over "
                         + SAMPLE + " frames of a held pose"
+        );
+    }
+
+    private static void verifiesReleasedOverlapReturnsToStandingPose()
+            throws Exception {
+        BoneModelSnapshot model = BonePhysicsVerificationSupport.coreModel(
+                BonePhysicsVerificationSupport.loadGeoModel(
+                        BonePhysicsVerificationSupport.MODEL_DIRECTORY
+                                .resolve(MODEL)
+                )
+        );
+        PhysicsSolverLayout layout = PhysicsSolverLayout.build(
+                model,
+                PhysicsBoneDiscoverer.discover(
+                        "verification:released_seated", model,
+                        PhysicsMetadata.EMPTY
+                )
+        );
+        List<BoneModelSnapshot.Bone> legs = legs(model);
+        int[] skirt = skirtSegments(layout);
+        SpringBoneSolver solver = new SpringBoneSolver(layout);
+        solver.solve(new Vector3f(), 0.0F, 0.0F, false);
+        for (int frame = 0; frame < 360; frame++) {
+            solver.restoreAnimationPose();
+            solver.solve(new Vector3f(), 0.0F, DT, false);
+        }
+        Vector3f[] standing = new Vector3f[skirt.length];
+        for (int index = 0; index < skirt.length; index++) {
+            standing[index] = new Vector3f();
+            solver.copyCurrentDirection(
+                    layout.node(skirt[index]).drivenSlot(), standing[index]
+            );
+        }
+
+        for (int frame = 0; frame < 360; frame++) {
+            solver.restoreAnimationPose();
+            seat(legs);
+            solver.solve(new Vector3f(), 0.0F, DT, false);
+        }
+        for (int frame = 0; frame < 360; frame++) {
+            solver.restoreAnimationPose();
+            solver.solve(new Vector3f(), 0.0F, DT, false);
+        }
+
+        Vector3f current = new Vector3f();
+        float worst = 0.0F;
+        String worstBone = "";
+        for (int index = 0; index < skirt.length; index++) {
+            solver.copyCurrentDirection(
+                    layout.node(skirt[index]).drivenSlot(), current
+            );
+            float difference = current.angle(standing[index]);
+            if (difference > worst) {
+                worst = difference;
+                worstBone = layout.node(skirt[index]).bone().getName();
+            }
+        }
+        require(
+                worst < 0.10F,
+                "Released skirt segment " + worstBone
+                        + " remained interlocked " + worst
+                        + " rad away from its standing pose"
         );
     }
 

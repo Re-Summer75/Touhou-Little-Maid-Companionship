@@ -6,21 +6,6 @@ import org.joml.Vector3f;
  * Builds compact reference-bone spatial groups once prepared geometry exists.
  */
 final class PreparedCollisionSpatialGroups {
-    /**
-     * Colliders per cull bucket.
-     *
-     * <p>Balanced by measurement, and the balance does not sit where it looks
-     * like it should. A tighter bucket is a better filter, so the obvious move is
-     * to subdivide until the spheres hug their contents — but every bucket costs
-     * an affine transform of its centre and a sweep test whether it rejects or
-     * not, and those fixed costs are paid for the whole tree while only the
-     * surviving buckets pay for their contents. At eight per bucket this model's
-     * 3234 colliders make several hundred buckets and the constraint layer runs
-     * at 8.4 times the unconstrained solver; at thirty-two it is 7.7, and beyond
-     * that the curve is flat, since by then the per-bucket overhead is gone and
-     * only the looser filter remains. Culling accuracy is unaffected either way:
-     * a bucket that survives is still tested collider by collider.
-     */
     private static final int MAX_GROUP_SIZE = 32;
 
     private PreparedCollisionSpatialGroups() {

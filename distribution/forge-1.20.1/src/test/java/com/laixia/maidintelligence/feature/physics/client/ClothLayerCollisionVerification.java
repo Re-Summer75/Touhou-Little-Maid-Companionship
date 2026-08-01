@@ -4,9 +4,6 @@ import com.laixia.maidintelligence.feature.physics.api.*;
 import com.laixia.maidintelligence.feature.physics.metadata.*;
 import com.laixia.maidintelligence.feature.physics.discovery.*;
 import com.laixia.maidintelligence.feature.physics.geometry.*;
-import com.laixia.maidintelligence.feature.physics.layout.*;
-import com.laixia.maidintelligence.feature.physics.engine.*;
-import com.laixia.maidintelligence.feature.physics.session.*;
 
 import com.google.gson.JsonParser;
 import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
@@ -37,6 +34,7 @@ final class ClothLayerCollisionVerification {
      */
     private static final float LEAN = 0.25F;
     private static final float STEP = 1.0F / 30.0F;
+    private static final float CROSSING_SWING = 1.15F;
 
     private ClothLayerCollisionVerification() {
     }
@@ -48,6 +46,7 @@ final class ClothLayerCollisionVerification {
         verifiesWrappedPanelsHaveNoOrder();
         verifiesOuterPanelStopsAtInnerPanel();
         verifiesColliderFollowsSolvedPose();
+        verifiesCrossedLayersReturnToRest();
     }
 
     /** The stack is recognised, and only the outer panel is constrained. */
@@ -293,6 +292,67 @@ final class ClothLayerCollisionVerification {
                 "The layer collider snapped back with the animation instead of"
                         + " following the solved pose: " + held
         );
+    }
+
+    /**
+     * An animated cover can swing around the finite side of its lining and end
+     * up behind it. Releasing that extreme pose must still restore the authored
+     * order rather than retain the collision-induced physical offset.
+     */
+    private static void verifiesCrossedLayersReturnToRest() {
+        BoneModelSnapshot model = stackedModel();
+        PhysicsSolverLayout layout = PhysicsSolverLayout.build(
+                model,
+                plan(model, true)
+        );
+        int apronNode = indexOf(layout, "Apron");
+        int apronSlot = layout.node(apronNode).drivenSlot();
+        BoneModelSnapshot.Bone cover = bone(model, "Apron");
+        SpringBoneSolver solver = new SpringBoneSolver(layout);
+        solver.solve(new Vector3f(), 0.0F, 0.0F, false);
+
+        for (int frame = 0; frame < 90; frame++) {
+            solver.restoreAnimationPose();
+            cover.setRotationX(-0.90F);
+            cover.setRotationZ(CROSSING_SWING);
+            solver.solve(new Vector3f(), 0.0F, STEP, false);
+        }
+        float displaced = angularDisplacement(solver, apronSlot);
+        require(
+                displaced > 0.15F,
+                "Layer crossing fixture did not displace its cover: "
+                        + displaced
+        );
+
+        for (int frame = 0; frame < 180; frame++) {
+            solver.restoreAnimationPose();
+            cover.setRotationX(0.0F);
+            cover.setRotationZ(0.0F);
+            solver.solve(new Vector3f(), 0.0F, STEP, false);
+        }
+        float recovered = angularDisplacement(solver, apronSlot);
+        require(
+                recovered < 0.10F,
+                "Crossed cloth layers remained interlocked after release: "
+                        + recovered
+        );
+    }
+
+    private static float angularDisplacement(
+            SpringBoneSolver solver,
+            int drivenSlot
+    ) {
+        Vector3f current = new Vector3f();
+        Vector3f rest = new Vector3f();
+        require(
+                solver.copyCurrentDirection(drivenSlot, current)
+                        && solver.copyRestDirection(drivenSlot, rest),
+                "Layer recovery direction was unavailable"
+        );
+        return (float) Math.acos(Math.max(
+                -1.0F,
+                Math.min(1.0F, current.dot(rest))
+        ));
     }
 
     private static Vector3f liningCollider(

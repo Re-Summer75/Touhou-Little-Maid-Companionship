@@ -3,9 +3,9 @@ package com.laixia.maidintelligence.feature.physics.engine.collision.runtime;
 
 import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
 import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxy;
+import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySource;
 import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySet;
 import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionScratch;
-import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.RuntimeCollisionFrames;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -52,7 +52,10 @@ public final class RuntimeCollisionCache {
                 continue;
             }
             PreparedCollisionProxySet prepared =
-                    new PreparedCollisionProxySet(baked.proxyCount());
+                    new PreparedCollisionProxySet(
+                            baked.proxyCount(),
+                            containsLayer(baked)
+                    );
             nodeSets[nodeIndex] = prepared;
             anyProxies = true;
             for (int proxyIndex = 0;
@@ -119,8 +122,19 @@ public final class RuntimeCollisionCache {
             }
             prepared.groupByReference();
         }
+        PreparedCollisionSurfaceFilter.markHiddenBoxFaces(unique);
         shapes = unique.toArray(new PreparedCollisionShape[0]);
         hasAnyProxies = anyProxies;
+    }
+
+    private static boolean containsLayer(CollisionProxySet proxies) {
+        for (int index = 0; index < proxies.proxyCount(); index++) {
+            if (proxies.proxy(index).source()
+                    == CollisionProxySource.LAYER) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void beginFrame(float dt) {
@@ -207,6 +221,9 @@ public final class RuntimeCollisionCache {
         for (int index = 0; index < preparedGenerations.length; index++) {
             preparedGenerations[index] = 0;
             nodeSets[index].resetFrame();
+        }
+        for (PreparedCollisionShape shape : shapes) {
+            shape.resetMotion();
         }
         generation = 0;
         shapeGeneration = 0;

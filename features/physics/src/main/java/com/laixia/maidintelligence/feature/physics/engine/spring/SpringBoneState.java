@@ -1,7 +1,6 @@
 package com.laixia.maidintelligence.feature.physics.engine.spring;
 
 
-import com.laixia.maidintelligence.feature.physics.api.PhysicsBoneSelectionPlan;
 import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -21,6 +20,8 @@ final class SpringBoneState {
     final SpringIntegrationState integration;
     final SpringContactState contact;
     final SpringOscillationState oscillation;
+    final SpringRecoveryState recovery;
+    final SpringSkirtCouplingState skirtCoupling;
     int referenceGeneration;
 
     SpringBoneState(PhysicsSolverLayout layout) {
@@ -43,6 +44,8 @@ final class SpringBoneState {
         integration = new SpringIntegrationState(drivenCount);
         contact = new SpringContactState(drivenCount);
         oscillation = new SpringOscillationState(layout);
+        recovery = new SpringRecoveryState(drivenCount);
+        skirtCoupling = new SpringSkirtCouplingState(layout);
     }
 
     void beginReferenceFrame(boolean constraintsEnabled) {
@@ -69,6 +72,8 @@ final class SpringBoneState {
         integration.reset();
         contact.reset();
         oscillation.reset();
+        recovery.reset();
+        skirtCoupling.reset();
         for (int index = 0;
              index < previousReferenceOrientations.length;
              index++) {

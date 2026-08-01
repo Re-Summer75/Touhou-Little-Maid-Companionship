@@ -14,6 +14,9 @@ import com.laixia.maidintelligence.feature.physics.engine.collision.model.Collis
 import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySet;
 import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionScratch;
 import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.PreparedCollisionProxy;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.InternalFaceCollisionVerification;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.PreparedCollisionCullReserveVerification;
+import com.laixia.maidintelligence.feature.physics.engine.collision.runtime.RelativeMotionSweepVerification;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
@@ -36,6 +39,9 @@ final class CollisionProxyFrameworkVerification {
 
     static void run() {
         CollisionMultiProxyVerification.run();
+        InternalFaceCollisionVerification.run();
+        PreparedCollisionCullReserveVerification.run();
+        RelativeMotionSweepVerification.run();
         verifiesPlaneProjection();
         verifiesSphereProjection();
         verifiesCapsuleProjection();

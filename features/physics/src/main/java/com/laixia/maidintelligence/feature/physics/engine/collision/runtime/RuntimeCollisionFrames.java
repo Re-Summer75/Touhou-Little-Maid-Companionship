@@ -2,7 +2,6 @@ package com.laixia.maidintelligence.feature.physics.engine.collision.runtime;
 
 import com.laixia.maidintelligence.feature.physics.geometry.BoneModelSnapshot;
 import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
-import com.laixia.maidintelligence.feature.physics.geometry.BoneModelSnapshot;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
@@ -149,6 +148,12 @@ public final class RuntimeCollisionFrames {
 
     public float maxBasisScale(int nodeIndex) {
         return valid(nodeIndex) ? maxBasisScales[nodeIndex] : 1.0F;
+    }
+
+    public boolean geometryVisible(int nodeIndex) {
+        return nodeIndex < 0
+                || (valid(nodeIndex)
+                && layout.node(nodeIndex).bone().isGeometryVisible());
     }
 
     public void reset() {

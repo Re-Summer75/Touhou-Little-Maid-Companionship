@@ -100,6 +100,10 @@ public final class CollisionScratch {
         return measuredClearance;
     }
 
+    public void setMeasuredClearance(float value) {
+        measuredClearance = value;
+    }
+
     /**
      * Marks the gap unknown, so a shape whose projection does not report one
      * cannot be read as having measured a gap the previous shape left behind.

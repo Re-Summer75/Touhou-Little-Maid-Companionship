@@ -112,11 +112,14 @@ final class PhysicsSolverLayoutBuilder {
             ));
         }
         boolean referencesPreordered = referencesPreordered(nodes);
+        SkirtBranchConstraintLayout skirtBranchConstraints =
+                SkirtBranchConstraintPlanner.build(nodes, restPoses);
         return new PhysicsSolverLayout(
                 nodes,
                 preorder.size(),
                 drivenCount,
-                referencesPreordered
+                referencesPreordered,
+                skirtBranchConstraints
         );
     }
 

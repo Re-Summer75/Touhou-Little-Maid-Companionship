@@ -14,17 +14,20 @@ public final class PhysicsSolverLayout {
     private final int fullBoneCount;
     private final int drivenBoneCount;
     private final boolean referencesPreordered;
+    private final SkirtBranchConstraintLayout skirtBranchConstraints;
 
     PhysicsSolverLayout(
             Node[] nodes,
             int fullBoneCount,
             int drivenBoneCount,
-            boolean referencesPreordered
+            boolean referencesPreordered,
+            SkirtBranchConstraintLayout skirtBranchConstraints
     ) {
         this.nodes = nodes;
         this.fullBoneCount = fullBoneCount;
         this.drivenBoneCount = drivenBoneCount;
         this.referencesPreordered = referencesPreordered;
+        this.skirtBranchConstraints = skirtBranchConstraints;
     }
 
     public static PhysicsSolverLayout build(
@@ -48,6 +51,10 @@ public final class PhysicsSolverLayout {
 
     public boolean referencesPreordered() {
         return referencesPreordered;
+    }
+
+    public SkirtBranchConstraintLayout skirtBranchConstraints() {
+        return skirtBranchConstraints;
     }
 
     public Node node(int index) {

@@ -187,7 +187,7 @@ public final class BoneModelSnapshot {
         }
     }
 
-    public static final class Bone {
+    public static final class Bone extends BoneRuntimePose {
         private final int index;
         private final Bone parent;
         private final String name;
@@ -199,16 +199,6 @@ public final class BoneModelSnapshot {
         private final List<Bone> mutableChildren = new ArrayList<>();
         private List<Bone> children = List.of();
 
-        private float rotationX;
-        private float rotationY;
-        private float rotationZ;
-        private float positionX;
-        private float positionY;
-        private float positionZ;
-        private float scaleX;
-        private float scaleY;
-        private float scaleZ;
-
         Bone(
                 int index,
                 Bone parent,
@@ -219,6 +209,13 @@ public final class BoneModelSnapshot {
                 RestPose restPose,
                 RestGeometry geometry
         ) {
+            super(
+                    restPose,
+                    !Boolean.TRUE.equals(
+                            Objects.requireNonNull(geometry, "geometry")
+                                    .dontRender()
+                    )
+            );
             this.index = index;
             this.parent = parent;
             this.name = Objects.requireNonNull(name, "name");
@@ -226,8 +223,7 @@ public final class BoneModelSnapshot {
             this.pivotY = pivotY;
             this.pivotZ = pivotZ;
             this.initialSnapshot = Objects.requireNonNull(restPose, "restPose");
-            this.geometry = Objects.requireNonNull(geometry, "geometry");
-            resetToRestPose();
+            this.geometry = geometry;
         }
 
         void addChild(Bone child) {
@@ -275,90 +271,6 @@ public final class BoneModelSnapshot {
 
         public float getPivotZ() {
             return pivotZ;
-        }
-
-        public float getRotationX() {
-            return rotationX;
-        }
-
-        public void setRotationX(float value) {
-            rotationX = value;
-        }
-
-        public float getRotationY() {
-            return rotationY;
-        }
-
-        public void setRotationY(float value) {
-            rotationY = value;
-        }
-
-        public float getRotationZ() {
-            return rotationZ;
-        }
-
-        public void setRotationZ(float value) {
-            rotationZ = value;
-        }
-
-        public float getPositionX() {
-            return positionX;
-        }
-
-        public void setPositionX(float value) {
-            positionX = value;
-        }
-
-        public float getPositionY() {
-            return positionY;
-        }
-
-        public void setPositionY(float value) {
-            positionY = value;
-        }
-
-        public float getPositionZ() {
-            return positionZ;
-        }
-
-        public void setPositionZ(float value) {
-            positionZ = value;
-        }
-
-        public float getScaleX() {
-            return scaleX;
-        }
-
-        public void setScaleX(float value) {
-            scaleX = value;
-        }
-
-        public float getScaleY() {
-            return scaleY;
-        }
-
-        public void setScaleY(float value) {
-            scaleY = value;
-        }
-
-        public float getScaleZ() {
-            return scaleZ;
-        }
-
-        public void setScaleZ(float value) {
-            scaleZ = value;
-        }
-
-        public void resetToRestPose() {
-            rotationX = initialSnapshot.rotationValueX;
-            rotationY = initialSnapshot.rotationValueY;
-            rotationZ = initialSnapshot.rotationValueZ;
-            positionX = initialSnapshot.positionOffsetX;
-            positionY = initialSnapshot.positionOffsetY;
-            positionZ = initialSnapshot.positionOffsetZ;
-            scaleX = initialSnapshot.scaleValueX;
-            scaleY = initialSnapshot.scaleValueY;
-            scaleZ = initialSnapshot.scaleValueZ;
         }
     }
 

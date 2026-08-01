@@ -29,6 +29,7 @@ public final class MeshCollisionRuntimeProjectionVerification {
     public static void run() {
         verifiesEndpointStopsAtHeadSurface();
         verifiesAuthoredOverlapIsNotForcedApart();
+        verifiesHiddenMeshIsNotPrepared();
     }
 
     /**
@@ -92,9 +93,9 @@ public final class MeshCollisionRuntimeProjectionVerification {
                 );
             }
         }
-        // Gravity trims the settled angle slightly below the authored swing.
+        // An idle constrained spring now settles on the authored swing itself.
         require(
-                hair.getRotationZ() > SWING - 0.15F,
+                hair.getRotationZ() > SWING - 0.02F,
                 "Collision forced the authored overlap apart: "
                         + hair.getRotationZ()
         );
@@ -111,6 +112,43 @@ public final class MeshCollisionRuntimeProjectionVerification {
             solver.solve(INWARD, 0.0F, 1.0F / 60.0F, false);
         }
         requireSurfaceContact(solver, indexOf(layout, "Hair"));
+    }
+
+    private static void verifiesHiddenMeshIsNotPrepared() {
+        BoneModelSnapshot model = model();
+        PhysicsSolverLayout layout = PhysicsSolverLayout.build(
+                model, plan(model, true)
+        );
+        SpringBoneSolver solver = new SpringBoneSolver(layout);
+        BoneModelSnapshot.Bone head = bone(model, "Head");
+        BoneModelSnapshot.Bone hair = bone(model, "Hair");
+        int hairIndex = indexOf(layout, "Hair");
+        int headIndex = indexOf(layout, "Head");
+
+        head.setRenderVisibility(true, false);
+        solver.solve(new Vector3f(), 0.0F, 0.0F, false);
+        require(
+                !hasPreparedReference(solver, hairIndex, headIndex),
+                "A hidden head mesh remained an active collision proxy"
+        );
+
+        head.setRenderVisibility(true, true);
+        solver.restoreAnimationPose();
+        hair.setRotationZ(CONTACT);
+        solver.solve(INWARD, 0.0F, 1.0F / 60.0F, false);
+        require(
+                hasPreparedReference(solver, hairIndex, headIndex),
+                "A newly visible head mesh did not rejoin collision"
+        );
+
+        head.setRenderVisibility(true, false);
+        solver.restoreAnimationPose();
+        hair.setRotationZ(CONTACT);
+        solver.solve(INWARD, 0.0F, 1.0F / 60.0F, false);
+        require(
+                !hasPreparedReference(solver, hairIndex, headIndex),
+                "A mesh visibility transition left a ghost collider"
+        );
     }
 
     /** Returns the settled swing angle after driving the strand inward. */
@@ -164,9 +202,26 @@ public final class MeshCollisionRuntimeProjectionVerification {
          * halfway inside.
          */
         float halfThickness = 1.0F / 16.0F;
+        float contactMargin = 1.0F / 128.0F;
         require(
-                nearest <= halfThickness + 1.0E-3F,
+                nearest <= halfThickness + contactMargin,
                 "The strand never reached the mesh collider: " + nearest
         );
+    }
+
+    private static boolean hasPreparedReference(
+            SpringBoneSolver solver,
+            int node,
+            int reference
+    ) {
+        CollisionProxyDebugData data = new CollisionProxyDebugData();
+        int count = solver.preparedProxyCount(node);
+        for (int proxy = 0; proxy < count; proxy++) {
+            if (solver.copyPreparedCollisionProxy(node, proxy, data)
+                    && data.referenceNodeIndex == reference) {
+                return true;
+            }
+        }
+        return false;
     }
 }

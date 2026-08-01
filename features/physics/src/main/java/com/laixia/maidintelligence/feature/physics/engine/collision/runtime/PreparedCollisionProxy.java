@@ -63,6 +63,18 @@ public final class PreparedCollisionProxy {
     float reserveBodyArm;
     boolean reserveValid;
     int reserveFrame = PreparedCollisionProxyMotion.NO_FRAME;
+    /** Conservative broad-phase gap carried across adjacent frames. */
+    float cullReserve;
+    int cullReserveFrame = PreparedCollisionProxyMotion.NO_FRAME;
+    final Vector3f lastDirection = new Vector3f();
+    final Vector3f sweepFromDirection = new Vector3f();
+    int lastDirectionFrame = PreparedCollisionProxyMotion.NO_FRAME;
+    int sweepFrame = PreparedCollisionProxyMotion.NO_FRAME;
+    int tipSweepFrame = PreparedCollisionProxyMotion.NO_FRAME;
+    int bodySweepFrame = PreparedCollisionProxyMotion.NO_FRAME;
+    boolean sweepDirectionAvailable;
+    final Vector3f sweepFromPivot = new Vector3f();
+    int sweepPivotFrame = PreparedCollisionProxyMotion.NO_FRAME;
     /**
      * Suppressed until the segment leaves this collider entirely.
      *
@@ -212,6 +224,15 @@ public final class PreparedCollisionProxy {
         float nextLeverArm = Float.isFinite(runtimeLeverArm)
                 ? Math.max(1.0E-6F, runtimeLeverArm)
                 : leverArm;
+        int previousFrame = reserveFrame;
+        if (frame != PreparedCollisionProxyMotion.NO_FRAME
+                && previousFrame != PreparedCollisionProxyMotion.NO_FRAME
+                && frame == previousFrame + 1) {
+            sweepFromPivot.set(pivot);
+            sweepPivotFrame = frame;
+        } else {
+            sweepPivotFrame = PreparedCollisionProxyMotion.NO_FRAME;
+        }
         PreparedCollisionProxyMotion.chargeFrameMotion(
                 this, runtimePivotModel, nextLeverArm, nextHitRadius, frame
         );
@@ -256,6 +277,37 @@ public final class PreparedCollisionProxy {
                 runtimeLeverArm,
                 bound + shape.hitRadius() * Math.max(0.0F, endpointScale)
         );
+    }
+
+    float coherentSlack(
+            Vector3f runtimePivotModel,
+            float runtimeLeverArm,
+            float endpointScale,
+            SwingCone cone,
+            int frameIndex,
+            float queryMotion,
+            float endpointScaleDelta,
+            boolean forceExact
+    ) {
+        if (!forceExact
+                && cullReserveFrame == frameIndex - 1
+                && Float.isFinite(queryMotion)) {
+            float remaining = cullReserve
+                    - queryMotion
+                    - shape.cullMotionBound()
+                    - shape.hitRadius() * endpointScaleDelta;
+            cullReserveFrame = frameIndex;
+            cullReserve = Math.max(0.0F, remaining);
+            if (remaining > 0.0F) {
+                return remaining;
+            }
+        }
+        float exact = slack(
+                runtimePivotModel, runtimeLeverArm, endpointScale, cone
+        );
+        cullReserveFrame = frameIndex;
+        cullReserve = Float.isFinite(exact) ? Math.max(0.0F, exact) : 0.0F;
+        return exact;
     }
 
     void bind(PreparedCollisionShape sharedShape) {
@@ -312,9 +364,20 @@ public final class PreparedCollisionProxy {
      * converts the push into the smaller turn that arm needs.
      */
     public boolean project(Vector3f direction, CollisionScratch scratch) {
-        return PreparedCollisionProxyProjection.project(
-                this, direction, scratch
+        return project(direction, scratch, null);
+    }
+
+    boolean project(
+            Vector3f direction,
+            CollisionScratch scratch,
+            PreparedCollisionSweepScratch sweepScratch
+    ) {
+        boolean moved = PreparedCollisionProxyProjection.project(
+                this, direction, scratch, sweepScratch
         );
+        lastDirection.set(direction);
+        lastDirectionFrame = reserveFrame;
+        return moved;
     }
 
     /** Stops this collider asking for anything until the overlap is gone. */
@@ -389,6 +452,14 @@ public final class PreparedCollisionProxy {
 
     void resetRestAllowance() {
         PreparedCollisionProxyRestLifecycle.reset(this);
+        cullReserve = 0.0F;
+        cullReserveFrame = PreparedCollisionProxyMotion.NO_FRAME;
+        lastDirectionFrame = PreparedCollisionProxyMotion.NO_FRAME;
+        sweepFrame = PreparedCollisionProxyMotion.NO_FRAME;
+        tipSweepFrame = PreparedCollisionProxyMotion.NO_FRAME;
+        bodySweepFrame = PreparedCollisionProxyMotion.NO_FRAME;
+        sweepDirectionAvailable = false;
+        sweepPivotFrame = PreparedCollisionProxyMotion.NO_FRAME;
     }
 
     private static float finiteScale(float scale) {
@@ -398,6 +469,14 @@ public final class PreparedCollisionProxy {
     private void setCommon(float fixedLeverArm) {
         leverArm = Math.max(1.0E-6F, fixedLeverArm);
         preparedLeverArm = leverArm;
+        cullReserve = 0.0F;
+        cullReserveFrame = PreparedCollisionProxyMotion.NO_FRAME;
+        lastDirectionFrame = PreparedCollisionProxyMotion.NO_FRAME;
+        sweepFrame = PreparedCollisionProxyMotion.NO_FRAME;
+        tipSweepFrame = PreparedCollisionProxyMotion.NO_FRAME;
+        bodySweepFrame = PreparedCollisionProxyMotion.NO_FRAME;
+        sweepDirectionAvailable = false;
+        sweepPivotFrame = PreparedCollisionProxyMotion.NO_FRAME;
         PreparedCollisionProxyRestLifecycle.resetAllowances(this);
         PreparedCollisionProxyRestLifecycle.applyAllowance(this);
     }

@@ -66,6 +66,7 @@ import com.laixia.maidintelligence.feature.level.tlm.LevelTlmModule;
 import com.laixia.maidintelligence.feature.level.tlm.TlmMaidLevelStore;
 import com.laixia.maidintelligence.feature.physics.PhysicsDebugCommands;
 import com.laixia.maidintelligence.feature.physics.client.ClientPhysicsSetup;
+import com.laixia.maidintelligence.feature.physics.forge.PhysicsClientConfig;
 import com.laixia.maidintelligence.feature.physics.forge.PhysicsForgeInstaller;
 import com.laixia.maidintelligence.feature.physics.tlm.PhysicsTlmModule;
 import com.laixia.maidintelligence.feature.shading.client.ShadingCacheInvalidator;
@@ -294,7 +295,8 @@ public final class MaidIntelligence {
                         () -> lifecycle ->
                                 ClientPhysicsSetup.initialize(
                                         lifecycle.modEventBus(),
-                                        lifecycle.gameEventBus()
+                                        lifecycle.gameEventBus(),
+                                        PhysicsClientConfig::isEnabled
                                 )
                 ),
                 new AtmosphereForgeInstaller(),

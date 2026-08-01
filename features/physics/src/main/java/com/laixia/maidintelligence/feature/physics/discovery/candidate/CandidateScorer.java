@@ -4,6 +4,7 @@ import com.laixia.maidintelligence.feature.physics.geometry.BoneModelSnapshot;
 
 
 import com.laixia.maidintelligence.feature.physics.discovery.classifier.PhysicsBoneClassifier;
+import com.laixia.maidintelligence.feature.physics.discovery.classifier.RigidEquipmentClassifier;
 import com.laixia.maidintelligence.feature.physics.geometry.PhysicsBoneGeometry;
 import com.laixia.maidintelligence.feature.physics.api.PhysicsBoneSelectionPlan;
 import com.laixia.maidintelligence.feature.physics.discovery.structure.BoneStructureAnalysis;
@@ -35,6 +36,15 @@ final class CandidateScorer {
                     PhysicsBoneSelectionPlan.StructureRole
                             .RIGID_ATTACHMENT_BASE,
                     "compact mount above independent cloth panels"
+            );
+        }
+        RigidEquipmentClassifier.Result equipment =
+                RigidEquipmentClassifier.classify(node, geometry, model);
+        if (equipment.kind() != RigidEquipmentClassifier.Kind.NONE) {
+            return Candidate.reject(
+                    PhysicsBoneSelectionPlan.StructureRole
+                            .RIGID_ATTACHMENT_BASE,
+                    equipment.reason()
             );
         }
         WearableAttachmentClassifier.Result wearable =

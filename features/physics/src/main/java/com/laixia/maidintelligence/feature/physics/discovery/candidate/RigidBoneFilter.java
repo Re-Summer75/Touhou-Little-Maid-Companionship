@@ -212,4 +212,5 @@ final class RigidBoneFilter {
                 geometry.node(hierarchy.get(hierarchy.size() - 1));
         return locator != null && node.isDescendantOf(locator);
     }
+
 }
