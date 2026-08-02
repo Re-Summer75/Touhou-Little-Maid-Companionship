@@ -66,6 +66,13 @@ public final class TlmMaidStatusService implements MaidStatusApi<EntityMaid> {
         }
     }
 
+    public void requestHungerAttention(EntityMaid maid) {
+        actionService.requestAttention(
+                maid,
+                MaidActionService.HUNGER_PRIORITY
+        );
+    }
+
     public void tick(EntityMaid maid) {
         if (!(maid.level() instanceof ServerLevel)) {
             return;

@@ -22,8 +22,8 @@ Java、Parchment、TLM、Gecko 及项目路径组合复制到 `gradle.properties
 
 1. `kernel` 提供身份、事件、结果和服务注册等最小稳定原语。
 2. `shared:geometry` 提供不含游戏类型的几何值对象与算法。
-3. 七个 `features/*` 只依赖 `kernel`、必要的 `shared:*` 和通用 JVM 库；feature 之间通过
-   Port 或领域事件协作，不直接绑定彼此实现。
+3. 八个顶层 `features/*` 及 `:features:ai:behavior` 子模块只依赖 `kernel`、必要的
+   `shared:*` 和通用 JVM 库；feature 之间通过 Port 或领域事件协作，不直接绑定彼此实现。
 4. `adapters/forge-*` 与 `adapters/tlm-*-gecko*` 实现 Port，并把 MC、Forge、TLM、Gecko
    类型转换为稳定模型。
 5. `distribution/*` 是组合根、资源容器和唯一 ForgeGradle 编译边界，同时装配稳定模块与两个
@@ -56,7 +56,7 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 - 目录分层应服务于导航和边界表达。除 API 边界、版本隔离或框架约定外，不为单个普通实现创建
   无意义的单文件目录；新子目录应能容纳一组职责一致、共同演进的文件。
 
-## 七个 feature 的公开边界
+## 顶层 feature 与 AI 行为子模块的公开边界
 
 ### level
 
@@ -72,6 +72,43 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 - `MaidStatusState`：稳定状态值。
 - `MaidStatusStore<S>`：状态持久化 Port。
 - 饥饿与工具耐久策略属于纯领域策略，不接受实体、物品或能力对象。
+
+### ai
+
+- `MaidAiOptimizationApi`：服务端 AI 优化 tuning 与性能、动态范围、战斗反应指标入口；
+  `MaidAiTuning` 将 Forge 配置收敛为不可变稳定值，TLM adapter 不反向读取平台配置。
+- `PathReachabilityCache`：按女仆实例持有的固定容量可达结果缓存，不保存游戏对象或可变路径。
+- `OwnerMotionTracker` 与 `DynamicActivityRadiusPolicy`：以 20 tick 静止、3 tick 移动滞回计算
+  瞬时空闲/工作/战斗半径，统一上限 24；只持有内存状态，不修改 TLM NBT 或持久化半径。
+- `CombatReactionPolicy` 与 `CombatThreatKind`：固定“女仆攻击者、主人攻击者、主人目标、
+  最近敌对实体”的排序，规定可见性、范围、扫描节流和候选上限，不涉及伤害或武器行为。
+- `MaidMovementCoordinationApi` 与 `MovementIntentLease`：为 TLM 内置移动写入提供短租约、
+  原生优先级镜像和冲突指标；仅对已开始的拾取增加有界承诺，普通跟随暂缓，
+  战斗意图位于回区与普通跟随之间；物品失效、硬状态或超距传送仍可立即释放。
+  状态不持久化，也不包含 Minecraft 对象。
+- `PassiveFollowPolicy`：只在主人静止、已识别原版任务仍有效且未达到紧急传送距离时暂缓
+  普通跟随；它仍属于原版 AI 调度优化。
+- 性能 API 仍只降低原有判断成本；移动协调不接管 Brain 周期、Activity 或任务列表。
+  未知 Task、ExtraBrain 与自定义目标采用 fail-open，保留第三方写入并临时退出仲裁。
+
+### ai:behavior
+
+- `:features:ai:behavior` 是独立 Gradle 子模块，包边界为 `feature.behavior`，承载本模组原创
+  AI 行为，不依赖 `:features:ai` 的优化实现。
+- `MaidGazeRecallApi<O, M>`：主人通过明确手势请求指定女仆靠近的窄用例入口。
+- `ContinuousLookTracker` 与 `GazeRecallPolicy`：分别处理连续注视边沿触发、好感度门槛、
+  跟随模式和硬移动状态；不持有 Minecraft 对象。
+- `MaidHungryOwnerRequestApi<M>` 与 `HungryOwnerRequestPolicy`：在饥饿阈值、周期和概率
+  均满足时请求靠近主人。普通分支与现有 40 点“需要食物”提示对齐，每 100 tick 以 10%
+  概率触发；饥饿不高于 20 且好感度至少 3 级时切入 25% 的高好感度分支。两者均避让
+  战斗与硬移动状态。TLM adapter 以弱引用暂存最长 200 tick 的抵达意图，进入主人身边
+  后通过状态动作服务面向主人播放一次请求动作，避免远距离动作打断靠近过程。
+- `MaidOwnerReturnApi<M>` 与 `OwnerReturnPolicy`：观察内置工作目标的释放边沿，在 20 tick
+  内没有新目标时只写入一次主人目标；每个新随机游走目标另有 10% 概率改选主人，并以
+  独立冷却抑制连续归队。运行态只保存在弱引用实例状态中，不进入女仆存档。
+- 当前 TLM adapter 以允许穿透方块的服务端射线和 20 tick 连续注视实现召回，并通过
+  ExtraBrain 执行求食和归队检查。三类移动写入从原版 AI 优化视角仍是外部行为；归队仅
+  只读当前租约来避让工作、战斗、拾取、回区与 fail-open，不反向接管移动仲裁。
 
 ### advancement
 
@@ -122,6 +159,8 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 `adapters/tlm-<mc>-gecko<代际>` 负责：
 
 - `EntityMaid`、Brain/TaskData、TLM 事件和扩展点；
+- `ActivityRadiusBridge` 只改写 `getRestrictRadius()` 的瞬时返回值；`CombatReactionBridge`
+  在 Brain tick 前预热内置攻击任务的 `ATTACK_TARGET`，tick 后仅为实际战斗目标登记移动租约；
 - Gecko、Bedrock、YSM 模型/渲染桥；
 - TLM/Gecko Mixin，且所有目标显式 `remap = false`；
 - advancement 的世界、战斗、成长 criterion 分别实现窄触发端口，不建立全能触发枢纽；
@@ -140,8 +179,9 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 
 ## 矩阵装配与 target 选择
 
-`settings.gradle` 永远只 include 一份 `kernel`、`shared:geometry` 和七个 feature，然后从
-矩阵的每条 target 动态 include 两个 adapter 与一个 distribution。
+`settings.gradle` 永远只 include 一份 `kernel`、`shared:geometry`、八个顶层 feature 和
+`:features:ai:behavior` 子模块，然后从矩阵的每条 target 动态 include 两个 adapter 与一个
+distribution。
 
 根构建把矩阵值注入对应 distribution。稳定模块使用所有 target 中最低的 Java 版本编译，
 保证单份稳定字节码可被每个 distribution 消费。每个 distribution 使用本 target 的 Java、

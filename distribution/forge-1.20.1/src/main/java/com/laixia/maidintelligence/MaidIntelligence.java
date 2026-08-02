@@ -2,6 +2,15 @@ package com.laixia.maidintelligence;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.compat.tlm.TlmAdapterRegistry;
+import com.laixia.maidintelligence.feature.ai.api.MaidAiOptimizationApi;
+import com.laixia.maidintelligence.feature.ai.api.MaidMovementCoordinationApi;
+import com.laixia.maidintelligence.feature.ai.api.MovementCoordinationMode;
+import com.laixia.maidintelligence.feature.ai.application.DefaultMaidAiOptimizationService;
+import com.laixia.maidintelligence.feature.ai.application.DefaultMaidMovementCoordinationService;
+import com.laixia.maidintelligence.feature.ai.command.MaidAiCommands;
+import com.laixia.maidintelligence.feature.ai.forge.AiForgeInstaller;
+import com.laixia.maidintelligence.feature.ai.forge.AiServerConfig;
+import com.laixia.maidintelligence.feature.ai.handler.MaidSeatCombatHandler;
 import com.laixia.maidintelligence.feature.advancement.api.MaidStatisticsApi;
 import com.laixia.maidintelligence.feature.advancement.application.DefaultMaidStatisticsService;
 import com.laixia.maidintelligence.feature.advancement.bridge.HoneySlideHandler;
@@ -32,6 +41,11 @@ import com.laixia.maidintelligence.feature.advancement.tlm.MaidStatisticsData;
 import com.laixia.maidintelligence.feature.advancement.tlm.TlmAdvancementRequestResolver;
 import com.laixia.maidintelligence.feature.advancement.tlm.TlmHoneySlideHandler;
 import com.laixia.maidintelligence.feature.atmosphere.forge.AtmosphereForgeInstaller;
+import com.laixia.maidintelligence.feature.behavior.api.MaidGazeRecallApi;
+import com.laixia.maidintelligence.feature.behavior.api.MaidOwnerReturnApi;
+import com.laixia.maidintelligence.feature.behavior.forge.BehaviorForgeInstaller;
+import com.laixia.maidintelligence.feature.behavior.forge.BehaviorServerConfig;
+import com.laixia.maidintelligence.feature.behavior.tlm.TlmBehaviorComposition;
 import com.laixia.maidintelligence.feature.interaction.bridge.EatingParticlePolicy;
 import com.laixia.maidintelligence.feature.interaction.client.ClientInteractionSetup;
 import com.laixia.maidintelligence.feature.interaction.client.runtime.TlmInteractionClientPacketHandler;
@@ -87,9 +101,7 @@ import com.laixia.maidintelligence.feature.status.tlm.MaidMealAccess;
 import com.laixia.maidintelligence.feature.status.tlm.StatusTlmModule;
 import com.laixia.maidintelligence.feature.status.tlm.TlmMaidStatusService;
 import com.laixia.maidintelligence.feature.status.tlm.TlmMaidStatusStore;
-import com.laixia.maidintelligence.gametest.AdvancementGameTests;
-import com.laixia.maidintelligence.gametest.LevelGameTests;
-import com.laixia.maidintelligence.gametest.StatusFeedbackGameTests;
+import com.laixia.maidintelligence.gametest.GameTestCatalog;
 import com.laixia.maidintelligence.kernel.event.DomainEventBus;
 import com.laixia.maidintelligence.kernel.service.MutableServiceRegistry;
 import com.laixia.maidintelligence.platform.forge.ForgeFeatureInstaller;
@@ -102,7 +114,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.RegisterGameTestsEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.common.Mod;
@@ -126,6 +137,19 @@ public final class MaidIntelligence {
                 MinecraftForge.EVENT_BUS
         );
         DomainEventBus events = new DomainEventBus();
+        MaidAiOptimizationApi aiOptimization =
+                new DefaultMaidAiOptimizationService(
+                        AiServerConfig::tuning
+                );
+        MaidMovementCoordinationApi movementCoordination =
+                new DefaultMaidMovementCoordinationService(
+                        () -> AiServerConfig.isEnabled()
+                                ? AiServerConfig.movementCoordinationMode()
+                                : MovementCoordinationMode.OFF,
+                        AiServerConfig::movementLeaseTicks,
+                        AiServerConfig::pickupCommitmentTicks,
+                        AiServerConfig::movementFailOpenTicks
+                );
 
         TlmMaidStatusService statusService = createStatusService();
         MaidStatusApi<EntityMaid> statusApi = statusService;
@@ -170,10 +194,28 @@ public final class MaidIntelligence {
         );
         MaidMouthFeedPort<ServerPlayer> mouthFeed =
                 new MaidMouthFeedRequestHandler(feeding);
+        TlmBehaviorComposition behaviors = TlmBehaviorComposition.create(
+                statusApi,
+                statusService::requestHungerAttention,
+                BehaviorServerConfig::tuning
+        );
 
         wireDomainEvents(events, progressAdvancementTriggers, levelApi);
 
         MutableServiceRegistry services = new MutableServiceRegistry()
+                .register(MaidAiOptimizationApi.class, aiOptimization)
+                .register(
+                        MaidMovementCoordinationApi.class,
+                        movementCoordination
+                )
+                .register(
+                        MaidGazeRecallApi.class,
+                        behaviors.gazeRecall()
+                )
+                .register(
+                        MaidOwnerReturnApi.class,
+                        behaviors.ownerReturn()
+                )
                 .register(MaidLevelApi.class, levelApi)
                 .register(MaidStatusApi.class, statusApi)
                 .register(
@@ -238,7 +280,8 @@ public final class MaidIntelligence {
                 new AdvancementTlmModule(statisticsData),
                 new InteractionTlmModule(feeding),
                 new PhysicsTlmModule(),
-                new StatusTlmModule(statusService)
+                new StatusTlmModule(statusService),
+                behaviors.tlmModule()
         ));
 
         ModNetwork.initialize(List.of(
@@ -248,6 +291,17 @@ public final class MaidIntelligence {
         ));
 
         List<ForgeFeatureInstaller> forgeFeatures = List.of(
+                new AiForgeInstaller(
+                        new MaidAiCommands(
+                                aiOptimization,
+                                movementCoordination
+                        )::onRegisterCommands,
+                        new MaidSeatCombatHandler()
+                ),
+                new BehaviorForgeInstaller(
+                        behaviors.gazeRecallHandler()::onPlayerTick,
+                        behaviors.gazeRecallHandler()::onPlayerLogout
+                ),
                 new LevelForgeInstaller(
                         new LevelExperienceHandler(levelApi),
                         new LevelCommands(
@@ -308,7 +362,7 @@ public final class MaidIntelligence {
                         () -> new MaidHungerGuiHandler(statusService)
                 )
         );
-        modEventBus.addListener(this::registerGameTests);
+        modEventBus.addListener(GameTestCatalog::register);
         forgeFeatures.forEach(feature -> feature.install(forge));
     }
 
@@ -444,9 +498,4 @@ public final class MaidIntelligence {
         return (Class) MaidAdvancementExperienceRewardedEvent.class;
     }
 
-    private void registerGameTests(RegisterGameTestsEvent event) {
-        event.register(AdvancementGameTests.class);
-        event.register(LevelGameTests.class);
-        event.register(StatusFeedbackGameTests.class);
-    }
 }

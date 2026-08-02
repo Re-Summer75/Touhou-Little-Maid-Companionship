@@ -48,6 +48,8 @@ def stableProjects = [
         'shared:geometry',
         'features:level',
         'features:status',
+        'features:ai',
+        'features:ai:behavior',
         'features:advancement',
         'features:interaction',
         'features:physics',

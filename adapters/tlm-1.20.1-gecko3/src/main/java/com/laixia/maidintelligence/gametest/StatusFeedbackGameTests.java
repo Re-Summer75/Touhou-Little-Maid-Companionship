@@ -21,6 +21,7 @@ import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 @GameTestHolder(ModResources.MOD_ID)
 @PrefixGameTestTemplate(false)
+@SuppressWarnings("null")
 public final class StatusFeedbackGameTests {
     private StatusFeedbackGameTests() {
     }

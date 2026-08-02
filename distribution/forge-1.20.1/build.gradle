@@ -27,6 +27,8 @@ def stableModules = [
         project(':shared:geometry'),
         project(':features:level'),
         project(':features:status'),
+        project(':features:ai'),
+        project(':features:ai:behavior'),
         project(':features:advancement'),
         project(':features:interaction'),
         project(':features:physics'),
@@ -190,6 +192,22 @@ def verificationEntrypoints = [
                 'Verifies hunger and tool durability status policies.',
                 'com.laixia.maidintelligence.feature.status.StatusDomainVerification'
         ],
+        verifyAiOptimization   : [
+                'Verifies maid AI cache invalidation and performance metrics.',
+                'com.laixia.maidintelligence.feature.ai.AiOptimizationVerification'
+        ],
+        verifyMovementIntent   : [
+                'Verifies compatibility-first maid movement intent coordination.',
+                'com.laixia.maidintelligence.feature.ai.MovementIntentCoordinationVerification'
+        ],
+        verifyCustomBehavior   : [
+                'Verifies original companionship behavior policies.',
+                'com.laixia.maidintelligence.feature.behavior.CustomBehaviorVerification'
+        ],
+        verifyAdaptiveAi       : [
+                'Verifies dynamic maid activity radius and combat reaction policies.',
+                'com.laixia.maidintelligence.feature.ai.AdaptiveAiVerification'
+        ],
         verifyAdvancementDomain: [
                 'Verifies maid statistics, advancement data and progress layouts.',
                 'com.laixia.maidintelligence.feature.advancement.AdvancementDomainVerification'
@@ -223,7 +241,7 @@ verificationEntrypoints.each { taskName, definition ->
 
 // Lower bound only: splitting or adding verifications must never fail the build,
 // but silently dropping them must. Raise the floor when the suite grows durably.
-def minimumVerificationSources = 108
+def minimumVerificationSources = 112
 
 tasks.register('verifyTestInventory') {
     group = 'verification'
@@ -275,8 +293,17 @@ tasks.register('verifyMixinLayout') {
                     'LivingEntityRendererAccessor'
             ],
             (tlmMixinConfig)                              : [
+                    'EntityMaidAiOptimizationMixin',
                     'EntityMaidPlaceBlockMixin',
                     'MaidFeedAnimalTaskMixin',
+                    'MaidPickupEntitiesSensorOptimizationMixin',
+                    'ai.EntityMaidMovementCoordinationMixin',
+                    'ai.MaidBegMovementCoordinationMixin',
+                    'ai.MaidBreathAirMovementCoordinationMixin',
+                    'ai.MaidFollowOwnerMovementCoordinationMixin',
+                    'ai.MaidMoveToBlockMovementCoordinationMixin',
+                    'ai.MaidPickupMovementCoordinationMixin',
+                    'ai.SchedulePosMovementCoordinationMixin',
                     'CustomPackPhysicsMetadataMixin',
                     'EntityMaidClientRandomHealingMixin',
                     'EntityMaidRendererYsmCaptureMixin',
@@ -302,7 +329,7 @@ tasks.register('verifyMixinLayout') {
                     )
                 }
             }
-            int count = (config =~ /"[A-Z][A-Za-z0-9]*(?:Mixin|Accessor)"/)
+            int count = (config =~ /"(?:[a-z][A-Za-z0-9_]*\.)*[A-Z][A-Za-z0-9]*(?:Mixin|Accessor)"/)
                     .count
             if (count != expectedMixins.size()) {
                 throw new GradleException(
