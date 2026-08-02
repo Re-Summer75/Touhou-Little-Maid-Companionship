@@ -8,13 +8,17 @@
     "EntityMaidPlaceBlockMixin",
     "MaidFeedAnimalTaskMixin",
     "MaidPickupEntitiesSensorOptimizationMixin",
+    "ai.EntitySitCommandSeatLockMixin",
     "ai.EntityMaidMovementCoordinationMixin",
     "ai.MaidBegMovementCoordinationMixin",
     "ai.MaidBreathAirMovementCoordinationMixin",
     "ai.MaidFollowOwnerMovementCoordinationMixin",
+    "ai.MaidFollowOwnerVehicleSeatLockMixin",
     "ai.MaidMoveToBlockMovementCoordinationMixin",
     "ai.MaidPickupMovementCoordinationMixin",
-    "ai.SchedulePosMovementCoordinationMixin"
+    "ai.MaidScheduleCommandSeatLockMixin",
+    "ai.SchedulePosMovementCoordinationMixin",
+    "status.MaidPickupInventoryFeedbackMixin"
   ],
   "client": [
     "CustomPackPhysicsMetadataMixin",

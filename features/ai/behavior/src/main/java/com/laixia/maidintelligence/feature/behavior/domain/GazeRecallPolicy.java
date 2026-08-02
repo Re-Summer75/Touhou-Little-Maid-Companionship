@@ -1,52 +1,22 @@
 package com.laixia.maidintelligence.feature.behavior.domain;
 
 /**
- * Platform-neutral eligibility and arrival policy for gaze recall.
+ * Sensor timing defaults; intent eligibility and arrival are data-driven.
  */
 public final class GazeRecallPolicy {
-    public static final int DEFAULT_HOLD_TICKS = 20;
-    public static final int DEFAULT_MINIMUM_FAVORABILITY_LEVEL = 1;
-    public static final int DEFAULT_CLOSE_ENOUGH_DISTANCE = 2;
+    public static final int DEFAULT_HOLD_TICKS = 2;
+    public static final int CURRENT_TIMING_REVISION = 2;
 
-    private final int minimumFavorabilityLevel;
-    private final int closeEnoughDistance;
+    private static final int LEGACY_DEFAULT_HOLD_TICKS = 20;
 
-    public GazeRecallPolicy(
-            int minimumFavorabilityLevel,
-            int closeEnoughDistance
-    ) {
-        if (minimumFavorabilityLevel < 0) {
-            throw new IllegalArgumentException(
-                    "minimumFavorabilityLevel must be non-negative"
-            );
+    private GazeRecallPolicy() {
+    }
+
+    public static int migrateHoldTicks(int configured, int timingRevision) {
+        if (timingRevision < CURRENT_TIMING_REVISION
+                && configured == LEGACY_DEFAULT_HOLD_TICKS) {
+            return DEFAULT_HOLD_TICKS;
         }
-        if (closeEnoughDistance < 0) {
-            throw new IllegalArgumentException(
-                    "closeEnoughDistance must be non-negative"
-            );
-        }
-        this.minimumFavorabilityLevel = minimumFavorabilityLevel;
-        this.closeEnoughDistance = closeEnoughDistance;
-    }
-
-    public static GazeRecallPolicy defaults() {
-        return new GazeRecallPolicy(
-                DEFAULT_MINIMUM_FAVORABILITY_LEVEL,
-                DEFAULT_CLOSE_ENOUGH_DISTANCE
-        );
-    }
-
-    public boolean eligible(
-            int favorabilityLevel,
-            boolean followMode,
-            boolean canMove
-    ) {
-        return favorabilityLevel >= minimumFavorabilityLevel
-                && followMode
-                && canMove;
-    }
-
-    public int closeEnoughDistance() {
-        return closeEnoughDistance;
+        return configured;
     }
 }

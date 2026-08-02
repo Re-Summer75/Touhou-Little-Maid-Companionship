@@ -63,7 +63,8 @@ public final class MovementIntentLease {
                     : MovementIntentDecision.RETARGETED;
         }
         if (holder == MovementIntentSource.PICKUP
-                && source == MovementIntentSource.FOLLOW_OWNER) {
+                && (source == MovementIntentSource.FOLLOW_OWNER
+                || source == MovementIntentSource.COMPANION)) {
             if (enforce) {
                 return MovementIntentDecision.SUPPRESSED;
             }

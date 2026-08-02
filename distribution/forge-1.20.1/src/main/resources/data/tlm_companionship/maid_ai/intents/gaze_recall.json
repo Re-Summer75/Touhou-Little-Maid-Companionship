@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "plan": "tlm_companionship:gaze_recall_session",
+  "conditions": [
+    { "fact": "tlm_companionship:signal/gaze_recall", "operator": "gte", "value": 1.0 },
+    { "fact": "tlm_companionship:fact/owner_valid", "operator": "eq", "value": 1.0 },
+    { "fact": "tlm_companionship:fact/favorability", "operator": "gte", "value": 1.0 },
+    { "fact": "tlm_companionship:fact/follow_mode", "operator": "eq", "value": 1.0 },
+    { "fact": "tlm_companionship:fact/can_move", "operator": "eq", "value": 1.0 },
+    { "fact": "tlm_companionship:fact/combat_active", "operator": "eq", "value": 0.0 },
+    { "fact": "tlm_companionship:fact/work_target_present", "operator": "eq", "value": 0.0 },
+    { "fact": "tlm_companionship:fact/using_item", "operator": "eq", "value": 0.0 },
+    { "fact": "tlm_companionship:fact/movement_hard_blocked", "operator": "eq", "value": 0.0 }
+  ],
+  "selection": {
+    "base_score": 1.0,
+    "minimum_score": 0.0,
+    "activation_chance": 1.0,
+    "evaluation_interval_ticks": 1,
+    "minimum_commit_ticks": 20,
+    "switch_margin": 0.1,
+    "interrupt_priority": 80,
+    "cooldown_ticks": 20
+  }
+}

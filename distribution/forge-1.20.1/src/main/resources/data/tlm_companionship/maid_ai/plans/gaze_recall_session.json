@@ -1,0 +1,27 @@
+{
+  "format_version": 1,
+  "initial_state": "approach",
+  "states": {
+    "approach": {
+      "action": "tlm_companionship:action/approach_owner",
+      "parameters": {
+        "speed": "0.6",
+        "close_distance": "2"
+      },
+      "timeout_ticks": 200,
+      "on_success": "command_window",
+      "on_failure": "$failure"
+    },
+    "command_window": {
+      "action": "tlm_companionship:action/companion_command_window",
+      "parameters": {
+        "duration_ticks": "60",
+        "speed": "0.6",
+        "close_distance": "2"
+      },
+      "timeout_ticks": 80,
+      "on_success": "$success",
+      "on_failure": "$failure"
+    }
+  }
+}

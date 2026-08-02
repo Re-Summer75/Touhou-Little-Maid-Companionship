@@ -1,5 +1,6 @@
 package com.laixia.maidintelligence.gametest;
 
+import com.laixia.maidintelligence.gametest.behavior.GazeCommandGameTests;
 import net.minecraftforge.event.RegisterGameTestsEvent;
 
 /**
@@ -13,8 +14,10 @@ public final class GameTestCatalog {
         event.register(AdaptiveAiGameTests.class);
         event.register(AdvancementGameTests.class);
         event.register(AiOptimizationGameTests.class);
+        event.register(GazeCommandGameTests.class);
         event.register(GazeRecallGameTests.class);
         event.register(HungryOwnerRequestGameTests.class);
+        event.register(IntentOrchestrationGameTests.class);
         event.register(LevelGameTests.class);
         event.register(MovementIntentGameTests.class);
         event.register(OwnerReturnGameTests.class);

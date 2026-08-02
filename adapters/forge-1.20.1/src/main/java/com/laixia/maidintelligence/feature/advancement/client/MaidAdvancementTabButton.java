@@ -18,7 +18,7 @@ import net.minecraftforge.api.distmarker.OnlyIn;
  * 当前就在进度页时画选中框，其余时候只画图标、让暗色导轨透出来。
  * <p>
  * 六格 Tab 全被其他附属占满时退化成 {@code (72,14)} 的 9×9 小图标按钮，
- * 位置见 docs/MAID_GUI_ANALYSIS.md 第 15.2 节。
+ * 位置见 docs/gui/README.md 第 15.2 节。
  */
 @OnlyIn(Dist.CLIENT)
 public final class MaidAdvancementTabButton extends Button {

@@ -1,13 +1,9 @@
 package com.laixia.maidintelligence.feature.behavior.tlm;
 
-import com.github.tartaricacid.touhoulittlemaid.entity.item.EntityChair;
-import com.github.tartaricacid.touhoulittlemaid.entity.item.EntitySit;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.api.MaidGazeRecallApi;
-import com.laixia.maidintelligence.feature.behavior.domain.GazeRecallPolicy;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.ai.behavior.BehaviorUtils;
-import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
+import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.Objects;
@@ -17,12 +13,12 @@ import java.util.Objects;
  */
 public final class TlmMaidGazeRecallService
         implements MaidGazeRecallApi<Player, EntityMaid> {
-    private static final float APPROACH_SPEED = 0.6F;
+    private static final int GAZE_SIGNAL_TTL_TICKS = 20;
 
-    private final GazeRecallPolicy policy;
+    private final MaidIntentApi<EntityMaid> intents;
 
-    public TlmMaidGazeRecallService(GazeRecallPolicy policy) {
-        this.policy = Objects.requireNonNull(policy, "policy");
+    public TlmMaidGazeRecallService(MaidIntentApi<EntityMaid> intents) {
+        this.intents = Objects.requireNonNull(intents, "intents");
     }
 
     @Override
@@ -30,40 +26,12 @@ public final class TlmMaidGazeRecallService
         if (!validPair(owner, maid)) {
             return false;
         }
-
-        boolean passiveSeat = isPassiveTlmSeat(maid.getVehicle());
-        boolean canMove = !maid.isMaidInSittingPose()
-                && !maid.isOrderedToSit()
-                && !maid.isSleeping()
-                && !maid.isLeashed()
-                && (!maid.isPassenger() || passiveSeat);
-        if (!policy.eligible(
-                maid.getFavorabilityManager().getLevel(),
-                !maid.isHomeModeEnable(),
-                canMove
-        )) {
-            return false;
-        }
-
-        if (passiveSeat) {
-            maid.stopRiding();
-        }
-        if (!maid.canBrainMoving()) {
-            return false;
-        }
-
-        int closeEnough = policy.closeEnoughDistance();
-        if (maid.distanceToSqr(owner) <= closeEnough * closeEnough) {
-            return true;
-        }
-        maid.getBrain().eraseMemory(MemoryModuleType.PATH);
-        BehaviorUtils.setWalkAndLookTargetMemories(
+        return intents.signal(
                 maid,
-                owner,
-                APPROACH_SPEED,
-                closeEnough
+                CompanionIntentIds.GAZE_RECALL,
+                maid.level().getGameTime(),
+                GAZE_SIGNAL_TTL_TICKS
         );
-        return true;
     }
 
     private static boolean validPair(Player owner, EntityMaid maid) {
@@ -77,9 +45,4 @@ public final class TlmMaidGazeRecallService
                 && owner.getUUID().equals(maid.getOwnerUUID());
     }
 
-    private static boolean isPassiveTlmSeat(Entity vehicle) {
-        return vehicle != null
-                && (vehicle.getType() == EntityChair.TYPE
-                || vehicle.getType() == EntitySit.TYPE);
-    }
 }

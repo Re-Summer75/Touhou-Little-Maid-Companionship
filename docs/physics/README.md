@@ -87,7 +87,7 @@ enabled = true
 
 1. **模型元数据**：作者显式指定的链与排除项，置信度最高;
 2. **几何 / 拓扑自动发现**：[`PhysicsBoneDiscoverer`](../../features/physics/src/main/java/com/laixia/maidintelligence/feature/physics/discovery/PhysicsBoneDiscoverer.java) 根据绑定姿态的 pivot、cube AABB、薄度、力臂、链长、分叉和相对 Head / Body 位置评分;
-3. **名称提示**：[`PhysicsBoneClassifier`](../../features/physics/src/main/java/com/laixia/maidintelligence/feature/physics/discovery/PhysicsBoneClassifier.java) 给常见英文、拼音、中文及日文罗马字名称加分并选择默认参数，支持 `TwinTail` 等多词组合；名称仍**不是入选前提**。
+3. **名称提示**：[`PhysicsBoneClassifier`](../../features/physics/src/main/java/com/laixia/maidintelligence/feature/physics/discovery/classifier/PhysicsBoneClassifier.java) 给常见英文、拼音、中文及日文罗马字名称加分并选择默认参数，支持 `TwinTail` 等多词组合；名称仍**不是入选前提**。
 
 具体实现集中在 `discovery` 子包：元数据绑定、候选评分、头部/躯干规则、刚性过滤和计划写入彼此独立；`discovery/structure` 另外负责镜像分支、同 pivot 重叠、紧凑底座、下装面板、细长挂饰、侧挂/包头穿戴物、长单骨网格和真实链段拓扑。入口 [`PhysicsBoneDiscoverer`](../../features/physics/src/main/java/com/laixia/maidintelligence/feature/physics/discovery/PhysicsBoneDiscoverer.java) 只保留稳定门面。
 

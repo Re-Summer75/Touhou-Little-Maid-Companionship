@@ -3,9 +3,13 @@ package com.laixia.maidintelligence.feature.behavior.tlm;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.api.BehaviorTuning;
 import com.laixia.maidintelligence.feature.behavior.api.MaidGazeRecallApi;
-import com.laixia.maidintelligence.feature.behavior.api.MaidOwnerReturnApi;
-import com.laixia.maidintelligence.feature.behavior.domain.GazeRecallPolicy;
 import com.laixia.maidintelligence.feature.behavior.handler.OwnerGazeRecallHandler;
+import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
+import com.laixia.maidintelligence.feature.orchestration.application.DefaultMaidIntentOrchestrator;
+import com.laixia.maidintelligence.feature.orchestration.application.MutableIntentCatalog;
+import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentActions;
+import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentContext;
+import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentObserver;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import net.minecraft.world.entity.player.Player;
 
@@ -18,13 +22,13 @@ import java.util.function.Supplier;
  */
 public record TlmBehaviorComposition(
         MaidGazeRecallApi<Player, EntityMaid> gazeRecall,
-        MaidOwnerReturnApi<EntityMaid> ownerReturn,
+        MaidIntentApi<EntityMaid> intents,
         OwnerGazeRecallHandler gazeRecallHandler,
         BehaviorTlmModule tlmModule
 ) {
     public TlmBehaviorComposition {
         Objects.requireNonNull(gazeRecall, "gazeRecall");
-        Objects.requireNonNull(ownerReturn, "ownerReturn");
+        Objects.requireNonNull(intents, "intents");
         Objects.requireNonNull(gazeRecallHandler, "gazeRecallHandler");
         Objects.requireNonNull(tlmModule, "tlmModule");
     }
@@ -32,7 +36,8 @@ public record TlmBehaviorComposition(
     public static TlmBehaviorComposition create(
             MaidStatusApi<EntityMaid> status,
             Consumer<EntityMaid> hungerRequestAction,
-            Supplier<BehaviorTuning> tuning
+            Supplier<BehaviorTuning> tuning,
+            MutableIntentCatalog catalog
     ) {
         Objects.requireNonNull(status, "status");
         Objects.requireNonNull(
@@ -40,28 +45,41 @@ public record TlmBehaviorComposition(
                 "hungerRequestAction"
         );
         Objects.requireNonNull(tuning, "tuning");
+        Objects.requireNonNull(catalog, "catalog");
 
+        TlmMaidIntentObserver observer = new TlmMaidIntentObserver();
+        TlmMaidIntentContext context =
+                new TlmMaidIntentContext(status, observer);
+        TlmMaidIntentActions actions =
+                new TlmMaidIntentActions(hungerRequestAction);
+        MaidIntentApi<EntityMaid> intents =
+                new DefaultMaidIntentOrchestrator<>(
+                        catalog,
+                        context,
+                        actions,
+                        EntityMaid::getId,
+                        () -> current(tuning).enabled(),
+                        () -> current(tuning).evaluationIntervalTicks(),
+                        () -> current(tuning).maxCandidateEvaluations(),
+                        () -> current(tuning).diagnosticsEnabled()
+                );
+        observer.bind(intents);
         MaidGazeRecallApi<Player, EntityMaid> gazeRecall =
-                new TlmMaidGazeRecallService(GazeRecallPolicy.defaults());
+                new TlmMaidGazeRecallService(intents);
         OwnerGazeRecallHandler gazeHandler =
                 new OwnerGazeRecallHandler(gazeRecall, tuning);
-        TlmMaidHungryOwnerRequestService hungryRequest =
-                new TlmMaidHungryOwnerRequestService(
-                        status,
-                        tuning,
-                        maid -> maid.getRandom().nextDouble(),
-                        hungerRequestAction
-                );
-        TlmMaidOwnerReturnService ownerReturn =
-                new TlmMaidOwnerReturnService(
-                        tuning,
-                        maid -> maid.getRandom().nextDouble()
-                );
         return new TlmBehaviorComposition(
                 gazeRecall,
-                ownerReturn,
+                intents,
                 gazeHandler,
-                new BehaviorTlmModule(hungryRequest, ownerReturn)
+                new BehaviorTlmModule(intents, observer)
         );
+    }
+
+    private static BehaviorTuning current(
+            Supplier<BehaviorTuning> tuning
+    ) {
+        BehaviorTuning current = tuning.get();
+        return current == null ? BehaviorTuning.defaults() : current;
     }
 }

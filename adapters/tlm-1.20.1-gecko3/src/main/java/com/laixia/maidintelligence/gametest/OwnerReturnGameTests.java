@@ -3,10 +3,10 @@ package com.laixia.maidintelligence.gametest;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskAttack;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
-import com.laixia.maidintelligence.feature.behavior.api.BehaviorTuning;
-import com.laixia.maidintelligence.feature.behavior.domain.OwnerReturnPolicy;
-import com.laixia.maidintelligence.feature.behavior.tlm.TlmMaidOwnerReturnService;
+import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
+import com.laixia.maidintelligence.gametest.support.IntentGameTestRuntime;
 import com.laixia.maidintelligence.platform.resource.ModResources;
+import com.laixia.maidintelligence.platform.runtime.AdapterRuntime;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -33,55 +33,77 @@ public final class OwnerReturnGameTests {
             GameTestHelper helper
     ) {
         Fixture fixture = fixture(helper);
-        TlmMaidOwnerReturnService service = service(1.0D);
+        IntentGameTestRuntime.Runtime runtime =
+                IntentGameTestRuntime.create(
+                        status(),
+                        maid -> {
+                        },
+                        IntentGameTestRuntime.postTaskIntent()
+                );
         long gameTime = helper.getLevel().getGameTime();
         fixture.maid().getBrain().setMemory(
                 InitEntities.TARGET_POS.get(),
                 new BlockPosTracker(fixture.maid().blockPosition().east(2))
         );
         helper.assertFalse(
-                service.tick(fixture.maid(), gameTime),
-                "Active work target triggered an early owner return"
+                runtime.tick(fixture.maid(), gameTime),
+                "Active work target triggered an early return"
         );
 
         fixture.maid().getBrain().eraseMemory(
                 InitEntities.TARGET_POS.get()
         );
         helper.assertFalse(
-                service.tick(fixture.maid(), gameTime + 1L),
-                "Work release ignored the settle window"
+                runtime.tick(fixture.maid(), gameTime + 1L),
+                "Post-task settle guard was bypassed"
         );
         helper.assertTrue(
-                service.tick(
-                        fixture.maid(),
-                        gameTime + 1L
-                                + OwnerReturnPolicy
-                                .DEFAULT_POST_TASK_SETTLE_TICKS
-                ),
-                "Completed work did not trigger one owner return"
+                runtime.tick(fixture.maid(), gameTime + 21L),
+                "Released work target did not trigger owner return"
         );
         assertWalkTargetOwner(helper, fixture);
 
         fixture.maid().getBrain().eraseMemory(
                 MemoryModuleType.WALK_TARGET
         );
+        helper.assertTrue(
+                runtime.tick(fixture.maid(), gameTime + 22L),
+                "Running return plan stopped after its signal was consumed"
+        );
+        assertWalkTargetOwner(helper, fixture);
+
+        fixture.owner().setPos(
+                fixture.maid().getX() + 1.0D,
+                fixture.maid().getY(),
+                fixture.maid().getZ()
+        );
+        helper.assertTrue(
+                runtime.tick(fixture.maid(), gameTime + 23L),
+                "Owner return did not complete after arriving"
+        );
         helper.assertFalse(
-                service.tick(
-                        fixture.maid(),
-                        gameTime + 2L
-                                + OwnerReturnPolicy
-                                .DEFAULT_POST_TASK_SETTLE_TICKS
-                ),
-                "One completed task triggered more than one return"
+                runtime.tick(fixture.maid(), gameTime + 24L),
+                "Consumed post-task signal started a second return"
+        );
+        helper.assertTrue(
+                runtime.intents().metrics().activations() == 1L,
+                "Post-task signal activated more than once"
         );
         helper.succeed();
     }
 
     @GameTest(templateNamespace = "minecraft", template = "empty")
-    public static void randomStrollMayChooseOwner(
+    public static void randomStrollSignalMayChooseOwner(
             GameTestHelper helper
     ) {
         Fixture fixture = fixture(helper);
+        IntentGameTestRuntime.Runtime runtime =
+                IntentGameTestRuntime.create(
+                        status(),
+                        maid -> {
+                        },
+                        IntentGameTestRuntime.wanderIntent()
+                );
         BehaviorUtils.setWalkAndLookTargetMemories(
                 fixture.maid(),
                 fixture.maid().blockPosition().east(3),
@@ -89,61 +111,14 @@ public final class OwnerReturnGameTests {
                 0
         );
 
-        boolean returned = service(0.0D).tick(
-                fixture.maid(),
-                helper.getLevel().getGameTime()
-        );
-
         helper.assertTrue(
-                returned,
-                "Passing random-stroll roll did not choose the owner"
+                runtime.tick(
+                        fixture.maid(),
+                        helper.getLevel().getGameTime()
+                ),
+                "Random-stroll edge did not activate owner return"
         );
         assertWalkTargetOwner(helper, fixture);
-        helper.succeed();
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty")
-    public static void randomStrollReturnRespectsChanceAndSitting(
-            GameTestHelper helper
-    ) {
-        Fixture failedRoll = fixture(helper);
-        BehaviorUtils.setWalkAndLookTargetMemories(
-                failedRoll.maid(),
-                failedRoll.maid().blockPosition().east(3),
-                0.3F,
-                0
-        );
-        helper.assertFalse(
-                service(1.0D).tick(
-                        failedRoll.maid(),
-                        helper.getLevel().getGameTime()
-                ),
-                "Failed random-stroll roll still chose the owner"
-        );
-
-        Fixture sitting = fixture(helper);
-        sitting.maid().setInSittingPose(true);
-        BehaviorUtils.setWalkAndLookTargetMemories(
-                sitting.maid(),
-                sitting.maid().blockPosition().east(3),
-                0.3F,
-                0
-        );
-        helper.assertFalse(
-                service(0.0D).tick(
-                        sitting.maid(),
-                        helper.getLevel().getGameTime()
-                ),
-                "Random-stroll return overrode commanded sitting"
-        );
-        helper.assertTrue(
-                sitting.maid().getBrain()
-                        .getMemory(MemoryModuleType.WALK_TARGET)
-                        .map(target -> target.getTarget())
-                        .filter(BlockPosTracker.class::isInstance)
-                        .isPresent(),
-                "Rejected owner return replaced the random stroll"
-        );
         helper.succeed();
     }
 
@@ -160,7 +135,7 @@ public final class OwnerReturnGameTests {
                         .map(EntityTracker::getEntity)
                         .filter(fixture.owner()::equals)
                         .isPresent(),
-                "Owner return did not retain the owner as movement target"
+                "Owner return did not retain the owner movement target"
         );
     }
 
@@ -170,18 +145,8 @@ public final class OwnerReturnGameTests {
                 helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
             }
         }
-        BlockPos maidPosition = helper.absolutePos(
-                new BlockPos(1, 2, 1)
-        );
-        BlockPos ownerPosition = helper.absolutePos(
-                new BlockPos(6, 2, 1)
-        );
         Player owner = helper.makeMockPlayer();
-        owner.setPos(
-                ownerPosition.getX() + 0.5D,
-                ownerPosition.getY(),
-                ownerPosition.getZ() + 0.5D
-        );
+        owner.setPos(6.5D, 2.0D, 1.5D);
         TaskAttack task = new TaskAttack();
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
@@ -194,11 +159,7 @@ public final class OwnerReturnGameTests {
                 return task;
             }
         };
-        maid.setPos(
-                maidPosition.getX() + 0.5D,
-                maidPosition.getY(),
-                maidPosition.getZ() + 0.5D
-        );
+        maid.setPos(1.5D, 2.0D, 1.5D);
         maid.setTame(true);
         maid.setHomeModeEnable(false);
         helper.getLevel().addFreshEntity(maid);
@@ -206,10 +167,10 @@ public final class OwnerReturnGameTests {
         return new Fixture(owner, maid);
     }
 
-    private static TlmMaidOwnerReturnService service(double randomSample) {
-        return new TlmMaidOwnerReturnService(
-                BehaviorTuning::defaults,
-                maid -> randomSample
+    @SuppressWarnings("unchecked")
+    private static MaidStatusApi<EntityMaid> status() {
+        return (MaidStatusApi<EntityMaid>) AdapterRuntime.require(
+                MaidStatusApi.class
         );
     }
 

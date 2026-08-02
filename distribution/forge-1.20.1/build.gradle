@@ -29,6 +29,7 @@ def stableModules = [
         project(':features:status'),
         project(':features:ai'),
         project(':features:ai:behavior'),
+        project(':features:ai:orchestration'),
         project(':features:advancement'),
         project(':features:interaction'),
         project(':features:physics'),
@@ -201,8 +202,16 @@ def verificationEntrypoints = [
                 'com.laixia.maidintelligence.feature.ai.MovementIntentCoordinationVerification'
         ],
         verifyCustomBehavior   : [
-                'Verifies original companionship behavior policies.',
+                'Verifies companionship sensor timing and engine safety tuning.',
                 'com.laixia.maidintelligence.feature.behavior.CustomBehaviorVerification'
+        ],
+        verifyIntentOrchestration: [
+                'Verifies deterministic Utility selection and plan runtime semantics.',
+                'com.laixia.maidintelligence.feature.orchestration.IntentOrchestrationVerification'
+        ],
+        verifyIntentData       : [
+                'Verifies versioned maid intent data and atomic reload fallback.',
+                'com.laixia.maidintelligence.feature.orchestration.data.IntentDataCodecVerification'
         ],
         verifyAdaptiveAi       : [
                 'Verifies dynamic maid activity radius and combat reaction policies.',
@@ -241,7 +250,7 @@ verificationEntrypoints.each { taskName, definition ->
 
 // Lower bound only: splitting or adding verifications must never fail the build,
 // but silently dropping them must. Raise the floor when the suite grows durably.
-def minimumVerificationSources = 112
+def minimumVerificationSources = 115
 
 tasks.register('verifyTestInventory') {
     group = 'verification'
@@ -297,13 +306,17 @@ tasks.register('verifyMixinLayout') {
                     'EntityMaidPlaceBlockMixin',
                     'MaidFeedAnimalTaskMixin',
                     'MaidPickupEntitiesSensorOptimizationMixin',
+                    'ai.EntitySitCommandSeatLockMixin',
                     'ai.EntityMaidMovementCoordinationMixin',
                     'ai.MaidBegMovementCoordinationMixin',
                     'ai.MaidBreathAirMovementCoordinationMixin',
                     'ai.MaidFollowOwnerMovementCoordinationMixin',
+                    'ai.MaidFollowOwnerVehicleSeatLockMixin',
                     'ai.MaidMoveToBlockMovementCoordinationMixin',
                     'ai.MaidPickupMovementCoordinationMixin',
+                    'ai.MaidScheduleCommandSeatLockMixin',
                     'ai.SchedulePosMovementCoordinationMixin',
+                    'status.MaidPickupInventoryFeedbackMixin',
                     'CustomPackPhysicsMetadataMixin',
                     'EntityMaidClientRandomHealingMixin',
                     'EntityMaidRendererYsmCaptureMixin',

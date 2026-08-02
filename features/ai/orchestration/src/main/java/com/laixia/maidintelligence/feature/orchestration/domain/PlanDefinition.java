@@ -1,0 +1,95 @@
+package com.laixia.maidintelligence.feature.orchestration.domain;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.regex.Pattern;
+
+public record PlanDefinition(
+        OrchestrationId id,
+        String initialState,
+        Map<String, State> states
+) {
+    public static final String SUCCESS = "$success";
+    public static final String FAILURE = "$failure";
+
+    private static final Pattern STATE_ID =
+            Pattern.compile("[a-z][a-z0-9_]{0,63}");
+
+    public PlanDefinition {
+        Objects.requireNonNull(id, "id");
+        requireStateId(initialState, "initialState");
+        states = Map.copyOf(new LinkedHashMap<>(states));
+        if (states.isEmpty()) {
+            throw new IllegalArgumentException("plan states cannot be empty");
+        }
+        if (!states.containsKey(initialState)) {
+            throw new IllegalArgumentException(
+                    "Missing initial plan state: " + initialState
+            );
+        }
+        states.forEach((stateId, state) -> {
+            requireStateId(stateId, "state");
+            Objects.requireNonNull(state, "state");
+        });
+    }
+
+    public record State(
+            OrchestrationId action,
+            Map<String, String> parameters,
+            int timeoutTicks,
+            String onSuccess,
+            String onFailure,
+            String onCancelled
+    ) {
+        public State(
+                OrchestrationId action,
+                Map<String, String> parameters,
+                int timeoutTicks,
+                String onSuccess,
+                String onFailure
+        ) {
+            this(
+                    action,
+                    parameters,
+                    timeoutTicks,
+                    onSuccess,
+                    onFailure,
+                    FAILURE
+            );
+        }
+
+        public State {
+            Objects.requireNonNull(action, "action");
+            parameters = Map.copyOf(new LinkedHashMap<>(parameters));
+            if (timeoutTicks < 1 || timeoutTicks > 72_000) {
+                throw new IllegalArgumentException(
+                        "timeoutTicks must be in [1, 72000]"
+                );
+            }
+            requireTransition(onSuccess, "onSuccess");
+            requireTransition(onFailure, "onFailure");
+            requireTransition(onCancelled, "onCancelled");
+        }
+    }
+
+    public static boolean terminal(String transition) {
+        return SUCCESS.equals(transition) || FAILURE.equals(transition);
+    }
+
+    private static void requireTransition(String value, String name) {
+        Objects.requireNonNull(value, name);
+        if (!terminal(value)) {
+            requireStateId(value, name);
+        }
+    }
+
+    private static void requireStateId(String value, String name) {
+        Objects.requireNonNull(value, name);
+        if (!STATE_ID.matcher(value).matches()) {
+            throw new IllegalArgumentException(
+                    name + " is not a valid state id: " + value
+            );
+        }
+    }
+}

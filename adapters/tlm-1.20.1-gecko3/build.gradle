@@ -98,9 +98,9 @@ tasks.register('verifyAdapterLayout') {
         ) {
             include '**/*.java'
         }.files
-        if (mixins.size() != 18) {
+        if (mixins.size() != 22) {
             throw new GradleException(
-                    "Expected 18 TLM/Gecko Mixins, found ${mixins.size()}."
+                    "Expected 22 TLM/Gecko Mixins, found ${mixins.size()}."
             )
         }
         mixins.each { mixin ->

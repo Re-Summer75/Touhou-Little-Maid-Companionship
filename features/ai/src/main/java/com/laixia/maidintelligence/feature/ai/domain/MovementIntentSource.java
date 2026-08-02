@@ -13,6 +13,7 @@ public enum MovementIntentSource {
     HOME_RETURN(1),
     COMBAT(2),
     FOLLOW_OWNER(3),
+    COMPANION(4),
     BUILT_IN_WORK(5),
     BEG(6),
     STEAL_EDIBLE(8),

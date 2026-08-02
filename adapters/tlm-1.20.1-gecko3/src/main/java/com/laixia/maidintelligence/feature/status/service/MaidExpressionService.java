@@ -43,6 +43,31 @@ public final class MaidExpressionService {
         return true;
     }
 
+    @SuppressWarnings("null")
+    public boolean showInventoryFull(EntityMaid maid) {
+        BubbleState state = stateFor(maid);
+        if (!canShowWarning(
+                maid,
+                state.inventoryBubbleKey,
+                state.lastInventoryWarningTick
+        )) {
+            return false;
+        }
+
+        long key = addStatusBubble(maid, TextChatBubbleData.create(
+                STATUS_EXIST_TICKS,
+                Component.translatable(statusBubble("inventory_full")),
+                IChatBubbleData.TYPE_2,
+                STATUS_PRIORITY
+        ));
+        if (key < 0) {
+            return false;
+        }
+        state.inventoryBubbleKey = key;
+        state.lastInventoryWarningTick = maid.level().getGameTime();
+        return true;
+    }
+
     public boolean showToolWarning(EntityMaid maid, ToolReplacementResult tool) {
         BubbleState state = stateFor(maid);
         if (!canShowWarning(maid, state.toolBubbleKey, state.lastToolWarningTick)) {
@@ -146,8 +171,10 @@ public final class MaidExpressionService {
 
     private static final class BubbleState {
         private long hungerBubbleKey = -1L;
+        private long inventoryBubbleKey = -1L;
         private long toolBubbleKey = -1L;
         private long lastHungerWarningTick = Long.MIN_VALUE;
+        private long lastInventoryWarningTick = Long.MIN_VALUE;
         private long lastToolWarningTick = Long.MIN_VALUE;
     }
 }

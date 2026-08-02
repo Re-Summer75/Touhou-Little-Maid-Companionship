@@ -1,0 +1,32 @@
+{
+  "format_version": 1,
+  "plan": "tlm_companionship:approach_owner",
+  "conditions": [
+    { "fact": "tlm_companionship:signal/random_stroll_return", "operator": "gte", "value": 1.0 },
+    { "fact": "tlm_companionship:fact/owner_valid", "operator": "eq", "value": 1.0 },
+    { "fact": "tlm_companionship:fact/follow_mode", "operator": "eq", "value": 1.0 },
+    { "fact": "tlm_companionship:fact/can_move", "operator": "eq", "value": 1.0 },
+    { "fact": "tlm_companionship:fact/combat_active", "operator": "eq", "value": 0.0 },
+    { "fact": "tlm_companionship:fact/built_in_task", "operator": "eq", "value": 1.0 },
+    { "fact": "tlm_companionship:fact/movement_hard_blocked", "operator": "eq", "value": 0.0 }
+  ],
+  "utility": [
+    {
+      "fact": "tlm_companionship:fact/owner_distance",
+      "minimum": 2.0,
+      "maximum": 16.0,
+      "weight": 0.1,
+      "curve": "linear"
+    }
+  ],
+  "selection": {
+    "base_score": 0.4,
+    "minimum_score": 0.0,
+    "activation_chance": 0.1,
+    "evaluation_interval_ticks": 1,
+    "minimum_commit_ticks": 20,
+    "switch_margin": 0.1,
+    "interrupt_priority": 20,
+    "cooldown_ticks": 400
+  }
+}

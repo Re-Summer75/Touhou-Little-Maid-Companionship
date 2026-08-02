@@ -231,7 +231,7 @@ flowchart LR
 `enqueueWork` 回主线程的原因：要解析父子关系，表本身又归渲染线程读。
 
 Tab 按钮的槽位避让沿用成就页那套两步定位（`Init` 里挑空位、`Render.Pre` 复核），
-详见[界面分析手册](../MAID_GUI_ANALYSIS.md) 15.6 节。
+详见[界面分析手册](../gui/README.md) 15.6 节。
 
 ## 8. 附属模组扩展
 

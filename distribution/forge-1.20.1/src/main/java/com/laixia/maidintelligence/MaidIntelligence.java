@@ -42,7 +42,7 @@ import com.laixia.maidintelligence.feature.advancement.tlm.TlmAdvancementRequest
 import com.laixia.maidintelligence.feature.advancement.tlm.TlmHoneySlideHandler;
 import com.laixia.maidintelligence.feature.atmosphere.forge.AtmosphereForgeInstaller;
 import com.laixia.maidintelligence.feature.behavior.api.MaidGazeRecallApi;
-import com.laixia.maidintelligence.feature.behavior.api.MaidOwnerReturnApi;
+import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
 import com.laixia.maidintelligence.feature.behavior.forge.BehaviorForgeInstaller;
 import com.laixia.maidintelligence.feature.behavior.forge.BehaviorServerConfig;
 import com.laixia.maidintelligence.feature.behavior.tlm.TlmBehaviorComposition;
@@ -64,20 +64,24 @@ import com.laixia.maidintelligence.feature.interaction.service.MaidMouthFeedRequ
 import com.laixia.maidintelligence.feature.interaction.tlm.InteractionTlmModule;
 import com.laixia.maidintelligence.feature.interaction.tlm.TlmEatingParticlePolicy;
 import com.laixia.maidintelligence.feature.level.api.ExperienceSource;
-import com.laixia.maidintelligence.feature.level.api.LevelChange;
 import com.laixia.maidintelligence.feature.level.api.MaidLevelApi;
 import com.laixia.maidintelligence.feature.level.application.DefaultMaidLevelService;
 import com.laixia.maidintelligence.feature.level.client.LevelGuiHandler;
 import com.laixia.maidintelligence.feature.level.command.LevelCommands;
 import com.laixia.maidintelligence.feature.level.domain.DefaultLevelCurve;
-import com.laixia.maidintelligence.feature.level.domain.LevelProgress;
 import com.laixia.maidintelligence.feature.level.event.MaidLevelChangedEvent;
 import com.laixia.maidintelligence.feature.level.forge.LevelForgeInstaller;
 import com.laixia.maidintelligence.feature.level.handler.LevelExperienceHandler;
 import com.laixia.maidintelligence.feature.level.network.LevelNetwork;
 import com.laixia.maidintelligence.feature.level.network.LevelPacketRegistrar;
 import com.laixia.maidintelligence.feature.level.tlm.LevelTlmModule;
+import com.laixia.maidintelligence.feature.level.tlm.TlmEntityLevelFacade;
 import com.laixia.maidintelligence.feature.level.tlm.TlmMaidLevelStore;
+import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
+import com.laixia.maidintelligence.feature.orchestration.application.MutableIntentCatalog;
+import com.laixia.maidintelligence.feature.orchestration.data.MaidIntentReloadListener;
+import com.laixia.maidintelligence.feature.orchestration.forge.OrchestrationForgeInstaller;
+import com.laixia.maidintelligence.feature.orchestration.tlm.TlmEntityIntentFacade;
 import com.laixia.maidintelligence.feature.physics.PhysicsDebugCommands;
 import com.laixia.maidintelligence.feature.physics.client.ClientPhysicsSetup;
 import com.laixia.maidintelligence.feature.physics.forge.PhysicsClientConfig;
@@ -88,6 +92,7 @@ import com.laixia.maidintelligence.feature.shading.client.ShadingClientSetup;
 import com.laixia.maidintelligence.feature.shading.client.TlmShadingCacheInvalidator;
 import com.laixia.maidintelligence.feature.shading.forge.ShadingForgeInstaller;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
+import com.laixia.maidintelligence.feature.status.api.MaidStatusFeedbackApi;
 import com.laixia.maidintelligence.feature.status.client.MaidHungerGuiHandler;
 import com.laixia.maidintelligence.feature.status.domain.DefaultHungerPolicy;
 import com.laixia.maidintelligence.feature.status.domain.DefaultToolDurabilityPolicy;
@@ -194,11 +199,15 @@ public final class MaidIntelligence {
         );
         MaidMouthFeedPort<ServerPlayer> mouthFeed =
                 new MaidMouthFeedRequestHandler(feeding);
+        MutableIntentCatalog intentCatalog = new MutableIntentCatalog();
         TlmBehaviorComposition behaviors = TlmBehaviorComposition.create(
                 statusApi,
                 statusService::requestHungerAttention,
-                BehaviorServerConfig::tuning
+                BehaviorServerConfig::tuning,
+                intentCatalog
         );
+        MaidIntentApi<Entity> commandIntents =
+                new TlmEntityIntentFacade(behaviors.intents());
 
         wireDomainEvents(events, progressAdvancementTriggers, levelApi);
 
@@ -212,12 +221,10 @@ public final class MaidIntelligence {
                         MaidGazeRecallApi.class,
                         behaviors.gazeRecall()
                 )
-                .register(
-                        MaidOwnerReturnApi.class,
-                        behaviors.ownerReturn()
-                )
+                .register(MaidIntentApi.class, behaviors.intents())
                 .register(MaidLevelApi.class, levelApi)
                 .register(MaidStatusApi.class, statusApi)
+                .register(MaidStatusFeedbackApi.class, statusService)
                 .register(
                         MaidWorldAdvancementTriggers.class,
                         worldAdvancementTriggers
@@ -294,7 +301,11 @@ public final class MaidIntelligence {
                 new AiForgeInstaller(
                         new MaidAiCommands(
                                 aiOptimization,
-                                movementCoordination
+                                movementCoordination,
+                                commandIntents,
+                                EntityMaid.class::isInstance,
+                                () -> BehaviorServerConfig.tuning()
+                                        .diagnosticsEnabled()
                         )::onRegisterCommands,
                         new MaidSeatCombatHandler()
                 ),
@@ -302,10 +313,17 @@ public final class MaidIntelligence {
                         behaviors.gazeRecallHandler()::onPlayerTick,
                         behaviors.gazeRecallHandler()::onPlayerLogout
                 ),
+                new OrchestrationForgeInstaller(
+                        new MaidIntentReloadListener(
+                                intentCatalog,
+                                CompanionIntentIds.vocabulary()
+                        ),
+                        commandIntents::forget
+                ),
                 new LevelForgeInstaller(
                         new LevelExperienceHandler(levelApi),
                         new LevelCommands(
-                                levelCommandApi(levelApi),
+                                new TlmEntityLevelFacade(levelApi),
                                 EntityMaid.class::isInstance
                         )::onRegisterCommands,
                         () -> new LevelGuiHandler(levelApi)
@@ -377,43 +395,6 @@ public final class MaidIntelligence {
                 new MaidExpressionService(),
                 new MaidActionService()
         );
-    }
-
-    private static MaidLevelApi<Entity> levelCommandApi(
-            MaidLevelApi<EntityMaid> levelApi
-    ) {
-        return new MaidLevelApi<>() {
-            @Override
-            public LevelProgress getProgress(Entity subject) {
-                return levelApi.getProgress((EntityMaid) subject);
-            }
-
-            @Override
-            public LevelChange awardExperience(
-                    Entity subject,
-                    int amount,
-                    ExperienceSource source
-            ) {
-                return levelApi.awardExperience(
-                        (EntityMaid) subject,
-                        amount,
-                        source
-                );
-            }
-
-            @Override
-            public LevelProgress setProgress(
-                    Entity subject,
-                    int level,
-                    int experience
-            ) {
-                return levelApi.setProgress(
-                        (EntityMaid) subject,
-                        level,
-                        experience
-                );
-            }
-        };
     }
 
     private static void wireDomainEvents(

@@ -5,6 +5,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.item.EntityChair;
 import com.github.tartaricacid.touhoulittlemaid.entity.item.EntitySit;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
+import com.laixia.maidintelligence.feature.behavior.tlm.MaidCommandSeatBridge;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
@@ -27,7 +28,8 @@ public final class MaidSeatAutonomyBridge {
     }
 
     public static void leaveSeatForFollow(EntityMaid maid) {
-        if (!canLeavePassiveSeat(maid) || maid.isHomeModeEnable()) {
+        if (!canLeavePassiveSeat(maid, false)
+                || maid.isHomeModeEnable()) {
             return;
         }
 
@@ -46,7 +48,7 @@ public final class MaidSeatAutonomyBridge {
     }
 
     public static void leaveSeatForPickup(EntityMaid maid) {
-        if (!canLeavePassiveSeat(maid)
+        if (!canLeavePassiveSeat(maid, false)
                 || !maid.isPickup()
                 || isSeatedWork(maid)) {
             return;
@@ -66,7 +68,7 @@ public final class MaidSeatAutonomyBridge {
     }
 
     public static void leaveSeatForCombat(EntityMaid maid) {
-        if (!canLeavePassiveSeat(maid)
+        if (!canLeavePassiveSeat(maid, true)
                 || isSeatedWork(maid)
                 || !ActivityRadiusBridge.isBuiltInCombatTask(maid)) {
             return;
@@ -125,19 +127,29 @@ public final class MaidSeatAutonomyBridge {
         }
     }
 
-    private static boolean canLeavePassiveSeat(EntityMaid maid) {
+    private static boolean canLeavePassiveSeat(
+            EntityMaid maid,
+            boolean dangerOverride
+    ) {
         if (maid.level().isClientSide()
                 || maid.isMaidInSittingPose()
                 || maid.isOrderedToSit()
                 || maid.isSleeping()
-                || maid.isLeashed()) {
+                || maid.isLeashed()
+                || (!dangerOverride
+                && MaidCommandSeatBridge.isSeatProtected(maid))) {
             return false;
         }
 
         Entity vehicle = maid.getVehicle();
-        return vehicle != null
-                && (vehicle.getType() == EntityChair.TYPE
-                || vehicle.getType() == EntitySit.TYPE);
+        if (vehicle == null) {
+            return false;
+        }
+        boolean passiveSeat = vehicle.getType() == EntityChair.TYPE
+                || vehicle.getType() == EntitySit.TYPE;
+        return passiveSeat
+                || (dangerOverride
+                && MaidCommandSeatBridge.isSeatProtected(maid));
     }
 
     private static boolean isSeatedWork(EntityMaid maid) {
@@ -172,6 +184,7 @@ public final class MaidSeatAutonomyBridge {
     ) {
         maid.getBrain().setMemory(MemoryModuleType.ATTACK_TARGET, target);
         maid.getBrain().eraseMemory(MemoryModuleType.PATH);
+        MaidCommandSeatBridge.releaseForDanger(maid);
         maid.stopRiding();
     }
 }

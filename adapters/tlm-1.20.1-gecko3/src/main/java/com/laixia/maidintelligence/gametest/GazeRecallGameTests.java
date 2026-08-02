@@ -2,17 +2,27 @@ package com.laixia.maidintelligence.gametest;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
-import com.laixia.maidintelligence.feature.behavior.domain.GazeRecallPolicy;
+import com.laixia.maidintelligence.feature.behavior.api.MaidGazeRecallApi;
 import com.laixia.maidintelligence.feature.behavior.handler.OwnerGazeRecallHandler;
 import com.laixia.maidintelligence.feature.behavior.tlm.TlmMaidGazeRecallService;
+import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
+import com.laixia.maidintelligence.feature.orchestration.tlm.MaidIntentBehavior;
+import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
+import com.laixia.maidintelligence.gametest.support.IntentGameTestRuntime;
 import com.laixia.maidintelligence.platform.resource.ModResources;
+import com.laixia.maidintelligence.platform.runtime.AdapterRuntime;
 import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.behavior.BlockPosTracker;
 import net.minecraft.world.entity.ai.behavior.EntityTracker;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.gametest.GameTestHolder;
@@ -29,11 +39,14 @@ public final class GazeRecallGameTests {
     public static void levelOneGazeRecallApproachesOwner(
             GameTestHelper helper
     ) {
-        EntityMaid maid = spawnOwnedMaid(helper);
-        Player owner = owner(helper, maid);
+        OwnedFixture fixture = ownedFixture(helper);
+        EntityMaid maid = fixture.maid();
+        Player owner = fixture.owner();
         maid.setFavorability(64);
+        IntentGameTestRuntime.Runtime runtime = runtime();
 
-        boolean recalled = service().tryRecall(owner, maid);
+        boolean recalled = service(runtime).tryRecall(owner, maid);
+        runtime.tick(maid, helper.getLevel().getGameTime());
 
         helper.assertTrue(recalled, "Level-one gaze recall was rejected");
         helper.assertTrue(
@@ -54,19 +67,29 @@ public final class GazeRecallGameTests {
     public static void gazeRecallRespectsFavorabilityAndCommandedSit(
             GameTestHelper helper
     ) {
-        EntityMaid maid = spawnOwnedMaid(helper);
-        Player owner = owner(helper, maid);
+        OwnedFixture fixture = ownedFixture(helper);
+        EntityMaid maid = fixture.maid();
+        Player owner = fixture.owner();
+        IntentGameTestRuntime.Runtime runtime = runtime();
         maid.setFavorability(63);
+        helper.assertTrue(
+                service(runtime).tryRecall(owner, maid),
+                "Valid gaze pair did not submit a signal"
+        );
         helper.assertFalse(
-                service().tryRecall(owner, maid),
-                "Favorability level zero unlocked gaze recall"
+                runtime.tick(maid, helper.getLevel().getGameTime()),
+                "Favorability level zero passed the data guard"
         );
 
         maid.setFavorability(64);
         maid.setInSittingPose(true);
+        service(runtime).tryRecall(owner, maid);
         helper.assertFalse(
-                service().tryRecall(owner, maid),
-                "Gaze recall overrode the owner's sitting command"
+                runtime.tick(
+                        maid,
+                        helper.getLevel().getGameTime() + 1L
+                ),
+                "Gaze recall overrode commanded sitting"
         );
         helper.assertTrue(
                 maid.getBrain()
@@ -113,6 +136,130 @@ public final class GazeRecallGameTests {
         helper.succeed();
     }
 
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void intentRuntimeAdvancesOnConsecutiveBrainTicks(
+            GameTestHelper helper
+    ) {
+        OwnedFixture fixture = ownedFixture(helper);
+        EntityMaid maid = fixture.maid();
+        maid.setFavorability(64);
+        IntentGameTestRuntime.Runtime runtime = runtime();
+        MaidIntentBehavior behavior = new MaidIntentBehavior(
+                runtime.intents(),
+                runtime.observer()
+        );
+        long gameTime = helper.getLevel().getGameTime();
+
+        helper.assertTrue(
+                behavior.tryStart(helper.getLevel(), maid, gameTime),
+                "Intent runtime did not start on the first Brain tick"
+        );
+        behavior.tickOrStop(helper.getLevel(), maid, gameTime);
+        helper.assertTrue(
+                behavior.getStatus() == net.minecraft.world.entity.ai.behavior.Behavior.Status.RUNNING,
+                "Intent runtime did not remain available for later signals"
+        );
+        helper.assertTrue(
+                service(runtime).tryRecall(fixture.owner(), maid),
+                "Gaze signal was rejected between consecutive Brain ticks"
+        );
+        behavior.tickOrStop(helper.getLevel(), maid, gameTime + 1L);
+        helper.assertTrue(
+                maid.getBrain()
+                        .getMemory(MemoryModuleType.WALK_TARGET)
+                        .map(target -> target.getTarget())
+                        .filter(EntityTracker.class::isInstance)
+                        .map(EntityTracker.class::cast)
+                        .map(EntityTracker::getEntity)
+                        .filter(fixture.owner()::equals)
+                        .isPresent(),
+                "Running intent behavior did not process the next-tick signal"
+        );
+        helper.succeed();
+    }
+
+    @GameTest(
+            templateNamespace = "minecraft",
+            template = "empty",
+            timeoutTicks = 40
+    )
+    public static void registeredGazeSignalRunsThroughMaidBrain(
+            GameTestHelper helper
+    ) {
+        OwnedFixture fixture = ownedFixture(helper);
+        for (int x = 6; x <= 8; x++) {
+            helper.setBlock(new BlockPos(x, 1, 1), Blocks.STONE);
+        }
+        fixture.owner().setPos(7.5D, 2.0D, 1.5D);
+        fixture.maid().setFavorability(64);
+        helper.assertTrue(
+                productionGazeRecall().tryRecall(
+                        fixture.owner(),
+                        fixture.maid()
+                ),
+                "Registered gaze service rejected a valid owner and maid"
+        );
+
+        helper.runAfterDelay(3, () -> {
+            var trace = productionIntents().inspect(fixture.maid());
+            var activeIntent = trace.activeIntent();
+            helper.assertTrue(
+                    activeIntent != null
+                            && "gaze_recall".equals(activeIntent.path()),
+                    "Maid Brain did not activate the registered gaze intent: "
+                            + trace
+                            + "; metrics="
+                            + productionIntents().metrics()
+            );
+            helper.succeed();
+        });
+    }
+
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void gazeRecallDefersImportantActivities(
+            GameTestHelper helper
+    ) {
+        OwnedFixture fixture = ownedFixture(helper);
+        EntityMaid maid = fixture.maid();
+        maid.setFavorability(64);
+        long gameTime = helper.getLevel().getGameTime();
+        maid.getBrain().setMemory(
+                InitEntities.TARGET_POS.get(),
+                new BlockPosTracker(maid.blockPosition().east(2))
+        );
+
+        helper.assertTrue(
+                productionGazeRecall().tryRecall(fixture.owner(), maid),
+                "Work guard fixture did not submit a gaze signal"
+        );
+        productionIntents().tick(maid, gameTime);
+        helper.assertTrue(
+                productionIntents().inspect(maid).activeIntent() == null,
+                "Gaze recall interrupted an active work target"
+        );
+
+        maid.getBrain().eraseMemory(InitEntities.TARGET_POS.get());
+        maid.setItemInHand(
+                InteractionHand.MAIN_HAND,
+                new ItemStack(Items.APPLE)
+        );
+        maid.startUsingItem(InteractionHand.MAIN_HAND);
+        helper.assertTrue(
+                maid.isUsingItem(),
+                "Important item-use fixture did not start"
+        );
+        helper.assertTrue(
+                productionGazeRecall().tryRecall(fixture.owner(), maid),
+                "Item-use guard fixture did not submit a gaze signal"
+        );
+        productionIntents().tick(maid, gameTime + 1L);
+        helper.assertTrue(
+                productionIntents().inspect(maid).activeIntent() == null,
+                "Gaze recall interrupted active item use"
+        );
+        helper.succeed();
+    }
+
     private static EntityMaid spawnOwnedMaid(GameTestHelper helper) {
         for (int x = 0; x <= 5; x++) {
             for (int z = 0; z <= 3; z++) {
@@ -128,17 +275,64 @@ public final class GazeRecallGameTests {
         return maid;
     }
 
-    private static Player owner(
-            GameTestHelper helper,
-            EntityMaid maid
-    ) {
+    private static OwnedFixture ownedFixture(GameTestHelper helper) {
+        for (int x = 0; x <= 5; x++) {
+            for (int z = 0; z <= 3; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
+            }
+        }
         Player owner = helper.makeMockPlayer();
         owner.setPos(4.5D, 2.0D, 1.5D);
+        EntityMaid maid = new EntityMaid(helper.getLevel()) {
+            @Override
+            public LivingEntity getOwner() {
+                return owner;
+            }
+        };
+        maid.setPos(1.5D, 2.0D, 1.5D);
+        maid.setTame(true);
+        maid.setHomeModeEnable(false);
         maid.setOwnerUUID(owner.getUUID());
-        return owner;
+        helper.getLevel().addFreshEntity(maid);
+        return new OwnedFixture(owner, maid);
     }
 
-    private static TlmMaidGazeRecallService service() {
-        return new TlmMaidGazeRecallService(GazeRecallPolicy.defaults());
+    private static TlmMaidGazeRecallService service(
+            IntentGameTestRuntime.Runtime runtime
+    ) {
+        return new TlmMaidGazeRecallService(runtime.intents());
+    }
+
+    private static IntentGameTestRuntime.Runtime runtime() {
+        return IntentGameTestRuntime.create(
+                status(),
+                maid -> {
+                },
+                IntentGameTestRuntime.gazeIntent()
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private static MaidStatusApi<EntityMaid> status() {
+        return (MaidStatusApi<EntityMaid>) AdapterRuntime.require(
+                MaidStatusApi.class
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private static MaidGazeRecallApi<Player, EntityMaid> productionGazeRecall() {
+        return (MaidGazeRecallApi<Player, EntityMaid>) AdapterRuntime.require(
+                MaidGazeRecallApi.class
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private static MaidIntentApi<EntityMaid> productionIntents() {
+        return (MaidIntentApi<EntityMaid>) AdapterRuntime.require(
+                MaidIntentApi.class
+        );
+    }
+
+    private record OwnedFixture(Player owner, EntityMaid maid) {
     }
 }

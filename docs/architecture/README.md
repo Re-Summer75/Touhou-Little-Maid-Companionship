@@ -22,8 +22,9 @@ Java、Parchment、TLM、Gecko 及项目路径组合复制到 `gradle.properties
 
 1. `kernel` 提供身份、事件、结果和服务注册等最小稳定原语。
 2. `shared:geometry` 提供不含游戏类型的几何值对象与算法。
-3. 八个顶层 `features/*` 及 `:features:ai:behavior` 子模块只依赖 `kernel`、必要的
-   `shared:*` 和通用 JVM 库；feature 之间通过 Port 或领域事件协作，不直接绑定彼此实现。
+3. 八个顶层 `features/*` 及 `:features:ai:behavior`、`:features:ai:orchestration`
+   子模块只依赖 `kernel`、必要的 `shared:*` 和通用 JVM 库；feature 之间通过 Port 或领域
+   事件协作，不直接绑定彼此实现。
 4. `adapters/forge-*` 与 `adapters/tlm-*-gecko*` 实现 Port，并把 MC、Forge、TLM、Gecko
    类型转换为稳定模型。
 5. `distribution/*` 是组合根、资源容器和唯一 ForgeGradle 编译边界，同时装配稳定模块与两个
@@ -69,6 +70,7 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 ### status
 
 - `MaidStatusApi<S>`：查询饥饿/饱和度并应用食物恢复。
+- `MaidStatusFeedbackApi<S>`：接收 TLM 运行时确认后的瞬时状态反馈；当前用于带冷却的背包满气泡。
 - `MaidStatusState`：稳定状态值。
 - `MaidStatusStore<S>`：状态持久化 Port。
 - 饥饿与工具耐久策略属于纯领域策略，不接受实体、物品或能力对象。
@@ -93,22 +95,36 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 
 ### ai:behavior
 
-- `:features:ai:behavior` 是独立 Gradle 子模块，包边界为 `feature.behavior`，承载本模组原创
-  AI 行为，不依赖 `:features:ai` 的优化实现。
-- `MaidGazeRecallApi<O, M>`：主人通过明确手势请求指定女仆靠近的窄用例入口。
-- `ContinuousLookTracker` 与 `GazeRecallPolicy`：分别处理连续注视边沿触发、好感度门槛、
-  跟随模式和硬移动状态；不持有 Minecraft 对象。
-- `MaidHungryOwnerRequestApi<M>` 与 `HungryOwnerRequestPolicy`：在饥饿阈值、周期和概率
-  均满足时请求靠近主人。普通分支与现有 40 点“需要食物”提示对齐，每 100 tick 以 10%
-  概率触发；饥饿不高于 20 且好感度至少 3 级时切入 25% 的高好感度分支。两者均避让
-  战斗与硬移动状态。TLM adapter 以弱引用暂存最长 200 tick 的抵达意图，进入主人身边
-  后通过状态动作服务面向主人播放一次请求动作，避免远距离动作打断靠近过程。
-- `MaidOwnerReturnApi<M>` 与 `OwnerReturnPolicy`：观察内置工作目标的释放边沿，在 20 tick
-  内没有新目标时只写入一次主人目标；每个新随机游走目标另有 10% 概率改选主人，并以
-  独立冷却抑制连续归队。运行态只保存在弱引用实例状态中，不进入女仆存档。
-- 当前 TLM adapter 以允许穿透方块的服务端射线和 20 tick 连续注视实现召回，并通过
-  ExtraBrain 执行求食和归队检查。三类移动写入从原版 AI 优化视角仍是外部行为；归队仅
-  只读当前租约来避让工作、战斗、拾取、回区与 fail-open，不反向接管移动仲裁。
+- `:features:ai:behavior` 是独立 Gradle 子模块，包边界为 `feature.behavior`，只保留原创
+  陪伴行为的稳定事实/刺激/动作词表、传感器时序与刺激门面；它依赖编排模块，但不依赖
+  `:features:ai` 的原版 AI 优化实现。
+- `MaidGazeRecallApi<O, M>` 是注视手势提交入口；`ContinuousLookTracker` 只处理连续
+  注视的边沿触发。好感度、模式、距离和动作语义不再硬编码于该模块。
+
+### ai:orchestration
+
+- `:features:ai:orchestration` 是平台中立的确定性意图引擎，包边界为
+  `feature.orchestration`。它只依赖 `kernel`，不包含 Minecraft、Forge 或 TLM 类型。
+- `IntentDefinition` 与 `PlanDefinition` 描述 Guard、Utility、激活概率、承诺/滞回、
+  中断等级、冷却、动作步骤、超时和成功/失败/取消转移；`FactKey`/`FactValue` 与
+  `ActionSchema` 对注册事实和动作参数做类型约束。
+- `IntentCatalog.compile` 将事实索引、条件、状态名与转移预编译为不可变目录，并拒绝未知
+  ID、重复定义、非法参数、不可达状态和无终点循环。`MutableIntentCatalog` 只通过一次
+  volatile 发布切换完整代际。
+- `DefaultMaidIntentOrchestrator<M>` 为每个主体保留弱引用运行态；普通候选按实体 ID
+  错峰评估，显式刺激立即重评，当前动作每 tick 推进。目录代际变化、时间回退、实体卸载、
+  Guard 失效和硬中断都会取消旧动作。
+- Forge adapter 读取 `data/<namespace>/maid_ai/intents/*.json` 与
+  `data/<namespace>/maid_ai/plans/*.json`。资源栈按优先级覆盖；无效上层定义回退下层，整批
+  编译失败保留上一代。格式与扩展注册见
+  [`intent-ai-data.md`](intent-ai-data.md)。
+- TLM adapter 用一个 `MaidIntentBehavior` 统一更新工作释放/随机游走边沿、采集事实并推进
+  调度器。注视处理器只提交 TTL 刺激；`TlmMaidIntentActions` 是唯一能写入主人靠近、
+  注视和求食动作的出口，并以 `COMPANION` 移动来源复用拾取保护、硬状态和 fail-open。
+- 内置目录定义 `gaze_recall`、`hungry_standard`、`hungry_high_trust`、
+  `post_task_return`、`wander_return`，以及 `approach_owner`、`request_food` 计划。
+  饥饿阈值、概率、归队等待和冷却全部由 Data Pack 决定；TOML 只控制引擎预算、诊断和
+  注视传感器安全参数。
 
 ### advancement
 
@@ -180,8 +196,8 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 ## 矩阵装配与 target 选择
 
 `settings.gradle` 永远只 include 一份 `kernel`、`shared:geometry`、八个顶层 feature 和
-`:features:ai:behavior` 子模块，然后从矩阵的每条 target 动态 include 两个 adapter 与一个
-distribution。
+`:features:ai:behavior`、`:features:ai:orchestration` 子模块，然后从矩阵的每条 target
+动态 include 两个 adapter 与一个 distribution。
 
 根构建把矩阵值注入对应 distribution。稳定模块使用所有 target 中最低的 Java 版本编译，
 保证单份稳定字节码可被每个 distribution 消费。每个 distribution 使用本 target 的 Java、
@@ -283,6 +299,12 @@ MixinGradle 对单个 source set 只可靠生成一份 refmap，因此 common �
 ```powershell
 .\gradlew.bat --offline verifyVersionMatrix check verifyAll assemble
 ```
+
+意图 AI 另有 `verifyIntentOrchestration` 与 `verifyIntentData` 两个纯 JVM 入口，覆盖
+Utility、确定性选择、承诺/滞回、硬中断、冷却、状态转移、超时、取消、目录代际、格式版本、
+内置资源编译和无效重载回退。GameTest Server 继续验证注视、三秒指挥跟随、载具共乘、
+座位镜像/补位与持久锁定、双层求食、任务后/随机游走归队、战斗抢占、拾取保护、
+一次性刺激、抵达请求动作和多女仆状态隔离。
 
 target 负向检查示例（失败为预期）：
 

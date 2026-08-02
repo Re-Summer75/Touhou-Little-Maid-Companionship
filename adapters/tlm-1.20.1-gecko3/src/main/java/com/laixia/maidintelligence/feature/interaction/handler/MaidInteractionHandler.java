@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.feature.interaction.handler;
 import com.github.tartaricacid.touhoulittlemaid.api.event.InteractMaidEvent;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.init.InitItems;
+import com.laixia.maidintelligence.feature.behavior.tlm.MaidCommandSeatBridge;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.InteractionHand;
@@ -65,7 +66,10 @@ public final class MaidInteractionHandler {
             return;
         }
 
-        boolean hadMountOrPassengers = maid.getVehicle() != null || !maid.getPassengers().isEmpty();
+        MaidCommandSeatBridge.releaseByOwner(maid);
+        boolean hadMountOrPassengers =
+                maid.getVehicle() != null
+                        || !maid.getPassengers().isEmpty();
         if (maid.getVehicle() != null) {
             maid.stopRiding();
         }

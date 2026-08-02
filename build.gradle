@@ -47,6 +47,7 @@ def stableModules = [
         ':features:status',
         ':features:ai',
         ':features:ai:behavior',
+        ':features:ai:orchestration',
         ':features:advancement',
         ':features:interaction',
         ':features:physics',

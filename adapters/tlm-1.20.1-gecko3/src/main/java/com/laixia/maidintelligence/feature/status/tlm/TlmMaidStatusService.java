@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.feature.status.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
+import com.laixia.maidintelligence.feature.status.api.MaidStatusFeedbackApi;
 import com.laixia.maidintelligence.feature.status.application.MaidStatusApplication;
 import com.laixia.maidintelligence.feature.status.domain.DefaultHungerPolicy;
 import com.laixia.maidintelligence.feature.status.domain.MaidStatusState;
@@ -20,7 +21,9 @@ import java.util.WeakHashMap;
 /**
  * TLM orchestration delegates reusable state transitions to the pure application slice.
  */
-public final class TlmMaidStatusService implements MaidStatusApi<EntityMaid> {
+public final class TlmMaidStatusService implements
+        MaidStatusApi<EntityMaid>,
+        MaidStatusFeedbackApi<EntityMaid> {
     private final MaidStatusStore<EntityMaid> store;
     private final MaidStatusApplication<EntityMaid> application;
     private final DefaultHungerPolicy hungerPolicy;
@@ -71,6 +74,11 @@ public final class TlmMaidStatusService implements MaidStatusApi<EntityMaid> {
                 maid,
                 MaidActionService.HUNGER_PRIORITY
         );
+    }
+
+    @Override
+    public boolean reportInventoryFull(EntityMaid maid) {
+        return expressionService.showInventoryFull(maid);
     }
 
     public void tick(EntityMaid maid) {

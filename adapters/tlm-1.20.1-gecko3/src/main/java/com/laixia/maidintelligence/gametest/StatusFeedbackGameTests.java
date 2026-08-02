@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.gametest;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.implement.TextChatBubbleData;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
@@ -14,6 +15,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraftforge.gametest.GameTestHolder;
@@ -91,6 +93,44 @@ public final class StatusFeedbackGameTests {
         helper.succeed();
     }
 
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void fullInventoryPickupShowsOneWarning(GameTestHelper helper) {
+        EntityMaid maid = spawnMaid(helper);
+        maid.setTame(true);
+        maid.setPickup(true);
+        var inventory = maid.getAvailableInv(false);
+        for (int slot = 0; slot < inventory.getSlots(); slot++) {
+            inventory.setStackInSlot(
+                    slot,
+                    new ItemStack(
+                            Items.COBBLESTONE,
+                            inventory.getSlotLimit(slot)
+                    )
+            );
+        }
+
+        ItemEntity item = new ItemEntity(
+                helper.getLevel(),
+                maid.getX() + 1.0D,
+                maid.getY(),
+                maid.getZ(),
+                new ItemStack(Items.DIAMOND)
+        );
+        item.setNoPickUpDelay();
+        helper.getLevel().addFreshEntity(item);
+
+        helper.assertTrue(
+                !maid.pickupItem(item, true),
+                "Full inventory unexpectedly accepted the pickup simulation"
+        );
+        maid.pickupItem(item, true);
+        helper.assertTrue(
+                textBubbleCount(maid) == 1,
+                "Full inventory warning was missing or bypassed its debounce"
+        );
+        helper.succeed();
+    }
+
     @GameTest(templateNamespace = "minecraft", template = "empty", timeoutTicks = 80)
     public static void hungerRegenerationContinuesWhileEatingAndRestartsAfterNewDamage(
             GameTestHelper helper
@@ -144,6 +184,19 @@ public final class StatusFeedbackGameTests {
 
     private static ToolReplacementService toolService() {
         return new ToolReplacementService(DefaultToolDurabilityPolicy.INSTANCE);
+    }
+
+    private static int textBubbleCount(EntityMaid maid) {
+        int count = 0;
+        var iterator = maid.getChatBubbleManager()
+                .getChatBubbleDataCollection()
+                .iterator();
+        while (iterator.hasNext()) {
+            if (TextChatBubbleData.ID.equals(iterator.next().id())) {
+                count++;
+            }
+        }
+        return count;
     }
 
     @SuppressWarnings("unchecked")
