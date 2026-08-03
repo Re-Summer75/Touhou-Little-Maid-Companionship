@@ -9,9 +9,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
 
-import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -69,13 +67,13 @@ public final class MaidCommandSeatBridge {
         Entity candidate = null;
         if (previousOwnerVehicle != null
                 && previousOwnerVehicle != currentOwnerVehicle
-                && available(previousOwnerVehicle, maid)) {
+                && available(previousOwnerVehicle, maid, owner)) {
             candidate = previousOwnerVehicle;
         } else if (currentOwnerVehicle != null) {
-            if (available(currentOwnerVehicle, maid)) {
+            if (available(currentOwnerVehicle, maid, owner)) {
                 candidate = currentOwnerVehicle;
-            } else if (passiveSeat(currentOwnerVehicle) != null) {
-                candidate = nearestEmptySeat(
+            } else {
+                candidate = nearestCompatibleSeat(
                         owner,
                         currentOwnerVehicle,
                         maid
@@ -84,7 +82,8 @@ public final class MaidCommandSeatBridge {
         }
         if (candidate == null
                 || !maid.closerThan(candidate, SEAT_SEARCH_RANGE)
-                || !mount(maid, candidate)) {
+                || !available(candidate, maid, owner)
+                || !maid.startRiding(candidate, true)) {
             return false;
         }
 
@@ -110,6 +109,17 @@ public final class MaidCommandSeatBridge {
     }
 
     public static void releaseForDanger(EntityMaid maid) {
+        releaseTerminal(maid);
+    }
+
+    /**
+     * Releases a passive command seat before TLM performs owner teleport.
+     */
+    public static void releaseForTeleport(EntityMaid maid) {
+        releaseTerminal(maid);
+    }
+
+    private static void releaseTerminal(EntityMaid maid) {
         if (maid.level().isClientSide()) {
             return;
         }
@@ -135,7 +145,7 @@ public final class MaidCommandSeatBridge {
         return true;
     }
 
-    private static Entity nearestEmptySeat(
+    private static Entity nearestCompatibleSeat(
             LivingEntity owner,
             Entity occupiedSeat,
             EntityMaid maid
@@ -145,47 +155,45 @@ public final class MaidCommandSeatBridge {
                 2.0D,
                 SEAT_SEARCH_RANGE
         );
-        List<Entity> seats = new ArrayList<>();
-        seats.addAll(owner.level().getEntitiesOfClass(
-                EntityChair.class,
+        return owner.level().getEntities(
+                maid,
                 bounds,
-                seat -> seat != occupiedSeat && available(seat, maid)
-        ));
-        seats.addAll(owner.level().getEntitiesOfClass(
-                EntitySit.class,
-                bounds,
-                seat -> seat != occupiedSeat && available(seat, maid)
-        ));
-        return seats.stream()
+                seat -> seat != occupiedSeat
+                        && compatibleSeatType(occupiedSeat, seat)
+                        && available(seat, maid, owner)
+        ).stream()
                 .min(Comparator.comparingDouble(owner::distanceToSqr))
                 .orElse(null);
     }
 
-    private static boolean available(Entity vehicle, EntityMaid maid) {
+    private static boolean available(
+            Entity vehicle,
+            EntityMaid maid,
+            LivingEntity owner
+    ) {
         if (!vehicle.isAlive()
-                || vehicle == maid
-                || (vehicle instanceof EntityChair chair
-                && !chair.isTameableCanRide())) {
+                || vehicle == maid) {
             return false;
         }
-        return ((EntityAccessor) vehicle).tlmCanAddPassenger(maid);
+        EntityAccessor access = (EntityAccessor) vehicle;
+        return access.tlmCanAddPassenger(maid)
+                || access.tlmCanAddPassenger(owner);
     }
 
-    private static boolean mount(EntityMaid maid, Entity vehicle) {
-        if (vehicle instanceof EntitySit) {
-            return maid.startRiding(vehicle, true);
+    private static boolean compatibleSeatType(
+            Entity occupiedSeat,
+            Entity candidate
+    ) {
+        if (candidate.getType() == occupiedSeat.getType()) {
+            return true;
         }
-        return maid.startRiding(vehicle);
+        return isTlmPassiveSeat(occupiedSeat)
+                && isTlmPassiveSeat(candidate);
     }
 
-    private static Entity passiveSeat(Entity entity) {
-        if (entity == null) {
-            return null;
-        }
+    private static boolean isTlmPassiveSeat(Entity entity) {
         return entity.getType() == EntityChair.TYPE
-                || entity.getType() == EntitySit.TYPE
-                ? entity
-                : null;
+                || entity.getType() == EntitySit.TYPE;
     }
 
     private static void lockSeat(EntityMaid maid, Entity vehicle) {

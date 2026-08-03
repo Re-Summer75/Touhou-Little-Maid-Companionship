@@ -119,10 +119,13 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
   编译失败保留上一代。格式与扩展注册见
   [`intent-ai-data.md`](intent-ai-data.md)。
 - TLM adapter 用一个 `MaidIntentBehavior` 统一更新工作释放/随机游走边沿、采集事实并推进
-  调度器。注视处理器只提交 TTL 刺激；`TlmMaidIntentActions` 是唯一能写入主人靠近、
-  注视和求食动作的出口，并以 `COMPANION` 移动来源复用拾取保护、硬状态和 fail-open。
-- 内置目录定义 `gaze_recall`、`hungry_standard`、`hungry_high_trust`、
-  `post_task_return`、`wander_return`，以及 `approach_owner`、`request_food` 计划。
+  调度器。注视处理器与缺食反馈只提交 TTL 刺激；`TlmMaidIntentActions` 是唯一能写入
+  主人靠近、零食柜取餐、注视和求食动作的出口，并以 `COMPANION` 移动来源复用拾取保护、
+  硬状态和 fail-open。零食柜适配器缓存附近有效柜位，在服务端只提取一份合法 Work Meal，
+  并让事实采集与动作执行共享同一个目标缓存。
+- 内置目录定义 `gaze_recall`、`hungry_feedback`、`hungry_standard`、
+  `hungry_high_trust`、`post_task_return`、`snack_cabinet_meal`、`wander_return`，
+  以及 `approach_owner`、`fetch_snack_cabinet_meal`、`request_food` 计划。
   饥饿阈值、概率、归队等待和冷却全部由 Data Pack 决定；TOML 只控制引擎预算、诊断和
   注视传感器安全参数。
 
@@ -303,8 +306,10 @@ MixinGradle 对单个 source set 只可靠生成一份 refmap，因此 common �
 意图 AI 另有 `verifyIntentOrchestration` 与 `verifyIntentData` 两个纯 JVM 入口，覆盖
 Utility、确定性选择、承诺/滞回、硬中断、冷却、状态转移、超时、取消、目录代际、格式版本、
 内置资源编译和无效重载回退。GameTest Server 继续验证注视、三秒指挥跟随、载具共乘、
-座位镜像/补位与持久锁定、双层求食、任务后/随机游走归队、战斗抢占、拾取保护、
-一次性刺激、抵达请求动作和多女仆状态隔离。
+座位镜像/补位与持久锁定、零食柜单份取餐、统一求食计划、任务后/随机游走归队、战斗抢占、
+拾取保护、一次性刺激、抵达请求动作和多女仆状态隔离。
+`runGameTestServer` 使用独立 `run-gametest` 工作目录，每次启动前删除旧测试世界；空模板
+覆盖全部夹具坐标，实体坐标必须通过 `GameTestPositions` 转换，避免并行测试和跨轮残留串扰。
 
 target 负向检查示例（失败为预期）：
 

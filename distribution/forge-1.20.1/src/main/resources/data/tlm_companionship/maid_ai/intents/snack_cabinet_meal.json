@@ -1,0 +1,23 @@
+{
+  "format_version": 1,
+  "plan": "tlm_companionship:fetch_snack_cabinet_meal",
+  "conditions": [
+    { "fact": "tlm_companionship:fact/hunger", "operator": "lte", "value": 40.0 },
+    { "fact": "tlm_companionship:fact/snack_cabinet_meal_available", "operator": "eq", "value": 1.0 },
+    { "fact": "tlm_companionship:fact/can_move", "operator": "eq", "value": 1.0 },
+    { "fact": "tlm_companionship:fact/passenger", "operator": "eq", "value": 0.0 },
+    { "fact": "tlm_companionship:fact/combat_active", "operator": "eq", "value": 0.0 },
+    { "fact": "tlm_companionship:fact/using_item", "operator": "eq", "value": 0.0 },
+    { "fact": "tlm_companionship:fact/movement_hard_blocked", "operator": "eq", "value": 0.0 }
+  ],
+  "selection": {
+    "base_score": 1.0,
+    "minimum_score": 0.0,
+    "activation_chance": 1.0,
+    "evaluation_interval_ticks": 20,
+    "minimum_commit_ticks": 20,
+    "switch_margin": 0.1,
+    "interrupt_priority": 60,
+    "cooldown_ticks": 40
+  }
+}

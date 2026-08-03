@@ -118,26 +118,36 @@
 提供：
 
 - 主人有效性/距离；
-- 好感度、饥饿；
+- 好感度、饥饿、附近 TLM 零食柜是否存在合法柜内餐食；
 - 跟随/Home、命令坐下/坐姿、睡眠、拴绳、载具/被动座椅；
 - 可移动、攻击目标、Panic、合并战斗状态、工作目标、物品使用、内置/第三方任务分类；
 - 移动租约是否活跃、租约优先级、fail-open、硬阻塞、工作目标释放年龄；
-- 注视召回、任务后归队、随机游走归队信号。
+- 注视召回、缺食反馈求食、任务后归队、随机游走归队信号。
 
 动作同样由 `CompanionIntentIds` 注册 `ActionSchema`。首阶段只有：
 
 - `tlm_companionship:action/approach_owner`
   - `speed`: NUMBER，可选
   - `close_distance`: INTEGER，可选
+- `tlm_companionship:action/fetch_snack_cabinet_meal`
+  - `speed`: NUMBER，可选
+  - `close_distance`: INTEGER，可选
+  - 前往事实采集阶段缓存的 TLM 零食柜，到达后在服务端原子取出一份通过 Work Meal
+    校验的食物并启动本体进食；取消时只清理该动作拥有的步行目标
 - `tlm_companionship:action/companion_command_window`
   - `duration_ticks`: INTEGER，必填；内置注视计划使用 60 tick
   - `speed`: NUMBER，必填
   - `close_distance`: INTEGER，必填
-  - 窗口内持续跟随主人，优先共乘仍有容量的主人载具；单座的 TLM 凳子/娱乐座位
-    则执行就近入座或主人离座补位。由该动作取得的座位/载具在计划结束后保持锁定，
-    直到主人主动下座或战斗危险释放
+  - 窗口内持续跟随主人，优先共乘仍有容量的主人载具；满座时搜索 3 格内同类型且
+    能接纳玩家的空位（TLM 凳子与娱乐座视为同一家族），或在主人离座后接替其释放
+    实体。仅接受玩家类型的空位会在容量校验后兼容女仆。由该动作取得的座位/载具
+    在计划结束后保持锁定，
+    直到主人主动下座或战斗危险释放；锁定的 TLM 被动座位另允许在非 Home 模式下
+    达到本体紧急跟随距离时解除并传送
 - `tlm_companionship:action/request_hunger_attention`
   - 无参数
+  - `hungry_feedback`、`hungry_standard` 与 `hungry_high_trust` 只定义不同的触发条件、
+    评分和概率，统一引用 `request_food` 计划；计划抵达主人后必须经过该动作
 
 ## 扩展步骤
 

@@ -2,32 +2,24 @@
   "format_version": 1,
   "plan": "tlm_companionship:request_food",
   "conditions": [
+    { "fact": "tlm_companionship:signal/hunger_request", "operator": "gte", "value": 1.0 },
     { "fact": "tlm_companionship:fact/owner_valid", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/hunger", "operator": "lte", "value": 20.0 },
-    { "fact": "tlm_companionship:fact/favorability", "operator": "gte", "value": 3.0 },
+    { "fact": "tlm_companionship:fact/owner_distance", "operator": "lte", "value": 8.0 },
+    { "fact": "tlm_companionship:fact/hunger", "operator": "lte", "value": 40.0 },
     { "fact": "tlm_companionship:fact/follow_mode", "operator": "eq", "value": 1.0 },
     { "fact": "tlm_companionship:fact/can_move", "operator": "eq", "value": 1.0 },
     { "fact": "tlm_companionship:fact/combat_active", "operator": "eq", "value": 0.0 },
     { "fact": "tlm_companionship:fact/using_item", "operator": "eq", "value": 0.0 },
     { "fact": "tlm_companionship:fact/movement_hard_blocked", "operator": "eq", "value": 0.0 }
   ],
-  "utility": [
-    {
-      "fact": "tlm_companionship:fact/hunger",
-      "minimum": 0.0,
-      "maximum": 20.0,
-      "weight": 0.1,
-      "curve": "inverse_linear"
-    }
-  ],
   "selection": {
-    "base_score": 0.8,
+    "base_score": 1.0,
     "minimum_score": 0.0,
-    "activation_chance": 0.25,
-    "evaluation_interval_ticks": 100,
+    "activation_chance": 1.0,
+    "evaluation_interval_ticks": 1,
     "minimum_commit_ticks": 40,
-    "switch_margin": 0.15,
-    "interrupt_priority": 45,
+    "switch_margin": 0.1,
+    "interrupt_priority": 50,
     "cooldown_ticks": 100
   }
 }

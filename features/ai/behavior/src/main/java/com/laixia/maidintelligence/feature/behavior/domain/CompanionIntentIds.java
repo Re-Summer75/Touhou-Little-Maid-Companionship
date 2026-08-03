@@ -20,6 +20,8 @@ public final class CompanionIntentIds {
             id("fact/owner_distance");
     public static final OrchestrationId FAVORABILITY = id("fact/favorability");
     public static final OrchestrationId HUNGER = id("fact/hunger");
+    public static final OrchestrationId SNACK_CABINET_MEAL_AVAILABLE =
+            id("fact/snack_cabinet_meal_available");
     public static final OrchestrationId FOLLOW_MODE = id("fact/follow_mode");
     public static final OrchestrationId HOME_MODE = id("fact/home_mode");
     public static final OrchestrationId ORDERED_SIT = id("fact/ordered_sit");
@@ -60,9 +62,13 @@ public final class CompanionIntentIds {
             id("signal/post_task_return");
     public static final OrchestrationId RANDOM_STROLL_RETURN =
             id("signal/random_stroll_return");
+    public static final OrchestrationId HUNGER_REQUEST =
+            id("signal/hunger_request");
 
     public static final OrchestrationId APPROACH_OWNER =
             id("action/approach_owner");
+    public static final OrchestrationId FETCH_SNACK_CABINET_MEAL =
+            id("action/fetch_snack_cabinet_meal");
     public static final OrchestrationId COMPANION_COMMAND_WINDOW =
             id("action/companion_command_window");
     public static final OrchestrationId REQUEST_HUNGER_ATTENTION =
@@ -75,13 +81,15 @@ public final class CompanionIntentIds {
         Set<OrchestrationId> signals = Set.of(
                 GAZE_RECALL,
                 POST_TASK_RETURN,
-                RANDOM_STROLL_RETURN
+                RANDOM_STROLL_RETURN,
+                HUNGER_REQUEST
         );
         Set<OrchestrationId> facts = Set.of(
                 OWNER_VALID,
                 OWNER_DISTANCE,
                 FAVORABILITY,
                 HUNGER,
+                SNACK_CABINET_MEAL_AVAILABLE,
                 FOLLOW_MODE,
                 HOME_MODE,
                 ORDERED_SIT,
@@ -104,12 +112,14 @@ public final class CompanionIntentIds {
                 MOVEMENT_FAIL_OPEN,
                 GAZE_RECALL,
                 POST_TASK_RETURN,
-                RANDOM_STROLL_RETURN
+                RANDOM_STROLL_RETURN,
+                HUNGER_REQUEST
         );
         return new IntentVocabulary(
                 facts,
                 Set.of(
                         APPROACH_OWNER,
+                        FETCH_SNACK_CABINET_MEAL,
                         COMPANION_COMMAND_WINDOW,
                         REQUEST_HUNGER_ATTENTION
                 ),
@@ -119,6 +129,10 @@ public final class CompanionIntentIds {
                         Map.entry(OWNER_DISTANCE, FactType.NUMBER),
                         Map.entry(FAVORABILITY, FactType.NUMBER),
                         Map.entry(HUNGER, FactType.NUMBER),
+                        Map.entry(
+                                SNACK_CABINET_MEAL_AVAILABLE,
+                                FactType.BOOLEAN
+                        ),
                         Map.entry(FOLLOW_MODE, FactType.BOOLEAN),
                         Map.entry(HOME_MODE, FactType.BOOLEAN),
                         Map.entry(ORDERED_SIT, FactType.BOOLEAN),
@@ -162,12 +176,27 @@ public final class CompanionIntentIds {
                         Map.entry(
                                 RANDOM_STROLL_RETURN,
                                 FactType.SIGNAL
+                        ),
+                        Map.entry(
+                                HUNGER_REQUEST,
+                                FactType.SIGNAL
                         )
                 ),
                 Map.of(
                         APPROACH_OWNER,
                         new ActionSchema(
                                 APPROACH_OWNER,
+                                Map.of(
+                                        "speed",
+                                        ActionParameterType.NUMBER,
+                                        "close_distance",
+                                        ActionParameterType.INTEGER
+                                ),
+                                Set.of()
+                        ),
+                        FETCH_SNACK_CABINET_MEAL,
+                        new ActionSchema(
+                                FETCH_SNACK_CABINET_MEAL,
                                 Map.of(
                                         "speed",
                                         ActionParameterType.NUMBER,

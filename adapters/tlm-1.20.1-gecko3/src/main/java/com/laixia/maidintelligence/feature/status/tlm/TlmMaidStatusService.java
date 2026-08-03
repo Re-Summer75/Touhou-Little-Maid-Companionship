@@ -16,7 +16,9 @@ import net.minecraft.world.entity.schedule.Activity;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.WeakHashMap;
+import java.util.function.Consumer;
 
 /**
  * TLM orchestration delegates reusable state transitions to the pure application slice.
@@ -32,6 +34,9 @@ public final class TlmMaidStatusService implements
     private final MaidExpressionService expressionService;
     private final MaidActionService actionService;
     private final Map<EntityMaid, RuntimeState> runtimeStates = new WeakHashMap<>();
+    private Consumer<EntityMaid> hungerRequestSignal = ignored -> {
+    };
+    private boolean hungerRequestSignalBound;
 
     public TlmMaidStatusService(
             MaidStatusStore<EntityMaid> store,
@@ -48,6 +53,24 @@ public final class TlmMaidStatusService implements
         this.mealAccess = mealAccess;
         this.expressionService = expressionService;
         this.actionService = actionService;
+    }
+
+    /**
+     * Completes the status-to-intent cycle after both services are constructed.
+     */
+    public synchronized void bindHungerRequestSignal(
+            Consumer<EntityMaid> signal
+    ) {
+        if (hungerRequestSignalBound) {
+            throw new IllegalStateException(
+                    "Hunger request signal is already bound"
+            );
+        }
+        hungerRequestSignal = Objects.requireNonNull(
+                signal,
+                "signal"
+        );
+        hungerRequestSignalBound = true;
     }
 
     @Override
@@ -310,7 +333,7 @@ public final class TlmMaidStatusService implements
             return;
         }
         if (expressionService.showHungerWarning(maid)) {
-            actionService.requestAttention(maid, MaidActionService.HUNGER_PRIORITY);
+            hungerRequestSignal.accept(maid);
         }
     }
 

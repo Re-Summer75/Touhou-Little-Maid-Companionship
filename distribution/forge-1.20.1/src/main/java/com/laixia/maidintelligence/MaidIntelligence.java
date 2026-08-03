@@ -10,7 +10,7 @@ import com.laixia.maidintelligence.feature.ai.application.DefaultMaidMovementCoo
 import com.laixia.maidintelligence.feature.ai.command.MaidAiCommands;
 import com.laixia.maidintelligence.feature.ai.forge.AiForgeInstaller;
 import com.laixia.maidintelligence.feature.ai.forge.AiServerConfig;
-import com.laixia.maidintelligence.feature.ai.handler.MaidSeatCombatHandler;
+import com.laixia.maidintelligence.feature.ai.handler.MaidRideAutonomyHandler;
 import com.laixia.maidintelligence.feature.advancement.api.MaidStatisticsApi;
 import com.laixia.maidintelligence.feature.advancement.application.DefaultMaidStatisticsService;
 import com.laixia.maidintelligence.feature.advancement.bridge.HoneySlideHandler;
@@ -206,6 +206,7 @@ public final class MaidIntelligence {
                 BehaviorServerConfig::tuning,
                 intentCatalog
         );
+        statusService.bindHungerRequestSignal(behaviors::signalHungerRequest);
         MaidIntentApi<Entity> commandIntents =
                 new TlmEntityIntentFacade(behaviors.intents());
 
@@ -307,7 +308,7 @@ public final class MaidIntelligence {
                                 () -> BehaviorServerConfig.tuning()
                                         .diagnosticsEnabled()
                         )::onRegisterCommands,
-                        new MaidSeatCombatHandler()
+                        new MaidRideAutonomyHandler()
                 ),
                 new BehaviorForgeInstaller(
                         behaviors.gazeRecallHandler()::onPlayerTick,

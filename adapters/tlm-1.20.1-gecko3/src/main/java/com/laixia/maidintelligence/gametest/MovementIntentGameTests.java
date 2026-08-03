@@ -180,7 +180,7 @@ public final class MovementIntentGameTests {
     }
 
     @GameTest(templateNamespace = "minecraft", template = "empty")
-    public static void pickupTaskPreservesUnrelatedVehicle(
+    public static void pickupTaskLeavesOrdinaryBoat(
             GameTestHelper helper
     ) {
         requireConservativeMode(helper);
@@ -200,13 +200,13 @@ public final class MovementIntentGameTests {
 
         boolean started = startPickupTask(helper, maid, item);
 
-        helper.assertFalse(
-                started,
-                "Pickup bypassed TLM's movement lock on an unrelated vehicle"
-        );
         helper.assertTrue(
-                maid.getVehicle() == boat,
-                "Seat autonomy dismounted an unrelated vehicle"
+                started,
+                "Pickup did not resume from an ordinary boat"
+        );
+        helper.assertFalse(
+                maid.isPassenger(),
+                "Pickup commitment left the maid trapped in a boat"
         );
         helper.succeed();
     }

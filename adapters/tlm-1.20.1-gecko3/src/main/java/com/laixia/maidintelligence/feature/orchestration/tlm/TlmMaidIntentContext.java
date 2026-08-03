@@ -12,6 +12,9 @@ import com.laixia.maidintelligence.feature.behavior.tlm.MaidCommandSeatBridge;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
 import com.laixia.maidintelligence.feature.orchestration.port.IntentContextPort;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
+import com.laixia.maidintelligence.feature.status.domain.DefaultHungerPolicy;
+import com.laixia.maidintelligence.feature.status.tlm.MaidMealAccess;
+import com.laixia.maidintelligence.feature.status.tlm.MaidSnackCabinetMealSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
@@ -26,13 +29,30 @@ public final class TlmMaidIntentContext
 
     private final MaidStatusApi<EntityMaid> status;
     private final TlmMaidIntentObserver observer;
+    private final MaidSnackCabinetMealSource snackCabinetMeals;
 
     public TlmMaidIntentContext(
             MaidStatusApi<EntityMaid> status,
             TlmMaidIntentObserver observer
     ) {
+        this(
+                status,
+                observer,
+                new MaidSnackCabinetMealSource(new MaidMealAccess())
+        );
+    }
+
+    public TlmMaidIntentContext(
+            MaidStatusApi<EntityMaid> status,
+            TlmMaidIntentObserver observer,
+            MaidSnackCabinetMealSource snackCabinetMeals
+    ) {
         this.status = Objects.requireNonNull(status, "status");
         this.observer = Objects.requireNonNull(observer, "observer");
+        this.snackCabinetMeals = Objects.requireNonNull(
+                snackCabinetMeals,
+                "snackCabinetMeals"
+        );
     }
 
     @Override
@@ -78,11 +98,24 @@ public final class TlmMaidIntentContext
         boolean usingItem = maid.isUsingItem();
         MovementSnapshot movement = movementSnapshot(maid, gameTime);
         boolean homeMode = maid.isHomeModeEnable();
+        int hunger = status.getState(maid).hunger();
+        boolean snackCabinetMealAvailable =
+                hunger <= DefaultHungerPolicy.AUTO_EAT_THRESHOLD
+                        && canMove
+                        && !attackTargetPresent
+                        && !panicActive
+                        && !usingItem
+                        && !movement.hardBlocked()
+                        && snackCabinetMeals.findAvailableMeal(
+                                maid,
+                                gameTime
+                        ).isPresent();
         return new Snapshot(
                 ownerValid,
                 ownerDistance,
                 maid.getFavorabilityManager().getLevel(),
-                status.getState(maid).hunger(),
+                hunger,
+                snackCabinetMealAvailable,
                 !homeMode,
                 homeMode,
                 orderedSit,
@@ -121,6 +154,11 @@ public final class TlmMaidIntentContext
         }
         if (fact.equals(CompanionIntentIds.HUNGER)) {
             return snapshot.hunger();
+        }
+        if (fact.equals(
+                CompanionIntentIds.SNACK_CABINET_MEAL_AVAILABLE
+        )) {
+            return bool(snapshot.snackCabinetMealAvailable());
         }
         if (fact.equals(CompanionIntentIds.FOLLOW_MODE)) {
             return bool(snapshot.followMode());
@@ -244,6 +282,7 @@ public final class TlmMaidIntentContext
             double ownerDistance,
             int favorability,
             int hunger,
+            boolean snackCabinetMealAvailable,
             boolean followMode,
             boolean homeMode,
             boolean orderedSit,

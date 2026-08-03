@@ -10,6 +10,8 @@ import com.laixia.maidintelligence.feature.behavior.tlm.MaidCommandSeatBridge;
 import com.laixia.maidintelligence.feature.orchestration.domain.ActionResult;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
 import com.laixia.maidintelligence.feature.orchestration.port.IntentActionPort;
+import com.laixia.maidintelligence.feature.status.tlm.MaidMealAccess;
+import com.laixia.maidintelligence.feature.status.tlm.MaidSnackCabinetMealSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.behavior.BehaviorUtils;
@@ -26,18 +28,33 @@ import java.util.function.Consumer;
 /**
  * The sole adapter allowed to apply data-driven companion side effects.
  */
+@SuppressWarnings("null")
 public final class TlmMaidIntentActions
         implements IntentActionPort<EntityMaid> {
     private final Consumer<EntityMaid> hungerRequestAction;
+    private final TlmSnackCabinetIntentAction snackCabinetAction;
     private final Map<EntityMaid, WalkTarget> ownedOwnerTargets =
             new WeakHashMap<>();
 
     public TlmMaidIntentActions(
             Consumer<EntityMaid> hungerRequestAction
     ) {
+        this(
+                hungerRequestAction,
+                new MaidSnackCabinetMealSource(new MaidMealAccess())
+        );
+    }
+
+    public TlmMaidIntentActions(
+            Consumer<EntityMaid> hungerRequestAction,
+            MaidSnackCabinetMealSource snackCabinetMeals
+    ) {
         this.hungerRequestAction = Objects.requireNonNull(
                 hungerRequestAction,
                 "hungerRequestAction"
+        );
+        this.snackCabinetAction = new TlmSnackCabinetIntentAction(
+                snackCabinetMeals
         );
     }
 
@@ -51,6 +68,15 @@ public final class TlmMaidIntentActions
     ) {
         if (action.equals(CompanionIntentIds.APPROACH_OWNER)) {
             return approachOwner(maid, parameters);
+        }
+        if (action.equals(
+                CompanionIntentIds.FETCH_SNACK_CABINET_MEAL
+        )) {
+            return snackCabinetAction.execute(
+                    maid,
+                    parameters,
+                    gameTime
+            );
         }
         if (action.equals(
                 CompanionIntentIds.COMPANION_COMMAND_WINDOW
@@ -73,6 +99,11 @@ public final class TlmMaidIntentActions
     ) {
         if (action.equals(CompanionIntentIds.APPROACH_OWNER)) {
             clearOwnedOwnerTarget(maid);
+        }
+        if (action.equals(
+                CompanionIntentIds.FETCH_SNACK_CABINET_MEAL
+        )) {
+            snackCabinetAction.cancel(maid);
         }
         if (action.equals(
                 CompanionIntentIds.COMPANION_COMMAND_WINDOW
@@ -362,4 +393,5 @@ public final class TlmMaidIntentActions
             return fallback;
         }
     }
+
 }

@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.gametest.behavior;
 
 import com.github.tartaricacid.touhoulittlemaid.api.event.InteractMaidEvent;
+import com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.task.MaidFollowOwnerTask;
 import com.github.tartaricacid.touhoulittlemaid.entity.item.EntityChair;
 import com.github.tartaricacid.touhoulittlemaid.entity.item.EntitySit;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
@@ -114,33 +115,16 @@ public final class GazeCommandGameTests {
             GameTestHelper helper
     ) {
         OwnedFixture fixture = ownedFixture(helper);
-        fixture.maid().setPos(position(helper, 3, 1));
-        EntityChair ownerSeat = chair(helper, 4, 1);
-        EntitySit maidSeat = new EntitySit(
-                helper.getLevel(),
-                position(helper, 3, 2),
-                "tlm_companionship:command_test",
-                helper.absolutePos(new BlockPos(3, 1, 2))
+        EntitySit maidSeat = lockCommandSeat(helper, fixture);
+        double retainedDistance = Math.max(
+                1.0D,
+                fixture.maid().getRestrictRadius()
         );
-        helper.getLevel().addFreshEntity(maidSeat);
-        fixture.owner().startRiding(ownerSeat, true);
-
-        TlmMaidIntentActions actions = actions();
-        helper.assertTrue(
-                execute(actions, fixture, 0) == ActionResult.RUNNING
-                        && fixture.maid().getVehicle() == maidSeat,
-                "Maid did not mirror the owner's seat"
+        fixture.owner().setPos(
+                fixture.maid().getX() + retainedDistance,
+                fixture.maid().getY(),
+                fixture.maid().getZ()
         );
-        helper.assertTrue(
-                execute(actions, fixture, 60) == ActionResult.SUCCEEDED
-                        && MaidCommandSeatBridge.isSeatProtected(
-                        fixture.maid()
-                ),
-                "Command seat was not locked after the window"
-        );
-
-        fixture.owner().stopRiding();
-        fixture.owner().setPos(position(helper, 20, 1));
         MaidSeatAutonomyBridge.leaveSeatForFollow(fixture.maid());
         helper.runAfterDelay(25, () -> {
             helper.assertTrue(
@@ -163,6 +147,73 @@ public final class GazeCommandGameTests {
             );
             helper.succeed();
         });
+    }
+
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void commandSeatAllowsOwnerTeleportOutsideHomeMode(
+            GameTestHelper helper
+    ) {
+        OwnedFixture fixture = ownedFixture(helper);
+        lockCommandSeat(helper, fixture);
+        fillFloor(helper, 16, 24, 0, 4);
+        fixture.owner().setPos(position(helper, 20, 2));
+        double distanceBefore = fixture.maid().distanceToSqr(
+                fixture.owner()
+        );
+
+        helper.assertTrue(
+                followTask().tryStart(
+                        helper.getLevel(),
+                        fixture.maid(),
+                        helper.getLevel().getGameTime()
+                ),
+                "TLM owner-follow task did not start"
+        );
+        helper.assertFalse(
+                fixture.maid().isPassenger()
+                        || MaidCommandSeatBridge.isSeatProtected(
+                        fixture.maid()
+                ),
+                "Owner teleport retained the command-seat lock"
+        );
+        helper.assertTrue(
+                fixture.maid().distanceToSqr(fixture.owner())
+                        < distanceBefore,
+                "Command-seated maid was not teleported toward the owner"
+        );
+        helper.succeed();
+    }
+
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void homeModeCommandSeatBlocksOwnerTeleport(
+            GameTestHelper helper
+    ) {
+        OwnedFixture fixture = ownedFixture(helper);
+        EntitySit maidSeat = lockCommandSeat(helper, fixture);
+        fixture.maid().setHomeModeEnable(true);
+        fixture.owner().setPos(position(helper, 20, 2));
+        double distanceBefore = fixture.maid().distanceToSqr(
+                fixture.owner()
+        );
+
+        followTask().tryStart(
+                helper.getLevel(),
+                fixture.maid(),
+                helper.getLevel().getGameTime()
+        );
+        helper.assertTrue(
+                fixture.maid().getVehicle() == maidSeat
+                        && MaidCommandSeatBridge.isSeatProtected(
+                        fixture.maid()
+                ),
+                "Home mode released the command seat"
+        );
+        helper.assertTrue(
+                fixture.maid().distanceToSqr(fixture.owner())
+                        == distanceBefore,
+                "Home mode allowed owner teleport"
+        );
+        helper.succeed();
     }
 
     @GameTest(templateNamespace = "minecraft", template = "empty")
@@ -268,6 +319,10 @@ public final class GazeCommandGameTests {
         });
     }
 
+    private static MaidFollowOwnerTask followTask() {
+        return new MaidFollowOwnerTask(0.5F, 2);
+    }
+
     @SuppressWarnings("unchecked")
     private static MaidGazeRecallApi<Player, EntityMaid>
     productionGazeRecall() {
@@ -299,12 +354,40 @@ public final class GazeCommandGameTests {
         return chair;
     }
 
+    private static EntitySit lockCommandSeat(
+            GameTestHelper helper,
+            OwnedFixture fixture
+    ) {
+        fixture.maid().setPos(position(helper, 3, 1));
+        EntityChair ownerSeat = chair(helper, 4, 1);
+        EntitySit maidSeat = new EntitySit(
+                helper.getLevel(),
+                position(helper, 3, 2),
+                "tlm_companionship:command_test",
+                helper.absolutePos(new BlockPos(3, 1, 2))
+        );
+        helper.getLevel().addFreshEntity(maidSeat);
+        fixture.owner().startRiding(ownerSeat, true);
+
+        TlmMaidIntentActions actions = actions();
+        helper.assertTrue(
+                execute(actions, fixture, 0) == ActionResult.RUNNING
+                        && fixture.maid().getVehicle() == maidSeat,
+                "Maid did not mirror the owner's seat"
+        );
+        helper.assertTrue(
+                execute(actions, fixture, 60) == ActionResult.SUCCEEDED
+                        && MaidCommandSeatBridge.isSeatProtected(
+                        fixture.maid()
+                ),
+                "Command seat was not locked after the window"
+        );
+        fixture.owner().stopRiding();
+        return maidSeat;
+    }
+
     private static OwnedFixture ownedFixture(GameTestHelper helper) {
-        for (int x = 0; x <= 7; x++) {
-            for (int z = 0; z <= 3; z++) {
-                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
-            }
-        }
+        fillFloor(helper, 0, 7, 0, 3);
         Player owner = helper.makeMockPlayer();
         owner.setPos(position(helper, 4, 1));
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
@@ -319,6 +402,20 @@ public final class GazeCommandGameTests {
         maid.setOwnerUUID(owner.getUUID());
         helper.getLevel().addFreshEntity(maid);
         return new OwnedFixture(owner, maid);
+    }
+
+    private static void fillFloor(
+            GameTestHelper helper,
+            int minX,
+            int maxX,
+            int minZ,
+            int maxZ
+    ) {
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
+            }
+        }
     }
 
     private static Vec3 position(GameTestHelper helper, int x, int z) {

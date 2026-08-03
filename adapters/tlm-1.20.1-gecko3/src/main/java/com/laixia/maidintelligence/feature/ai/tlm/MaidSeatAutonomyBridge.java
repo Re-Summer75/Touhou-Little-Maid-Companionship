@@ -10,12 +10,13 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.schedule.Activity;
+import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.phys.AABB;
 
 import java.util.List;
 
 /**
- * Lets built-in movement needs release only TLM-owned passive seats.
+ * Lets built-in movement needs release TLM passive seats and ordinary boats.
  * Commanded sitting and unrelated vehicle integrations remain untouched.
  */
 @SuppressWarnings("null")
@@ -27,9 +28,36 @@ public final class MaidSeatAutonomyBridge {
     private MaidSeatAutonomyBridge() {
     }
 
+    public static void leaveOrdinaryBoatWhenOwnerLeaves(EntityMaid maid) {
+        if (!canLeaveSeatState(maid)) {
+            return;
+        }
+        Entity vehicle = maid.getVehicle();
+        if (!isOrdinaryBoat(vehicle)
+                || MaidCommandSeatBridge.isSeatProtected(maid)) {
+            return;
+        }
+
+        LivingEntity owner = maid.getOwner();
+        boolean ownerStillAboard = owner != null
+                && owner.isAlive()
+                && owner.level() == maid.level()
+                && owner.getVehicle() == vehicle;
+        if (!ownerStillAboard) {
+            maid.stopRiding();
+        }
+    }
+
     public static void leaveSeatForFollow(EntityMaid maid) {
-        if (!canLeavePassiveSeat(maid, false)
+        if (!canLeaveSeatState(maid)
                 || maid.isHomeModeEnable()) {
+            return;
+        }
+        Entity vehicle = maid.getVehicle();
+        boolean commandProtected =
+                MaidCommandSeatBridge.isSeatProtected(maid);
+        if (!isPassiveSeat(vehicle)
+                && (!isOrdinaryBoat(vehicle) || commandProtected)) {
             return;
         }
 
@@ -42,13 +70,21 @@ public final class MaidSeatAutonomyBridge {
         }
 
         int followDistance = (int) maid.getRestrictRadius() - 2;
-        if (!maid.closerThan(owner, followDistance)) {
+        // Ordinary following keeps the commanded seat. Only TLM's exact
+        // emergency-teleport threshold may release it outside Home mode.
+        int leaveDistance = commandProtected
+                ? followDistance + 4
+                : followDistance;
+        if (!maid.closerThan(owner, leaveDistance)) {
+            if (commandProtected) {
+                MaidCommandSeatBridge.releaseForTeleport(maid);
+            }
             maid.stopRiding();
         }
     }
 
     public static void leaveSeatForPickup(EntityMaid maid) {
-        if (!canLeavePassiveSeat(maid, false)
+        if (!canLeaveAutonomousRide(maid, false)
                 || !maid.isPickup()
                 || isSeatedWork(maid)) {
             return;
@@ -68,7 +104,7 @@ public final class MaidSeatAutonomyBridge {
     }
 
     public static void leaveSeatForCombat(EntityMaid maid) {
-        if (!canLeavePassiveSeat(maid, true)
+        if (!canLeaveAutonomousRide(maid, true)
                 || isSeatedWork(maid)
                 || !ActivityRadiusBridge.isBuiltInCombatTask(maid)) {
             return;
@@ -127,15 +163,11 @@ public final class MaidSeatAutonomyBridge {
         }
     }
 
-    private static boolean canLeavePassiveSeat(
+    private static boolean canLeaveAutonomousRide(
             EntityMaid maid,
             boolean dangerOverride
     ) {
-        if (maid.level().isClientSide()
-                || maid.isMaidInSittingPose()
-                || maid.isOrderedToSit()
-                || maid.isSleeping()
-                || maid.isLeashed()
+        if (!canLeaveSeatState(maid)
                 || (!dangerOverride
                 && MaidCommandSeatBridge.isSeatProtected(maid))) {
             return false;
@@ -145,11 +177,28 @@ public final class MaidSeatAutonomyBridge {
         if (vehicle == null) {
             return false;
         }
-        boolean passiveSeat = vehicle.getType() == EntityChair.TYPE
-                || vehicle.getType() == EntitySit.TYPE;
-        return passiveSeat
+        return isPassiveSeat(vehicle)
+                || isOrdinaryBoat(vehicle)
                 || (dangerOverride
                 && MaidCommandSeatBridge.isSeatProtected(maid));
+    }
+
+    private static boolean canLeaveSeatState(EntityMaid maid) {
+        return !maid.level().isClientSide()
+                && !maid.isMaidInSittingPose()
+                && !maid.isOrderedToSit()
+                && !maid.isSleeping()
+                && !maid.isLeashed();
+    }
+
+    private static boolean isPassiveSeat(Entity vehicle) {
+        return vehicle != null
+                && (vehicle.getType() == EntityChair.TYPE
+                || vehicle.getType() == EntitySit.TYPE);
+    }
+
+    private static boolean isOrdinaryBoat(Entity vehicle) {
+        return vehicle instanceof Boat;
     }
 
     private static boolean isSeatedWork(EntityMaid maid) {

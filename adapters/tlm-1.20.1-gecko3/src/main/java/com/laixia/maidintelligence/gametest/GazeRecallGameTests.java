@@ -8,6 +8,7 @@ import com.laixia.maidintelligence.feature.behavior.tlm.TlmMaidGazeRecallService
 import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
 import com.laixia.maidintelligence.feature.orchestration.tlm.MaidIntentBehavior;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
+import com.laixia.maidintelligence.gametest.support.GameTestPositions;
 import com.laixia.maidintelligence.gametest.support.IntentGameTestRuntime;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import com.laixia.maidintelligence.platform.runtime.AdapterRuntime;
@@ -107,7 +108,7 @@ public final class GazeRecallGameTests {
         EntityMaid maid = spawnOwnedMaid(helper);
         Player owner = helper.makeMockPlayer();
         owner.setPos(
-                maid.getX() - 4.0D,
+                maid.getX() + 4.0D,
                 maid.getY(),
                 maid.getZ()
         );
@@ -190,7 +191,7 @@ public final class GazeRecallGameTests {
         for (int x = 6; x <= 8; x++) {
             helper.setBlock(new BlockPos(x, 1, 1), Blocks.STONE);
         }
-        fixture.owner().setPos(7.5D, 2.0D, 1.5D);
+        fixture.owner().setPos(GameTestPositions.center(helper, 7, 2, 1));
         fixture.maid().setFavorability(64);
         helper.assertTrue(
                 productionGazeRecall().tryRecall(
@@ -282,14 +283,14 @@ public final class GazeRecallGameTests {
             }
         }
         Player owner = helper.makeMockPlayer();
-        owner.setPos(4.5D, 2.0D, 1.5D);
+        owner.setPos(GameTestPositions.center(helper, 4, 2, 1));
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
             public LivingEntity getOwner() {
                 return owner;
             }
         };
-        maid.setPos(1.5D, 2.0D, 1.5D);
+        maid.setPos(GameTestPositions.center(helper, 1, 2, 1));
         maid.setTame(true);
         maid.setHomeModeEnable(false);
         maid.setOwnerUUID(owner.getUUID());

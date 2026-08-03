@@ -4,6 +4,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskAttack;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
+import com.laixia.maidintelligence.gametest.support.GameTestPositions;
 import com.laixia.maidintelligence.gametest.support.IntentGameTestRuntime;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import com.laixia.maidintelligence.platform.runtime.AdapterRuntime;
@@ -146,7 +147,7 @@ public final class OwnerReturnGameTests {
             }
         }
         Player owner = helper.makeMockPlayer();
-        owner.setPos(6.5D, 2.0D, 1.5D);
+        owner.setPos(GameTestPositions.center(helper, 6, 2, 1));
         TaskAttack task = new TaskAttack();
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
@@ -159,7 +160,7 @@ public final class OwnerReturnGameTests {
                 return task;
             }
         };
-        maid.setPos(1.5D, 2.0D, 1.5D);
+        maid.setPos(GameTestPositions.center(helper, 1, 2, 1));
         maid.setTame(true);
         maid.setHomeModeEnable(false);
         helper.getLevel().addFreshEntity(maid);

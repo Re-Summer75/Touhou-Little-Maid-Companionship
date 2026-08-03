@@ -7,6 +7,7 @@ import com.laixia.maidintelligence.feature.ai.tlm.ActivityRadiusAccess;
 import com.laixia.maidintelligence.feature.ai.tlm.ActivityRadiusBridge;
 import com.laixia.maidintelligence.feature.ai.tlm.ActivityRadiusState;
 import com.laixia.maidintelligence.feature.ai.tlm.CombatReactionBridge;
+import com.laixia.maidintelligence.gametest.support.GameTestPositions;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -365,7 +366,7 @@ public final class AdaptiveAiGameTests {
             GameTestHelper helper,
             EntityMaid maid
     ) {
-        maid.setPos(1.5D, 2.0D, 1.5D);
+        maid.setPos(GameTestPositions.center(helper, 1, 2, 1));
         maid.setTame(true);
         maid.setHomeModeEnable(false);
         helper.getLevel().addFreshEntity(maid);
@@ -376,7 +377,7 @@ public final class AdaptiveAiGameTests {
 
     private static Player stationaryOwner(GameTestHelper helper) {
         Player owner = helper.makeMockPlayer();
-        owner.setPos(1.5D, 2.0D, 1.5D);
+        owner.setPos(GameTestPositions.center(helper, 1, 2, 1));
         owner.xo = owner.getX();
         owner.yo = owner.getY();
         owner.zo = owner.getZ();

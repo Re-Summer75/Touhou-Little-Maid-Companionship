@@ -38,6 +38,7 @@ def stableModules = [
 ]
 def forgeAdapter = project(forge_adapter_project_path)
 def tlmAdapter = project(tlm_adapter_project_path)
+def gameTestRunDir = rootProject.file('run-gametest')
 def tlmMixinConfig =
         "tlm_companionship.tlm-gecko${gecko_generation}.mixins.json"
 
@@ -94,6 +95,7 @@ minecraft {
             args '--nogui'
         }
         gameTestServer {
+            workingDirectory gameTestRunDir
             property 'forge.enabledGameTestNamespaces', "${mod_id},minecraft"
         }
         data {
@@ -414,14 +416,21 @@ tasks.register('benchmarkBonePhysics', JavaExec) {
     workingDir rootProject.projectDir
 }
 
-tasks.register('prepareGameTestStructures', Copy) {
+def cleanGameTestWorld = tasks.register('cleanGameTestWorld', Delete) {
+    delete new File(gameTestRunDir, 'world')
+}
+
+def prepareGameTestStructures = tasks.register(
+        'prepareGameTestStructures',
+        Copy
+) {
     from 'src/test/resources/gameteststructures'
-    into rootProject.file('run/gameteststructures')
+    into new File(gameTestRunDir, 'gameteststructures')
 }
 
 tasks.configureEach {
     if (name == 'runGameTestServer') {
-        dependsOn prepareGameTestStructures
+        dependsOn cleanGameTestWorld, prepareGameTestStructures
     }
 }
 

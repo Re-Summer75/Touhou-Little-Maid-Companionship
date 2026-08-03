@@ -8,6 +8,7 @@ import com.laixia.maidintelligence.feature.ai.tlm.ActivityRadiusBridge;
 import com.laixia.maidintelligence.feature.ai.tlm.ActivityRadiusState;
 import com.laixia.maidintelligence.feature.ai.tlm.MovementCoordinationBridge;
 import com.laixia.maidintelligence.feature.ai.tlm.PassiveFollowBridge;
+import com.laixia.maidintelligence.gametest.support.GameTestPositions;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -24,6 +25,7 @@ import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 @GameTestHolder(ModResources.MOD_ID)
 @PrefixGameTestTemplate(false)
+@SuppressWarnings("null")
 public final class PassiveFollowGameTests {
     private PassiveFollowGameTests() {
     }
@@ -34,7 +36,7 @@ public final class PassiveFollowGameTests {
     ) {
         prepareFloor(helper);
         Player owner = helper.makeMockPlayer();
-        owner.setPos(16.5D, 2.0D, 1.5D);
+        owner.setPos(GameTestPositions.center(helper, 16, 2, 1));
         owner.xo = owner.getX();
         owner.zo = owner.getZ();
 
@@ -44,7 +46,7 @@ public final class PassiveFollowGameTests {
                 return owner;
             }
         };
-        maid.setPos(1.5D, 2.0D, 1.5D);
+        maid.setPos(GameTestPositions.center(helper, 1, 2, 1));
         maid.setTame(true);
         maid.setHomeModeEnable(false);
         helper.getLevel().addFreshEntity(maid);
@@ -81,7 +83,7 @@ public final class PassiveFollowGameTests {
         );
 
         activityState(maid).ownerMotion().reset();
-        owner.setPos(8.5D, 2.0D, 1.5D);
+        owner.setPos(GameTestPositions.center(helper, 8, 2, 1));
         owner.xo = owner.getX() - 1.0D;
         boolean movingStarted = followTask().tryStart(
                 helper.getLevel(),

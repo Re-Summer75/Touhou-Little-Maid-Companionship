@@ -6,6 +6,7 @@ import com.laixia.maidintelligence.feature.ai.domain.MovementTargetKind;
 import com.laixia.maidintelligence.feature.ai.tlm.MovementCoordinationAccess;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
+import com.laixia.maidintelligence.gametest.support.GameTestPositions;
 import com.laixia.maidintelligence.gametest.support.IntentGameTestRuntime;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import com.laixia.maidintelligence.platform.runtime.AdapterRuntime;
@@ -34,7 +35,7 @@ public final class IntentOrchestrationGameTests {
     public static void combatCancelsCompanionMovement(
             GameTestHelper helper
     ) {
-        Fixture fixture = fixture(helper, 1.5D, 5.5D);
+        Fixture fixture = fixture(helper, 1, 5);
         IntentGameTestRuntime.Runtime runtime = gazeRuntime();
         long gameTime = helper.getLevel().getGameTime();
         runtime.intents().signal(
@@ -69,7 +70,7 @@ public final class IntentOrchestrationGameTests {
     public static void cancellationPreservesReplacementOwnerTarget(
             GameTestHelper helper
     ) {
-        Fixture fixture = fixture(helper, 1.5D, 5.5D);
+        Fixture fixture = fixture(helper, 1, 5);
         IntentGameTestRuntime.Runtime runtime = gazeRuntime();
         long gameTime = helper.getLevel().getGameTime();
         runtime.intents().signal(
@@ -114,7 +115,7 @@ public final class IntentOrchestrationGameTests {
     public static void pickupLeaseBlocksCompanionIntent(
             GameTestHelper helper
     ) {
-        Fixture fixture = fixture(helper, 1.5D, 5.5D);
+        Fixture fixture = fixture(helper, 1, 5);
         IntentGameTestRuntime.Runtime runtime = gazeRuntime();
         long gameTime = helper.getLevel().getGameTime();
         ((MovementCoordinationAccess) fixture.maid())
@@ -151,8 +152,8 @@ public final class IntentOrchestrationGameTests {
     public static void signalsRemainIsolatedPerMaid(
             GameTestHelper helper
     ) {
-        Fixture first = fixture(helper, 1.5D, 5.5D);
-        Fixture second = fixture(helper, 1.5D, 6.5D);
+        Fixture first = fixture(helper, 1, 5);
+        Fixture second = fixture(helper, 1, 6);
         IntentGameTestRuntime.Runtime runtime = gazeRuntime();
         long gameTime = helper.getLevel().getGameTime();
         runtime.intents().signal(
@@ -185,8 +186,8 @@ public final class IntentOrchestrationGameTests {
 
     private static Fixture fixture(
             GameTestHelper helper,
-            double maidX,
-            double ownerX
+            int maidX,
+            int ownerX
     ) {
         for (int x = 0; x <= 7; x++) {
             for (int z = 0; z <= 3; z++) {
@@ -194,14 +195,14 @@ public final class IntentOrchestrationGameTests {
             }
         }
         Player owner = helper.makeMockPlayer();
-        owner.setPos(ownerX, 2.0D, 1.5D);
+        owner.setPos(GameTestPositions.center(helper, ownerX, 2, 1));
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
             public LivingEntity getOwner() {
                 return owner;
             }
         };
-        maid.setPos(maidX, 2.0D, 1.5D);
+        maid.setPos(GameTestPositions.center(helper, maidX, 2, 1));
         maid.setTame(true);
         maid.setHomeModeEnable(false);
         maid.setFavorability(64);

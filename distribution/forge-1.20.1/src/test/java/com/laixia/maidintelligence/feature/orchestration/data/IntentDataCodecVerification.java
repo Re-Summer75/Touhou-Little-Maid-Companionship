@@ -64,28 +64,98 @@ public final class IntentDataCodecVerification {
                 id("gaze_recall_session"),
                 parsePlan("gaze_recall_session")
         );
+        plans.put(
+                id("fetch_snack_cabinet_meal"),
+                parsePlan("fetch_snack_cabinet_meal")
+        );
         plans.put(id("request_food"), parsePlan("request_food"));
 
         Map<OrchestrationId, IntentDefinition> intents =
                 new LinkedHashMap<>();
-        for (String name : List.of(
+        List<String> intentNames = List.of(
                 "gaze_recall",
+                "hungry_feedback",
                 "hungry_standard",
                 "hungry_high_trust",
                 "post_task_return",
+                "snack_cabinet_meal",
                 "wander_return"
-        )) {
+        );
+        for (String name : intentNames) {
             intents.put(id(name), parseIntent(name));
         }
+        PlanDefinition requestFood = plans.get(id("request_food"));
+        require(
+                requestFood.states().values().stream().anyMatch(
+                        state -> state.action().equals(
+                                CompanionIntentIds.REQUEST_HUNGER_ATTENTION
+                        )
+                ),
+                "Shared food request plan has no request action"
+        );
+        for (String name : intentNames) {
+            if (name.startsWith("hungry_")) {
+                IntentDefinition hungerIntent = intents.get(id(name));
+                require(
+                        hungerIntent.plan().equals(id("request_food")),
+                        "Hunger intent bypassed the shared request plan: " + name
+                );
+                require(
+                        hasCondition(
+                                hungerIntent,
+                                CompanionIntentIds.USING_ITEM,
+                                FactComparison.EQUAL,
+                                0.0D
+                        ),
+                        "Hunger intent lacks its item-use guard: " + name
+                );
+            }
+        }
+        require(
+                hasCondition(
+                        intents.get(id("hungry_feedback")),
+                        CompanionIntentIds.HUNGER_REQUEST,
+                        FactComparison.GREATER_OR_EQUAL,
+                        1.0D
+                ),
+                "Status feedback hunger intent is not signal-driven"
+        );
+        IntentDefinition snackCabinetMeal =
+                intents.get(id("snack_cabinet_meal"));
+        require(
+                snackCabinetMeal.plan().equals(
+                        id("fetch_snack_cabinet_meal")
+                ),
+                "Snack cabinet intent bypassed its fetch plan"
+        );
+        require(
+                hasCondition(
+                        snackCabinetMeal,
+                        CompanionIntentIds.SNACK_CABINET_MEAL_AVAILABLE,
+                        FactComparison.EQUAL,
+                        1.0D
+                ),
+                "Snack cabinet intent lacks its availability guard"
+        );
+        require(
+                plans.get(id("fetch_snack_cabinet_meal"))
+                        .states()
+                        .values()
+                        .stream()
+                        .anyMatch(state -> state.action().equals(
+                                CompanionIntentIds.FETCH_SNACK_CABINET_MEAL
+                        )),
+                "Snack cabinet fetch plan has no extraction action"
+        );
         IntentCatalog catalog = IntentCatalog.compile(
                 1L,
                 intents.values(),
                 plans.values(),
                 CompanionIntentIds.vocabulary()
         );
-        require(catalog.intents().size() == 5,
+        require(catalog.intents().size() == 7,
                 "Built-in intent inventory is incomplete");
-        require(catalog.planCount() == 3,
+        require(catalog.planCount() == 4,
                 "Built-in plan inventory is incomplete");
     }
 
@@ -190,6 +260,19 @@ public final class IntentDataCodecVerification {
                 )
         ).result().orElseThrow(() ->
                 new AssertionError("Failed to parse plan " + name));
+    }
+
+    private static boolean hasCondition(
+            IntentDefinition intent,
+            OrchestrationId fact,
+            FactComparison comparison,
+            double expected
+    ) {
+        return intent.conditions().stream().anyMatch(condition ->
+                condition.fact().equals(fact)
+                        && condition.comparison() == comparison
+                        && condition.expected() == expected
+        );
     }
 
     private static JsonElement resource(String path) throws IOException {

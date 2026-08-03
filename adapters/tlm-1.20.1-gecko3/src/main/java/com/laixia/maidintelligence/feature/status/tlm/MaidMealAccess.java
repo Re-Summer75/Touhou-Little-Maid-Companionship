@@ -12,6 +12,7 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 
+@SuppressWarnings("null")
 public final class MaidMealAccess {
     public boolean tryStartHungerMeal(EntityMaid maid) {
         List<IMaidMeal> mealHandlers = MaidMealManager.getMaidMeals(MaidMealType.WORK_MEAL);
@@ -49,6 +50,80 @@ public final class MaidMealAccess {
             return true;
         }
         return false;
+    }
+
+    public boolean hasLocalHungerMeal(EntityMaid maid) {
+        List<IMaidMeal> mealHandlers = MaidMealManager.getMaidMeals(
+                MaidMealType.WORK_MEAL
+        );
+        for (InteractionHand hand : HandUtils.NATIVE_HANDS) {
+            if (findHandler(
+                    maid,
+                    maid.getItemInHand(hand),
+                    hand,
+                    mealHandlers
+            ) != null) {
+                return true;
+            }
+        }
+
+        InteractionHand eatingHand = findEatingHand(maid);
+        var backpack = maid.getAvailableBackpackInv();
+        for (int slot = 0; slot < backpack.getSlots(); slot++) {
+            if (findHandler(
+                    maid,
+                    backpack.getStackInSlot(slot),
+                    eatingHand,
+                    mealHandlers
+            ) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean canStartExternalHungerMeal(
+            EntityMaid maid,
+            ItemStack food
+    ) {
+        return findExternalHandler(maid, food) != null;
+    }
+
+    public boolean tryStartExternalHungerMeal(
+            EntityMaid maid,
+            ItemStack food
+    ) {
+        if (food.isEmpty()) {
+            return false;
+        }
+        InteractionHand eatingHand = findEatingHand(maid);
+        IMaidMeal handler = findHandler(
+                maid,
+                food,
+                eatingHand,
+                MaidMealManager.getMaidMeals(MaidMealType.WORK_MEAL)
+        );
+        if (handler == null) {
+            return false;
+        }
+
+        ItemStack previousHandStack = maid.getItemInHand(eatingHand).copy();
+        maid.setItemInHand(eatingHand, food);
+        maid.memoryHandItemStack(previousHandStack);
+        handler.onMaidEat(maid, maid.getItemInHand(eatingHand), eatingHand);
+        return true;
+    }
+
+    private IMaidMeal findExternalHandler(
+            EntityMaid maid,
+            ItemStack food
+    ) {
+        return findHandler(
+                maid,
+                food,
+                findEatingHand(maid),
+                MaidMealManager.getMaidMeals(MaidMealType.WORK_MEAL)
+        );
     }
 
     private IMaidMeal findHandler(
