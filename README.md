@@ -137,7 +137,7 @@
 2. 从 [Releases](https://github.com/Re-Summer75/Touhou-Little-Maid-Companionship/releases) 下载 `tlm-companionship-1.20.1-forge-x.x.x.jar`，放入游戏根目录的 `mods` 文件夹。
 3. 启动游戏即可。
 
-> 当前处于 `v0.0.3` 测试阶段，功能可用但仍在快速迭代，建议先备份存档。
+> 当前处于 `v0.1.0` 测试阶段，功能可用但仍在快速迭代，建议先备份存档。
 
 ---
 

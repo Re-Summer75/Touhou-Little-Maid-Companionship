@@ -122,8 +122,7 @@ tasks.register('verifyVerificationReachability') {
             )
         }
         def rootsWithoutMain = roots.findAll {
-            codeByClass.containsKey(it)
-                    && !mainPattern.matcher(codeByClass[it]).find()
+            codeByClass.containsKey(it) && !mainPattern.matcher(codeByClass[it]).find()
         }
         if (!rootsWithoutMain.isEmpty()) {
             errors << (
