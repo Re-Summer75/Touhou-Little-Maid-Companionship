@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.feature.ai.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
 import com.laixia.maidintelligence.feature.ai.api.MaidMovementCoordinationApi;
 import com.laixia.maidintelligence.feature.ai.domain.MovementIntentDecision;
 import com.laixia.maidintelligence.feature.ai.domain.MovementIntentLease;
@@ -19,6 +20,7 @@ import net.minecraft.world.entity.schedule.Activity;
 /**
  * Converts TLM Brain memory into allocation-free stable movement identities.
  */
+@SuppressWarnings("null")
 public final class MovementCoordinationBridge {
     private static final String TLM_PACKAGE =
             "com.github.tartaricacid.touhoulittlemaid.";
@@ -29,8 +31,12 @@ public final class MovementCoordinationBridge {
     }
 
     public static WalkTarget capture(EntityMaid maid) {
+        return capture(maid, maid.level().getGameTime());
+    }
+
+    public static WalkTarget capture(EntityMaid maid, long gameTime) {
         WalkTarget current = currentWalkTarget(maid);
-        reconcile(maid, current);
+        reconcile(maid, current, gameTime);
         return current;
     }
 
@@ -39,6 +45,22 @@ public final class MovementCoordinationBridge {
             WalkTarget previous,
             MovementIntentSource source,
             boolean managedImplementation
+    ) {
+        finishKnownWrite(
+                maid,
+                previous,
+                source,
+                managedImplementation,
+                maid.level().getGameTime()
+        );
+    }
+
+    public static void finishKnownWrite(
+            EntityMaid maid,
+            WalkTarget previous,
+            MovementIntentSource source,
+            boolean managedImplementation,
+            long gameTime
     ) {
         WalkTarget current = currentWalkTarget(maid);
         if (current == previous) {
@@ -49,7 +71,7 @@ public final class MovementCoordinationBridge {
             return;
         }
         if (!managedImplementation) {
-            reconcile(maid, current);
+            reconcile(maid, current, gameTime);
             return;
         }
         if (shouldPreserveHardState(maid, source)) {
@@ -60,7 +82,8 @@ public final class MovementCoordinationBridge {
         MovementIntentDecision decision = claimCurrent(
                 maid,
                 current,
-                source
+                source,
+                gameTime
         );
         if (!decision.writeAllowed()
                 || (decision == MovementIntentDecision.RENEWED
@@ -72,11 +95,30 @@ public final class MovementCoordinationBridge {
     }
 
     public static void reconcile(EntityMaid maid) {
+        reconcile(maid, maid.level().getGameTime());
+    }
+
+    public static void reconcile(EntityMaid maid, long gameTime) {
         if (!coordination().mode().trackingEnabled()) {
             coordination().hardReset(lease(maid));
             return;
         }
-        reconcile(maid, currentWalkTarget(maid));
+        reconcile(maid, currentWalkTarget(maid), gameTime);
+    }
+
+    /**
+     * Renews a target whose object identity was already verified by its owner.
+     */
+    public static MovementIntentDecision renewKnownWrite(
+            EntityMaid maid,
+            MovementIntentSource source,
+            long gameTime
+    ) {
+        WalkTarget current = currentWalkTarget(maid);
+        if (current == null) {
+            return MovementIntentDecision.PASS_THROUGH;
+        }
+        return claimCurrent(maid, current, source, gameTime);
     }
 
     public static void hardReset(EntityMaid maid) {
@@ -113,16 +155,46 @@ public final class MovementCoordinationBridge {
         return MovementIntentSource.BUILT_IN_WORK;
     }
 
-    private static void reconcile(EntityMaid maid, WalkTarget current) {
+    public static boolean isManagedRandomStroll(
+            EntityMaid maid,
+            WalkTarget previous
+    ) {
+        WalkTarget current = currentWalkTarget(maid);
+        return current != null
+                && current != previous
+                && current.getTarget() instanceof BlockPosTracker
+                && !maid.getBrain().hasMemoryValue(
+                InitEntities.TARGET_POS.get()
+        )
+                && !maid.getBrain().hasMemoryValue(
+                MemoryModuleType.ATTACK_TARGET
+        );
+    }
+
+    private static void reconcile(
+            EntityMaid maid,
+            WalkTarget current,
+            long gameTime
+    ) {
         if (current == null) {
-            reconcile(maid, MovementTargetKind.NONE, 0L);
+            reconcile(
+                    maid,
+                    MovementTargetKind.NONE,
+                    0L,
+                    gameTime
+            );
             return;
         }
         PositionTracker tracker = current.getTarget();
         if (tracker instanceof EntityTracker entityTracker) {
             Entity target = entityTracker.getEntity();
             if (invalidEntityTarget(maid, target)) {
-                reconcile(maid, MovementTargetKind.NONE, 0L);
+                reconcile(
+                        maid,
+                        MovementTargetKind.NONE,
+                        0L,
+                        gameTime
+                );
                 return;
             }
             reconcile(
@@ -131,7 +203,8 @@ public final class MovementCoordinationBridge {
                     movementIdentity(
                             current,
                             entityIdentity(target)
-                    )
+                    ),
+                    gameTime
             );
             return;
         }
@@ -142,14 +215,16 @@ public final class MovementCoordinationBridge {
                     movementIdentity(
                             current,
                             tracker.currentBlockPosition().asLong()
-                    )
+                    ),
+                    gameTime
             );
             return;
         }
         reconcile(
                 maid,
                 MovementTargetKind.UNMANAGED,
-                System.identityHashCode(tracker)
+                System.identityHashCode(tracker),
+                gameTime
         );
     }
 
@@ -187,18 +262,24 @@ public final class MovementCoordinationBridge {
     private static MovementIntentDecision claimCurrent(
             EntityMaid maid,
             WalkTarget current,
-            MovementIntentSource source
+            MovementIntentSource source,
+            long gameTime
     ) {
         PositionTracker tracker = current.getTarget();
         if (tracker instanceof EntityTracker entityTracker) {
             Entity target = entityTracker.getEntity();
             if (invalidEntityTarget(maid, target)) {
-                reconcile(maid, MovementTargetKind.NONE, 0L);
+                reconcile(
+                        maid,
+                        MovementTargetKind.NONE,
+                        0L,
+                        gameTime
+                );
                 return MovementIntentDecision.PASS_THROUGH;
             }
             return coordination().claim(
                     lease(maid),
-                    maid.level().getGameTime(),
+                    gameTime,
                     source,
                     MovementTargetKind.ENTITY,
                     movementIdentity(
@@ -210,7 +291,7 @@ public final class MovementCoordinationBridge {
         if (tracker instanceof BlockPosTracker) {
             return coordination().claim(
                     lease(maid),
-                    maid.level().getGameTime(),
+                    gameTime,
                     source,
                     MovementTargetKind.BLOCK,
                     movementIdentity(
@@ -219,18 +300,19 @@ public final class MovementCoordinationBridge {
                     )
             );
         }
-        reconcile(maid, current);
+        reconcile(maid, current, gameTime);
         return MovementIntentDecision.PASS_THROUGH;
     }
 
     private static void reconcile(
             EntityMaid maid,
             MovementTargetKind targetKind,
-            long targetIdentity
+            long targetIdentity,
+            long gameTime
     ) {
         coordination().reconcile(
                 lease(maid),
-                maid.level().getGameTime(),
+                gameTime,
                 targetKind,
                 targetIdentity
         );

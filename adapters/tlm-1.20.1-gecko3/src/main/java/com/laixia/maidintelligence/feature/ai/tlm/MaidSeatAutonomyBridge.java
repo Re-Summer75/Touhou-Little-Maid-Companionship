@@ -1,15 +1,12 @@
 package com.laixia.maidintelligence.feature.ai.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask;
-import com.github.tartaricacid.touhoulittlemaid.entity.item.EntityChair;
-import com.github.tartaricacid.touhoulittlemaid.entity.item.EntitySit;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
 import com.laixia.maidintelligence.feature.behavior.tlm.MaidCommandSeatBridge;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
-import net.minecraft.world.entity.schedule.Activity;
 import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.phys.AABB;
 
@@ -33,8 +30,12 @@ public final class MaidSeatAutonomyBridge {
             return;
         }
         Entity vehicle = maid.getVehicle();
-        if (!isOrdinaryBoat(vehicle)
-                || MaidCommandSeatBridge.isSeatProtected(maid)) {
+        if (!isOrdinaryBoat(vehicle)) {
+            return;
+        }
+        boolean commandProtected =
+                MaidCommandSeatBridge.isSeatProtected(maid);
+        if (commandProtected && maid.isHomeModeEnable()) {
             return;
         }
 
@@ -44,6 +45,11 @@ public final class MaidSeatAutonomyBridge {
                 && owner.level() == maid.level()
                 && owner.getVehicle() == vehicle;
         if (!ownerStillAboard) {
+            // A command seat must not strand a following maid after the
+            // owner leaves their shared boat.
+            if (commandProtected) {
+                MaidCommandSeatBridge.releaseForTeleport(maid);
+            }
             maid.stopRiding();
         }
     }
@@ -57,7 +63,16 @@ public final class MaidSeatAutonomyBridge {
         boolean commandProtected =
                 MaidCommandSeatBridge.isSeatProtected(maid);
         if (!isPassiveSeat(vehicle)
-                && (!isOrdinaryBoat(vehicle) || commandProtected)) {
+                && !isOrdinaryBoat(vehicle)
+                && !commandProtected) {
+            return;
+        }
+        if (commandProtected) {
+            if (!requiresEmergencyOwnerFollow(maid)) {
+                return;
+            }
+            MaidCommandSeatBridge.releaseForTeleport(maid);
+            maid.stopRiding();
             return;
         }
 
@@ -68,25 +83,35 @@ public final class MaidSeatAutonomyBridge {
                 || maid.level() != owner.level()) {
             return;
         }
-
         int followDistance = (int) maid.getRestrictRadius() - 2;
-        // Ordinary following keeps the commanded seat. Only TLM's exact
-        // emergency-teleport threshold may release it outside Home mode.
-        int leaveDistance = commandProtected
-                ? followDistance + 4
-                : followDistance;
-        if (!maid.closerThan(owner, leaveDistance)) {
-            if (commandProtected) {
-                MaidCommandSeatBridge.releaseForTeleport(maid);
-            }
+        if (!maid.closerThan(owner, followDistance)) {
             maid.stopRiding();
         }
+    }
+
+    public static boolean requiresEmergencyOwnerFollow(EntityMaid maid) {
+        if (!canLeaveSeatState(maid)
+                || maid.isHomeModeEnable()) {
+            return false;
+        }
+        LivingEntity owner = maid.getOwner();
+        if (owner == null
+                || owner.isSpectator()
+                || owner.isDeadOrDying()
+                || maid.level() != owner.level()) {
+            return false;
+        }
+        int followDistance = Math.max(
+                0,
+                (int) maid.getRestrictRadius() - 2
+        );
+        return !maid.closerThan(owner, followDistance + 4);
     }
 
     public static void leaveSeatForPickup(EntityMaid maid) {
         if (!canLeaveAutonomousRide(maid, false)
                 || !maid.isPickup()
-                || isSeatedWork(maid)) {
+                || TlmBehaviorOccupancyClassifier.isSeatedWork(maid)) {
             return;
         }
 
@@ -105,7 +130,6 @@ public final class MaidSeatAutonomyBridge {
 
     public static void leaveSeatForCombat(EntityMaid maid) {
         if (!canLeaveAutonomousRide(maid, true)
-                || isSeatedWork(maid)
                 || !ActivityRadiusBridge.isBuiltInCombatTask(maid)) {
             return;
         }
@@ -192,27 +216,11 @@ public final class MaidSeatAutonomyBridge {
     }
 
     private static boolean isPassiveSeat(Entity vehicle) {
-        return vehicle != null
-                && (vehicle.getType() == EntityChair.TYPE
-                || vehicle.getType() == EntitySit.TYPE);
+        return TlmBehaviorOccupancyClassifier.isPassiveSeat(vehicle);
     }
 
     private static boolean isOrdinaryBoat(Entity vehicle) {
         return vehicle instanceof Boat;
-    }
-
-    private static boolean isSeatedWork(EntityMaid maid) {
-        if (maid.getScheduleDetail() != Activity.WORK) {
-            return false;
-        }
-
-        Entity vehicle = maid.getVehicle();
-        if (vehicle instanceof EntitySit seat) {
-            return maid.getTask().canSitInJoy(maid, seat.getJoyType());
-        }
-        return vehicle != null
-                && vehicle.getType() == EntityChair.TYPE
-                && maid.getTask().workPointTask(maid);
     }
 
     private static boolean validCombatTarget(

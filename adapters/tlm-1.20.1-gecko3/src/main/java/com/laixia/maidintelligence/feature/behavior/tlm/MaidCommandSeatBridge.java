@@ -4,10 +4,15 @@ import com.github.tartaricacid.touhoulittlemaid.entity.item.EntityChair;
 import com.github.tartaricacid.touhoulittlemaid.entity.item.EntitySit;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.mixin.accessor.EntityAccessor;
+import com.laixia.maidintelligence.feature.orchestration.api.CoordinationClaimService;
+import com.laixia.maidintelligence.feature.orchestration.domain.claim.CoordinationClaimRequest;
+import com.laixia.maidintelligence.feature.orchestration.domain.claim.CoordinationClaimToken;
+import com.laixia.maidintelligence.feature.orchestration.tlm.TlmCoordinationClaims;
+import com.laixia.maidintelligence.feature.perception.tlm.TlmAffordancePerceptionService;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.phys.AABB;
 
 import java.util.Comparator;
 import java.util.Map;
@@ -23,11 +28,24 @@ public final class MaidCommandSeatBridge {
     private static final String VEHICLE_TAG =
             "tlm_companionship_command_seat_vehicle";
     private static final double SEAT_SEARCH_RANGE = 3.0D;
+    private static final int SEAT_CLAIM_TICKS = 100;
 
     private static final Map<EntityMaid, Session> SESSIONS =
             new WeakHashMap<>();
+    private static final Map<EntityMaid, CoordinationClaimToken>
+            OCCUPIED_CLAIMS = new WeakHashMap<>();
+    private static TlmAffordancePerceptionService perception;
 
     private MaidCommandSeatBridge() {
+    }
+
+    public static synchronized void bindPerception(
+            TlmAffordancePerceptionService service
+    ) {
+        perception = java.util.Objects.requireNonNull(
+                service,
+                "service"
+        );
     }
 
     public static boolean mirrorOwnerSeat(
@@ -54,6 +72,7 @@ public final class MaidCommandSeatBridge {
         }
         if (maid.getVehicle() == session.commandSeat
                 && session.commandSeat != null) {
+            renewOccupiedClaim(maid);
             lockSeat(maid, session.commandSeat);
             return true;
         }
@@ -83,7 +102,7 @@ public final class MaidCommandSeatBridge {
         if (candidate == null
                 || !maid.closerThan(candidate, SEAT_SEARCH_RANGE)
                 || !available(candidate, maid, owner)
-                || !maid.startRiding(candidate, true)) {
+                || !tryMountClaimed(maid, candidate)) {
             return false;
         }
 
@@ -105,6 +124,7 @@ public final class MaidCommandSeatBridge {
             session.seatingDisabled = true;
             session.commandSeat = null;
         }
+        releaseClaim(maid, "owner_release");
         clearLock(maid);
     }
 
@@ -124,6 +144,7 @@ public final class MaidCommandSeatBridge {
             return;
         }
         SESSIONS.remove(maid);
+        releaseClaim(maid, "terminal_release");
         clearLock(maid);
     }
 
@@ -139,9 +160,11 @@ public final class MaidCommandSeatBridge {
         if (vehicle == null
                 || !data.hasUUID(VEHICLE_TAG)
                 || !data.getUUID(VEHICLE_TAG).equals(vehicle.getUUID())) {
+            releaseClaim(maid, "seat_lost");
             clearLock(maid);
             return false;
         }
+        renewOccupiedClaim(maid);
         return true;
     }
 
@@ -150,20 +173,116 @@ public final class MaidCommandSeatBridge {
             Entity occupiedSeat,
             EntityMaid maid
     ) {
-        AABB bounds = owner.getBoundingBox().inflate(
-                SEAT_SEARCH_RANGE,
-                2.0D,
-                SEAT_SEARCH_RANGE
-        );
-        return owner.level().getEntities(
-                maid,
-                bounds,
-                seat -> seat != occupiedSeat
-                        && compatibleSeatType(occupiedSeat, seat)
-                        && available(seat, maid, owner)
-        ).stream()
+        TlmAffordancePerceptionService current = perception;
+        if (current == null) {
+            return null;
+        }
+        return current.queryCompatibleSeats(
+                        maid,
+                        32,
+                        SEAT_SEARCH_RANGE,
+                        maid.level().getGameTime()
+                ).stream()
+                .filter(seat -> seat != occupiedSeat)
+                .filter(seat -> compatibleSeatType(occupiedSeat, seat))
+                .filter(seat -> available(seat, maid, owner))
+                .filter(seat -> claimAvailable(maid, seat))
                 .min(Comparator.comparingDouble(owner::distanceToSqr))
                 .orElse(null);
+    }
+
+    private static boolean tryMountClaimed(
+            EntityMaid maid,
+            Entity candidate
+    ) {
+        if (!(maid.level() instanceof ServerLevel level)) {
+            return false;
+        }
+        releaseClaim(maid, "retarget");
+        int seatIndex = candidate.getPassengers().size();
+        CoordinationClaimService claims =
+                TlmCoordinationClaims.service(level);
+        CoordinationClaimToken token = claims.tryClaim(
+                new CoordinationClaimRequest(
+                        TlmCoordinationClaims.seat(
+                                level,
+                                candidate,
+                                seatIndex
+                        ),
+                        maid.getUUID(),
+                        TlmCoordinationClaims.operation(
+                                maid,
+                                "seat/" + candidate.getUUID()
+                                        + "/" + seatIndex
+                        ),
+                        SEAT_CLAIM_TICKS
+                ),
+                level.getGameTime()
+        ).orElse(null);
+        if (token == null) {
+            return false;
+        }
+        if (!maid.startRiding(candidate, true)
+                || !claims.occupy(
+                token,
+                level.getGameTime(),
+                SEAT_CLAIM_TICKS
+        )) {
+            maid.stopRiding();
+            claims.release(
+                    token,
+                    level.getGameTime(),
+                    "mount_failed"
+            );
+            return false;
+        }
+        OCCUPIED_CLAIMS.put(maid, token);
+        return true;
+    }
+
+    private static boolean claimAvailable(
+            EntityMaid maid,
+            Entity candidate
+    ) {
+        if (!(maid.level() instanceof ServerLevel level)) {
+            return false;
+        }
+        return !TlmCoordinationClaims.service(level).isClaimed(
+                TlmCoordinationClaims.seat(
+                        level,
+                        candidate,
+                        candidate.getPassengers().size()
+                ),
+                level.getGameTime()
+        );
+    }
+
+    private static void renewOccupiedClaim(EntityMaid maid) {
+        CoordinationClaimToken token = OCCUPIED_CLAIMS.get(maid);
+        if (token == null
+                || !(maid.level() instanceof ServerLevel level)) {
+            return;
+        }
+        if (!TlmCoordinationClaims.service(level).renew(
+                token,
+                level.getGameTime(),
+                SEAT_CLAIM_TICKS
+        )) {
+            OCCUPIED_CLAIMS.remove(maid);
+        }
+    }
+
+    private static void releaseClaim(EntityMaid maid, String reason) {
+        CoordinationClaimToken token = OCCUPIED_CLAIMS.remove(maid);
+        if (token == null
+                || !(maid.level() instanceof ServerLevel level)) {
+            return;
+        }
+        TlmCoordinationClaims.service(level).release(
+                token,
+                level.getGameTime(),
+                reason
+        );
     }
 
     private static boolean available(

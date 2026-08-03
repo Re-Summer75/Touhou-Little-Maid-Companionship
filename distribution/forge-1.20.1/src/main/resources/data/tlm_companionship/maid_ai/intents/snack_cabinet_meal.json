@@ -6,9 +6,7 @@
     { "fact": "tlm_companionship:fact/snack_cabinet_meal_available", "operator": "eq", "value": 1.0 },
     { "fact": "tlm_companionship:fact/can_move", "operator": "eq", "value": 1.0 },
     { "fact": "tlm_companionship:fact/passenger", "operator": "eq", "value": 0.0 },
-    { "fact": "tlm_companionship:fact/combat_active", "operator": "eq", "value": 0.0 },
-    { "fact": "tlm_companionship:fact/using_item", "operator": "eq", "value": 0.0 },
-    { "fact": "tlm_companionship:fact/movement_hard_blocked", "operator": "eq", "value": 0.0 }
+    { "fact": "tlm_companionship:fact/behavior_occupancy_level", "operator": "eq", "value": 0.0 }
   ],
   "selection": {
     "base_score": 1.0,

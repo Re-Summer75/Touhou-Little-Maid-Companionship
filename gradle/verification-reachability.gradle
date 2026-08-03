@@ -1,0 +1,181 @@
+def verificationSources = fileTree('src/test/java') {
+    include '**/*Verification.java'
+}
+
+def verificationClassName = { source ->
+    def text = source.getText('UTF-8')
+    def packageMatcher = text =~
+            /(?m)^\s*package\s+([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)\s*;/
+    if (!packageMatcher.find()) {
+        throw new GradleException(
+                "Verification source has no package declaration: ${source}"
+        )
+    }
+    def simpleName = source.name.substring(
+            0,
+            source.name.length() - '.java'.length()
+    )
+    packageMatcher.group(1) + '.' + simpleName
+}
+def executableCode = { source ->
+    source.getText('UTF-8')
+            .replaceAll(/(?s)\/\*.*?\*\//, ' ')
+            .replaceAll(/(?m)\/\/.*$/, ' ')
+            .replaceAll(/(?s)"(?:\\.|[^"\\])*"/, '""')
+            .replaceAll(/(?s)'(?:\\.|[^'\\])*'/, "''")
+}
+def mainPattern = ~/\bpublic\s+static\s+void\s+main\s*\(/
+def discoveredMainClasses = verificationSources.files.findAll {
+    mainPattern.matcher(executableCode(it)).find()
+}.collect(verificationClassName).toSet()
+def taskNameOverrides = [
+        MovementIntentCoordinationVerification: 'verifyMovementIntent',
+        IntentDataCodecVerification            : 'verifyIntentData'
+]
+def verificationTaskNames = []
+discoveredMainClasses.sort().each { className ->
+    def simpleName = className.substring(className.lastIndexOf('.') + 1)
+    def suiteName = simpleName.substring(
+            0,
+            simpleName.length() - 'Verification'.length()
+    )
+    def taskName = taskNameOverrides.getOrDefault(
+            simpleName,
+            'verify' + suiteName
+    )
+    if (tasks.names.contains(taskName)) {
+        throw new GradleException(
+                "Verification task name collision: ${taskName}"
+        )
+    }
+    tasks.register(taskName, JavaExec) {
+        group = 'verification'
+        description = "Runs discovered verification suite ${className}."
+        dependsOn tasks.named('testClasses')
+        classpath = sourceSets.test.runtimeClasspath
+        mainClass = className
+        if (simpleName in [
+                'BonePhysicsVerification',
+                'ModelShadingVerification'
+        ]) {
+            workingDir rootProject.projectDir
+        }
+    }
+    verificationTaskNames.add(taskName)
+}
+ext.verificationTaskNames = verificationTaskNames.asImmutable()
+
+tasks.register('verifyVerificationReachability') {
+    group = 'verification'
+    description = 'Rejects verification suites unreachable from discovered JavaExec entrypoints.'
+    inputs.files(verificationSources)
+    inputs.property('entrypoints', discoveredMainClasses.sort())
+
+    doLast {
+        def sourceByClass = [:]
+        def codeByClass = [:]
+        verificationSources.files.sort().each { source ->
+            def className = verificationClassName(source)
+            if (sourceByClass.put(className, source) != null) {
+                throw new GradleException(
+                        "Duplicate verification class: ${className}"
+                )
+            }
+
+            // Calls in comments or diagnostics must not make an orphan suite
+            // appear reachable.
+            codeByClass[className] = executableCode(source)
+        }
+
+        def classesBySimpleName = sourceByClass.keySet().groupBy {
+            it.substring(it.lastIndexOf('.') + 1)
+        }
+        def ambiguousNames = classesBySimpleName.findAll {
+            ignored, classes -> classes.size() > 1
+        }
+        if (!ambiguousNames.isEmpty()) {
+            throw new GradleException(
+                    'Verification simple names must be unique for static '
+                            + 'reachability analysis: '
+                            + ambiguousNames.keySet().sort().join(', ')
+            )
+        }
+
+        def roots = discoveredMainClasses
+        def errors = []
+        def missingRoots = roots - sourceByClass.keySet()
+        if (!missingRoots.isEmpty()) {
+            errors << (
+                    'registered entrypoints without a Verification source: '
+                            + missingRoots.sort().join(', ')
+            )
+        }
+
+        def declaredMains = codeByClass.findAll {
+            ignored, code -> mainPattern.matcher(code).find()
+        }.keySet()
+        def unregisteredMains = declaredMains - roots
+        if (!unregisteredMains.isEmpty()) {
+            errors << (
+                    'unregistered Verification main entrypoints: '
+                            + unregisteredMains.sort().join(', ')
+            )
+        }
+        def rootsWithoutMain = roots.findAll {
+            codeByClass.containsKey(it)
+                    && !mainPattern.matcher(codeByClass[it]).find()
+        }
+        if (!rootsWithoutMain.isEmpty()) {
+            errors << (
+                    'registered entrypoints without public static main: '
+                            + rootsWithoutMain.sort().join(', ')
+            )
+        }
+
+        def edges = sourceByClass.keySet().collectEntries { sourceClass ->
+            def targets = [] as Set
+            classesBySimpleName.each { simpleName, candidates ->
+                def invocationPattern = java.util.regex.Pattern.compile(
+                        '(?<![A-Za-z0-9_$])'
+                                + java.util.regex.Pattern.quote(simpleName)
+                                + '\\s*\\.\\s*[A-Za-z_$][A-Za-z0-9_$]*'
+                                + '\\s*\\('
+                )
+                if (invocationPattern.matcher(codeByClass[sourceClass]).find()) {
+                    targets.add(candidates.first())
+                }
+            }
+            [(sourceClass): targets]
+        }
+
+        def reachable = [] as Set
+        def pending = new ArrayDeque(roots)
+        while (!pending.isEmpty()) {
+            def current = pending.removeFirst()
+            if (reachable.add(current)) {
+                edges.getOrDefault(current, [] as Set).each {
+                    pending.addLast(it)
+                }
+            }
+        }
+        def unreachable = sourceByClass.keySet() - reachable
+        if (!unreachable.isEmpty()) {
+            errors << (
+                    'Verification sources unreachable from registered '
+                            + 'entrypoints: '
+                            + unreachable.sort().join(', ')
+            )
+        }
+
+        if (!errors.isEmpty()) {
+            throw new GradleException(
+                    'Verification reachability failed:\n - '
+                            + errors.join('\n - ')
+            )
+        }
+        logger.lifecycle(
+                "Verification reachability passed: "
+                        + "${reachable.size()} sources from ${roots.size()} entrypoints."
+        )
+    }
+}

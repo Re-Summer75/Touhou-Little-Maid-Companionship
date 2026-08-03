@@ -9,6 +9,7 @@ import com.laixia.maidintelligence.platform.resource.ModResources;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
 import com.laixia.maidintelligence.feature.orchestration.domain.ActionResult;
 import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentActions;
+import com.laixia.maidintelligence.feature.perception.tlm.TlmAffordancePerceptionService;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.feature.status.domain.DefaultToolDurabilityPolicy;
 import com.laixia.maidintelligence.feature.status.domain.MaidStatusState;
@@ -24,6 +25,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.ai.memory.WalkTarget;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraftforge.gametest.GameTestHolder;
@@ -125,7 +127,7 @@ public final class StatusFeedbackGameTests {
         cabinet.setItem(0, new ItemStack(Items.APPLE, 2));
 
         MaidSnackCabinetMealSource source =
-                new MaidSnackCabinetMealSource(new MaidMealAccess());
+                indexedMealSource(helper, cabinetPos);
         helper.assertTrue(
                 source.findAvailableMeal(
                         maid,
@@ -183,7 +185,7 @@ public final class StatusFeedbackGameTests {
         cabinet.setItem(0, new ItemStack(Items.BREAD));
 
         MaidSnackCabinetMealSource source =
-                new MaidSnackCabinetMealSource(new MaidMealAccess());
+                indexedMealSource(helper, cabinetPos);
         TlmMaidIntentActions actions = new TlmMaidIntentActions(
                 ignored -> {
                 },
@@ -202,14 +204,19 @@ public final class StatusFeedbackGameTests {
         );
         helper.assertTrue(result == ActionResult.RUNNING,
                 "Distant snack cabinet did not create an approach target");
+        WalkTarget walkTarget = maid.getBrain()
+                .getMemory(MemoryModuleType.WALK_TARGET)
+                .orElse(null);
         helper.assertTrue(
-                maid.getBrain()
-                        .getMemory(MemoryModuleType.WALK_TARGET)
-                        .filter(target -> target.getTarget()
-                                .currentBlockPosition()
-                                .equals(cabinetPos))
-                        .isPresent(),
-                "Snack cabinet approach wrote the wrong walk target"
+                walkTarget != null
+                        && walkTarget.getTarget()
+                        .currentBlockPosition()
+                        .equals(cabinetPos),
+                "Snack cabinet approach target: expected "
+                        + cabinetPos + ", actual "
+                        + (walkTarget == null
+                        ? "<missing>"
+                        : walkTarget.getTarget().currentBlockPosition())
         );
 
         actions.cancel(
@@ -223,6 +230,77 @@ public final class StatusFeedbackGameTests {
                         .isEmpty(),
                 "Cancelling snack cabinet approach left its walk target"
         );
+        helper.succeed();
+    }
+
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void twoMaidsCannotClaimTheLastSnackTogether(
+            GameTestHelper helper
+    ) {
+        EntityMaid first = spawnMaid(helper);
+        EntityMaid second = helper.spawn(
+                InitEntities.MAID.get(),
+                new BlockPos(1, 2, 2)
+        );
+        BlockPos cabinetRelative = new BlockPos(6, 2, 1);
+        helper.setBlock(
+                cabinetRelative,
+                InitBlocks.SNACK_CABINET.get()
+        );
+        BlockPos cabinetPos = helper.absolutePos(cabinetRelative);
+        TileEntitySnackCabinet cabinet =
+                (TileEntitySnackCabinet) helper.getLevel()
+                        .getBlockEntity(cabinetPos);
+        helper.assertTrue(cabinet != null,
+                "Snack cabinet block entity was not created");
+        cabinet.setItem(0, new ItemStack(Items.APPLE));
+
+        MaidSnackCabinetMealSource source =
+                indexedMealSource(helper, cabinetPos);
+        TlmMaidIntentActions actions = new TlmMaidIntentActions(
+                ignored -> {
+                },
+                source
+        );
+        Map<String, String> parameters = Map.of(
+                "speed", "0.55",
+                "close_distance", "2"
+        );
+        long gameTime = helper.getLevel().getGameTime();
+        helper.assertTrue(actions.execute(
+                        first,
+                        CompanionIntentIds.FETCH_SNACK_CABINET_MEAL,
+                        parameters,
+                        gameTime,
+                        0
+                ) == ActionResult.RUNNING,
+                "First maid did not claim the distant meal");
+        helper.assertTrue(actions.execute(
+                        second,
+                        CompanionIntentIds.FETCH_SNACK_CABINET_MEAL,
+                        parameters,
+                        gameTime,
+                        0
+                ) == ActionResult.FAILED,
+                "Second maid acquired the same container-slot claim");
+
+        first.setPos(
+                cabinetPos.getX() - 1.0D,
+                cabinetPos.getY() + 0.5D,
+                cabinetPos.getZ() + 0.5D
+        );
+        helper.assertTrue(actions.execute(
+                        first,
+                        CompanionIntentIds.FETCH_SNACK_CABINET_MEAL,
+                        parameters,
+                        gameTime + 1L,
+                        1
+                ) == ActionResult.SUCCEEDED,
+                "Claim owner could not commit the meal extraction");
+        helper.assertTrue(cabinet.getItem(0).isEmpty(),
+                "Last snack was duplicated or left behind");
+        helper.assertTrue(!second.isUsingItem(),
+                "Losing maid received a duplicated snack");
         helper.succeed();
     }
 
@@ -303,6 +381,23 @@ public final class StatusFeedbackGameTests {
             helper.assertTrue(maid.getHealth() > 1.0F, "Second regeneration cycle did not heal");
             helper.succeed();
         });
+    }
+
+    private static MaidSnackCabinetMealSource indexedMealSource(
+            GameTestHelper helper,
+            BlockPos cabinetPos
+    ) {
+        TlmAffordancePerceptionService perception =
+                new TlmAffordancePerceptionService();
+        perception.onBlockChanged(
+                helper.getLevel(),
+                cabinetPos,
+                helper.getLevel().getGameTime()
+        );
+        return new MaidSnackCabinetMealSource(
+                new MaidMealAccess(),
+                perception
+        );
     }
 
     private static EntityMaid spawnMaid(GameTestHelper helper) {

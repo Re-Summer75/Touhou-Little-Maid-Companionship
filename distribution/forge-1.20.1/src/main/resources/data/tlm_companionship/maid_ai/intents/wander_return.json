@@ -6,9 +6,8 @@
     { "fact": "tlm_companionship:fact/owner_valid", "operator": "eq", "value": 1.0 },
     { "fact": "tlm_companionship:fact/follow_mode", "operator": "eq", "value": 1.0 },
     { "fact": "tlm_companionship:fact/can_move", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/combat_active", "operator": "eq", "value": 0.0 },
     { "fact": "tlm_companionship:fact/built_in_task", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/movement_hard_blocked", "operator": "eq", "value": 0.0 }
+    { "fact": "tlm_companionship:fact/behavior_occupancy_level", "operator": "eq", "value": 0.0 }
   ],
   "utility": [
     {

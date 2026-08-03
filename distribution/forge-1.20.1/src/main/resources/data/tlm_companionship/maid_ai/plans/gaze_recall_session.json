@@ -6,7 +6,8 @@
       "action": "tlm_companionship:action/approach_owner",
       "parameters": {
         "speed": "0.6",
-        "close_distance": "2"
+        "close_distance": "2",
+        "authority": "owner_command"
       },
       "timeout_ticks": 200,
       "on_success": "command_window",

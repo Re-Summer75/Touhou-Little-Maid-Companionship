@@ -1,18 +1,21 @@
 package com.laixia.maidintelligence.feature.orchestration.application;
 
+import com.laixia.maidintelligence.feature.orchestration.api.CompanionObservationSnapshot;
+import com.laixia.maidintelligence.feature.orchestration.api.DecisionTrace;
 import com.laixia.maidintelligence.feature.orchestration.api.IntentMetrics;
 import com.laixia.maidintelligence.feature.orchestration.api.IntentTrace;
 import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
-import com.laixia.maidintelligence.feature.orchestration.domain.ActionResult;
 import com.laixia.maidintelligence.feature.orchestration.domain.IntentCatalog;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
+import com.laixia.maidintelligence.feature.orchestration.domain.observation.Belief;
+import com.laixia.maidintelligence.feature.orchestration.domain.observation.EpisodicEvent;
+import com.laixia.maidintelligence.feature.orchestration.port.CompanionMemoryPort;
 import com.laixia.maidintelligence.feature.orchestration.port.IntentActionPort;
 import com.laixia.maidintelligence.feature.orchestration.port.IntentCatalogPort;
 import com.laixia.maidintelligence.feature.orchestration.port.IntentContextPort;
+import com.laixia.maidintelligence.feature.orchestration.port.OperationOutcomePort;
+import com.laixia.maidintelligence.feature.orchestration.port.UtilityModifierPort;
 
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.WeakHashMap;
@@ -24,21 +27,17 @@ public final class DefaultMaidIntentOrchestrator<M>
         implements MaidIntentApi<M> {
     private static final int MAX_SIGNALS_PER_SUBJECT = 32;
     private final IntentCatalogPort catalogs;
-    private final IntentContextPort<M> context;
-    private final IntentActionPort<M> actions;
+    private final IntentFactReader<M> facts;
     private final IntentSelectionEngine<M> selection;
+    private final RuntimeObservability<M> observability;
+    private final IntentPlanExecutor<M> executor;
+    private final IntentActivationCoordinator<M> activation;
     private final BooleanSupplier enabled;
     private final IntSupplier evaluationIntervalTicks;
     private final IntSupplier maxCandidateEvaluations;
     private final BooleanSupplier diagnosticsEnabled;
     private final Map<M, MaidIntentRuntimeState> states = new WeakHashMap<>();
-    private long evaluations;
-    private long activations;
-    private long switches;
-    private long interruptions;
-    private long completions;
-    private long failures;
-    private long cancellations;
+    private final IntentMetricsTracker metrics = new IntentMetricsTracker();
 
     public DefaultMaidIntentOrchestrator(
             IntentCatalogPort catalogs,
@@ -48,16 +47,9 @@ public final class DefaultMaidIntentOrchestrator<M>
             BooleanSupplier enabled,
             IntSupplier evaluationIntervalTicks
     ) {
-        this(
-                catalogs,
-                context,
-                actions,
-                identity,
-                enabled,
+        this(catalogs, context, actions, identity, enabled,
                 evaluationIntervalTicks,
-                () -> 128,
-                () -> true
-        );
+                () -> 128, () -> true, CompanionMemoryPort.noop());
     }
 
     public DefaultMaidIntentOrchestrator(
@@ -70,25 +62,66 @@ public final class DefaultMaidIntentOrchestrator<M>
             IntSupplier maxCandidateEvaluations,
             BooleanSupplier diagnosticsEnabled
     ) {
+        this(catalogs, context, actions, identity, enabled,
+                evaluationIntervalTicks, maxCandidateEvaluations,
+                diagnosticsEnabled, CompanionMemoryPort.noop());
+    }
+
+    public DefaultMaidIntentOrchestrator(
+            IntentCatalogPort catalogs,
+            IntentContextPort<M> context,
+            IntentActionPort<M> actions,
+            ToLongFunction<M> identity,
+            BooleanSupplier enabled,
+            IntSupplier evaluationIntervalTicks,
+            IntSupplier maxCandidateEvaluations,
+            BooleanSupplier diagnosticsEnabled,
+            CompanionMemoryPort<M> memory
+    ) {
+        this(catalogs, context, actions, identity, enabled,
+                evaluationIntervalTicks, maxCandidateEvaluations,
+                diagnosticsEnabled, memory, OperationOutcomePort.noop(),
+                UtilityModifierPort.noop());
+    }
+
+    public DefaultMaidIntentOrchestrator(
+            IntentCatalogPort catalogs,
+            IntentContextPort<M> context,
+            IntentActionPort<M> actions,
+            ToLongFunction<M> identity,
+            BooleanSupplier enabled,
+            IntSupplier evaluationIntervalTicks,
+            IntSupplier maxCandidateEvaluations,
+            BooleanSupplier diagnosticsEnabled,
+            CompanionMemoryPort<M> memory,
+            OperationOutcomePort<M> outcomes,
+            UtilityModifierPort<M> modifiers
+    ) {
         this.catalogs = Objects.requireNonNull(catalogs, "catalogs");
-        this.context = Objects.requireNonNull(context, "context");
-        this.actions = Objects.requireNonNull(actions, "actions");
+        this.facts = new IntentFactReader<>(context);
+        IntentActionPort<M> checkedActions = Objects.requireNonNull(
+                actions, "actions");
+        ToLongFunction<M> checkedIdentity = Objects.requireNonNull(
+                identity, "identity");
         this.selection = new IntentSelectionEngine<>(
-                Objects.requireNonNull(identity, "identity")
+                checkedIdentity,
+                Objects.requireNonNull(modifiers, "modifiers")
         );
+        this.observability = new RuntimeObservability<>(
+                Objects.requireNonNull(memory, "memory"),
+                checkedIdentity,
+                Objects.requireNonNull(outcomes, "outcomes")
+        );
+        this.executor = new IntentPlanExecutor<>(checkedActions, observability);
+        this.activation = new IntentActivationCoordinator<>(
+                executor, observability);
         this.enabled = Objects.requireNonNull(enabled, "enabled");
         this.evaluationIntervalTicks = Objects.requireNonNull(
-                evaluationIntervalTicks,
-                "evaluationIntervalTicks"
-        );
+                evaluationIntervalTicks, "evaluationIntervalTicks");
         this.maxCandidateEvaluations = Objects.requireNonNull(
-                maxCandidateEvaluations,
-                "maxCandidateEvaluations"
-        );
+                maxCandidateEvaluations, "maxCandidateEvaluations");
         this.diagnosticsEnabled = Objects.requireNonNull(
-                diagnosticsEnabled,
-                "diagnosticsEnabled"
-        );
+                diagnosticsEnabled, "diagnosticsEnabled");
     }
 
     @Override
@@ -99,6 +132,7 @@ public final class DefaultMaidIntentOrchestrator<M>
                 subject,
                 ignored -> new MaidIntentRuntimeState()
         );
+        observability.initialize(subject, state, gameTime);
         boolean clockRolledBack = state.lastTick != Long.MIN_VALUE
                 && gameTime < state.lastTick;
         boolean catalogChanged =
@@ -111,10 +145,13 @@ public final class DefaultMaidIntentOrchestrator<M>
 
         if (!enabled.getAsBoolean() || catalog.intents().isEmpty()) {
             cancelActive(subject, state, "disabled", false);
+            executor.abortSuspended(state);
+            observability.updateDecision(state, catalog, gameTime);
             return false;
         }
 
-        readFacts(subject, state, catalog, gameTime);
+        facts.read(subject, state, catalog, gameTime);
+        executor.pruneSuspended(state, catalog, gameTime);
         IntentCatalog.CompiledIntent active =
                 activeDefinition(state, catalog);
         if (active != null
@@ -123,8 +160,15 @@ public final class DefaultMaidIntentOrchestrator<M>
                         state.facts,
                         catalog
                 )) {
-            interruptions++;
-            cancelActive(subject, state, "active_blocked", true);
+            metrics.interrupted();
+            interruptActive(
+                    subject,
+                    state,
+                    active,
+                    catalog,
+                    gameTime,
+                    "active_blocked"
+            );
             active = null;
             state.dirty = true;
         }
@@ -134,9 +178,18 @@ public final class DefaultMaidIntentOrchestrator<M>
             active = activeDefinition(state, catalog);
         }
         if (active == null) {
+            observability.updateDecision(state, catalog, gameTime);
             return false;
         }
-        return advance(subject, state, active, gameTime);
+        IntentPlanExecutor.AdvanceResult result =
+                executor.advance(subject, state, active, gameTime);
+        if (result == IntentPlanExecutor.AdvanceResult.COMPLETED) {
+            metrics.completed();
+        } else if (result == IntentPlanExecutor.AdvanceResult.FAILED) {
+            metrics.failed();
+        }
+        observability.updateDecision(state, catalog, gameTime);
+        return true;
     }
 
     @Override
@@ -155,6 +208,7 @@ public final class DefaultMaidIntentOrchestrator<M>
                 subject,
                 ignored -> new MaidIntentRuntimeState()
         );
+        observability.initialize(subject, state, gameTime);
         IntentCatalog catalog = catalogs.current();
         if (state.catalogGeneration != catalog.generation()
                 || (state.lastTick != Long.MIN_VALUE
@@ -170,10 +224,18 @@ public final class DefaultMaidIntentOrchestrator<M>
                 signal,
                 new MaidIntentRuntimeState.SignalWindow(
                         gameTime,
-                        deadline(gameTime, ttlTicks)
+                        IntentRuntimeTrace.deadline(gameTime, ttlTicks)
                 )
         );
         state.dirty = true;
+        observability.publishSignal(
+                subject,
+                state,
+                signal,
+                gameTime,
+                ttlTicks
+        );
+        observability.updateDecision(state, catalog, gameTime);
         return true;
     }
 
@@ -181,6 +243,68 @@ public final class DefaultMaidIntentOrchestrator<M>
     public IntentTrace inspect(M subject) {
         MaidIntentRuntimeState state = states.get(subject);
         return state == null ? IntentTrace.idle() : state.trace;
+    }
+
+    @Override
+    public DecisionTrace inspectDecision(M subject) {
+        MaidIntentRuntimeState state = states.get(subject);
+        return state == null ? DecisionTrace.idle() : state.decisionTrace;
+    }
+
+    @Override
+    public CompanionObservationSnapshot observations(
+            M subject,
+            long gameTime
+    ) {
+        MaidIntentRuntimeState state = states.get(subject);
+        return state == null
+                ? CompanionObservationSnapshot.empty()
+                : state.mailbox.snapshot(gameTime);
+    }
+
+    @Override
+    public boolean publishEvent(
+            M subject,
+            EpisodicEvent event,
+            long gameTime
+    ) {
+        Objects.requireNonNull(subject, "subject");
+        Objects.requireNonNull(event, "event");
+        MaidIntentRuntimeState state = states.computeIfAbsent(
+                subject,
+                ignored -> new MaidIntentRuntimeState()
+        );
+        observability.initialize(subject, state, gameTime);
+        boolean published = observability.publishEvent(
+                state,
+                event,
+                gameTime
+        );
+        observability.updateDecision(state, catalogs.current(), gameTime);
+        return published;
+    }
+
+    @Override
+    public boolean rememberBelief(
+            M subject,
+            Belief belief,
+            long gameTime
+    ) {
+        Objects.requireNonNull(subject, "subject");
+        Objects.requireNonNull(belief, "belief");
+        MaidIntentRuntimeState state = states.computeIfAbsent(
+                subject,
+                ignored -> new MaidIntentRuntimeState()
+        );
+        observability.initialize(subject, state, gameTime);
+        boolean remembered = observability.rememberBelief(
+                subject,
+                state,
+                belief,
+                gameTime
+        );
+        observability.updateDecision(state, catalogs.current(), gameTime);
+        return remembered;
     }
 
     @Override
@@ -193,68 +317,12 @@ public final class DefaultMaidIntentOrchestrator<M>
 
     @Override
     public IntentMetrics metrics() {
-        IntentCatalog catalog = catalogs.current();
-        return new IntentMetrics(
-                catalog.generation(),
-                catalog.intents().size(),
-                catalog.planCount(),
-                evaluations,
-                activations,
-                switches,
-                interruptions,
-                completions,
-                failures,
-                cancellations
-        );
+        return metrics.snapshot(catalogs.current());
     }
 
     @Override
     public void resetMetrics() {
-        evaluations = 0L;
-        activations = 0L;
-        switches = 0L;
-        interruptions = 0L;
-        completions = 0L;
-        failures = 0L;
-        cancellations = 0L;
-    }
-
-    private void readFacts(
-            M subject,
-            MaidIntentRuntimeState state,
-            IntentCatalog catalog,
-            long gameTime
-    ) {
-        int factCount = catalog.facts().size();
-        if (state.facts.length != factCount) {
-            state.facts = new double[factCount];
-        }
-        Arrays.fill(state.facts, Double.NaN);
-        context.readFacts(
-                subject,
-                gameTime,
-                catalog.facts(),
-                state.facts
-        );
-
-        Iterator<Map.Entry<OrchestrationId,
-                MaidIntentRuntimeState.SignalWindow>> iterator =
-                state.signals.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<OrchestrationId,
-                    MaidIntentRuntimeState.SignalWindow> entry =
-                    iterator.next();
-            if (!entry.getValue().activeAt(gameTime)) {
-                iterator.remove();
-            }
-        }
-        for (int index = 0; index < factCount; index++) {
-            MaidIntentRuntimeState.SignalWindow signal =
-                    state.signals.get(catalog.facts().get(index));
-            if (signal != null && signal.activeAt(gameTime)) {
-                state.facts[index] = 1.0D;
-            }
-        }
+        metrics.reset();
     }
 
     private void evaluate(
@@ -263,9 +331,10 @@ public final class DefaultMaidIntentOrchestrator<M>
             IntentCatalog catalog,
             long gameTime
     ) {
-        evaluations++;
+        metrics.evaluated();
+        observability.beginDecision(subject, state, catalog, gameTime);
         state.dirty = false;
-        state.nextEvaluationTick = deadline(
+        state.nextEvaluationTick = IntentRuntimeTrace.deadline(
                 gameTime,
                 Math.max(1, evaluationIntervalTicks.getAsInt())
         );
@@ -279,17 +348,37 @@ public final class DefaultMaidIntentOrchestrator<M>
         );
         IntentSelectionEngine.ScoredIntent winner = result.winner();
         if (winner == null) {
-            updateTrace(state, catalog, result.trace(), result.status());
+            IntentRuntimeTrace.selection(
+                    state,
+                    catalog,
+                    result.trace(),
+                    result.status()
+            );
             return;
         }
         if (state.activeIntent == null) {
-            start(state, catalog, winner, gameTime);
-            updateTrace(state, catalog, result.trace(),
-                    "activated:" + winner.intent().id());
+            String transition = activateSelected(
+                    subject,
+                    state,
+                    catalog,
+                    winner,
+                    gameTime
+            );
+            IntentRuntimeTrace.selection(
+                    state,
+                    catalog,
+                    result.trace(),
+                    transition
+            );
             return;
         }
         if (winner.intent().id().equals(state.activeIntent)) {
-            updateTrace(state, catalog, result.trace(), "retained");
+            IntentRuntimeTrace.selection(
+                    state,
+                    catalog,
+                    result.trace(),
+                    "retained"
+            );
             return;
         }
 
@@ -297,121 +386,66 @@ public final class DefaultMaidIntentOrchestrator<M>
                 catalog.intent(state.activeIntent);
         if (active != null
                 && !selection.canSwitch(state, active, winner, gameTime)) {
-            updateTrace(state, catalog, result.trace(), "committed");
+            IntentRuntimeTrace.selection(
+                    state,
+                    catalog,
+                    result.trace(),
+                    "committed"
+            );
             return;
         }
-        cancelActive(subject, state, "preempted", true);
-        switches++;
-        interruptions++;
-        start(state, catalog, winner, gameTime);
-        updateTrace(state, catalog, result.trace(),
-                "switched:" + winner.intent().id());
-    }
-
-    private boolean advance(
-            M subject,
-            MaidIntentRuntimeState state,
-            IntentCatalog.CompiledIntent active,
-            long gameTime
-    ) {
-        IntentCatalog.CompiledState step =
-                active.plan().states().get(state.activeState);
-        state.activeAction = step.action();
-        state.activeParameters = step.parameters();
-        long elapsed = Math.max(0L, gameTime - state.stateSinceTick);
-        boolean timedOut = elapsed >= step.timeoutTicks();
-        ActionResult result;
-        if (timedOut) {
-            actions.cancel(subject, step.action(), step.parameters());
-            result = ActionResult.FAILED;
-        } else {
-            result = actions.execute(
+        IntentActivationCoordinator.InterruptResult interrupted =
+                activation.interrupt(
                         subject,
-                        step.action(),
-                        step.parameters(),
+                        state,
+                        active,
+                        catalog,
                         gameTime,
-                        (int) Math.min(Integer.MAX_VALUE, elapsed)
+                        "preempted"
                 );
+        if (interrupted
+                == IntentActivationCoordinator.InterruptResult.CANCELLED) {
+            metrics.cancelled();
         }
-        if (result == ActionResult.RUNNING) {
-            updateActiveTrace(state, active, step.id());
-            return true;
-        }
-
-        int transition = switch (result) {
-            case SUCCEEDED -> step.successState();
-            case FAILED -> step.failureState();
-            case CANCELLED -> step.cancellationState();
-            case RUNNING -> throw new IllegalStateException(
-                    "Running action reached terminal transition"
-            );
-        };
-        if (transition == IntentCatalog.TERMINAL_SUCCESS) {
-            finishActive(state, active, gameTime, true);
-            return true;
-        }
-        if (transition == IntentCatalog.TERMINAL_FAILURE) {
-            finishActive(state, active, gameTime, false);
-            return true;
-        }
-        state.activeState = transition;
-        state.stateSinceTick = gameTime;
-        state.activeAction = null;
-        state.activeParameters = Map.of();
-        IntentCatalog.CompiledState next =
-                active.plan().states().get(transition);
-        updateActiveTrace(state, active, next.id());
-        return true;
+        metrics.switched();
+        metrics.interrupted();
+        String transition = activateSelected(
+                subject,
+                state,
+                catalog,
+                winner,
+                gameTime
+        );
+        IntentRuntimeTrace.selection(
+                state,
+                catalog,
+                result.trace(),
+                "switched:" + transition
+        );
     }
 
-    private void start(
+    private String activateSelected(
+            M subject,
             MaidIntentRuntimeState state,
             IntentCatalog catalog,
             IntentSelectionEngine.ScoredIntent selected,
             long gameTime
     ) {
-        IntentCatalog.CompiledIntent intent = selected.intent();
-        state.activeIntent = intent.id();
-        state.activeState = intent.plan().initialState();
-        state.activeSinceTick = gameTime;
-        state.stateSinceTick = gameTime;
-        state.committedUntilTick = deadline(
-                gameTime,
-                intent.definition().minimumCommitTicks()
+        IntentActivationCoordinator.StartResult result = activation.start(
+                subject,
+                state,
+                catalog,
+                selected,
+                gameTime
         );
-        state.activeScore = selected.score();
-        IntentSelectionEngine.consumeSignals(state, catalog, intent);
-        activations++;
-    }
-
-    private void finishActive(
-            MaidIntentRuntimeState state,
-            IntentCatalog.CompiledIntent active,
-            long gameTime,
-            boolean succeeded
-    ) {
-        state.cooldowns.put(
-                active.id(),
-                deadline(gameTime, active.definition().cooldownTicks())
-        );
-        String transition = succeeded
-                ? "completed:" + active.id()
-                : "failed:" + active.id();
-        if (succeeded) {
-            completions++;
-        } else {
-            failures++;
+        if (result == IntentActivationCoordinator.StartResult.ACTIVATED) {
+            metrics.activated();
+            return "activated:" + selected.intent().id();
         }
-        List<IntentTrace.Candidate> candidates = state.trace.candidates();
-        state.clearActive();
-        state.trace = new IntentTrace(
-                null,
-                "",
-                -1L,
-                candidates,
-                transition
-        );
-        state.dirty = true;
+        if (result == IntentActivationCoordinator.StartResult.RESUMED) {
+            return "resumed:" + selected.intent().id();
+        }
+        return "resume_aborted:" + selected.intent().id();
     }
 
     private void cancelActive(
@@ -420,28 +454,32 @@ public final class DefaultMaidIntentOrchestrator<M>
             String reason,
             boolean count
     ) {
-        if (state.activeIntent == null) {
-            return;
+        boolean cancelled = executor.cancelActive(subject, state, reason);
+        if (cancelled && count) {
+            metrics.cancelled();
         }
-        if (state.activeAction != null) {
-            actions.cancel(
-                    subject,
-                    state.activeAction,
-                    state.activeParameters
-            );
-        }
-        OrchestrationId cancelled = state.activeIntent;
-        List<IntentTrace.Candidate> candidates = state.trace.candidates();
-        state.clearActive();
-        state.trace = new IntentTrace(
-                null,
-                "",
-                -1L,
-                candidates,
-                reason + ":" + cancelled
-        );
-        if (count) {
-            cancellations++;
+    }
+
+    private void interruptActive(
+            M subject,
+            MaidIntentRuntimeState state,
+            IntentCatalog.CompiledIntent active,
+            IntentCatalog catalog,
+            long gameTime,
+            String reason
+    ) {
+        IntentActivationCoordinator.InterruptResult result =
+                activation.interrupt(
+                        subject,
+                        state,
+                        active,
+                        catalog,
+                        gameTime,
+                        reason
+                );
+        if (result
+                == IntentActivationCoordinator.InterruptResult.CANCELLED) {
+            metrics.cancelled();
         }
     }
 
@@ -454,47 +492,4 @@ public final class DefaultMaidIntentOrchestrator<M>
                 : catalog.intent(state.activeIntent);
     }
 
-    private static void updateTrace(
-            MaidIntentRuntimeState state,
-            IntentCatalog catalog,
-            List<IntentTrace.Candidate> candidates,
-            String transition
-    ) {
-        String activeState = "";
-        IntentCatalog.CompiledIntent active =
-                activeDefinition(state, catalog);
-        if (active != null) {
-            activeState = active.plan()
-                    .states()
-                    .get(state.activeState)
-                    .id();
-        }
-        state.trace = new IntentTrace(
-                state.activeIntent,
-                activeState,
-                state.activeSinceTick,
-                candidates,
-                transition
-        );
-    }
-
-    private static void updateActiveTrace(
-            MaidIntentRuntimeState state,
-            IntentCatalog.CompiledIntent active,
-            String stateId
-    ) {
-        state.trace = new IntentTrace(
-                active.id(),
-                stateId,
-                state.activeSinceTick,
-                state.trace.candidates(),
-                state.trace.lastTransition()
-        );
-    }
-
-    private static long deadline(long gameTime, long duration) {
-        return gameTime > Long.MAX_VALUE - duration
-                ? Long.MAX_VALUE
-                : gameTime + duration;
-    }
 }

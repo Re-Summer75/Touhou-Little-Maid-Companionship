@@ -6,6 +6,7 @@ import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
 import com.laixia.maidintelligence.feature.ai.tlm.ActivityRadiusBridge;
 import com.laixia.maidintelligence.feature.ai.tlm.MaidSeatAutonomyBridge;
 import com.laixia.maidintelligence.feature.behavior.tlm.MaidCommandSeatBridge;
+import com.laixia.maidintelligence.feature.orchestration.tlm.TlmCoordinationClaims;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -149,7 +150,7 @@ public final class VehicleAutonomyGameTests {
     }
 
     @GameTest(templateNamespace = "minecraft", template = "empty")
-    public static void commandBoatRemainsLockedWhenOwnerLeaves(
+    public static void commandBoatReleasesWhenOwnerLeavesInFollowMode(
             GameTestHelper helper
     ) {
         BoatFixture fixture = boatFixture(helper, null, false);
@@ -165,12 +166,40 @@ public final class VehicleAutonomyGameTests {
         MaidSeatAutonomyBridge.leaveOrdinaryBoatWhenOwnerLeaves(
                 fixture.maid()
         );
+        helper.assertFalse(
+                fixture.maid().isPassenger()
+                        || MaidCommandSeatBridge.isSeatProtected(
+                        fixture.maid()
+                ),
+                "Owner departure retained a commanded boat in follow mode"
+        );
+        helper.succeed();
+    }
+
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void homeModeKeepsCommandBoatWhenOwnerLeaves(
+            GameTestHelper helper
+    ) {
+        BoatFixture fixture = boatFixture(helper, null, false);
+        helper.assertTrue(
+                MaidCommandSeatBridge.mirrorOwnerSeat(
+                        fixture.maid(),
+                        fixture.owner()
+                ),
+                "Command fixture did not mount the maid"
+        );
+        fixture.maid().setHomeModeEnable(true);
+        fixture.owner().stopRiding();
+
+        MaidSeatAutonomyBridge.leaveOrdinaryBoatWhenOwnerLeaves(
+                fixture.maid()
+        );
         helper.assertTrue(
                 fixture.maid().getVehicle() == fixture.boat()
                         && MaidCommandSeatBridge.isSeatProtected(
                         fixture.maid()
                 ),
-                "Owner departure released a commanded boat"
+                "Home mode released its commanded boat"
         );
         MaidCommandSeatBridge.releaseForDanger(fixture.maid());
         fixture.maid().stopRiding();
@@ -236,6 +265,53 @@ public final class VehicleAutonomyGameTests {
         );
         MaidCommandSeatBridge.releaseForDanger(maid);
         maid.stopRiding();
+        helper.succeed();
+    }
+
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void twoMaidsCannotOccupyOneReleasedSeat(
+            GameTestHelper helper
+    ) {
+        prepareFloor(helper);
+        Player owner = helper.makeMockPlayer();
+        owner.setPos(position(helper, 2, 1));
+        EntityMaid first = ordinaryMaid(helper, owner);
+        EntityMaid second = ordinaryMaid(helper, owner);
+        first.setPos(position(helper, 2, 2));
+        second.setPos(position(helper, 2, 3));
+        PlayerOnlySeat seat = playerOnlySeat(helper, 2, 1);
+        helper.assertTrue(owner.startRiding(seat),
+                "Owner could not mount the claim fixture");
+        helper.assertFalse(
+                MaidCommandSeatBridge.mirrorOwnerSeat(first, owner),
+                "First maid entered the owner's full seat"
+        );
+        helper.assertFalse(
+                MaidCommandSeatBridge.mirrorOwnerSeat(second, owner),
+                "Second maid entered the owner's full seat"
+        );
+
+        owner.stopRiding();
+        helper.assertTrue(
+                MaidCommandSeatBridge.mirrorOwnerSeat(first, owner),
+                "First maid could not claim the released seat"
+        );
+        helper.assertFalse(
+                MaidCommandSeatBridge.mirrorOwnerSeat(second, owner),
+                "Second maid also occupied the claimed seat"
+        );
+        helper.assertTrue(
+                TlmCoordinationClaims.service(helper.getLevel())
+                        .activeClaims(helper.getLevel().getGameTime())
+                        .stream()
+                        .anyMatch(claim -> claim.token()
+                                .holder()
+                                .equals(first.getUUID())),
+                "Occupied seat did not retain its fencing claim"
+        );
+        MaidCommandSeatBridge.releaseForDanger(first);
+        first.stopRiding();
+        MaidCommandSeatBridge.releaseForDanger(second);
         helper.succeed();
     }
 

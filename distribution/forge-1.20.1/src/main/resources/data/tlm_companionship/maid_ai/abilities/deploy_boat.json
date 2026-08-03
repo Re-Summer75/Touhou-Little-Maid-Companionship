@@ -1,0 +1,11 @@
+{
+  "format_version": 1,
+  "template": "world_item_deploy",
+  "action": "tlm_companionship:action/deploy_boat",
+  "timeout_ticks": 40,
+  "request_ttl_ticks": 100,
+  "cooldown_ticks": 200,
+  "command_score": 900.0,
+  "autonomous_score": 120.0,
+  "interrupt_priority": 500
+}

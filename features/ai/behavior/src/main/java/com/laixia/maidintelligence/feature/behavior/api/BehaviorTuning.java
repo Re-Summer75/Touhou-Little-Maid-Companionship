@@ -1,12 +1,16 @@
 package com.laixia.maidintelligence.feature.behavior.api;
 
 import com.laixia.maidintelligence.feature.behavior.domain.GazeRecallPolicy;
+import com.laixia.maidintelligence.feature.behavior.domain.learning.LearningMode;
+import com.laixia.maidintelligence.feature.orchestration.api.IntentRolloutMode;
 
 /**
  * Engine and sensor safety tuning. Behavior semantics live in data packs.
  */
 public record BehaviorTuning(
         boolean enabled,
+        IntentRolloutMode rolloutMode,
+        LearningMode learningMode,
         int evaluationIntervalTicks,
         int maxCandidateEvaluations,
         boolean diagnosticsEnabled,
@@ -14,6 +18,8 @@ public record BehaviorTuning(
         double gazeRecallRange
 ) {
     public BehaviorTuning {
+        java.util.Objects.requireNonNull(rolloutMode, "rolloutMode");
+        java.util.Objects.requireNonNull(learningMode, "learningMode");
         requireRange(
                 evaluationIntervalTicks,
                 1,
@@ -38,6 +44,8 @@ public record BehaviorTuning(
     public static BehaviorTuning defaults() {
         return new BehaviorTuning(
                 true,
+                IntentRolloutMode.LIVE_ONLY,
+                LearningMode.SHADOW,
                 5,
                 64,
                 true,

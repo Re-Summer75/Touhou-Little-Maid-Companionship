@@ -3,12 +3,16 @@ package com.laixia.maidintelligence.feature.orchestration.domain;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 public record PlanDefinition(
         OrchestrationId id,
         String initialState,
-        Map<String, State> states
+        Map<String, State> states,
+        ResumePolicy resumePolicy,
+        Set<String> checkpoints,
+        int maximumSuspendTicks
 ) {
     public static final String SUCCESS = "$success";
     public static final String FAILURE = "$failure";
@@ -16,10 +20,37 @@ public record PlanDefinition(
     private static final Pattern STATE_ID =
             Pattern.compile("[a-z][a-z0-9_]{0,63}");
 
+    public PlanDefinition(
+            OrchestrationId id,
+            String initialState,
+            Map<String, State> states
+    ) {
+        this(
+                id,
+                initialState,
+                states,
+                ResumePolicy.NEVER_RESUME,
+                Set.of(),
+                1_200
+        );
+    }
+
+    public PlanDefinition(
+            OrchestrationId id,
+            String initialState,
+            Map<String, State> states,
+            ResumePolicy resumePolicy
+    ) {
+        this(id, initialState, states, resumePolicy, Set.of(), 1_200);
+    }
+
     public PlanDefinition {
         Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(resumePolicy, "resumePolicy");
+        Objects.requireNonNull(checkpoints, "checkpoints");
         requireStateId(initialState, "initialState");
         states = Map.copyOf(new LinkedHashMap<>(states));
+        checkpoints = Set.copyOf(checkpoints);
         if (states.isEmpty()) {
             throw new IllegalArgumentException("plan states cannot be empty");
         }
@@ -32,6 +63,20 @@ public record PlanDefinition(
             requireStateId(stateId, "state");
             Objects.requireNonNull(state, "state");
         });
+        for (String checkpoint : checkpoints) {
+            requireStateId(checkpoint, "checkpoint");
+            if (!states.containsKey(checkpoint)) {
+                throw new IllegalArgumentException(
+                        "Unknown checkpoint state: " + checkpoint
+                );
+            }
+        }
+        if (maximumSuspendTicks < 1
+                || maximumSuspendTicks > 72_000) {
+            throw new IllegalArgumentException(
+                    "maximumSuspendTicks must be in [1, 72000]"
+            );
+        }
     }
 
     public record State(

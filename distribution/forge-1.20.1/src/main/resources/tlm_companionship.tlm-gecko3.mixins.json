@@ -18,6 +18,10 @@
     "ai.MaidPickupMovementCoordinationMixin",
     "ai.MaidScheduleCommandSeatLockMixin",
     "ai.SchedulePosMovementCoordinationMixin",
+    "ai.arbitration.BlockJoyOwnerCommandSuppressionMixin",
+    "ai.arbitration.MaidBoardGameTaskMovementCoordinationMixin",
+    "ai.arbitration.MaidJoyTaskMovementCoordinationMixin",
+    "ai.arbitration.MaidRunOneMovementCoordinationMixin",
     "status.MaidPickupInventoryFeedbackMixin"
   ],
   "client": [

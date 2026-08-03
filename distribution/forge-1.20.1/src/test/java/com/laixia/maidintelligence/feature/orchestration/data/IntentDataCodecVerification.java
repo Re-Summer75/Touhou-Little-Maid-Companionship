@@ -2,7 +2,15 @@ package com.laixia.maidintelligence.feature.orchestration.data;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.laixia.maidintelligence.feature.behavior.application.ability.AbilityTemplateCompiler;
+import com.laixia.maidintelligence.feature.behavior.application.ability.MutableAbilityCatalog;
+import com.laixia.maidintelligence.feature.behavior.data.AbilityDefinitionCodec;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
+import com.laixia.maidintelligence.feature.behavior.domain.ability.AbilityCatalog;
+import com.laixia.maidintelligence.feature.behavior.domain.ability.AbilityDefinition;
+import com.laixia.maidintelligence.feature.behavior.domain.ability.AbilityTemplate;
+import com.laixia.maidintelligence.feature.behavior.domain.ability.CompanionAbilityIds;
+import com.laixia.maidintelligence.feature.behavior.domain.ability.CompiledAbilityTemplate;
 import com.laixia.maidintelligence.feature.orchestration.application.MutableIntentCatalog;
 import com.laixia.maidintelligence.feature.orchestration.domain.FactComparison;
 import com.laixia.maidintelligence.feature.orchestration.domain.FactCondition;
@@ -11,6 +19,7 @@ import com.laixia.maidintelligence.feature.orchestration.domain.IntentDefinition
 import com.laixia.maidintelligence.feature.orchestration.domain.IntentVocabulary;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
 import com.laixia.maidintelligence.feature.orchestration.domain.PlanDefinition;
+import com.laixia.maidintelligence.feature.orchestration.domain.ResumePolicy;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -31,6 +40,7 @@ public final class IntentDataCodecVerification {
         formatVersionIsRequiredAndBounded();
         builtInDefinitionsCompileAsOneCatalog();
         invalidCompiledReloadKeepsPreviousGeneration();
+        abilityReloadIsAtomicAndFallbackSafe();
     }
 
     private static void formatVersionIsRequiredAndBounded() {
@@ -103,13 +113,37 @@ public final class IntentDataCodecVerification {
                 require(
                         hasCondition(
                                 hungerIntent,
-                                CompanionIntentIds.USING_ITEM,
+                                CompanionIntentIds.BEHAVIOR_OCCUPANCY_LEVEL,
                                 FactComparison.EQUAL,
                                 0.0D
                         ),
-                        "Hunger intent lacks its item-use guard: " + name
+                        "Hunger intent lacks its idle-occupancy guard: " + name
                 );
             }
+        }
+        require(
+                hasCondition(
+                        intents.get(id("gaze_recall")),
+                        CompanionIntentIds.BEHAVIOR_OCCUPANCY_LEVEL,
+                        FactComparison.LESS_OR_EQUAL,
+                        1.0D
+                ),
+                "Gaze recall must allow soft occupancy preemption"
+        );
+        for (String name : List.of(
+                "post_task_return",
+                "wander_return",
+                "snack_cabinet_meal"
+        )) {
+            require(
+                    hasCondition(
+                            intents.get(id(name)),
+                            CompanionIntentIds.BEHAVIOR_OCCUPANCY_LEVEL,
+                            FactComparison.EQUAL,
+                            0.0D
+                    ),
+                    "Passive intent lacks its idle-occupancy guard: " + name
+            );
         }
         require(
                 hasCondition(
@@ -146,6 +180,11 @@ public final class IntentDataCodecVerification {
                                 CompanionIntentIds.FETCH_SNACK_CABINET_MEAL
                         )),
                 "Snack cabinet fetch plan has no extraction action"
+        );
+        require(
+                plans.get(id("fetch_snack_cabinet_meal"))
+                        .resumePolicy() == ResumePolicy.RESTART_STEP,
+                "Snack cabinet plan is not recoverable after interruption"
         );
         IntentCatalog catalog = IntentCatalog.compile(
                 1L,
@@ -234,6 +273,88 @@ public final class IntentDataCodecVerification {
         );
         require(repository.current().generation() == 2L,
                 "Valid reload was not atomically published");
+    }
+
+    private static void abilityReloadIsAtomicAndFallbackSafe()
+            throws IOException {
+        AbilityDefinition valid = AbilityDefinitionCodec.parse(
+                CompanionAbilityIds.DEPLOY_BOAT,
+                resource(MaidIntentReloadListener.ABILITY_PREFIX
+                        + "/deploy_boat.json")
+        ).result().orElseThrow(() ->
+                new AssertionError("Failed to parse deploy_boat ability"));
+        AbilityTemplateCompiler compiler = new AbilityTemplateCompiler();
+        MutableIntentCatalog intents = new MutableIntentCatalog();
+        intents.publish(IntentCatalog.compile(
+                1L,
+                List.of(),
+                List.of(),
+                CompanionIntentIds.vocabulary()
+        ));
+        MutableAbilityCatalog abilities = new MutableAbilityCatalog();
+        abilities.publish(AbilityCatalog.compile(
+                1L,
+                List.of(valid)
+        ));
+        MaidIntentReloadListener listener =
+                new MaidIntentReloadListener(
+                        intents,
+                        CompanionIntentIds.vocabulary(),
+                        abilities,
+                        compiler,
+                        () -> {
+                        }
+                );
+        AbilityDefinition invalid = new AbilityDefinition(
+                id("invalid_ability"),
+                AbilityTemplate.WORLD_ITEM_DEPLOY,
+                id("unknown_action"),
+                Map.of(),
+                20,
+                20,
+                20,
+                10.0D,
+                5.0D,
+                10
+        );
+        applyAbility(listener, compiler, invalid);
+        require(intents.current().generation() == 1L
+                        && abilities.current().generation() == 1L,
+                "Invalid ability replaced a last-good catalog");
+
+        applyAbility(listener, compiler, valid);
+        require(intents.current().generation() == 2L
+                        && abilities.current().generation() == 2L,
+                "Valid ability and generated intents were not atomic");
+        require(intents.current().intents().size() == 2
+                        && intents.current().planCount() == 1,
+                "Ability template did not publish both activation intents");
+    }
+
+    private static void applyAbility(
+            MaidIntentReloadListener listener,
+            AbilityTemplateCompiler compiler,
+            AbilityDefinition definition
+    ) {
+        CompiledAbilityTemplate compiled = compiler.compile(definition);
+        Map<OrchestrationId, IntentDefinition> generated =
+                new LinkedHashMap<>();
+        compiled.intents().forEach(intent ->
+                generated.put(intent.id(), intent));
+        listener.apply(
+                new MaidIntentReloadListener.Prepared(
+                        generated,
+                        Map.of(compiled.plan().id(), compiled.plan()),
+                        Map.of(definition.id(), definition),
+                        compiler.extendVocabulary(
+                                CompanionIntentIds.vocabulary(),
+                                List.of(compiled)
+                        ),
+                        null
+                ),
+                null,
+                null
+        );
     }
 
     private static IntentDefinition parseIntent(String name)

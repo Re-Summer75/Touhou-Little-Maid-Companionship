@@ -42,10 +42,14 @@ import com.laixia.maidintelligence.feature.advancement.tlm.TlmAdvancementRequest
 import com.laixia.maidintelligence.feature.advancement.tlm.TlmHoneySlideHandler;
 import com.laixia.maidintelligence.feature.atmosphere.forge.AtmosphereForgeInstaller;
 import com.laixia.maidintelligence.feature.behavior.api.MaidGazeRecallApi;
+import com.laixia.maidintelligence.feature.behavior.application.ability.AbilityTemplateCompiler;
+import com.laixia.maidintelligence.feature.behavior.application.ability.MutableAbilityCatalog;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
 import com.laixia.maidintelligence.feature.behavior.forge.BehaviorForgeInstaller;
 import com.laixia.maidintelligence.feature.behavior.forge.BehaviorServerConfig;
 import com.laixia.maidintelligence.feature.behavior.tlm.TlmBehaviorComposition;
+import com.laixia.maidintelligence.feature.behavior.tlm.TlmEntityAbilityFacade;
+import com.laixia.maidintelligence.feature.behavior.tlm.TlmEntityLearningFacade;
 import com.laixia.maidintelligence.feature.interaction.bridge.EatingParticlePolicy;
 import com.laixia.maidintelligence.feature.interaction.client.ClientInteractionSetup;
 import com.laixia.maidintelligence.feature.interaction.client.runtime.TlmInteractionClientPacketHandler;
@@ -192,7 +196,6 @@ public final class MaidIntelligence {
                 new MaidProgressCriteria(advancementManager, statistics);
         TlmAdvancementRequestResolver advancementRequests =
                 new TlmAdvancementRequestResolver(advancementManager);
-
         MaidFeedingService feeding = new MaidFeedingService(
                 feedingStatusPort(statusService),
                 events
@@ -200,18 +203,19 @@ public final class MaidIntelligence {
         MaidMouthFeedPort<ServerPlayer> mouthFeed =
                 new MaidMouthFeedRequestHandler(feeding);
         MutableIntentCatalog intentCatalog = new MutableIntentCatalog();
+        MutableAbilityCatalog abilityCatalog = new MutableAbilityCatalog();
         TlmBehaviorComposition behaviors = TlmBehaviorComposition.create(
                 statusApi,
                 statusService::requestHungerAttention,
                 BehaviorServerConfig::tuning,
-                intentCatalog
+                intentCatalog,
+                abilityCatalog
         );
         statusService.bindHungerRequestSignal(behaviors::signalHungerRequest);
         MaidIntentApi<Entity> commandIntents =
                 new TlmEntityIntentFacade(behaviors.intents());
-
+        var commandAbilities = new TlmEntityAbilityFacade(behaviors.abilities());
         wireDomainEvents(events, progressAdvancementTriggers, levelApi);
-
         MutableServiceRegistry services = new MutableServiceRegistry()
                 .register(MaidAiOptimizationApi.class, aiOptimization)
                 .register(
@@ -304,6 +308,8 @@ public final class MaidIntelligence {
                                 aiOptimization,
                                 movementCoordination,
                                 commandIntents,
+                                commandAbilities,
+                                new TlmEntityLearningFacade(behaviors.learning()),
                                 EntityMaid.class::isInstance,
                                 () -> BehaviorServerConfig.tuning()
                                         .diagnosticsEnabled()
@@ -312,12 +318,22 @@ public final class MaidIntelligence {
                 ),
                 new BehaviorForgeInstaller(
                         behaviors.gazeRecallHandler()::onPlayerTick,
-                        behaviors.gazeRecallHandler()::onPlayerLogout
+                        behaviors.gazeRecallHandler()::onPlayerLogout,
+                        behaviors.perceptionHandler()::onChunkLoad,
+                        behaviors.perceptionHandler()::onChunkUnload,
+                        behaviors.perceptionHandler()::onBlockPlace,
+                        behaviors.perceptionHandler()::onBlockBreak,
+                        behaviors.perceptionHandler()::onEntityJoin,
+                        behaviors.perceptionHandler()::onEntityLeave,
+                        behaviors.perceptionHandler()::onLevelUnload
                 ),
                 new OrchestrationForgeInstaller(
                         new MaidIntentReloadListener(
                                 intentCatalog,
-                                CompanionIntentIds.vocabulary()
+                                CompanionIntentIds.vocabulary(),
+                                abilityCatalog,
+                                new AbilityTemplateCompiler(),
+                                behaviors::reloadCoordination
                         ),
                         commandIntents::forget
                 ),

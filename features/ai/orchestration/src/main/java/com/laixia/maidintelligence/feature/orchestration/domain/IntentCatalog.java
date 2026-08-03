@@ -271,10 +271,16 @@ public final class IntentCatalog {
         }
         int initialState = indexes.get(definition.initialState());
         validatePlanGraph(definition.id(), states, initialState);
+        Set<Integer> checkpoints = definition.checkpoints().stream()
+                .map(indexes::get)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
         return new CompiledPlan(
                 definition.id(),
                 initialState,
-                List.copyOf(states)
+                List.copyOf(states),
+                definition.resumePolicy(),
+                checkpoints,
+                definition.maximumSuspendTicks()
         );
     }
 
@@ -454,7 +460,10 @@ public final class IntentCatalog {
     public record CompiledPlan(
             OrchestrationId id,
             int initialState,
-            List<CompiledState> states
+            List<CompiledState> states,
+            ResumePolicy resumePolicy,
+            Set<Integer> checkpoints,
+            int maximumSuspendTicks
     ) {
     }
 

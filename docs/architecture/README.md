@@ -3,6 +3,8 @@
 本文描述稳定业务模块、版本适配器和可发布 distribution 的边界。版本组合的唯一结构化来源是
 [`gradle/version-matrix.json`](../../gradle/version-matrix.json)；不得再把 Minecraft、Forge、
 Java、Parchment、TLM、Gecko 及项目路径组合复制到 `gradle.properties`、版本目录或其他清单。
+陪伴智能的所有权、生命周期、不变量、生产接线和验证注册规则见
+[陪伴智能维护契约](companion-intelligence.md)。
 
 当前默认 target 为 `1.20.1`：
 
@@ -85,9 +87,9 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 - `CombatReactionPolicy` 与 `CombatThreatKind`：固定“女仆攻击者、主人攻击者、主人目标、
   最近敌对实体”的排序，规定可见性、范围、扫描节流和候选上限，不涉及伤害或武器行为。
 - `MaidMovementCoordinationApi` 与 `MovementIntentLease`：为 TLM 内置移动写入提供短租约、
-  原生优先级镜像和冲突指标；仅对已开始的拾取增加有界承诺，普通跟随暂缓，
-  战斗意图位于回区与普通跟随之间；物品失效、硬状态或超距传送仍可立即释放。
-  状态不持久化，也不包含 Minecraft 对象。
+  跨系统权威矩阵（紧急 > 硬承诺 > 主人命令 > 软/被动）和 Brain priority 决胜；
+  `BehaviorOccupancySnapshot` 将原版占用分为 IDLE/SOFT/HARD，注视等 `OWNER_COMMAND`
+  可干净抢占 SOFT。状态不持久化，也不包含 Minecraft 对象。
 - `PassiveFollowPolicy`：只在主人静止、已识别原版任务仍有效且未达到紧急传送距离时暂缓
   普通跟随；它仍属于原版 AI 调度优化。
 - 性能 API 仍只降低原有判断成本；移动协调不接管 Brain 周期、Activity 或任务列表。
@@ -100,6 +102,19 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
   `:features:ai` 的原版 AI 优化实现。
 - `MaidGazeRecallApi<O, M>` 是注视手势提交入口；`ContinuousLookTracker` 只处理连续
   注视的边沿触发。好感度、模式、距离和动作语义不再硬编码于该模块。
+- `AffordanceAdvertisement`/`AffordanceQuery` 与 `DefaultAffordanceIndex` 提供有 revision、
+  TTL、top-K 和每 tick 检查预算的对象中心感知；零食柜、主人和座位由 TLM Provider
+  在已加载世界事件上发布，查询绝不加载区块。
+- `AbilityDefinition`、`AbilityGrant` 与 `AbilityActivationRequest` 将授权、短期请求、
+  冷却和执行态分离。`AbilityTemplateCompiler` 只把受支持模板展开为既有 Intent/Plan，
+  不建立第二套执行器；Grant 通过 TLM TaskData 持久化。
+- `CompanionLearningProfile` 将 Outcome 分别投影为可靠性、主人偏好和时段习惯，不合并成
+  总 reward。默认 `SHADOW` 只记录；`ACTIVE` 也只能通过 `UtilityModifierPort` 提供有上限
+  的软分数，不能绕过 Guard、授权、命令优先级或资源容量。
+- `OwnerCoordinationService` 按主人 UUID 与维度分组，对共享 Request 使用硬资格、Utility、
+  距离、负载、fairness aging 和 UUID 稳定平局竞标，并限制 `fanOut`。当前
+  `deploy_boat` 自主请求使用唯一响应者；协调故障退化时仍共享 request ID，由资源 Claim
+  保持提交安全。
 
 ### ai:orchestration
 
@@ -114,15 +129,24 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 - `DefaultMaidIntentOrchestrator<M>` 为每个主体保留弱引用运行态；普通候选按实体 ID
   错峰评估，显式刺激立即重评，当前动作每 tick 推进。目录代际变化、时间回退、实体卸载、
   Guard 失效和硬中断都会取消旧动作。
+- 有界 `EpisodicEvent`、`Belief` 与 `OperationOutcome` 使用 operation/event/correlation
+  身份去重；每个执行终态只写一个 Outcome。短期邮箱和 DecisionTrace 留在弱引用运行态，
+  高价值记忆才通过 `CompanionMemoryPort` 持久化。
+- Plan format 2 可声明 `NEVER_RESUME`、`RESTART_STEP`、`RESUME_CHECKPOINT`、
+  `REPLAN_SUFFIX` 或 `ATOMIC`。暂停先 quiesce 并释放移动目标与 Claim，恢复前重验目录、
+  Guard、超时和动作前置条件。
+- `CoordinationClaimService` 是 ServerLevel 主线程上的原子资源目录，使用 epoch 与 fencing
+  token 管理 claimed → occupied → released 生命周期；容器槽、座位、放置点和共享 request
+  与单女仆 `MovementIntentLease` 严格分离。
 - Forge adapter 读取 `data/<namespace>/maid_ai/intents/*.json` 与
   `data/<namespace>/maid_ai/plans/*.json`。资源栈按优先级覆盖；无效上层定义回退下层，整批
   编译失败保留上一代。格式与扩展注册见
   [`intent-ai-data.md`](intent-ai-data.md)。
 - TLM adapter 用一个 `MaidIntentBehavior` 统一更新工作释放/随机游走边沿、采集事实并推进
-  调度器。注视处理器与缺食反馈只提交 TTL 刺激；`TlmMaidIntentActions` 是唯一能写入
-  主人靠近、零食柜取餐、注视和求食动作的出口，并以 `COMPANION` 移动来源复用拾取保护、
-  硬状态和 fail-open。零食柜适配器缓存附近有效柜位，在服务端只提取一份合法 Work Meal，
-  并让事实采集与动作执行共享同一个目标缓存。
+  调度器。注视处理器与缺食反馈只提交 TTL 刺激；`TlmMaidIntentActions` 只做动作分派，
+  主人交互、零食柜和放船副作用由各自 action family 实现，并以 `COMPANION` 移动来源复用
+  拾取保护、硬状态和 fail-open。零食柜与兼容座位只从共享 Affordance 索引粗筛，再对少量
+  候选复验世界状态；容器槽、座位与放置点必须取得 Claim 后才能提交。
 - 内置目录定义 `gaze_recall`、`hungry_feedback`、`hungry_standard`、
   `hungry_high_trust`、`post_task_return`、`snack_cabinet_meal`、`wander_return`，
   以及 `approach_owner`、`fetch_snack_cabinet_meal`、`request_food` 计划。
@@ -304,10 +328,14 @@ MixinGradle 对单个 source set 只可靠生成一份 refmap，因此 common �
 ```
 
 意图 AI 另有 `verifyIntentOrchestration` 与 `verifyIntentData` 两个纯 JVM 入口，覆盖
-Utility、确定性选择、承诺/滞回、硬中断、冷却、状态转移、超时、取消、目录代际、格式版本、
-内置资源编译和无效重载回退。GameTest Server 继续验证注视、三秒指挥跟随、载具共乘、
-座位镜像/补位与持久锁定、零食柜单份取餐、统一求食计划、任务后/随机游走归队、战斗抢占、
-拾取保护、一次性刺激、抵达请求动作和多女仆状态隔离。
+Utility、确定性选择、承诺/滞回、硬中断、冷却、恢复状态机、Outcome 去重、Claim 代际、
+能力模板、学习边界、确定性竞标、目录代际、格式版本、内置资源编译和无效重载回退。
+带 `public static main` 的独立 `*Verification.java` 由构建自动发现并纳入 `verifyAll`；
+内部验证片段必须从自动入口静态可达。`verifyVerificationReachability` 会拒绝孤立
+Verification；`verifyTestInventory` 只保留源码数量下限，不再被视为注册覆盖证明。
+GameTest Server 继续验证注视、三秒指挥跟随、载具共乘、座位镜像/补位与持久锁定、
+零食柜单份取餐、统一求食计划、任务后/随机游走归队、战斗抢占、拾取保护、一次性刺激、
+放船不重复消费以及同一主人下两名女仆只响应一个共享放船 Request。
 `runGameTestServer` 使用独立 `run-gametest` 工作目录，每次启动前删除旧测试世界；空模板
 覆盖全部夹具坐标，实体坐标必须通过 `GameTestPositions` 转换，避免并行测试和跨轮残留串扰。
 

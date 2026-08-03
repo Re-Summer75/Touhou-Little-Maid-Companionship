@@ -186,69 +186,7 @@ tasks.matching {
     dependsOn stableModules.collect { it.tasks.named('classes') }
 }
 
-def verificationEntrypoints = [
-        verifyLevelDomain      : [
-                'Verifies dependency-free level policies and persistence behavior.',
-                'com.laixia.maidintelligence.feature.level.LevelDomainVerification'
-        ],
-        verifyStatusDomain     : [
-                'Verifies hunger and tool durability status policies.',
-                'com.laixia.maidintelligence.feature.status.StatusDomainVerification'
-        ],
-        verifyAiOptimization   : [
-                'Verifies maid AI cache invalidation and performance metrics.',
-                'com.laixia.maidintelligence.feature.ai.AiOptimizationVerification'
-        ],
-        verifyMovementIntent   : [
-                'Verifies compatibility-first maid movement intent coordination.',
-                'com.laixia.maidintelligence.feature.ai.MovementIntentCoordinationVerification'
-        ],
-        verifyCustomBehavior   : [
-                'Verifies companionship sensor timing and engine safety tuning.',
-                'com.laixia.maidintelligence.feature.behavior.CustomBehaviorVerification'
-        ],
-        verifyIntentOrchestration: [
-                'Verifies deterministic Utility selection and plan runtime semantics.',
-                'com.laixia.maidintelligence.feature.orchestration.IntentOrchestrationVerification'
-        ],
-        verifyIntentData       : [
-                'Verifies versioned maid intent data and atomic reload fallback.',
-                'com.laixia.maidintelligence.feature.orchestration.data.IntentDataCodecVerification'
-        ],
-        verifyAdaptiveAi       : [
-                'Verifies dynamic maid activity radius and combat reaction policies.',
-                'com.laixia.maidintelligence.feature.ai.AdaptiveAiVerification'
-        ],
-        verifyAdvancementDomain: [
-                'Verifies maid statistics, advancement data and progress layouts.',
-                'com.laixia.maidintelligence.feature.advancement.AdvancementDomainVerification'
-        ],
-        verifyFaceTracking     : [
-                'Verifies generalized maid face geometry selection.',
-                'com.laixia.maidintelligence.feature.interaction.client.FaceTrackingVerification'
-        ],
-        verifyBonePhysics      : [
-                'Verifies physics metadata, discovery, spring and collision behavior.',
-                'com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerification'
-        ],
-        verifyModelShading     : [
-                'Verifies Gecko outside-face normals and winding.',
-                'com.laixia.maidintelligence.feature.shading.client.ModelShadingVerification'
-        ]
-]
-
-verificationEntrypoints.each { taskName, definition ->
-    tasks.register(taskName, JavaExec) {
-        group = 'verification'
-        description = definition[0]
-        dependsOn testClasses
-        classpath = sourceSets.test.runtimeClasspath
-        mainClass = definition[1]
-        if (taskName in ['verifyBonePhysics', 'verifyModelShading']) {
-            workingDir rootProject.projectDir
-        }
-    }
-}
+apply from: rootProject.file('gradle/verification-reachability.gradle')
 
 // Lower bound only: splitting or adding verifications must never fail the build,
 // but silently dropping them must. Raise the floor when the suite grows durably.
@@ -271,9 +209,10 @@ tasks.register('verifyTestInventory') {
 
 tasks.register('verifyAll') {
     group = 'verification'
-    description = 'Runs all registered functional verification entrypoints.'
-    dependsOn verificationEntrypoints.keySet()
+    description = 'Runs all automatically discovered verification entrypoints.'
+    dependsOn verificationTaskNames
     dependsOn tasks.named('verifyTestInventory')
+    dependsOn tasks.named('verifyVerificationReachability')
     dependsOn stableModules.collect { "${it.path}:verifyArchitecture" }
 }
 
@@ -318,6 +257,10 @@ tasks.register('verifyMixinLayout') {
                     'ai.MaidPickupMovementCoordinationMixin',
                     'ai.MaidScheduleCommandSeatLockMixin',
                     'ai.SchedulePosMovementCoordinationMixin',
+                    'ai.arbitration.BlockJoyOwnerCommandSuppressionMixin',
+                    'ai.arbitration.MaidBoardGameTaskMovementCoordinationMixin',
+                    'ai.arbitration.MaidJoyTaskMovementCoordinationMixin',
+                    'ai.arbitration.MaidRunOneMovementCoordinationMixin',
                     'status.MaidPickupInventoryFeedbackMixin',
                     'CustomPackPhysicsMetadataMixin',
                     'EntityMaidClientRandomHealingMixin',

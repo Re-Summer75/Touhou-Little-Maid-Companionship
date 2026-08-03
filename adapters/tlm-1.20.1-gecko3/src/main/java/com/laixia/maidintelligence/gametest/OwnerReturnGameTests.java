@@ -3,6 +3,8 @@ package com.laixia.maidintelligence.gametest;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskAttack;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
+import com.laixia.maidintelligence.feature.ai.domain.MovementIntentSource;
+import com.laixia.maidintelligence.feature.ai.tlm.MovementCoordinationBridge;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.gametest.support.GameTestPositions;
 import com.laixia.maidintelligence.gametest.support.IntentGameTestRuntime;
@@ -16,6 +18,7 @@ import net.minecraft.world.entity.ai.behavior.BehaviorUtils;
 import net.minecraft.world.entity.ai.behavior.BlockPosTracker;
 import net.minecraft.world.entity.ai.behavior.EntityTracker;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.ai.memory.WalkTarget;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.schedule.Activity;
 import net.minecraft.world.level.block.Blocks;
@@ -105,17 +108,36 @@ public final class OwnerReturnGameTests {
                         },
                         IntentGameTestRuntime.wanderIntent()
                 );
+        long gameTime = helper.getLevel().getGameTime();
+        WalkTarget previous = MovementCoordinationBridge.capture(
+                fixture.maid(),
+                gameTime
+        );
         BehaviorUtils.setWalkAndLookTargetMemories(
                 fixture.maid(),
                 fixture.maid().blockPosition().east(3),
                 0.3F,
                 0
         );
+        MovementCoordinationBridge.finishKnownWrite(
+                fixture.maid(),
+                previous,
+                MovementIntentSource.RANDOM_STROLL,
+                true,
+                gameTime
+        );
+        helper.assertFalse(
+                runtime.tick(fixture.maid(), gameTime),
+                "Active random stroll triggered an early owner return"
+        );
+        fixture.maid().getBrain().eraseMemory(
+                MemoryModuleType.WALK_TARGET
+        );
 
         helper.assertTrue(
                 runtime.tick(
                         fixture.maid(),
-                        helper.getLevel().getGameTime()
+                        gameTime + 1L
                 ),
                 "Random-stroll edge did not activate owner return"
         );

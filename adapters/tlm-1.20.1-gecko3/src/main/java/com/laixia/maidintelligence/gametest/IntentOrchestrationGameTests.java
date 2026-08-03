@@ -2,8 +2,7 @@ package com.laixia.maidintelligence.gametest;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.ai.domain.MovementIntentSource;
-import com.laixia.maidintelligence.feature.ai.domain.MovementTargetKind;
-import com.laixia.maidintelligence.feature.ai.tlm.MovementCoordinationAccess;
+import com.laixia.maidintelligence.feature.ai.tlm.MovementCoordinationBridge;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.gametest.support.GameTestPositions;
@@ -15,6 +14,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.behavior.BehaviorUtils;
 import net.minecraft.world.entity.ai.behavior.EntityTracker;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.memory.WalkTarget;
@@ -118,16 +118,24 @@ public final class IntentOrchestrationGameTests {
         Fixture fixture = fixture(helper, 1, 5);
         IntentGameTestRuntime.Runtime runtime = gazeRuntime();
         long gameTime = helper.getLevel().getGameTime();
-        ((MovementCoordinationAccess) fixture.maid())
-                .maidIntelligence$movementIntentLease()
-                .claim(
-                        gameTime,
-                        MovementIntentSource.PICKUP,
-                        MovementTargetKind.BLOCK,
-                        42L,
-                        20,
-                        true
-                );
+        BlockPos pickupTarget = fixture.maid().blockPosition().east(2);
+        WalkTarget previous = MovementCoordinationBridge.capture(
+                fixture.maid(),
+                gameTime
+        );
+        BehaviorUtils.setWalkAndLookTargetMemories(
+                fixture.maid(),
+                pickupTarget,
+                0.5F,
+                0
+        );
+        MovementCoordinationBridge.finishKnownWrite(
+                fixture.maid(),
+                previous,
+                MovementIntentSource.PICKUP,
+                true,
+                gameTime
+        );
         runtime.intents().signal(
                 fixture.maid(),
                 CompanionIntentIds.GAZE_RECALL,
@@ -142,8 +150,11 @@ public final class IntentOrchestrationGameTests {
         helper.assertTrue(
                 fixture.maid().getBrain()
                         .getMemory(MemoryModuleType.WALK_TARGET)
-                        .isEmpty(),
-                "Blocked companion intent wrote movement"
+                        .map(WalkTarget::getTarget)
+                        .map(target -> target.currentBlockPosition()
+                                .equals(pickupTarget))
+                        .orElse(false),
+                "Blocked companion intent replaced the pickup target"
         );
         helper.succeed();
     }

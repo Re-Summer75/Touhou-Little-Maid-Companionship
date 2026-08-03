@@ -62,24 +62,7 @@ public final class MovementIntentLease {
                     ? MovementIntentDecision.RENEWED
                     : MovementIntentDecision.RETARGETED;
         }
-        if (holder == MovementIntentSource.PICKUP
-                && (source == MovementIntentSource.FOLLOW_OWNER
-                || source == MovementIntentSource.COMPANION)) {
-            if (enforce) {
-                return MovementIntentDecision.SUPPRESSED;
-            }
-            // Observation mode follows vanilla while reporting the conflict
-            // that conservative mode would defer.
-            replace(
-                    gameTime,
-                    source,
-                    incomingTargetKind,
-                    incomingTargetIdentity,
-                    ttlTicks
-            );
-            return MovementIntentDecision.OBSERVED_CONFLICT;
-        }
-        if (source.priority() < holder.priority()) {
+        if (outranks(source, holder)) {
             replace(
                     gameTime,
                     source,
@@ -207,6 +190,19 @@ public final class MovementIntentLease {
         targetIdentity = 0L;
         recordedAtTick = 0L;
         expiresAtTick = 0L;
+    }
+
+    private static boolean outranks(
+            MovementIntentSource incoming,
+            MovementIntentSource current
+    ) {
+        int authority = Integer.compare(
+                incoming.authority().rank(),
+                current.authority().rank()
+        );
+        return authority < 0
+                || (authority == 0
+                && incoming.priority() < current.priority());
     }
 
     private static long expirationTick(long gameTime, int ttlTicks) {

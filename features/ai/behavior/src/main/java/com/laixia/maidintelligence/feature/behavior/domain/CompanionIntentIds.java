@@ -55,6 +55,10 @@ public final class CompanionIntentIds {
             id("fact/movement_lease_priority");
     public static final OrchestrationId MOVEMENT_FAIL_OPEN =
             id("fact/movement_fail_open");
+    public static final OrchestrationId BEHAVIOR_OCCUPANCY_LEVEL =
+            id("fact/behavior_occupancy_level");
+    public static final OrchestrationId BEHAVIOR_OCCUPANCY_REASON =
+            id("fact/behavior_occupancy_reason");
 
     public static final OrchestrationId GAZE_RECALL =
             id("signal/gaze_recall");
@@ -73,6 +77,8 @@ public final class CompanionIntentIds {
             id("action/companion_command_window");
     public static final OrchestrationId REQUEST_HUNGER_ATTENTION =
             id("action/request_hunger_attention");
+    public static final OrchestrationId DEPLOY_BOAT =
+            id("action/deploy_boat");
 
     private CompanionIntentIds() {
     }
@@ -110,6 +116,8 @@ public final class CompanionIntentIds {
                 MOVEMENT_LEASE_ACTIVE,
                 MOVEMENT_LEASE_PRIORITY,
                 MOVEMENT_FAIL_OPEN,
+                BEHAVIOR_OCCUPANCY_LEVEL,
+                BEHAVIOR_OCCUPANCY_REASON,
                 GAZE_RECALL,
                 POST_TASK_RETURN,
                 RANDOM_STROLL_RETURN,
@@ -121,7 +129,8 @@ public final class CompanionIntentIds {
                         APPROACH_OWNER,
                         FETCH_SNACK_CABINET_MEAL,
                         COMPANION_COMMAND_WINDOW,
-                        REQUEST_HUNGER_ATTENTION
+                        REQUEST_HUNGER_ATTENTION,
+                        DEPLOY_BOAT
                 ),
                 signals,
                 Map.ofEntries(
@@ -171,6 +180,14 @@ public final class CompanionIntentIds {
                                 MOVEMENT_FAIL_OPEN,
                                 FactType.BOOLEAN
                         ),
+                        Map.entry(
+                                BEHAVIOR_OCCUPANCY_LEVEL,
+                                FactType.NUMBER
+                        ),
+                        Map.entry(
+                                BEHAVIOR_OCCUPANCY_REASON,
+                                FactType.NUMBER
+                        ),
                         Map.entry(GAZE_RECALL, FactType.SIGNAL),
                         Map.entry(POST_TASK_RETURN, FactType.SIGNAL),
                         Map.entry(
@@ -190,7 +207,9 @@ public final class CompanionIntentIds {
                                         "speed",
                                         ActionParameterType.NUMBER,
                                         "close_distance",
-                                        ActionParameterType.INTEGER
+                                        ActionParameterType.INTEGER,
+                                        "authority",
+                                        ActionParameterType.STRING
                                 ),
                                 Set.of()
                         ),
@@ -225,6 +244,15 @@ public final class CompanionIntentIds {
                         REQUEST_HUNGER_ATTENTION,
                         ActionSchema.withoutParameters(
                                 REQUEST_HUNGER_ATTENTION
+                        ),
+                        DEPLOY_BOAT,
+                        new ActionSchema(
+                                DEPLOY_BOAT,
+                                Map.of(
+                                        "ability_id",
+                                        ActionParameterType.STRING
+                                ),
+                                Set.of("ability_id")
                         )
                 )
         );

@@ -1,6 +1,8 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "initial_state": "fetch",
+  "resume_policy": "restart_step",
+  "maximum_suspend_ticks": 600,
   "states": {
     "fetch": {
       "action": "tlm_companionship:action/fetch_snack_cabinet_meal",

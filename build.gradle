@@ -420,6 +420,7 @@ tasks.register('verifyAll') {
         'verifyMovementIntent',
         'verifyCustomBehavior',
         'verifyAdaptiveAi',
+        'verifyVerificationReachability',
         'verifyAdvancementDomain',
         'verifyFaceTracking',
         'verifyBonePhysics',

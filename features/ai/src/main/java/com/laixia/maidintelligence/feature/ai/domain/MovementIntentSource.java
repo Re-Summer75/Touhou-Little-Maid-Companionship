@@ -1,28 +1,41 @@
 package com.laixia.maidintelligence.feature.ai.domain;
 
+import com.laixia.maidintelligence.feature.ai.domain.arbitration.MovementIntentAuthority;
+
 /**
- * Whitelisted TLM movement writers in their native Brain priority order.
+ * Whitelisted movement writers with cross-system authority and Brain priority.
  *
- * <p>Lower values have higher priority, matching Minecraft Brain behavior
- * registration. Unknown or addon-owned writers are intentionally absent and
- * therefore remain unmanaged. A pickup that already owns the lease has one
- * bounded exception: normal following waits for that pickup commitment.</p>
+ * <p>Authority is compared before the numeric priority. Unknown or addon-owned
+ * writers remain unmanaged and therefore force fail-open reconciliation.</p>
  */
 public enum MovementIntentSource {
-    BREATH_AIR(0),
-    HOME_RETURN(1),
-    COMBAT(2),
-    FOLLOW_OWNER(3),
-    COMPANION(4),
-    BUILT_IN_WORK(5),
-    BEG(6),
-    STEAL_EDIBLE(8),
-    PICKUP(10);
+    BREATH_AIR(MovementIntentAuthority.EMERGENCY, 0),
+    COMBAT(MovementIntentAuthority.EMERGENCY, 2),
+    HOME_RETURN(MovementIntentAuthority.NATIVE_COMMITMENT, 1),
+    BUILT_IN_WORK(MovementIntentAuthority.NATIVE_COMMITMENT, 5),
+    STEAL_EDIBLE(MovementIntentAuthority.NATIVE_COMMITMENT, 8),
+    PICKUP(MovementIntentAuthority.NATIVE_COMMITMENT, 10),
+    OWNER_COMMAND(MovementIntentAuthority.OWNER_COMMAND, 4),
+    FOLLOW_OWNER(MovementIntentAuthority.NATIVE_SOFT, 3),
+    FOLLOW_OWNER_VEHICLE(MovementIntentAuthority.NATIVE_SOFT, 3),
+    LEISURE(MovementIntentAuthority.NATIVE_SOFT, 7),
+    BEG(MovementIntentAuthority.NATIVE_SOFT, 6),
+    RANDOM_STROLL(MovementIntentAuthority.NATIVE_SOFT, 20),
+    COMPANION(MovementIntentAuthority.PASSIVE_COMPANION, 4);
 
+    private final MovementIntentAuthority authority;
     private final int priority;
 
-    MovementIntentSource(int priority) {
+    MovementIntentSource(
+            MovementIntentAuthority authority,
+            int priority
+    ) {
+        this.authority = authority;
         this.priority = priority;
+    }
+
+    public MovementIntentAuthority authority() {
+        return authority;
     }
 
     public int priority() {

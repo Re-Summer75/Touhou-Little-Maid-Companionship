@@ -16,10 +16,12 @@ public final class BehaviorExtraBrain implements IExtraMaidBrain {
 
     private final MaidIntentApi<EntityMaid> intents;
     private final TlmMaidIntentObserver observer;
+    private final TlmDeployBoatAutonomy boatAutonomy;
 
     public BehaviorExtraBrain(
             MaidIntentApi<EntityMaid> intents,
-            TlmMaidIntentObserver observer
+            TlmMaidIntentObserver observer,
+            TlmDeployBoatAutonomy boatAutonomy
     ) {
         this.intents = Objects.requireNonNull(
                 intents,
@@ -29,6 +31,10 @@ public final class BehaviorExtraBrain implements IExtraMaidBrain {
                 observer,
                 "observer"
         );
+        this.boatAutonomy = Objects.requireNonNull(
+                boatAutonomy,
+                "boatAutonomy"
+        );
     }
 
     @Override
@@ -37,7 +43,11 @@ public final class BehaviorExtraBrain implements IExtraMaidBrain {
         return List.of(
                 Pair.of(
                         INTENT_PRIORITY,
-                        new MaidIntentBehavior(intents, observer)
+                        new MaidIntentBehavior(
+                                intents,
+                                observer,
+                                boatAutonomy::tick
+                        )
                 )
         );
     }

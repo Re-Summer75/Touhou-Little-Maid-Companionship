@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.feature.orchestration.application;
 import com.laixia.maidintelligence.feature.orchestration.api.IntentTrace;
 import com.laixia.maidintelligence.feature.orchestration.domain.IntentCatalog;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
+import com.laixia.maidintelligence.feature.orchestration.port.UtilityModifierPort;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -10,11 +11,17 @@ import java.util.function.ToLongFunction;
 
 final class IntentSelectionEngine<M> {
     private static final int MAX_TRACE_CANDIDATES = 8;
+    private static final double MAX_UTILITY_MODIFIER = 50.0D;
 
     private final ToLongFunction<M> identity;
+    private final UtilityModifierPort<M> modifiers;
 
-    IntentSelectionEngine(ToLongFunction<M> identity) {
+    IntentSelectionEngine(
+            ToLongFunction<M> identity,
+            UtilityModifierPort<M> modifiers
+    ) {
         this.identity = identity;
+        this.modifiers = modifiers;
     }
 
     Selection select(
@@ -41,8 +48,10 @@ final class IntentSelectionEngine<M> {
             int index = (start + offset) % intentCount;
             IntentCatalog.CompiledIntent intent = intents.get(index);
             boolean active = intent.id().equals(state.activeIntent);
+            boolean suspended = state.hasSuspended(intent.id());
+            boolean continuation = active || suspended;
             boolean signalled = hasActiveSignal(intent, state, catalog);
-            if (!active && !signalled) {
+            if (!continuation && !signalled) {
                 if (evaluated >= maxCandidates) {
                     continue;
                 }
@@ -51,13 +60,18 @@ final class IntentSelectionEngine<M> {
                     budgetCursor = (index + 1) % intentCount;
                 }
             }
-            double score = score(intent, state.facts);
+            double score = score(
+                    subject,
+                    intent,
+                    state.facts,
+                    gameTime
+            );
             String blocked = blockedReason(
                     intent,
                     state,
                     gameTime,
                     catalog,
-                    active
+                    continuation
             );
             if (blocked != null) {
                 addTrace(trace, intent.id(), score, blocked);
@@ -67,7 +81,7 @@ final class IntentSelectionEngine<M> {
                 addTrace(trace, intent.id(), score, "below_minimum");
                 continue;
             }
-            if (!active
+            if (!continuation
                     && !signalled
                     && !intentEvaluationDue(
                             subject,
@@ -93,6 +107,7 @@ final class IntentSelectionEngine<M> {
 
         if (winner != null
                 && !winner.intent().id().equals(state.activeIntent)
+                && !state.hasSuspended(winner.intent().id())
                 && !chancePassed(
                         subject,
                         winner.intent(),
@@ -254,15 +269,29 @@ final class IntentSelectionEngine<M> {
         return null;
     }
 
-    private static double score(
+    private double score(
+            M subject,
             IntentCatalog.CompiledIntent intent,
-            double[] facts
+            double[] facts,
+            long gameTime
     ) {
         double score = intent.definition().baseScore();
         for (IntentCatalog.CompiledConsideration consideration :
                 intent.considerations()) {
             score += consideration.consideration().contribution(
                     facts[consideration.factIndex()]
+            );
+        }
+        double modifier;
+        try {
+            modifier = modifiers.modifier(subject, intent, gameTime);
+        } catch (RuntimeException ignored) {
+            modifier = 0.0D;
+        }
+        if (Double.isFinite(modifier)) {
+            score += Math.max(
+                    -MAX_UTILITY_MODIFIER,
+                    Math.min(MAX_UTILITY_MODIFIER, modifier)
             );
         }
         return score;

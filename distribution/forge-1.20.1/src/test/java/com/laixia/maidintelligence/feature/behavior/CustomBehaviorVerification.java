@@ -3,6 +3,8 @@ package com.laixia.maidintelligence.feature.behavior;
 import com.laixia.maidintelligence.feature.behavior.api.BehaviorTuning;
 import com.laixia.maidintelligence.feature.behavior.domain.ContinuousLookTracker;
 import com.laixia.maidintelligence.feature.behavior.domain.GazeRecallPolicy;
+import com.laixia.maidintelligence.feature.behavior.domain.learning.LearningMode;
+import com.laixia.maidintelligence.feature.orchestration.api.IntentRolloutMode;
 
 public final class CustomBehaviorVerification {
     private CustomBehaviorVerification() {
@@ -57,6 +59,9 @@ public final class CustomBehaviorVerification {
                         && defaults.evaluationIntervalTicks() == 5
                         && defaults.maxCandidateEvaluations() == 64
                         && defaults.diagnosticsEnabled()
+                        && defaults.rolloutMode()
+                        == IntentRolloutMode.LIVE_ONLY
+                        && defaults.learningMode() == LearningMode.SHADOW
                         && defaults.gazeRecallHoldTicks() == 2,
                 "Behavior engine safety defaults changed"
         );

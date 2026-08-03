@@ -15,7 +15,6 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.behavior.BehaviorUtils;
-import net.minecraft.world.entity.ai.behavior.EntityTracker;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.memory.WalkTarget;
 import net.minecraft.world.entity.player.Player;
@@ -95,15 +94,8 @@ public final class PassiveFollowGameTests {
                 "Moving owner did not resume normal following"
         );
         helper.assertTrue(
-                maid.getBrain()
-                        .getMemory(MemoryModuleType.WALK_TARGET)
-                        .map(WalkTarget::getTarget)
-                        .filter(EntityTracker.class::isInstance)
-                        .map(EntityTracker.class::cast)
-                        .map(EntityTracker::getEntity)
-                        .filter(owner::equals)
-                        .isPresent(),
-                "Resumed following did not target the owner"
+                currentTarget(maid).equals(workTarget),
+                "Soft owner follow replaced hard built-in work"
         );
         helper.succeed();
     }

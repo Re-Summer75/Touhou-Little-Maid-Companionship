@@ -115,7 +115,7 @@ public final class GazeCommandGameTests {
             GameTestHelper helper
     ) {
         OwnedFixture fixture = ownedFixture(helper);
-        EntitySit maidSeat = lockCommandSeat(helper, fixture);
+        EntitySit maidSeat = lockCommandSeat(helper, fixture, true);
         double retainedDistance = Math.max(
                 1.0D,
                 fixture.maid().getRestrictRadius()
@@ -150,11 +150,11 @@ public final class GazeCommandGameTests {
     }
 
     @GameTest(templateNamespace = "minecraft", template = "empty")
-    public static void commandSeatAllowsOwnerTeleportOutsideHomeMode(
+    public static void activeCommandSeatAllowsOwnerTeleportOutsideHomeMode(
             GameTestHelper helper
     ) {
         OwnedFixture fixture = ownedFixture(helper);
-        lockCommandSeat(helper, fixture);
+        lockCommandSeat(helper, fixture, false);
         fillFloor(helper, 16, 24, 0, 4);
         fixture.owner().setPos(position(helper, 20, 2));
         double distanceBefore = fixture.maid().distanceToSqr(
@@ -189,7 +189,7 @@ public final class GazeCommandGameTests {
             GameTestHelper helper
     ) {
         OwnedFixture fixture = ownedFixture(helper);
-        EntitySit maidSeat = lockCommandSeat(helper, fixture);
+        EntitySit maidSeat = lockCommandSeat(helper, fixture, true);
         fixture.maid().setHomeModeEnable(true);
         fixture.owner().setPos(position(helper, 20, 2));
         double distanceBefore = fixture.maid().distanceToSqr(
@@ -247,7 +247,7 @@ public final class GazeCommandGameTests {
     }
 
     @GameTest(templateNamespace = "minecraft", template = "empty")
-    public static void commandSharesTheOwnersRideableEntity(
+    public static void commandBoatReleasesWhenOwnerDismounts(
             GameTestHelper helper
     ) {
         OwnedFixture fixture = ownedFixture(helper);
@@ -270,16 +270,16 @@ public final class GazeCommandGameTests {
                 "Maid did not share the owner's rideable entity"
         );
         fixture.owner().stopRiding();
-        execute(actions, fixture, 1);
-        helper.assertTrue(
-                fixture.maid().getVehicle() == boat
-                        && MaidCommandSeatBridge.isSeatProtected(
+        MaidSeatAutonomyBridge.leaveOrdinaryBoatWhenOwnerLeaves(
+                fixture.maid()
+        );
+        helper.assertFalse(
+                fixture.maid().isPassenger()
+                        || MaidCommandSeatBridge.isSeatProtected(
                         fixture.maid()
                 ),
-                "Owner dismount automatically released the command vehicle"
+                "Following maid retained the command boat after owner dismount"
         );
-        MaidCommandSeatBridge.releaseForDanger(fixture.maid());
-        fixture.maid().stopRiding();
         helper.succeed();
     }
 
@@ -356,7 +356,8 @@ public final class GazeCommandGameTests {
 
     private static EntitySit lockCommandSeat(
             GameTestHelper helper,
-            OwnedFixture fixture
+            OwnedFixture fixture,
+            boolean completeCommandWindow
     ) {
         fixture.maid().setPos(position(helper, 3, 1));
         EntityChair ownerSeat = chair(helper, 4, 1);
@@ -375,13 +376,16 @@ public final class GazeCommandGameTests {
                         && fixture.maid().getVehicle() == maidSeat,
                 "Maid did not mirror the owner's seat"
         );
-        helper.assertTrue(
-                execute(actions, fixture, 60) == ActionResult.SUCCEEDED
-                        && MaidCommandSeatBridge.isSeatProtected(
-                        fixture.maid()
-                ),
-                "Command seat was not locked after the window"
-        );
+        if (completeCommandWindow) {
+            helper.assertTrue(
+                    execute(actions, fixture, 60)
+                            == ActionResult.SUCCEEDED
+                            && MaidCommandSeatBridge.isSeatProtected(
+                            fixture.maid()
+                    ),
+                    "Command seat was not locked after the window"
+            );
+        }
         fixture.owner().stopRiding();
         return maidSeat;
     }

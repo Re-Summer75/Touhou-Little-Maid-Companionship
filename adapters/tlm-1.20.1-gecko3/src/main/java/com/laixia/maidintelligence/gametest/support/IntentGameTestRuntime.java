@@ -163,12 +163,7 @@ public final class IntentGameTestRuntime {
                         1.0D
                 ),
                 condition(
-                        CompanionIntentIds.COMBAT_ACTIVE,
-                        FactComparison.EQUAL,
-                        0.0D
-                ),
-                condition(
-                        CompanionIntentIds.MOVEMENT_HARD_BLOCKED,
+                        CompanionIntentIds.BEHAVIOR_OCCUPANCY_LEVEL,
                         FactComparison.EQUAL,
                         0.0D
                 )

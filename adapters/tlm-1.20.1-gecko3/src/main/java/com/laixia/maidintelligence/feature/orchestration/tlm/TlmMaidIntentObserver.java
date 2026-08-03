@@ -1,13 +1,11 @@
 package com.laixia.maidintelligence.feature.orchestration.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
+import com.laixia.maidintelligence.feature.ai.domain.arbitration.BehaviorOccupancyReason;
+import com.laixia.maidintelligence.feature.ai.domain.arbitration.BehaviorOccupancySnapshot;
+import com.laixia.maidintelligence.feature.ai.tlm.TlmBehaviorOccupancyClassifier;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
 import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
-import net.minecraft.world.entity.ai.behavior.BlockPosTracker;
-import net.minecraft.world.entity.ai.memory.MemoryModuleType;
-import net.minecraft.world.entity.ai.memory.WalkTarget;
-import net.minecraft.world.entity.schedule.Activity;
 
 import java.util.Map;
 import java.util.Objects;
@@ -47,19 +45,18 @@ public final class TlmMaidIntentObserver {
         }
         state.lastTick = gameTime;
 
-        WalkTarget walkTarget = currentWalkTarget(maid);
-        boolean newWalkTarget = walkTarget != null
-                && walkTarget != state.lastWalkTarget;
-        state.lastWalkTarget = walkTarget;
-
+        BehaviorOccupancySnapshot occupancy =
+                TlmBehaviorOccupancyClassifier.snapshot(maid, gameTime);
         if (!isBuiltInTask(maid)) {
             state.resetWork();
+            state.randomStrollActive = false;
             return;
         }
-        boolean hasWorkTarget = maid.getBrain().hasMemoryValue(
-                InitEntities.TARGET_POS.get()
-        );
-        if (hasWorkTarget) {
+        boolean activeWork = occupancy.reason()
+                == BehaviorOccupancyReason.WORK_TARGET
+                || occupancy.reason()
+                == BehaviorOccupancyReason.BUILT_IN_WORK;
+        if (activeWork) {
             state.workTargetActive = true;
             state.workReleasedAtTick = -1L;
         } else if (state.workTargetActive) {
@@ -73,11 +70,11 @@ public final class TlmMaidIntentObserver {
             );
         }
 
-        if (newWalkTarget
-                && !hasWorkTarget
-                && walkTarget.getTarget() instanceof BlockPosTracker
-                && maid.getBrain().isActive(Activity.WORK)
-                && maid.getTask().enableLookAndRandomWalk(maid)) {
+        boolean randomStroll = occupancy.reason()
+                == BehaviorOccupancyReason.RANDOM_STROLL;
+        if (state.randomStrollActive
+                && !randomStroll
+                && !occupancy.ownerCommandOverrideActive()) {
             intents().signal(
                     maid,
                     CompanionIntentIds.RANDOM_STROLL_RETURN,
@@ -85,6 +82,7 @@ public final class TlmMaidIntentObserver {
                     RANDOM_STROLL_SIGNAL_TTL
             );
         }
+        state.randomStrollActive = randomStroll;
     }
 
     public double workReleaseAge(EntityMaid maid, long gameTime) {
@@ -103,12 +101,6 @@ public final class TlmMaidIntentObserver {
         );
     }
 
-    private static WalkTarget currentWalkTarget(EntityMaid maid) {
-        return maid.getBrain()
-                .getMemory(MemoryModuleType.WALK_TARGET)
-                .orElse(null);
-    }
-
     private MaidIntentApi<EntityMaid> intents() {
         if (intents == null) {
             throw new IllegalStateException(
@@ -122,7 +114,7 @@ public final class TlmMaidIntentObserver {
         private long lastTick = Long.MIN_VALUE;
         private boolean workTargetActive;
         private long workReleasedAtTick = -1L;
-        private WalkTarget lastWalkTarget;
+        private boolean randomStrollActive;
 
         private void resetWork() {
             workTargetActive = false;
@@ -132,7 +124,7 @@ public final class TlmMaidIntentObserver {
         private void reset() {
             lastTick = Long.MIN_VALUE;
             resetWork();
-            lastWalkTarget = null;
+            randomStrollActive = false;
         }
     }
 }

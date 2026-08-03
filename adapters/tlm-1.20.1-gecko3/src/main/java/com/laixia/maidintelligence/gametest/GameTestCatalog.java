@@ -1,6 +1,10 @@
 package com.laixia.maidintelligence.gametest;
 
+import com.laixia.maidintelligence.gametest.behavior.AbilityGameTests;
 import com.laixia.maidintelligence.gametest.behavior.GazeCommandGameTests;
+import com.laixia.maidintelligence.gametest.behavior.NativeBehaviorArbitrationGameTests;
+import com.laixia.maidintelligence.gametest.behavior.OwnerCoordinationGameTests;
+import com.laixia.maidintelligence.gametest.behavior.VehicleAutonomyGameTests;
 import net.minecraftforge.event.RegisterGameTestsEvent;
 
 /**
@@ -12,9 +16,13 @@ public final class GameTestCatalog {
 
     public static void register(RegisterGameTestsEvent event) {
         event.register(AdaptiveAiGameTests.class);
+        event.register(AbilityGameTests.class);
         event.register(AdvancementGameTests.class);
         event.register(AiOptimizationGameTests.class);
         event.register(GazeCommandGameTests.class);
+        event.register(NativeBehaviorArbitrationGameTests.class);
+        event.register(OwnerCoordinationGameTests.class);
+        event.register(VehicleAutonomyGameTests.class);
         event.register(GazeRecallGameTests.class);
         event.register(HungryOwnerRequestGameTests.class);
         event.register(IntentOrchestrationGameTests.class);

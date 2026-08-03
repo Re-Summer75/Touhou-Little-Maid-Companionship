@@ -5,21 +5,38 @@
 
 [返回行为总索引](../README.md)
 
+七个内置陪伴意图当前均由同一个 Utility/Plan 管线生产执行，默认 rollout 为
+`LIVE_ONLY`。管理员仍可临时切换 `SHADOW_COMPARE` 做同输入、零副作用 trace 对照；
+影子侧不会执行动作、扣物品、写 Brain、取得 Claim 或加载区块。
+
 ## 决策顺序
 
 以下规则不是简单的单一优先级列表：
 
 1. 死亡、睡眠、拴绳、命令坐下、Home、Panic 等硬状态先阻止不合适的行为。
-2. 呼吸、回区、战斗和已经承诺的拾取等硬移动需求优先。
-3. 数据驱动意图再按中断优先级、效用、承诺时间和切换余量选择。
-4. 普通跟随、工作、祈求、偷吃和拾取通过短期移动租约减少互相覆盖目标。
-5. 未知第三方行为替换移动目标时，协调器临时 fail-open，不强行夺回控制。
+2. 原版/TLM 占用分级：`HARD` 阻挡全部陪伴意图；`SOFT`（IDLE 娱乐、随机游走、Beg、
+   普通/载具跟随、被动座位）只允许注视等显式主人命令抢占；其余意图默认要求 `IDLE`。
+3. 移动权威矩阵：紧急状态 > 原版硬承诺 > 主人命令 > 被动陪伴/原版软行为；同权威再比
+   Brain priority。未知第三方写入 fail-open，不清理其状态。
+4. 数据驱动意图再按中断优先级、效用、承诺时间和切换余量选择。
+5. 普通跟随、工作、祈求、偷吃和拾取通过短期移动租约减少互相覆盖目标。
 
 内置陪伴意图优先级为：
 
 `注视召回 80 > 零食柜补给 60 > 缺食反馈求食 50 > 高好感求食 45 > 普通求食 40 > 任务后归队 30 > 随机游走归队 20`
 
-战斗和硬状态通过持续条件直接中断，不依赖上述数字。
+战斗和硬状态通过持续条件直接中断，不依赖上述数字。占用升为 `HARD` 时，正在运行的
+陪伴意图立即走现有 suspend/cancel 路径。
+
+## 对象感知与可恢复执行
+
+- 零食柜、主人和兼容座位以 Affordance advertisement 进入按维度维护的有界索引。
+- 区块/方块/实体生命周期事件更新索引；查询只返回 top-K 已加载候选，再做食物、容量、
+  距离和世界状态精确复验，不再逐次扫描整个立方体。
+- 战斗等高优先级事件可暂停允许恢复的计划。暂停会释放本动作拥有的路径、步行目标和 Claim；
+  恢复前重验目录代际、Guard、超时与目标状态。
+- 零食柜取餐使用 `RESTART_STEP`：战斗结束后可重启当前取餐步骤，但柜位、槽位与物品指纹
+  必须重新确认。
 
 ## 注视召回与指挥
 
@@ -30,21 +47,22 @@
 - 主人连续用准星注视自己的女仆 2 tick，即约 0.1 秒。
 - 默认检测范围 8 格；方块遮挡不阻止注视手势。
 - 女仆好感度等级至少为 1，处于跟随而非 Home 模式。
-- 女仆没有战斗、工作目标、物品使用或更高优先级移动需求。
+- 占用级别为 `IDLE` 或 `SOFT`（可干净中断 IDLE 娱乐、随机游走、Beg、普通跟随等）。
 
 效果：
 
-- 女仆以默认速度 `0.6` 走向主人。
-- 如果女仆坐在未锁定的 TLM 凳子或娱乐座位上，会先主动离座。
-- 进入 2 格范围后完成靠近阶段并开启指挥窗口。
+- 女仆以默认速度 `0.6` 走向主人，动作权威为 `OWNER_COMMAND`。
+- 若正在 SOFT 娱乐座/被动座上，会先离座并清理已确认的软移动目标；不会误删工作、
+  拾取或未知 addon 状态。
+- 进入 2 格范围后完成靠近阶段并开启指挥窗口；窗口期间续租 override，抑制已知软行为重入。
 - 注视只提交短期信号，不会永久改变 Home、坐下或任务设置。
 
 触发与执行阻断：
 
-- 战斗、Panic、呼吸、回区、工作目标、拾取承诺、偷吃和正在使用物品时不会激活，
-  已经运行时相应持续条件失效也会取消。
-- 主人命令坐下、睡眠或拴绳时不执行靠近。
+- `HARD` 占用（战斗、Panic、呼吸、回区、内置工作/棋类、拾取承诺、偷吃、使用物品、
+  睡眠、拴绳、命令坐下、未知 writer）不会激活；已运行时占用升级也会取消。
 - 已锁定的指挥座位不会被新的注视解除；信号即使提交，靠近阶段也会失败并保留锁定。
+- WORK 棋类与其它硬坐式工作不受注视抑制；战斗可立即打断命令窗口并离座。
 
 ### 3 秒指挥窗口
 
@@ -58,7 +76,8 @@
 
 “玩家可坐”以主人本次实际乘坐的实体类型和实体容量判定，不维护模组座椅白名单。
 只允许玩家乘坐、但拒绝其它生物类型的空位会在容量校验后兼容女仆；不会扫描与主人
-当前座位类型无关的生物或业务实体。
+当前座位类型无关的生物或业务实体。邻座候选来自共享 Affordance 索引，最终上座前还会
+取得带 fencing token 的座位 Claim。
 
 窗口结束会停止指挥移动，但不会自动让已经就座或共乘的女仆下来。
 
@@ -97,8 +116,8 @@ TLM 零食柜：
 - Home 模式不会阻止家内补给；命令坐下、乘坐、指挥座位、战斗、物品使用和硬移动会阻止
   或中断取餐。
 - 意图优先级为 60，高于三条向主人求食的分支，确定有柜内食物时优先自助。
-- 空结果缓存 100 tick，已命中的零食柜则低成本复查；多女仆取物由服务端串行提取保证
-  不复制，同一份食物只能被一名女仆取得。
+- 空结果缓存 100 tick，已命中的零食柜则低成本复查；多女仆先竞争具体容器槽 Claim，
+  提取提交点再复验 ItemStack 指纹，同一份食物只能被一名女仆取得。
 
 配置与定义：
 
@@ -165,6 +184,53 @@ TLM 零食柜：
 - `data/tlm_companionship/maid_ai/intents/post_task_return.json`
 - `data/tlm_companionship/maid_ai/intents/wander_return.json`
 - `data/tlm_companionship/maid_ai/plans/approach_owner.json`
+
+## 数据驱动能力与放船
+
+能力由授权、请求和执行三层组成：
+
+- Grant 随女仆保存，但单独存在时永不激活。
+- 主人命令或带滞回的自主渡水需求生成短期 Request；命令与自主来源各有独立 Utility
+  Intent，但共享模板编译出的 Plan。
+- 冷却和执行态不写入 Grant，卸载后不会把一次旧请求当成永久命令。
+
+内置试点 `deploy_boat`：
+
+1. 优先复用主人或女仆附近仍存活且无乘客的船，不消耗物品。
+2. 否则只检查已加载区块内的水面，并为放置点取得 Claim。
+3. 提交前复验女仆船槽、ItemStack 指纹、碰撞和 Request assignment。
+4. 船实体成功加入世界后才扣除一件物品；失败或部分执行不会重复扣物或重复放船。
+
+同一主人、同一维度中的自主请求会先竞标。硬资格通过后按优先级、Utility、距离、当前负载
+和 fairness aging 排序，完全相同用女仆 UUID 稳定平局；`deploy_boat` 的 `fanOut` 为 1，
+因此只有赢家能发出激活信号和取得 Request Claim。协调器故障时允许单女仆退化，但所有
+退化者仍共享同一 request ID，资源 Claim 不会失效。
+
+资源与命令：
+
+- `data/tlm_companionship/maid_ai/abilities/deploy_boat.json`
+- `/tlmcompanionship ai ability grant <maid> <ability>`
+- `/tlmcompanionship ai ability revoke <maid> <ability>`
+- `/tlmcompanionship ai ability activate <maid> <ability>`
+- `/tlmcompanionship ai ability inspect <maid>`
+
+## 有界学习
+
+执行终态会生成带 operation/correlation 身份的 Outcome，并去重投影为三类独立数据：
+
+- Affordance Reliability：动作/对象能力的成功与失败 Beta 计数；
+- Owner Preference：主人相关意图的有界 EWMA 倾向；
+- Habit Forecast：按游戏时间桶记录的行为频率。
+
+默认 `learning_mode = SHADOW`，只持久化投影而不改 Utility。切换 `ACTIVE` 后也只能施加
+有上限的软评分，不能授予能力、改好感度、绕过安全 Guard、提升命令等级或增加 Claim 容量。
+每只女仆的投影和近期信号都有固定容量，可随时冻结、重置和导出：
+
+- `/tlmcompanionship ai learning inspect <maid>`
+- `/tlmcompanionship ai learning freeze <maid>`
+- `/tlmcompanionship ai learning unfreeze <maid>`
+- `/tlmcompanionship ai learning reset <maid>`
+- `/tlmcompanionship ai learning export <maid>`
 
 ## 普通跟随调整
 
@@ -252,10 +318,10 @@ Home、坐下、睡眠、拴绳、乘客和 Panic 等状态不启用扩展。
 - 主人不再乘坐同一艘普通船时立即下船，不依赖 TLM 的离船冷却和近距离窗口。
 
 Home 模式不会为普通跟随离座。允许坐式工作的任务不会因普通拾取而被拉下座位；
-但普通船只失去同乘主人或出现战斗危险时仍可下乘。无关的第三方载具不由这套规则处理。
-指挥锁定的凳子或娱乐座位通常也不会为跟随离座，但非 Home 模式下主人达到
-TLM 紧急传送阈值时会解除锁定并复用本体传送；Home 模式始终保留座位。
-指挥锁定的船只不会因主人离船、跟随或拾取自动释放，仍只响应主人明确下乘或战斗危险。
+但未被指挥锁定的普通船只失去同乘主人或出现战斗危险时仍可下乘。无关的第三方载具
+不由这套规则处理。非 Home 模式下，即使主人指挥窗口仍在生效，达到 TLM 紧急传送
+阈值时也会解除指挥座位并复用本体传送；Home 模式始终保留座位。
+指挥锁定的船只在跟随模式下会随主人离船立即解除锁定并下船，但不会因普通拾取释放。
 
 ## 等价性能优化
 
@@ -270,8 +336,9 @@ TLM 紧急传送阈值时会解除锁定并复用本体传送；Home 模式始�
 ## 配置与诊断
 
 - `config/tlm_companionship-server.toml`：AI 优化、活动半径、战斗扫描和移动协调。
-- `config/tlm_companionship-behavior-server.toml`：意图引擎预算和注视传感器。
+- `config/tlm_companionship-behavior-server.toml`：意图预算、rollout、学习模式和注视传感器。
 - `/tlmcompanionship ai stats`：查看目录代际与调度计数。
-- `/tlmcompanionship ai explain <女仆>`：查看当前意图、状态、候选分数和阻塞原因。
+- `/tlmcompanionship ai explain <女仆>`：查看当前意图、状态、候选分数、Outcome 与阻塞原因。
 
 Data Pack 作者参见[意图 AI 格式与扩展](../../architecture/intent-ai-data.md)。
+维护者与代码 Agent 参见[陪伴智能维护契约](../../architecture/companion-intelligence.md)。

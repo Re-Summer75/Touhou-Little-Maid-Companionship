@@ -5,6 +5,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.ai.domain.MovementIntentSource;
 import com.laixia.maidintelligence.feature.ai.tlm.MaidSeatAutonomyBridge;
 import com.laixia.maidintelligence.feature.ai.tlm.MovementCoordinationBridge;
+import com.laixia.maidintelligence.feature.ai.tlm.NativeBehaviorArbitrationBridge;
 import com.laixia.maidintelligence.feature.ai.tlm.PassiveFollowBridge;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.memory.WalkTarget;
@@ -40,10 +41,21 @@ public abstract class MaidFollowOwnerMovementCoordinationMixin {
             EntityMaid maid,
             CallbackInfoReturnable<Boolean> callback
     ) {
-        if (MovementCoordinationBridge.isExactImplementation(
+        if (!MovementCoordinationBridge.isExactImplementation(
                 this,
                 MaidFollowOwnerTask.class
-        ) && PassiveFollowBridge.shouldDefer(maid)) {
+        )) {
+            return;
+        }
+        boolean ownerCommandActive =
+                NativeBehaviorArbitrationBridge.ownerCommandActive(
+                maid,
+                level.getGameTime()
+        );
+        if ((ownerCommandActive
+                && !MaidSeatAutonomyBridge
+                .requiresEmergencyOwnerFollow(maid))
+                || PassiveFollowBridge.shouldDefer(maid)) {
             callback.setReturnValue(false);
         }
     }

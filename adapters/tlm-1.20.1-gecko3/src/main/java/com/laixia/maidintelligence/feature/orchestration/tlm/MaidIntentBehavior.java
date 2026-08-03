@@ -8,21 +8,33 @@ import net.minecraft.world.entity.ai.behavior.Behavior;
 
 import javax.annotation.Nonnull;
 import java.util.Objects;
+import java.util.function.BiConsumer;
 
 public final class MaidIntentBehavior extends Behavior<EntityMaid> {
     private static final int RUNTIME_DURATION_TICKS = Integer.MAX_VALUE;
 
     private final MaidIntentApi<EntityMaid> intents;
     private final TlmMaidIntentObserver observer;
+    private final BiConsumer<EntityMaid, Long> preTick;
     private long lastProcessedTick = Long.MIN_VALUE;
 
     public MaidIntentBehavior(
             MaidIntentApi<EntityMaid> intents,
             TlmMaidIntentObserver observer
     ) {
+        this(intents, observer, (maid, gameTime) -> {
+        });
+    }
+
+    public MaidIntentBehavior(
+            MaidIntentApi<EntityMaid> intents,
+            TlmMaidIntentObserver observer,
+            BiConsumer<EntityMaid, Long> preTick
+    ) {
         super(ImmutableMap.of(), RUNTIME_DURATION_TICKS);
         this.intents = Objects.requireNonNull(intents, "intents");
         this.observer = Objects.requireNonNull(observer, "observer");
+        this.preTick = Objects.requireNonNull(preTick, "preTick");
     }
 
     @Override
@@ -69,6 +81,7 @@ public final class MaidIntentBehavior extends Behavior<EntityMaid> {
         }
         lastProcessedTick = gameTime;
         observer.observe(maid, gameTime);
+        preTick.accept(maid, gameTime);
         intents.tick(maid, gameTime);
     }
 }

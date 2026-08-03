@@ -32,7 +32,7 @@
 | 环境风场 | 可复现的空间风场与逐骨受风响应 | 客户端 |
 | 渲染修正 | Gecko 模型逐面外法线与绕序重算 | 客户端 |
 | 原版 AI 优化 | 寻路缓存、移动意图软协调、任务保护 | 服务端 |
-| 数据驱动意图 AI | Utility 决策、计划状态机、注视召回、求食与归队 | 服务端 |
+| 数据驱动陪伴智能 | Utility、可恢复计划、对象感知、能力、学习与多女仆协调 | 服务端 |
 
 ## 核心特性
 
@@ -109,8 +109,12 @@
 - 自动进食失败并出现“需要食物”提示时会提交一次确定性的求食信号；普通低饥饿分支默认每 5 秒有 10% 概率激活，饥饿值 20 及以下且好感度高于 2 级时概率提升至 25%。三条分支只保留触发条件和优先级差异，统一复用“靠近主人后面向主人做请求动作”的 Data Pack 计划；战斗、Home 和主人命令坐下等硬状态不会被抢占。
 - 内置工作目标序列结束且 1 秒内没有新目标时，女仆会执行一次归队；新一轮随机游走默认有 10% 概率改为走回主人身边。连续工作只在整轮结束后触发，战斗、拾取、回区、呼吸、第三方任务和硬移动状态均会优先。
 - 七个内置意图由服务端 Data Pack 中的 `maid_ai/intents/*.json` 与 `maid_ai/plans/*.json` 定义，通过 Utility 评分和小型状态机统一调度；`/reload` 会原子切换已校验目录，无效上层资源回退到下层有效定义，整批失败则保留上一代。
-- `tlm_companionship-behavior-server.toml` 只保留总开关、评估预算、诊断开关以及注视传感器范围/持续时间；饥饿阈值、概率、等待、冷却和计划步骤均以 Data Pack 为唯一来源。
-- 管理员可用 `/tlmcompanionship ai stats` 查看目录代际和调度计数，用 `/tlmcompanionship ai explain <女仆>` 查看当前意图、计划状态、候选效用和阻塞原因。数据格式与扩展方式见 [`docs/architecture/intent-ai-data.md`](docs/architecture/intent-ai-data.md)。
+- 零食柜、主人和可坐实体进入事件驱动的 Affordance 索引；查询只粗筛已加载 top-K 候选。容器槽、座位、放置点和共享请求使用带 fencing token 的 Claim，取消、死亡、卸载、超时和 reload 都会释放。
+- 计划可在战斗打断后按策略重启步骤、恢复检查点或重规划后缀；执行终态以去重 Outcome 记录。短期事件和 trace 有界保存在内存，高价值记忆才随女仆持久化。
+- `maid_ai/abilities/*.json` 可把受支持的高层模板编译为同一套 Intent/Plan。首个能力 `deploy_boat` 会优先复用空船，否则安全 Claim 水面并在生成成功后才扣物；同一主人下多名女仆通过公平竞标只选一个自主响应者。
+- 有界学习把 Outcome 分别投影为对象可靠性、主人偏好和时段习惯；默认只做影子记录。启用后也只能软修正 Utility，不能绕过安全条件、命令、能力授权或资源容量，并支持查看、冻结、重置和导出。
+- `tlm_companionship-behavior-server.toml` 只保留总开关、评估预算、rollout、学习模式、诊断开关以及注视传感器范围/持续时间；饥饿阈值、概率、等待、冷却和计划步骤均以 Data Pack 为唯一来源。
+- 管理员可用 `/tlmcompanionship ai stats` 查看目录代际和调度计数，用 `/tlmcompanionship ai explain <女仆>` 查看当前意图、计划状态、候选效用和阻塞原因，并通过 `ai ability` 与 `ai learning` 子命令管理能力和学习。数据格式与扩展方式见 [`docs/architecture/intent-ai-data.md`](docs/architecture/intent-ai-data.md)。
 
 ---
 

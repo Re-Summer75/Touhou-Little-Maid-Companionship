@@ -1,8 +1,8 @@
 package com.laixia.maidintelligence.feature.status.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.github.tartaricacid.touhoulittlemaid.init.InitBlocks;
 import com.github.tartaricacid.touhoulittlemaid.tileentity.TileEntitySnackCabinet;
+import com.laixia.maidintelligence.feature.perception.tlm.TlmAffordancePerceptionService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -19,17 +19,25 @@ import java.util.WeakHashMap;
 public final class MaidSnackCabinetMealSource {
     public static final int SEARCH_RANGE = 8;
 
-    private static final int VERTICAL_SEARCH_RANGE = 4;
     private static final int SEARCH_INTERVAL_TICKS = 100;
     private static final double SEARCH_RANGE_SQUARED =
             (double) SEARCH_RANGE * SEARCH_RANGE;
 
     private final MaidMealAccess mealAccess;
+    private final TlmAffordancePerceptionService perception;
     private final Map<EntityMaid, SearchState> searchStates =
             new WeakHashMap<>();
 
     public MaidSnackCabinetMealSource(MaidMealAccess mealAccess) {
+        this(mealAccess, new TlmAffordancePerceptionService());
+    }
+
+    public MaidSnackCabinetMealSource(
+            MaidMealAccess mealAccess,
+            TlmAffordancePerceptionService perception
+    ) {
         this.mealAccess = Objects.requireNonNull(mealAccess, "mealAccess");
+        this.perception = Objects.requireNonNull(perception, "perception");
     }
 
     public Optional<BlockPos> findAvailableMeal(
@@ -65,13 +73,41 @@ public final class MaidSnackCabinetMealSource {
         }
 
         state.nextSearchTime = gameTime + SEARCH_INTERVAL_TICKS;
-        state.target = searchNearest(maid, level);
+        state.target = indexedNearest(maid, level, gameTime);
         return Optional.ofNullable(state.target);
+    }
+
+    public Optional<MealTarget> findAvailableMealTarget(
+            EntityMaid maid,
+            long gameTime
+    ) {
+        return findAvailableMeal(maid, gameTime)
+                .flatMap(position -> {
+                    if (!(maid.level() instanceof ServerLevel level)) {
+                        return Optional.empty();
+                    }
+                    return Optional.ofNullable(targetAt(
+                            maid,
+                            level,
+                            position
+                    ));
+                });
     }
 
     public boolean tryTakeAndStartMeal(
             EntityMaid maid,
             BlockPos cabinetPos
+    ) {
+        if (!(maid.level() instanceof ServerLevel level)) {
+            return false;
+        }
+        MealTarget target = targetAt(maid, level, cabinetPos);
+        return target != null && tryTakeAndStartMeal(maid, target);
+    }
+
+    public boolean tryTakeAndStartMeal(
+            EntityMaid maid,
+            MealTarget target
     ) {
         if (!(maid.level() instanceof ServerLevel level)
                 || maid.isUsingItem()
@@ -82,15 +118,24 @@ public final class MaidSnackCabinetMealSource {
                 || mealAccess.hasLocalHungerMeal(maid)) {
             return false;
         }
-        if (!(level.getBlockEntity(cabinetPos)
+        if (!(level.getBlockEntity(target.position())
                 instanceof TileEntitySnackCabinet cabinet)) {
-            invalidate(maid, cabinetPos);
+            invalidate(maid, target.position());
             return false;
         }
 
-        int slot = findMealSlot(maid, cabinet);
-        if (slot < 0) {
-            invalidate(maid, cabinetPos);
+        int slot = target.slot();
+        if (slot < 0
+                || slot >= cabinet.getContainerSize()
+                || !mealAccess.canStartExternalHungerMeal(
+                maid,
+                cabinet.getItem(slot)
+        )
+                || !ItemStack.isSameItemSameTags(
+                target.fingerprint(),
+                cabinet.getItem(slot)
+        )) {
+            invalidate(maid, target.position());
             return false;
         }
 
@@ -98,19 +143,19 @@ public final class MaidSnackCabinetMealSource {
         // makes competing maids observe the updated stack without duplication.
         ItemStack extracted = cabinet.removeItem(slot, 1);
         if (extracted.isEmpty()) {
-            invalidate(maid, cabinetPos);
+            invalidate(maid, target.position());
             return false;
         }
         cabinet.setChanged();
         if (mealAccess.tryStartExternalHungerMeal(maid, extracted)) {
             if (findMealSlot(maid, cabinet) < 0) {
-                invalidate(maid, cabinetPos);
+                invalidate(maid, target.position());
             }
             return true;
         }
 
         restore(cabinet, slot, extracted);
-        invalidate(maid, cabinetPos);
+        invalidate(maid, target.position());
         return false;
     }
 
@@ -125,38 +170,26 @@ public final class MaidSnackCabinetMealSource {
         state.nextSearchTime = 0L;
     }
 
-    private BlockPos searchNearest(EntityMaid maid, ServerLevel level) {
-        BlockPos origin = maid.blockPosition();
+    private BlockPos indexedNearest(
+            EntityMaid maid,
+            ServerLevel level,
+            long gameTime
+    ) {
         BlockPos nearest = null;
         double nearestDistance = Double.POSITIVE_INFINITY;
-        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-
-        for (int y = -VERTICAL_SEARCH_RANGE;
-             y <= VERTICAL_SEARCH_RANGE;
-             y++) {
-            for (int x = -SEARCH_RANGE; x <= SEARCH_RANGE; x++) {
-                for (int z = -SEARCH_RANGE; z <= SEARCH_RANGE; z++) {
-                    cursor.setWithOffset(origin, x, y, z);
-                    double distance = maid.distanceToSqr(
-                            cursor.getX() + 0.5D,
-                            cursor.getY() + 0.5D,
-                            cursor.getZ() + 0.5D
-                    );
-                    if (distance > SEARCH_RANGE_SQUARED
-                            || distance >= nearestDistance
-                            || !level.isLoaded(cursor)
-                            || !level.getBlockState(cursor).is(
-                            InitBlocks.SNACK_CABINET.get()
-                    )) {
-                        continue;
-                    }
-                    if (level.getBlockEntity(cursor)
-                            instanceof TileEntitySnackCabinet cabinet
-                            && findMealSlot(maid, cabinet) >= 0) {
-                        nearest = cursor.immutable();
-                        nearestDistance = distance;
-                    }
-                }
+        for (BlockPos position
+                : perception.querySnackCabinets(maid, 8, gameTime)) {
+            if (!hasMeal(maid, level, position)) {
+                continue;
+            }
+            double distance = maid.distanceToSqr(
+                    position.getX() + 0.5D,
+                    position.getY() + 0.5D,
+                    position.getZ() + 0.5D
+            );
+            if (distance < nearestDistance) {
+                nearest = position;
+                nearestDistance = distance;
             }
         }
         return nearest;
@@ -195,6 +228,27 @@ public final class MaidSnackCabinetMealSource {
         return -1;
     }
 
+    private MealTarget targetAt(
+            EntityMaid maid,
+            ServerLevel level,
+            BlockPos position
+    ) {
+        if (!level.isLoaded(position)
+                || !(level.getBlockEntity(position)
+                instanceof TileEntitySnackCabinet cabinet)) {
+            return null;
+        }
+        int slot = findMealSlot(maid, cabinet);
+        if (slot < 0) {
+            return null;
+        }
+        return new MealTarget(
+                position.immutable(),
+                slot,
+                cabinet.getItem(slot)
+        );
+    }
+
     private static void restore(
             TileEntitySnackCabinet cabinet,
             int slot,
@@ -213,5 +267,21 @@ public final class MaidSnackCabinetMealSource {
         private long lastGameTime = Long.MIN_VALUE;
         private long nextSearchTime;
         private BlockPos target;
+    }
+
+    public record MealTarget(
+            BlockPos position,
+            int slot,
+            ItemStack fingerprint
+    ) {
+        public MealTarget {
+            Objects.requireNonNull(position, "position");
+            Objects.requireNonNull(fingerprint, "fingerprint");
+            if (slot < 0 || fingerprint.isEmpty()) {
+                throw new IllegalArgumentException("Invalid meal target");
+            }
+            position = position.immutable();
+            fingerprint = fingerprint.copyWithCount(1);
+        }
     }
 }

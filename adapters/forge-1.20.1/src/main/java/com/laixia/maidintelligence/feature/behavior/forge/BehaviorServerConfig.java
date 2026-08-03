@@ -2,6 +2,8 @@ package com.laixia.maidintelligence.feature.behavior.forge;
 
 import com.laixia.maidintelligence.feature.behavior.api.BehaviorTuning;
 import com.laixia.maidintelligence.feature.behavior.domain.GazeRecallPolicy;
+import com.laixia.maidintelligence.feature.behavior.domain.learning.LearningMode;
+import com.laixia.maidintelligence.feature.orchestration.api.IntentRolloutMode;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -17,6 +19,10 @@ public final class BehaviorServerConfig {
 
     private static final ForgeConfigSpec SPEC;
     private static final ForgeConfigSpec.BooleanValue ENABLED;
+    private static final ForgeConfigSpec.EnumValue<IntentRolloutMode>
+            ROLLOUT_MODE;
+    private static final ForgeConfigSpec.EnumValue<LearningMode>
+            LEARNING_MODE;
     private static final ForgeConfigSpec.IntValue EVALUATION_INTERVAL_TICKS;
     private static final ForgeConfigSpec.IntValue MAX_CANDIDATE_EVALUATIONS;
     private static final ForgeConfigSpec.BooleanValue DIAGNOSTICS_ENABLED;
@@ -33,6 +39,22 @@ public final class BehaviorServerConfig {
         ENABLED = builder
                 .comment("Whether data-driven companionship intents run.")
                 .define("enabled", true);
+        ROLLOUT_MODE = builder
+                .comment(
+                        "LIVE_ONLY runs authoritative behavior only; "
+                                + "SHADOW_COMPARE evaluates a dry-run copy "
+                                + "before live behavior for diagnostics."
+                )
+                .defineEnum(
+                        "rollout_mode",
+                        IntentRolloutMode.LIVE_ONLY
+                );
+        LEARNING_MODE = builder
+                .comment(
+                        "SHADOW records bounded projections without changing "
+                                + "Utility; ACTIVE applies capped soft modifiers."
+                )
+                .defineEnum("learning_mode", LearningMode.SHADOW);
         EVALUATION_INTERVAL_TICKS = builder
                 .comment(
                         "Ticks between routine Utility evaluations. "
@@ -134,6 +156,8 @@ public final class BehaviorServerConfig {
             }
             tuning = new BehaviorTuning(
                     ENABLED.get(),
+                    ROLLOUT_MODE.get(),
+                    LEARNING_MODE.get(),
                     EVALUATION_INTERVAL_TICKS.get(),
                     MAX_CANDIDATE_EVALUATIONS.get(),
                     DIAGNOSTICS_ENABLED.get(),
