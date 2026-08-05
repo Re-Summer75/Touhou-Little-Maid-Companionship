@@ -24,6 +24,9 @@ public final class CompanionIntentIds {
             id("fact/owner_distance");
     public static final OrchestrationId FAVORABILITY = id("fact/favorability");
     public static final OrchestrationId HUNGER = id("fact/hunger");
+    /** Something edible is lying within reach and free to take. */
+    public static final OrchestrationId LOOSE_FOOD_AVAILABLE =
+            id("fact/loose_food_available");
     public static final OrchestrationId SNACK_CABINET_MEAL_AVAILABLE =
             id("fact/snack_cabinet_meal_available");
     public static final OrchestrationId FOLLOW_MODE = id("fact/follow_mode");
@@ -77,6 +80,9 @@ public final class CompanionIntentIds {
             id("action/approach_owner");
     public static final OrchestrationId FETCH_SNACK_CABINET_MEAL =
             id("action/fetch_snack_cabinet_meal");
+    /** Walk to a dropped item and take it, rather than opening anything. */
+    public static final OrchestrationId PICK_UP_LOOSE_FOOD =
+            id("action/pick_up_loose_food");
     public static final OrchestrationId COMPANION_COMMAND_WINDOW =
             id("action/companion_command_window");
     public static final OrchestrationId REQUEST_HUNGER_ATTENTION =
@@ -123,6 +129,7 @@ public final class CompanionIntentIds {
                 FAVORABILITY,
                 HUNGER,
                 SNACK_CABINET_MEAL_AVAILABLE,
+                LOOSE_FOOD_AVAILABLE,
                 FOLLOW_MODE,
                 HOME_MODE,
                 ORDERED_SIT,
@@ -164,6 +171,7 @@ public final class CompanionIntentIds {
                 Set.of(
                         APPROACH_OWNER,
                         FETCH_SNACK_CABINET_MEAL,
+                        PICK_UP_LOOSE_FOOD,
                         COMPANION_COMMAND_WINDOW,
                         REQUEST_HUNGER_ATTENTION,
                         DEPLOY_BOAT
@@ -176,6 +184,10 @@ public final class CompanionIntentIds {
                         Map.entry(HUNGER, FactType.NUMBER),
                         Map.entry(
                                 SNACK_CABINET_MEAL_AVAILABLE,
+                                FactType.BOOLEAN
+                        ),
+                        Map.entry(
+                                LOOSE_FOOD_AVAILABLE,
                                 FactType.BOOLEAN
                         ),
                         Map.entry(FOLLOW_MODE, FactType.BOOLEAN),
@@ -252,6 +264,17 @@ public final class CompanionIntentIds {
                         FETCH_SNACK_CABINET_MEAL,
                         new ActionSchema(
                                 FETCH_SNACK_CABINET_MEAL,
+                                Map.of(
+                                        "speed",
+                                        ActionParameterType.NUMBER,
+                                        "close_distance",
+                                        ActionParameterType.INTEGER
+                                ),
+                                Set.of()
+                        ),
+                        PICK_UP_LOOSE_FOOD,
+                        new ActionSchema(
+                                PICK_UP_LOOSE_FOOD,
                                 Map.of(
                                         "speed",
                                         ActionParameterType.NUMBER,

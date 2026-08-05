@@ -58,6 +58,17 @@ public final class TlmCoordinationClaims {
         );
     }
 
+    public static CoordinationResourceKey itemEntity(
+            ServerLevel level,
+            Entity item
+    ) {
+        return key(
+                level,
+                CoordinationResourceType.ITEM_ENTITY,
+                item.getUUID().toString()
+        );
+    }
+
     public static CoordinationResourceKey placement(
             ServerLevel level,
             BlockPos position

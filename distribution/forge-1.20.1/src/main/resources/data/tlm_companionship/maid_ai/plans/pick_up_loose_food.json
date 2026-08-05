@@ -1,0 +1,19 @@
+{
+  "format_version": 2,
+  "initial_state": "take",
+  "resume_policy": "restart_step",
+  "maximum_suspend_ticks": 400,
+  "states": {
+    "take": {
+      "action": "tlm_companionship:action/pick_up_loose_food",
+      "parameters": {
+        "speed": "0.6",
+        "close_distance": "2"
+      },
+      "timeout_ticks": 160,
+      "on_success": "$success",
+      "on_failure": "$failure",
+      "on_cancel": "$failure"
+    }
+  }
+}

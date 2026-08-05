@@ -54,7 +54,17 @@ public final class TlmBehaviorOccupancyClassifier {
             return occupied(BehaviorOccupancyReason.PANIC,
                     source, failOpen, ownerCommand);
         }
-        if (maid.isHomeModeEnable()) {
+        /*
+         * Home mode is a place she belongs, not something she is busy doing.
+         * Treating the mode itself as hard occupancy meant that turning it on
+         * switched off every companion intent for good, because they all
+         * require an idle maid — she would sit at home doing nothing while
+         * hungry, with food at her feet.
+         *
+         * She is genuinely occupied only while actually on her way back, which
+         * is exactly when she is outside the area she is restricted to.
+         */
+        if (maid.isHomeModeEnable() && !maid.isWithinRestriction()) {
             return occupied(BehaviorOccupancyReason.HOME_RETURN,
                     source, failOpen, ownerCommand);
         }

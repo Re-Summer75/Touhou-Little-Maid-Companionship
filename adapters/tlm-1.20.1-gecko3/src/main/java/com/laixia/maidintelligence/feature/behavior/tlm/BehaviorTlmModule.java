@@ -9,8 +9,19 @@ import com.laixia.maidintelligence.feature.orchestration.tlm.CompanionTaskData;
 import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentObserver;
 
 import java.util.Objects;
+import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
 
 public final class BehaviorTlmModule implements TlmFeatureModule {
+    /**
+     * The one task this mod contributes. Registered here rather than in a task
+     * module of its own, because what it does is entirely about behaviour:
+     * it removes every competing behaviour so companion intents have the floor.
+     */
+    @Override
+    public void registerTasks(TaskManager manager) {
+        manager.add(new FreedomMaidTask());
+    }
+
     private final MaidIntentApi<EntityMaid> intents;
     private final TlmMaidIntentObserver observer;
     private final TlmDeployBoatAutonomy boatAutonomy;

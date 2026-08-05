@@ -1,0 +1,41 @@
+{
+  "format_version": 1,
+  "plan": "tlm_companionship:pick_up_loose_food",
+  "conditions": [
+    {
+      "fact": "tlm_companionship:fact/hunger",
+      "operator": "lte",
+      "value": 40.0
+    },
+    {
+      "fact": "tlm_companionship:fact/loose_food_available",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/can_move",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/passenger",
+      "operator": "eq",
+      "value": 0.0
+    },
+    {
+      "fact": "tlm_companionship:fact/behavior_occupancy_level",
+      "operator": "eq",
+      "value": 0.0
+    }
+  ],
+  "selection": {
+    "base_score": 1.0,
+    "minimum_score": 0.0,
+    "activation_chance": 1.0,
+    "evaluation_interval_ticks": 20,
+    "minimum_commit_ticks": 20,
+    "switch_margin": 0.1,
+    "interrupt_priority": 65,
+    "cooldown_ticks": 40
+  }
+}

@@ -45,6 +45,19 @@ public final class MaidSnackCabinetMealSource {
         this.perception = Objects.requireNonNull(perception, "perception");
     }
 
+    /**
+     * How this source feeds a maid, shared so a sibling action can start a meal
+     * on the same terms rather than reimplementing what counts as edible.
+     */
+    public MaidMealAccess mealAccess() {
+        return mealAccess;
+    }
+
+    /** How this source sees, shared for the same reason. */
+    public TlmAffordancePerceptionService perception() {
+        return perception;
+    }
+
     public Optional<BlockPos> findAvailableMeal(
             EntityMaid maid,
             long gameTime

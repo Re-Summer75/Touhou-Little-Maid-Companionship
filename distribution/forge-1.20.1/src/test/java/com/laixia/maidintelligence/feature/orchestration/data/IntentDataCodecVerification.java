@@ -67,18 +67,17 @@ public final class IntentDataCodecVerification {
 
     private static void builtInDefinitionsCompileAsOneCatalog()
             throws IOException {
+        /*
+         * Discovered rather than listed, for the same reason the intents below
+         * are: a plan added to the data pack but forgotten here failed as
+         * "references unknown plan", which reads like a broken intent rather
+         * than an out-of-date test.
+         */
         Map<OrchestrationId, PlanDefinition> plans =
                 new LinkedHashMap<>();
-        plans.put(id("approach_owner"), parsePlan("approach_owner"));
-        plans.put(
-                id("gaze_recall_session"),
-                parsePlan("gaze_recall_session")
-        );
-        plans.put(
-                id("fetch_snack_cabinet_meal"),
-                parsePlan("fetch_snack_cabinet_meal")
-        );
-        plans.put(id("request_food"), parsePlan("request_food"));
+        for (String name : bundledNames(MaidIntentReloadListener.PLAN_PREFIX)) {
+            plans.put(id(name), parsePlan(name));
+        }
 
         Map<OrchestrationId, IntentDefinition> intents =
                 new LinkedHashMap<>();

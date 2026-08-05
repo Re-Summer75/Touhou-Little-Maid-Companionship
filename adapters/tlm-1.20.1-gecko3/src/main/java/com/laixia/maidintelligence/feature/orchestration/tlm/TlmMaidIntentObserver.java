@@ -10,6 +10,7 @@ import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
 import java.util.Map;
 import java.util.Objects;
 import java.util.WeakHashMap;
+import com.laixia.maidintelligence.feature.behavior.tlm.FreedomMaidTask;
 
 /**
  * Converts TLM memory edges into bounded, one-shot orchestration signals.
@@ -95,7 +96,18 @@ public final class TlmMaidIntentObserver {
         return gameTime - state.workReleasedAtTick;
     }
 
+    /**
+     * Whether this mod may observe the task she is on.
+     *
+     * <p>Third-party tasks are left alone, but our own freedom task is not a
+     * third party: she still wanders under it, so the return-from-wandering
+     * signal still applies. Excluding it would have switched that signal off
+     * for exactly the maids meant to be the most responsive.
+     */
     private static boolean isBuiltInTask(EntityMaid maid) {
+        if (FreedomMaidTask.UID.equals(maid.getTask().getUid())) {
+            return true;
+        }
         return TLM_NAMESPACE.equals(
                 maid.getTask().getUid().getNamespace()
         );

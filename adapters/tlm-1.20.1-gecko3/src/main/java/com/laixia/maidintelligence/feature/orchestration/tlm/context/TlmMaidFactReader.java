@@ -283,6 +283,20 @@ public final class TlmMaidFactReader {
                 occupancy.movementFailOpen(),
                 occupancy.level().code(),
                 occupancy.reason().code(),
+                /*
+                 * Same gating as the cabinet meal above: whether anything is
+                 * worth walking to is a separate question from whether she is
+                 * free to walk at all, and an intent should not have to repeat
+                 * the second one.
+                 */
+                hunger <= DefaultHungerPolicy.AUTO_EAT_THRESHOLD
+                        && canMove
+                        && !attackTargetPresent
+                        && !panicActive
+                        && !usingItem
+                        && occupancy.allowsPassiveCompanion()
+                        && !perception.queryLooseFood(maid, 1, gameTime)
+                                .isEmpty(),
                 ownerFacts.read(owner, gameTime)
         );
     }
@@ -374,6 +388,9 @@ public final class TlmMaidFactReader {
         if (fact.equals(CompanionIntentIds.BEHAVIOR_OCCUPANCY_REASON)) {
             return snapshot.behaviorOccupancyReason();
         }
+        if (fact.equals(CompanionIntentIds.LOOSE_FOOD_AVAILABLE)) {
+            return bool(snapshot.looseFoodAvailable());
+        }
         // Owner facts answer for themselves, and NaN for anything that is
         // not one, which is the same answer this method gave before.
         return snapshot.owner().value(fact);
@@ -429,6 +446,7 @@ public final class TlmMaidFactReader {
             boolean movementFailOpen,
             int behaviorOccupancyLevel,
             int behaviorOccupancyReason,
+            boolean looseFoodAvailable,
             OwnerFacts owner
     ) {
     }

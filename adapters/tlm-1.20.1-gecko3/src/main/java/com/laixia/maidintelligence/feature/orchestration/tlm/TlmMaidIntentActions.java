@@ -20,6 +20,7 @@ public final class TlmMaidIntentActions
         implements IntentActionPort<EntityMaid> {
     private final TlmOwnerCompanionIntentAction ownerAction;
     private final TlmSnackCabinetIntentAction snackCabinetAction;
+    private final TlmLooseFoodIntentAction looseFoodAction;
     private final TlmDeployBoatIntentAction deployBoatAction;
 
     public TlmMaidIntentActions(
@@ -50,6 +51,12 @@ public final class TlmMaidIntentActions
         snackCabinetAction = new TlmSnackCabinetIntentAction(
                 snackCabinetMeals
         );
+        // Built from the meal source's own perception and feeding, so both
+        // ways of eating agree on what is edible and what is in reach.
+        looseFoodAction = new TlmLooseFoodIntentAction(
+                snackCabinetMeals.perception(),
+                snackCabinetMeals.mealAccess()
+        );
         deployBoatAction = abilities == null
                 ? null
                 : new TlmDeployBoatIntentAction(abilities);
@@ -74,6 +81,9 @@ public final class TlmMaidIntentActions
                     parameters,
                     gameTime
             );
+        }
+        if (action.equals(CompanionIntentIds.PICK_UP_LOOSE_FOOD)) {
+            return looseFoodAction.execute(maid, parameters, gameTime);
         }
         if (action.equals(
                 CompanionIntentIds.COMPANION_COMMAND_WINDOW
@@ -109,6 +119,8 @@ public final class TlmMaidIntentActions
                 CompanionIntentIds.FETCH_SNACK_CABINET_MEAL
         )) {
             snackCabinetAction.cancel(maid);
+        } else if (action.equals(CompanionIntentIds.PICK_UP_LOOSE_FOOD)) {
+            looseFoodAction.cancel(maid);
         } else if (action.equals(
                 CompanionIntentIds.COMPANION_COMMAND_WINDOW
         )) {
@@ -127,6 +139,9 @@ public final class TlmMaidIntentActions
                 CompanionIntentIds.FETCH_SNACK_CABINET_MEAL
         )) {
             return snackCabinetAction.revalidate(maid, gameTime);
+        }
+        if (action.equals(CompanionIntentIds.PICK_UP_LOOSE_FOOD)) {
+            return looseFoodAction.revalidate(maid, gameTime);
         }
         if (action.equals(CompanionIntentIds.APPROACH_OWNER)
                 || action.equals(

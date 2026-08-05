@@ -28,6 +28,8 @@ public final class GameTestCatalog {
         event.register(IntentOrchestrationGameTests.class);
         event.register(LevelGameTests.class);
         event.register(MovementIntentGameTests.class);
+        event.register(FreedomTaskGameTests.class);
+        event.register(LooseFoodGameTests.class);
         event.register(OwnerAwarenessGameTests.class);
         event.register(OwnerReturnGameTests.class);
         event.register(PassiveFollowGameTests.class);

@@ -84,7 +84,7 @@ final class TlmSnackCabinetIntentAction {
             return ActionResult.FAILED;
         }
 
-        int closeEnough = intParameter(
+        int closeEnough = TlmActionParameters.integer(
                 parameters,
                 "close_distance",
                 2,
@@ -117,7 +117,7 @@ final class TlmSnackCabinetIntentAction {
             return ActionResult.RUNNING;
         }
 
-        float speed = floatParameter(
+        float speed = TlmActionParameters.number(
                 parameters,
                 "speed",
                 0.55F,
@@ -294,44 +294,7 @@ final class TlmSnackCabinetIntentAction {
                 || vehicle.getType() == EntitySit.TYPE);
     }
 
-    private static int intParameter(
-            Map<String, String> parameters,
-            String name,
-            int fallback,
-            int minimum,
-            int maximum
-    ) {
-        try {
-            int value = Integer.parseInt(parameters.getOrDefault(
-                    name,
-                    Integer.toString(fallback)
-            ));
-            return Math.max(minimum, Math.min(maximum, value));
-        } catch (NumberFormatException exception) {
-            return fallback;
-        }
-    }
 
-    private static float floatParameter(
-            Map<String, String> parameters,
-            String name,
-            float fallback,
-            float minimum,
-            float maximum
-    ) {
-        try {
-            float value = Float.parseFloat(parameters.getOrDefault(
-                    name,
-                    Float.toString(fallback)
-            ));
-            if (!Float.isFinite(value)) {
-                return fallback;
-            }
-            return Math.max(minimum, Math.min(maximum, value));
-        } catch (NumberFormatException exception) {
-            return fallback;
-        }
-    }
 
     private record OwnedTarget(
             MealTarget target,
