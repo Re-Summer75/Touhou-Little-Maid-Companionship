@@ -9,6 +9,7 @@ import com.laixia.maidintelligence.feature.behavior.domain.perception.Affordance
 import com.laixia.maidintelligence.feature.behavior.domain.perception.CompanionAffordanceIds;
 import com.laixia.maidintelligence.feature.behavior.port.AffordanceIndexPort;
 import net.minecraft.core.BlockPos;
+import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -185,6 +186,40 @@ public final class TlmAffordancePerceptionService {
         indexes.remove(level);
     }
 
+    /**
+     * The one query every specific lookup is built on.
+     *
+     * <p>Observing, ranking, and the shared per-tick budget were written out
+     * three times over, once per kind of thing a maid looks for, and the three
+     * copies could only stay in step by being edited together. What genuinely
+     * differs between them is which advertisements qualify and what is read
+     * back off the winners — so that is all the callers below still say.
+     *
+     * <p>Because the qualifying set is an argument, a caller that gets it from
+     * a data pack can point a maid at an advertiser this mod has never heard
+     * of, so long as something publishes one.
+     */
+    public List<AffordanceCandidate> queryAffordances(
+            EntityMaid maid,
+            java.util.Set<OrchestrationId> affordances,
+            OrchestrationId commodity,
+            double range,
+            int topK,
+            long gameTime
+    ) {
+        if (!(maid.level() instanceof ServerLevel level)) {
+            return List.of();
+        }
+        observeMaid(maid, gameTime);
+        return index(level).query(new AffordanceQuery(
+                affordances,
+                commodity,
+                position(maid),
+                range,
+                Math.max(1, Math.min(32, topK)),
+                gameTime
+        ));
+    }
     public List<BlockPos> querySnackCabinets(
             EntityMaid maid,
             int topK,
@@ -193,26 +228,22 @@ public final class TlmAffordancePerceptionService {
         if (!(maid.level() instanceof ServerLevel level)) {
             return List.of();
         }
-        observeMaid(maid, gameTime);
-        List<AffordanceCandidate> candidates = index(level).query(
-                new AffordanceQuery(
-                        java.util.Set.of(
-                                CompanionAffordanceIds.TAKE_FOOD,
-                                CompanionAffordanceIds.OPEN_CONTAINER
-                        ),
-                        CompanionAffordanceIds.HUNGER_RELIEF,
-                        position(maid),
-                        PERCEPTION_RANGE,
-                        Math.max(1, Math.min(32, topK)),
-                        gameTime
-                )
-        );
         List<BlockPos> result = new ArrayList<>();
-        for (AffordanceCandidate candidate : candidates) {
-            String encoded = candidate.advertisement()
-                    .attributes()
-                    .get("block_pos");
-            BlockPos position = parseBlockPos(encoded);
+        for (AffordanceCandidate candidate : queryAffordances(
+                maid,
+                java.util.Set.of(
+                        CompanionAffordanceIds.TAKE_FOOD,
+                        CompanionAffordanceIds.OPEN_CONTAINER
+                ),
+                CompanionAffordanceIds.HUNGER_RELIEF,
+                PERCEPTION_RANGE,
+                topK,
+                gameTime
+        )) {
+            BlockPos position = parseBlockPos(
+                    candidate.advertisement().attributes().get("block_pos")
+            );
+            // Re-checked against the world: the index is a hint, not a promise.
             if (position != null
                     && level.isLoaded(position)
                     && level.getBlockEntity(position)
@@ -226,9 +257,9 @@ public final class TlmAffordancePerceptionService {
     /**
      * Edible items lying within reach, best first.
      *
-     * <p>The counterpart to {@link #querySnackCabinets}: that one asks for
-     * food behind a door she has to open, this one for food she could simply
-     * walk over and pick up — including whatever the owner just threw at her.
+     * <p>The counterpart to {@link #querySnackCabinets}: that one asks for food
+     * behind a door she has to open, this one for food she could walk over and
+     * pick up — including whatever the owner just threw at her.
      */
     public List<ItemEntity> queryLooseFood(
             EntityMaid maid,
@@ -238,26 +269,20 @@ public final class TlmAffordancePerceptionService {
         if (!(maid.level() instanceof ServerLevel level)) {
             return List.of();
         }
-        observeMaid(maid, gameTime);
-        List<AffordanceCandidate> candidates = index(level).query(
-                new AffordanceQuery(
-                        java.util.Set.of(
-                                CompanionAffordanceIds.TAKE_FOOD
-                        ),
-                        CompanionAffordanceIds.HUNGER_RELIEF,
-                        position(maid),
-                        PERCEPTION_RANGE,
-                        Math.max(1, Math.min(32, topK)),
-                        gameTime
-                )
-        );
         List<ItemEntity> result = new ArrayList<>();
-        for (AffordanceCandidate candidate : candidates) {
+        for (AffordanceCandidate candidate : queryAffordances(
+                maid,
+                java.util.Set.of(CompanionAffordanceIds.TAKE_FOOD),
+                CompanionAffordanceIds.HUNGER_RELIEF,
+                PERCEPTION_RANGE,
+                topK,
+                gameTime
+        )) {
             String encoded = candidate.advertisement()
                     .attributes()
                     .get("entity_id");
             if (encoded == null) {
-                // A cabinet, which this caller cannot pick up off the floor.
+                // A cabinet, which cannot be picked up off the floor.
                 continue;
             }
             if (level.getEntity(Integer.parseInt(encoded))
@@ -277,35 +302,23 @@ public final class TlmAffordancePerceptionService {
         if (!(maid.level() instanceof ServerLevel level)) {
             return List.of();
         }
-        observeMaid(maid, gameTime);
-        List<AffordanceCandidate> candidates = index(level).query(
-                new AffordanceQuery(
-                        java.util.Set.of(
-                                CompanionAffordanceIds.OCCUPY_SEAT
-                        ),
-                        CompanionAffordanceIds.SEATING,
-                        position(maid),
-                        range,
-                        Math.max(1, Math.min(32, topK)),
-                        gameTime
-                )
-        );
         LivingEntity owner = maid.getOwner();
         List<Entity> result = new ArrayList<>();
-        for (AffordanceCandidate candidate : candidates) {
+        for (AffordanceCandidate candidate : queryAffordances(
+                maid,
+                java.util.Set.of(CompanionAffordanceIds.OCCUPY_SEAT),
+                CompanionAffordanceIds.SEATING,
+                range,
+                topK,
+                gameTime
+        )) {
             Entity entity = entity(
                     level,
-                    candidate.advertisement()
-                            .attributes()
-                            .get("entity_uuid")
+                    candidate.advertisement().attributes().get("entity_uuid")
             );
             if (entity != null
                     && entity.isAlive()
-                    && TlmSeatAffordanceProvider.accepts(
-                    entity,
-                    maid,
-                    owner
-            )) {
+                    && TlmSeatAffordanceProvider.accepts(entity, maid, owner)) {
                 result.add(entity);
             }
         }

@@ -10,11 +10,11 @@ import java.util.Map;
  * an action that failed on it would leave a maid stuck with no way for the
  * author to see why.
  */
-final class TlmActionParameters {
+public final class TlmActionParameters {
     private TlmActionParameters() {
     }
 
-    static int integer(
+    public static int integer(
             Map<String, String> parameters,
             String name,
             int fallback,
@@ -32,7 +32,7 @@ final class TlmActionParameters {
         }
     }
 
-    static float number(
+    public static float number(
             Map<String, String> parameters,
             String name,
             float fallback,

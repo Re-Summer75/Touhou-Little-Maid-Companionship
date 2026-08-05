@@ -12,6 +12,9 @@ import com.laixia.maidintelligence.feature.status.tlm.MaidSnackCabinetMealSource
 
 import java.util.Map;
 import java.util.function.Consumer;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.ApproachAndCommitAction;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.LooseFoodErrand;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.CabinetMealErrand;
 
 /**
  * The sole dispatcher allowed to apply data-driven companion side effects.
@@ -19,8 +22,8 @@ import java.util.function.Consumer;
 public final class TlmMaidIntentActions
         implements IntentActionPort<EntityMaid> {
     private final TlmOwnerCompanionIntentAction ownerAction;
-    private final TlmSnackCabinetIntentAction snackCabinetAction;
-    private final TlmLooseFoodIntentAction looseFoodAction;
+    private final ApproachAndCommitAction snackCabinetAction;
+    private final ApproachAndCommitAction looseFoodAction;
     private final TlmDeployBoatIntentAction deployBoatAction;
 
     public TlmMaidIntentActions(
@@ -48,14 +51,16 @@ public final class TlmMaidIntentActions
         ownerAction = new TlmOwnerCompanionIntentAction(
                 hungerRequestAction
         );
-        snackCabinetAction = new TlmSnackCabinetIntentAction(
-                snackCabinetMeals
+        snackCabinetAction = new ApproachAndCommitAction(
+                new CabinetMealErrand(snackCabinetMeals)
         );
         // Built from the meal source's own perception and feeding, so both
         // ways of eating agree on what is edible and what is in reach.
-        looseFoodAction = new TlmLooseFoodIntentAction(
-                snackCabinetMeals.perception(),
-                snackCabinetMeals.mealAccess()
+        looseFoodAction = new ApproachAndCommitAction(
+                new LooseFoodErrand(
+                        snackCabinetMeals.perception(),
+                        snackCabinetMeals.mealAccess()
+                )
         );
         deployBoatAction = abilities == null
                 ? null
