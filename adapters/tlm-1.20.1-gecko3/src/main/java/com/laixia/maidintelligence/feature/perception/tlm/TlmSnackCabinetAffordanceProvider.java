@@ -49,7 +49,7 @@ final class TlmSnackCabinetAffordanceProvider {
             long gameTime,
             AffordanceIndexPort index
     ) {
-        if (!(blockEntity instanceof TileEntitySnackCabinet)) {
+        if (!(blockEntity instanceof TileEntitySnackCabinet cabinet)) {
             remove(level, position, index);
             return;
         }
@@ -58,10 +58,20 @@ final class TlmSnackCabinetAffordanceProvider {
         AffordanceAdvertisement advertisement =
                 new AffordanceAdvertisement(
                         target,
-                        Set.of(CompanionAffordanceIds.TAKE_FOOD),
+                        Set.of(
+                                CompanionAffordanceIds.TAKE_FOOD,
+                                CompanionAffordanceIds.OPEN_CONTAINER
+                        ),
                         Map.of(
                                 CompanionAffordanceIds.HUNGER_RELIEF,
-                                1.0D
+                                /*
+                                 * Read from the stock rather than asserted.
+                                 * A flat 1.0 made every cabinet identical, so
+                                 * ranking collapsed to distance and she walked
+                                 * to the nearest one whether or not it held
+                                 * anything.
+                                 */
+                                TlmHungerCommodity.of(cabinet, null)
                         ),
                         TlmPerceptionCoordinates.at(level, position),
                         revision,

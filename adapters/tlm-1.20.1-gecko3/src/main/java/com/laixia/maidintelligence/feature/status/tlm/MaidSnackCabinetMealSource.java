@@ -17,9 +17,14 @@ import java.util.WeakHashMap;
  */
 @SuppressWarnings("null")
 public final class MaidSnackCabinetMealSource {
-    public static final int SEARCH_RANGE = 8;
+    public static final int SEARCH_RANGE = 16;
 
-    private static final int SEARCH_INTERVAL_TICKS = 100;
+    /*
+     * Five seconds meant a cabinet stocked in front of her stayed invisible
+     * long enough to look like she had not noticed. Two is short enough to read
+     * as noticing and still amortises the query across many maids.
+     */
+    private static final int SEARCH_INTERVAL_TICKS = 40;
     private static final double SEARCH_RANGE_SQUARED =
             (double) SEARCH_RANGE * SEARCH_RANGE;
 

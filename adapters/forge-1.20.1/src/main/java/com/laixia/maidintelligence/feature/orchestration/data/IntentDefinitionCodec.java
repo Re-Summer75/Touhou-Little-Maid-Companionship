@@ -4,16 +4,24 @@ import com.google.gson.JsonElement;
 import com.laixia.maidintelligence.feature.orchestration.domain.FactCondition;
 import com.laixia.maidintelligence.feature.orchestration.domain.IntentDefinition;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
-import com.laixia.maidintelligence.feature.orchestration.domain.UtilityConsideration;
+import com.laixia.maidintelligence.feature.orchestration.domain.utility.UtilityAggregation;
+import com.laixia.maidintelligence.feature.orchestration.domain.utility.UtilityConsideration;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import java.util.List;
+import java.util.Locale;
 
 final class IntentDefinitionCodec {
-    private static final Codec<FactCondition> CONDITION =
+    /**
+     * Package private so {@link TaskDefinitionCodec} parses a method guard the
+     * same way an intent guard is parsed. A second declaration would be free to
+     * drift, and a guard that means one thing in a task and another in an
+     * intent is exactly the kind of difference nobody would look for.
+     */
+    static final Codec<FactCondition> CONDITION =
             RecordCodecBuilder.create(instance -> instance.group(
                     OrchestrationCodecSupport.ID.fieldOf("fact")
                             .forGetter(FactCondition::fact),
@@ -23,7 +31,9 @@ final class IntentDefinitionCodec {
                             .forGetter(FactCondition::expected)
             ).apply(instance, FactCondition::new));
 
-    private static final Codec<UtilityConsideration> CONSIDERATION =
+    /** Shared with {@link TaskDefinitionCodec} for the same reason as
+     * {@link #CONDITION}: one spelling of a consideration, not two. */
+    static final Codec<UtilityConsideration> CONSIDERATION =
             RecordCodecBuilder.create(instance -> instance.group(
                     OrchestrationCodecSupport.ID.fieldOf("fact")
                             .forGetter(UtilityConsideration::fact),
@@ -63,7 +73,7 @@ final class IntentDefinitionCodec {
 
     private static final Codec<Payload> PAYLOAD =
             RecordCodecBuilder.create(instance -> instance.group(
-                    Codec.intRange(1, 1)
+                    Codec.intRange(1, 2)
                             .fieldOf("format_version")
                             .forGetter(Payload::formatVersion),
                     OrchestrationCodecSupport.ID.fieldOf("plan")
@@ -76,6 +86,10 @@ final class IntentDefinitionCodec {
                             "utility",
                             List.of()
                     ).forGetter(Payload::utility),
+                    OrchestrationCodecSupport.AGGREGATION.optionalFieldOf(
+                            "aggregation",
+                            UtilityAggregation.SUM
+                    ).forGetter(Payload::aggregation),
                     SELECTION.optionalFieldOf(
                             "selection",
                             Selection.DEFAULT
@@ -98,6 +112,21 @@ final class IntentDefinitionCodec {
             Payload payload
     ) {
         Selection selection = payload.selection();
+        if (payload.formatVersion() < 2
+                && payload.aggregation() != UtilityAggregation.SUM) {
+            /*
+             * A version 1 file that names an aggregation is refused rather than
+             * honoured. Weights and base scores mean different things under the
+             * two modes, so silently accepting the field would reinterpret
+             * every number around it instead of just the one that was written.
+             */
+            return DataResult.error(() ->
+                    "Intent " + id + " uses aggregation '"
+                            + payload.aggregation().name()
+                                    .toLowerCase(Locale.ROOT)
+                            + "' which requires format_version 2"
+            );
+        }
         try {
             return DataResult.success(new IntentDefinition(
                     id,
@@ -111,7 +140,8 @@ final class IntentDefinitionCodec {
                     selection.minimumCommitTicks(),
                     selection.switchMargin(),
                     selection.interruptPriority(),
-                    selection.cooldownTicks()
+                    selection.cooldownTicks(),
+                    payload.aggregation()
             ));
         } catch (IllegalArgumentException exception) {
             return DataResult.error(exception::getMessage);
@@ -123,6 +153,7 @@ final class IntentDefinitionCodec {
             OrchestrationId plan,
             List<FactCondition> conditions,
             List<UtilityConsideration> utility,
+            UtilityAggregation aggregation,
             Selection selection
     ) {
     }

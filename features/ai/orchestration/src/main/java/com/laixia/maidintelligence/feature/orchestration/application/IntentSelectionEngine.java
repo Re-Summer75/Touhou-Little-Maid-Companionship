@@ -2,7 +2,9 @@ package com.laixia.maidintelligence.feature.orchestration.application;
 
 import com.laixia.maidintelligence.feature.orchestration.api.IntentTrace;
 import com.laixia.maidintelligence.feature.orchestration.domain.IntentCatalog;
+import com.laixia.maidintelligence.feature.orchestration.domain.IntentDefinition;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
+import com.laixia.maidintelligence.feature.orchestration.domain.utility.UtilityAggregation;
 import com.laixia.maidintelligence.feature.orchestration.port.UtilityModifierPort;
 
 import java.util.ArrayList;
@@ -60,11 +62,32 @@ final class IntentSelectionEngine<M> {
                     budgetCursor = (index + 1) % intentCount;
                 }
             }
+            /*
+             * Interrupt priority is compared before score, so an intent that
+             * ranks below the incumbent band cannot overtake it at any score
+             * at all and does not need one. Skipping after the budget has
+             * already been charged keeps the round-robin cursor identical to
+             * an unpruned pass.
+             *
+             * <p>Never for a continuation: the active intent's score is what
+             * hysteresis compares against next tick, and a suspended one still
+             * has to be scored to decide whether it may resume. Never while a
+             * trace is retained either — `ai explain` exists to show why an
+             * intent lost, and "it was skipped" is not that answer.
+             */
+            if (!retainTrace
+                    && !continuation
+                    && winner != null
+                    && intent.definition().interruptPriority()
+                    < winner.intent().definition().interruptPriority()) {
+                continue;
+            }
             double score = score(
                     subject,
                     intent,
                     state.facts,
-                    gameTime
+                    gameTime,
+                    pruneFloor(winner, intent, continuation, retainTrace)
             );
             String blocked = blockedReason(
                     intent,
@@ -269,32 +292,106 @@ final class IntentSelectionEngine<M> {
         return null;
     }
 
+    /**
+     * Scores one intent, optionally stopping as soon as it cannot reach
+     * {@code pruneFloor}.
+     *
+     * <p>A pruned return is an upper bound rather than the true score. That is
+     * only sound because the caller discards the trace whenever pruning is
+     * enabled, and because a value that failed to reach the floor cannot go on
+     * to win: both the incumbent comparison and the {@code minimum_score} gate
+     * reject an over-estimate exactly as they would reject the real number.
+     */
     private double score(
             M subject,
             IntentCatalog.CompiledIntent intent,
             double[] facts,
+            long gameTime,
+            double pruneFloor
+    ) {
+        IntentDefinition definition = intent.definition();
+        UtilityAggregation aggregation = definition.aggregation();
+        /*
+         * Resolved before the considerations, not after, so the bound below is
+         * exact instead of needing headroom for a modifier that has not been
+         * read yet. It does not consult the fact array, so the move cannot
+         * change what it returns.
+         */
+        double modifier = modifier(subject, intent, gameTime);
+        List<IntentCatalog.CompiledConsideration> considerations =
+                intent.considerations();
+        int count = considerations.size();
+        boolean prunable = aggregation.monotonicallyNonIncreasing()
+                && pruneFloor > Double.NEGATIVE_INFINITY;
+        double accumulated = definition.baseScore();
+        for (int index = 0; index < count; index++) {
+            IntentCatalog.CompiledConsideration consideration =
+                    considerations.get(index);
+            accumulated = aggregation.combine(
+                    accumulated,
+                    aggregation.term(
+                            consideration.consideration(),
+                            facts[consideration.factIndex()]
+                    )
+            );
+            if (prunable) {
+                // Every remaining term can only lower `accumulated`, and
+                // `finish` is non-decreasing in it, so this bounds the
+                // finished score from above.
+                double ceiling = aggregation.finish(accumulated, count)
+                        + modifier;
+                if (ceiling < pruneFloor) {
+                    return ceiling;
+                }
+            }
+        }
+        return aggregation.finish(accumulated, count) + modifier;
+    }
+
+    private double modifier(
+            M subject,
+            IntentCatalog.CompiledIntent intent,
             long gameTime
     ) {
-        double score = intent.definition().baseScore();
-        for (IntentCatalog.CompiledConsideration consideration :
-                intent.considerations()) {
-            score += consideration.consideration().contribution(
-                    facts[consideration.factIndex()]
-            );
-        }
         double modifier;
         try {
             modifier = modifiers.modifier(subject, intent, gameTime);
         } catch (RuntimeException ignored) {
             modifier = 0.0D;
         }
-        if (Double.isFinite(modifier)) {
-            score += Math.max(
-                    -MAX_UTILITY_MODIFIER,
-                    Math.min(MAX_UTILITY_MODIFIER, modifier)
-            );
+        if (!Double.isFinite(modifier)) {
+            return 0.0D;
         }
-        return score;
+        return Math.max(
+                -MAX_UTILITY_MODIFIER,
+                Math.min(MAX_UTILITY_MODIFIER, modifier)
+        );
+    }
+
+    /**
+     * The score an intent must be able to beat, or
+     * {@link Double#NEGATIVE_INFINITY} when it has to be scored in full.
+     *
+     * <p>Only a candidate inside the incumbent's interrupt band is bounded by
+     * its score. Above the band it wins on priority no matter what it scores,
+     * and below it the caller has already skipped it.
+     */
+    private double pruneFloor(
+            ScoredIntent winner,
+            IntentCatalog.CompiledIntent intent,
+            boolean continuation,
+            boolean retainTrace
+    ) {
+        if (retainTrace || continuation || winner == null) {
+            return Double.NEGATIVE_INFINITY;
+        }
+        if (intent.definition().interruptPriority()
+                != winner.intent().definition().interruptPriority()) {
+            return Double.NEGATIVE_INFINITY;
+        }
+        // Strict, because an exact tie is still resolved by intent id and an
+        // over-estimate must never be allowed to reach that comparison.
+        return winner.score();
     }
 
     private static boolean hasActiveSignal(

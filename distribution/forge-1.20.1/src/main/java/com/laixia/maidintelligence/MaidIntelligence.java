@@ -78,6 +78,9 @@ import com.laixia.maidintelligence.feature.level.forge.LevelForgeInstaller;
 import com.laixia.maidintelligence.feature.level.handler.LevelExperienceHandler;
 import com.laixia.maidintelligence.feature.level.network.LevelNetwork;
 import com.laixia.maidintelligence.feature.level.network.LevelPacketRegistrar;
+import com.laixia.maidintelligence.feature.orchestration.insight.InsightForgeInstaller;
+import com.laixia.maidintelligence.feature.orchestration.insight.InsightPacketRegistrar;
+import com.laixia.maidintelligence.feature.orchestration.tlm.insight.TlmMaidInsightSource;
 import com.laixia.maidintelligence.feature.level.tlm.LevelTlmModule;
 import com.laixia.maidintelligence.feature.level.tlm.TlmEntityLevelFacade;
 import com.laixia.maidintelligence.feature.level.tlm.TlmMaidLevelStore;
@@ -114,6 +117,7 @@ import com.laixia.maidintelligence.gametest.GameTestCatalog;
 import com.laixia.maidintelligence.kernel.event.DomainEventBus;
 import com.laixia.maidintelligence.kernel.service.MutableServiceRegistry;
 import com.laixia.maidintelligence.platform.forge.ForgeFeatureInstaller;
+import com.laixia.maidintelligence.platform.item.ModItems;
 import com.laixia.maidintelligence.platform.forge.ForgeLifecycle;
 import com.laixia.maidintelligence.platform.network.ModNetwork;
 import com.laixia.maidintelligence.platform.resource.ModResources;
@@ -215,7 +219,7 @@ public final class MaidIntelligence {
         MaidIntentApi<Entity> commandIntents =
                 new TlmEntityIntentFacade(behaviors.intents());
         var commandAbilities = new TlmEntityAbilityFacade(behaviors.abilities());
-        wireDomainEvents(events, progressAdvancementTriggers, levelApi);
+        DomainEventWiring.wire(events, progressAdvancementTriggers, levelApi);
         MutableServiceRegistry services = new MutableServiceRegistry()
                 .register(MaidAiOptimizationApi.class, aiOptimization)
                 .register(
@@ -299,10 +303,16 @@ public final class MaidIntelligence {
         ModNetwork.initialize(List.of(
                 new LevelPacketRegistrar(),
                 new InteractionPacketRegistrar(),
-                new AdvancementPacketRegistrar()
+                new AdvancementPacketRegistrar(),
+                new InsightPacketRegistrar()
         ));
 
         List<ForgeFeatureInstaller> forgeFeatures = List.of(
+                new ModItems(),
+                new InsightForgeInstaller(new TlmMaidInsightSource(
+                        behaviors.intents(),
+                        behaviors.context()
+                )),
                 new AiForgeInstaller(
                         new MaidAiCommands(
                                 aiOptimization,
@@ -414,44 +424,6 @@ public final class MaidIntelligence {
         );
     }
 
-    private static void wireDomainEvents(
-            DomainEventBus events,
-            MaidProgressAdvancementTriggers advancement,
-            MaidLevelApi<EntityMaid> levels
-    ) {
-        events.subscribe(MaidLevelChangedEvent.class, event -> {
-            if (!(event.subject() instanceof EntityMaid maid)) {
-                throw new IllegalStateException(
-                        "Level event subject is not a TLM maid: "
-                                + event.subject()
-                );
-            }
-            if (maid.getOwner() instanceof ServerPlayer owner) {
-                LevelNetwork.sendLevelUp(
-                        owner,
-                        maid.getId(),
-                        event.oldLevel(),
-                        event.newLevel()
-                );
-            }
-            advancement.level(maid, event.newLevel());
-        });
-        events.subscribe(
-                maidFedEventType(),
-                event -> advancement.fed(
-                        event.subject(),
-                        event.item()
-                )
-        );
-        events.subscribe(
-                advancementExperienceEventType(),
-                event -> levels.awardExperience(
-                        event.subject(),
-                        event.points(),
-                        ExperienceSource.ADVANCEMENT
-                )
-        );
-    }
 
     private static MaidFeedingStatusPort<EntityMaid, ItemStack>
     feedingStatusPort(TlmMaidStatusService status) {
@@ -482,18 +454,6 @@ public final class MaidIntelligence {
                 );
             }
         };
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private static Class<MaidFedEvent<EntityMaid, ItemStack>>
-    maidFedEventType() {
-        return (Class) MaidFedEvent.class;
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private static Class<MaidAdvancementExperienceRewardedEvent<EntityMaid>>
-    advancementExperienceEventType() {
-        return (Class) MaidAdvancementExperienceRewardedEvent.class;
     }
 
 }

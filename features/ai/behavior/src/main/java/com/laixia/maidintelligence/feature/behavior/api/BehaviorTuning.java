@@ -50,7 +50,7 @@ public record BehaviorTuning(
                 64,
                 true,
                 GazeRecallPolicy.DEFAULT_HOLD_TICKS,
-                8.0D
+                GazeRecallPolicy.DEFAULT_RANGE
         );
     }
 

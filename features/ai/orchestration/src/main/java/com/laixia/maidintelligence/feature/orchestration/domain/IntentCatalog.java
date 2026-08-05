@@ -1,5 +1,6 @@
 package com.laixia.maidintelligence.feature.orchestration.domain;
 
+import com.laixia.maidintelligence.feature.orchestration.domain.utility.UtilityConsideration;
 import com.laixia.maidintelligence.feature.orchestration.domain.fact.FactType;
 
 import java.util.ArrayList;

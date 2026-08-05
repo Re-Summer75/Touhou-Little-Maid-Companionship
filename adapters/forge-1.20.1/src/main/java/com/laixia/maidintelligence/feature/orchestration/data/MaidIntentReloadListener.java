@@ -4,7 +4,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.laixia.maidintelligence.feature.behavior.application.ability.AbilityTemplateCompiler;
 import com.laixia.maidintelligence.feature.behavior.application.ability.MutableAbilityCatalog;
-import com.laixia.maidintelligence.feature.behavior.data.AbilityDefinitionCodec;
 import com.laixia.maidintelligence.feature.behavior.domain.ability.AbilityCatalog;
 import com.laixia.maidintelligence.feature.behavior.domain.ability.AbilityDefinition;
 import com.laixia.maidintelligence.feature.behavior.domain.ability.CompiledAbilityTemplate;
@@ -14,6 +13,7 @@ import com.laixia.maidintelligence.feature.orchestration.domain.IntentDefinition
 import com.laixia.maidintelligence.feature.orchestration.domain.IntentVocabulary;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
 import com.laixia.maidintelligence.feature.orchestration.domain.PlanDefinition;
+import com.laixia.maidintelligence.feature.orchestration.domain.task.TaskDefinition;
 import com.mojang.logging.LogUtils;
 import com.mojang.serialization.DataResult;
 import net.minecraft.resources.ResourceLocation;
@@ -97,7 +97,7 @@ public final class MaidIntentReloadListener
             Map<OrchestrationId, AbilityDefinition> abilities =
                     abilityCatalog == null
                             ? Map.of()
-                            : loadAbilityDefinitions(
+                            : AbilityDataLoading.load(
                                     resourceManager,
                                     errors
                             );
@@ -115,19 +115,30 @@ public final class MaidIntentReloadListener
                                     vocabulary,
                                     templates
                             );
+            Map<OrchestrationId, TaskDefinition> tasks =
+                    TaskIntentExpansion.load(resourceManager, errors);
+            TaskIntentExpansion.requireExpandable(tasks, errors);
+            if (!errors.isEmpty()) {
+                return Prepared.failed(String.join("; ", errors));
+            }
             Map<OrchestrationId, PlanDefinition> plans =
                     loadPlanDefinitions(
                             resourceManager,
                             effectiveVocabulary
                     );
-            mergeAbilityPlans(plans, templates);
+            AbilityDataLoading.mergePlans(plans, templates);
             Map<OrchestrationId, IntentDefinition> intents =
                     loadIntentDefinitions(
                             resourceManager,
                             effectiveVocabulary,
-                            plans
+                            plans,
+                            tasks
                     );
-            mergeAbilityIntents(intents, templates);
+            AbilityDataLoading.mergeIntents(intents, templates);
+            // Decomposition happens before `Prepared` is built, so what reaches
+            // `apply` is already ordinary data and a bad task cannot be
+            // published half-expanded.
+            TaskIntentExpansion.expand(intents, plans, tasks);
             return new Prepared(
                     intents,
                     plans,
@@ -197,7 +208,8 @@ public final class MaidIntentReloadListener
     loadIntentDefinitions(
             ResourceManager resourceManager,
             IntentVocabulary vocabulary,
-            Map<OrchestrationId, PlanDefinition> plans
+            Map<OrchestrationId, PlanDefinition> plans,
+            Map<OrchestrationId, TaskDefinition> tasks
     ) {
         Map<OrchestrationId, IntentDefinition> loaded =
                 new LinkedHashMap<>();
@@ -212,73 +224,18 @@ public final class MaidIntentReloadListener
                         INTENT_PREFIX,
                         loaded,
                         IntentDefinitionCodec::parse,
-                        intent -> IntentCatalog.compile(
-                                0L,
-                                List.of(intent),
-                                plans.values(),
+                        intent -> TaskIntentExpansion.validate(
+                                intent,
+                                tasks,
+                                plans,
                                 vocabulary
                         )
                 ));
         return loaded;
     }
 
-    private static Map<OrchestrationId, AbilityDefinition>
-    loadAbilityDefinitions(
-            ResourceManager resourceManager,
-            List<String> errors
-    ) {
-        Map<OrchestrationId, AbilityDefinition> loaded =
-                new LinkedHashMap<>();
-        resourceManager.listResourceStacks(
-                ABILITY_PREFIX,
-                MaidIntentReloadListener::jsonResource
-        ).entrySet().stream()
-                .sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> loadStack(
-                        entry.getKey(),
-                        entry.getValue(),
-                        ABILITY_PREFIX,
-                        loaded,
-                        AbilityDefinitionCodec::parse,
-                        ignored -> {
-                        },
-                        errors
-                ));
-        return loaded;
-    }
 
-    private static void mergeAbilityPlans(
-            Map<OrchestrationId, PlanDefinition> plans,
-            List<CompiledAbilityTemplate> templates
-    ) {
-        for (CompiledAbilityTemplate template : templates) {
-            if (plans.putIfAbsent(
-                    template.plan().id(),
-                    template.plan()
-            ) != null) {
-                throw new IllegalArgumentException(
-                        "Ability generated duplicate plan "
-                                + template.plan().id()
-                );
-            }
-        }
-    }
 
-    private static void mergeAbilityIntents(
-            Map<OrchestrationId, IntentDefinition> intents,
-            List<CompiledAbilityTemplate> templates
-    ) {
-        for (CompiledAbilityTemplate template : templates) {
-            for (IntentDefinition intent : template.intents()) {
-                if (intents.putIfAbsent(intent.id(), intent) != null) {
-                    throw new IllegalArgumentException(
-                            "Ability generated duplicate intent "
-                                    + intent.id()
-                    );
-                }
-            }
-        }
-    }
 
     private static Map<OrchestrationId, PlanDefinition>
     loadPlanDefinitions(
@@ -327,7 +284,11 @@ public final class MaidIntentReloadListener
         );
     }
 
-    private static <T> void loadStack(
+    /**
+     * Package private so {@link TaskIntentExpansion} loads task files through
+     * the same pack-override and fallback rules as everything else here.
+     */
+    static <T> void loadStack(
             ResourceLocation location,
             List<Resource> stack,
             String prefix,
@@ -427,7 +388,7 @@ public final class MaidIntentReloadListener
         }
     }
 
-    private static boolean jsonResource(ResourceLocation location) {
+    static boolean jsonResource(ResourceLocation location) {
         return location.getPath().endsWith(".json");
     }
 
@@ -470,12 +431,12 @@ public final class MaidIntentReloadListener
     }
 
     @FunctionalInterface
-    private interface DefinitionParser<T> {
+    interface DefinitionParser<T> {
         DataResult<T> parse(OrchestrationId id, JsonElement json);
     }
 
     @FunctionalInterface
-    private interface DefinitionValidator<T> {
+    interface DefinitionValidator<T> {
         void validate(T definition);
     }
 }

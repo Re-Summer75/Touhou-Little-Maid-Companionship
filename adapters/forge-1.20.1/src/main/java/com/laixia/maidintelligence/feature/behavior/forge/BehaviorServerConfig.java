@@ -101,7 +101,12 @@ public final class BehaviorServerConfig {
                 );
         GAZE_RECALL_RANGE = builder
                 .comment("Maximum server-side gaze sensor distance.")
-                .defineInRange("range", 8.0D, 2.0D, 32.0D);
+                .defineInRange(
+                        "range",
+                        GazeRecallPolicy.DEFAULT_RANGE,
+                        2.0D,
+                        32.0D
+                );
         builder.pop(2);
         SPEC = builder.build();
     }
@@ -141,14 +146,18 @@ public final class BehaviorServerConfig {
 
     private static void onConfigEvent(ModConfigEvent event) {
         if (event.getConfig().getSpec() == SPEC) {
+            int revision = GAZE_SENSOR_TIMING_REVISION.get();
             int holdTicks = GazeRecallPolicy.migrateHoldTicks(
                     GAZE_RECALL_HOLD_TICKS.get(),
-                    GAZE_SENSOR_TIMING_REVISION.get()
+                    revision
             );
-            if (holdTicks != GAZE_RECALL_HOLD_TICKS.get()
-                    || GAZE_SENSOR_TIMING_REVISION.get()
-                    < GazeRecallPolicy.CURRENT_TIMING_REVISION) {
+            double range = GazeRecallPolicy.migrateRange(
+                    GAZE_RECALL_RANGE.get(),
+                    revision
+            );
+            if (revision < GazeRecallPolicy.CURRENT_TIMING_REVISION) {
                 GAZE_RECALL_HOLD_TICKS.set(holdTicks);
+                GAZE_RECALL_RANGE.set(range);
                 GAZE_SENSOR_TIMING_REVISION.set(
                         GazeRecallPolicy.CURRENT_TIMING_REVISION
                 );
@@ -162,7 +171,7 @@ public final class BehaviorServerConfig {
                     MAX_CANDIDATE_EVALUATIONS.get(),
                     DIAGNOSTICS_ENABLED.get(),
                     holdTicks,
-                    GAZE_RECALL_RANGE.get()
+                    range
             );
         }
     }

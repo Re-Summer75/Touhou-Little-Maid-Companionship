@@ -11,6 +11,7 @@ import com.laixia.maidintelligence.feature.behavior.port.AffordanceIndexPort;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -27,7 +28,24 @@ import java.util.WeakHashMap;
  */
 @SuppressWarnings("null")
 public final class TlmAffordancePerceptionService {
-    private static final int EXAMINATION_BUDGET_PER_TICK = 256;
+    /**
+     * Doubled alongside the reach below. Quadrupling the searched area without
+     * giving the sweep more room to work would only mean queries running out of
+     * budget further out, which reads in play as a maid intermittently failing
+     * to notice things she noticed a moment ago.
+     */
+    private static final int EXAMINATION_BUDGET_PER_TICK = 512;
+
+    /**
+     * One shared reach for everything a maid perceives. Eight blocks was a room;
+     * sixteen is a building, which is the scale she is actually expected to keep
+     * house over. Seats already used this figure, so this brings food in line
+     * with them rather than introducing a new number.
+     */
+    public static final double PERCEPTION_RANGE = 16.0D;
+
+    /** Cabinets re-read for stock per observation. */
+    private static final int MAX_RESTOCK_CHECKS = 8;
     private static final int SUBJECT_OBSERVATION_INTERVAL = 20;
 
     private final Map<ServerLevel, AffordanceIndexPort> indexes =
@@ -38,6 +56,8 @@ public final class TlmAffordancePerceptionService {
             new TlmSnackCabinetAffordanceProvider();
     private final TlmSeatAffordanceProvider seats =
             new TlmSeatAffordanceProvider();
+    private final TlmItemEntityAffordanceProvider items =
+            new TlmItemEntityAffordanceProvider();
     private final TlmOwnerAffordanceProvider owners =
             new TlmOwnerAffordanceProvider();
 
@@ -59,6 +79,52 @@ public final class TlmAffordancePerceptionService {
         AffordanceIndexPort index = index(level);
         owners.observe(maid, gameTime, index);
         seats.observeNearby(maid, gameTime, index);
+        items.observeNearby(maid, gameTime, index);
+        restockCabinets(maid, level, gameTime, index);
+    }
+
+    /**
+     * Re-reads the stock of cabinets already known nearby.
+     *
+     * <p>Putting food into a cabinet raises no block event — the block does not
+     * change, only its contents do — so an advertisement made when it was empty
+     * would keep saying so. Rather than scan for cabinets, this asks the index
+     * where it already believes they are, which costs a query and a handful of
+     * lookups on the same slow clock as the rest of an observation.
+     *
+     * <p>An emptied cabinet advertises zero rather than withdrawing, so it is
+     * still found here and can be seen to have been refilled.
+     */
+    private void restockCabinets(
+            EntityMaid maid,
+            ServerLevel level,
+            long gameTime,
+            AffordanceIndexPort index
+    ) {
+        for (AffordanceCandidate candidate : index.query(new AffordanceQuery(
+                java.util.Set.of(
+                        CompanionAffordanceIds.TAKE_FOOD,
+                        CompanionAffordanceIds.OPEN_CONTAINER
+                ),
+                CompanionAffordanceIds.HUNGER_RELIEF,
+                position(maid),
+                PERCEPTION_RANGE,
+                MAX_RESTOCK_CHECKS,
+                gameTime
+        ))) {
+            String encoded = candidate.advertisement()
+                    .attributes()
+                    .get("block_pos");
+            if (encoded == null) {
+                continue;
+            }
+            cabinets.observe(
+                    level,
+                    BlockPos.of(Long.parseLong(encoded)),
+                    gameTime,
+                    index
+            );
+        }
     }
 
     public void onChunkLoaded(
@@ -131,11 +197,12 @@ public final class TlmAffordancePerceptionService {
         List<AffordanceCandidate> candidates = index(level).query(
                 new AffordanceQuery(
                         java.util.Set.of(
-                                CompanionAffordanceIds.TAKE_FOOD
+                                CompanionAffordanceIds.TAKE_FOOD,
+                                CompanionAffordanceIds.OPEN_CONTAINER
                         ),
                         CompanionAffordanceIds.HUNGER_RELIEF,
                         position(maid),
-                        8.0D,
+                        PERCEPTION_RANGE,
                         Math.max(1, Math.min(32, topK)),
                         gameTime
                 )
@@ -151,6 +218,51 @@ public final class TlmAffordancePerceptionService {
                     && level.getBlockEntity(position)
                     instanceof TileEntitySnackCabinet) {
                 result.add(position);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    /**
+     * Edible items lying within reach, best first.
+     *
+     * <p>The counterpart to {@link #querySnackCabinets}: that one asks for
+     * food behind a door she has to open, this one for food she could simply
+     * walk over and pick up — including whatever the owner just threw at her.
+     */
+    public List<ItemEntity> queryLooseFood(
+            EntityMaid maid,
+            int topK,
+            long gameTime
+    ) {
+        if (!(maid.level() instanceof ServerLevel level)) {
+            return List.of();
+        }
+        observeMaid(maid, gameTime);
+        List<AffordanceCandidate> candidates = index(level).query(
+                new AffordanceQuery(
+                        java.util.Set.of(
+                                CompanionAffordanceIds.TAKE_FOOD
+                        ),
+                        CompanionAffordanceIds.HUNGER_RELIEF,
+                        position(maid),
+                        PERCEPTION_RANGE,
+                        Math.max(1, Math.min(32, topK)),
+                        gameTime
+                )
+        );
+        List<ItemEntity> result = new ArrayList<>();
+        for (AffordanceCandidate candidate : candidates) {
+            String encoded = candidate.advertisement()
+                    .attributes()
+                    .get("entity_id");
+            if (encoded == null) {
+                // A cabinet, which this caller cannot pick up off the floor.
+                continue;
+            }
+            if (level.getEntity(Integer.parseInt(encoded))
+                    instanceof ItemEntity item && item.isAlive()) {
+                result.add(item);
             }
         }
         return List.copyOf(result);

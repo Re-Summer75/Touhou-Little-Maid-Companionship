@@ -1,7 +1,6 @@
 package com.laixia.maidintelligence.feature.behavior;
 
 import com.laixia.maidintelligence.feature.behavior.api.BehaviorTuning;
-import com.laixia.maidintelligence.feature.behavior.domain.ContinuousLookTracker;
 import com.laixia.maidintelligence.feature.behavior.domain.GazeRecallPolicy;
 import com.laixia.maidintelligence.feature.behavior.domain.learning.LearningMode;
 import com.laixia.maidintelligence.feature.orchestration.api.IntentRolloutMode;
@@ -11,45 +10,8 @@ public final class CustomBehaviorVerification {
     }
 
     public static void main(String[] args) {
-        verifiesContinuousLookThreshold();
-        verifiesTargetSwitchAndRearm();
         verifiesEngineAndSensorTuning();
         verifiesLegacyGazeTimingMigration();
-    }
-
-    private static void verifiesContinuousLookThreshold() {
-        ContinuousLookTracker tracker = new ContinuousLookTracker();
-        require(
-                !tracker.observe(17, 2),
-                "Gaze recall fired before two continuous ticks"
-        );
-        require(
-                tracker.observe(17, 2),
-                "Gaze recall did not fire at 0.1 seconds"
-        );
-        require(
-                !tracker.observe(17, 2) && tracker.triggered(),
-                "Held gaze retriggered without looking away"
-        );
-    }
-
-    private static void verifiesTargetSwitchAndRearm() {
-        ContinuousLookTracker tracker = new ContinuousLookTracker();
-        for (int tick = 0; tick < 10; tick++) {
-            tracker.observe(1, 20);
-        }
-        tracker.observe(2, 20);
-        require(
-                tracker.targetId() == 2 && tracker.heldTicks() == 1,
-                "Switching maids retained the previous hold duration"
-        );
-        tracker.observe(-1, 20);
-        require(
-                tracker.targetId() == Integer.MIN_VALUE
-                        && tracker.heldTicks() == 0
-                        && !tracker.triggered(),
-                "Looking away did not rearm the gesture"
-        );
     }
 
     private static void verifiesEngineAndSensorTuning() {
@@ -62,19 +24,35 @@ public final class CustomBehaviorVerification {
                         && defaults.rolloutMode()
                         == IntentRolloutMode.LIVE_ONLY
                         && defaults.learningMode() == LearningMode.SHADOW
-                        && defaults.gazeRecallHoldTicks() == 2,
+                        && defaults.gazeRecallHoldTicks() == 6,
                 "Behavior engine safety defaults changed"
         );
     }
 
     private static void verifiesLegacyGazeTimingMigration() {
         require(
-                GazeRecallPolicy.migrateHoldTicks(20, 1) == 2,
+                GazeRecallPolicy.migrateHoldTicks(20, 1) == 6,
                 "Legacy one-second gaze default was not migrated"
         );
         require(
                 GazeRecallPolicy.migrateHoldTicks(12, 1) == 12,
                 "Custom legacy gaze timing was overwritten"
+        );
+        require(
+                GazeRecallPolicy.migrateHoldTicks(2, 2) == 6,
+                "The two-tick glance default was not migrated"
+        );
+        require(
+                GazeRecallPolicy.migrateRange(8.0D, 3) == 16.0D,
+                "Legacy single-room gaze range was not widened"
+        );
+        require(
+                GazeRecallPolicy.migrateRange(24.0D, 3) == 24.0D,
+                "A chosen gaze range was overwritten"
+        );
+        require(
+                GazeRecallPolicy.migrateRange(8.0D, 4) == 8.0D,
+                "An already-migrated range was migrated again"
         );
     }
 

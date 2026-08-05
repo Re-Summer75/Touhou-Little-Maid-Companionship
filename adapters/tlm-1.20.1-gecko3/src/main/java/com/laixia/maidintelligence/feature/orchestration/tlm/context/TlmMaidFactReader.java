@@ -5,7 +5,11 @@ import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
 import com.laixia.maidintelligence.feature.ai.domain.arbitration.BehaviorOccupancyLevel;
 import com.laixia.maidintelligence.feature.ai.domain.arbitration.BehaviorOccupancySnapshot;
 import com.laixia.maidintelligence.feature.ai.tlm.TlmBehaviorOccupancyClassifier;
+import com.laixia.maidintelligence.feature.behavior.application.forecast.OwnerActivityTracker;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
+import com.laixia.maidintelligence.feature.behavior.domain.owner.OwnerFacts;
+import com.laixia.maidintelligence.feature.behavior.domain.forecast.CompanionActivity;
+import com.laixia.maidintelligence.feature.orchestration.api.insight.MaidInsight;
 import com.laixia.maidintelligence.feature.behavior.tlm.MaidCommandSeatBridge;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
 import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentObserver;
@@ -17,7 +21,9 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.schedule.Activity;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -26,10 +32,23 @@ import java.util.Objects;
 public final class TlmMaidFactReader {
     private static final String TLM_NAMESPACE = "touhou_little_maid";
 
+    private final TlmOwnerFactReader ownerFacts =
+            new TlmOwnerFactReader();
+
+    /**
+     * Fact id to the activity it forecasts, built once from the enum so the
+     * dispatch below cannot fall behind {@link CompanionActivity}.
+     */
+    private static final Map<OrchestrationId, CompanionActivity>
+            FORECAST_FACTS = forecastFacts();
+    private static final Map<OrchestrationId, CompanionActivity>
+            FORECAST_LIFT_FACTS = forecastLiftFacts();
+
     private final MaidStatusApi<EntityMaid> status;
     private final TlmMaidIntentObserver observer;
     private final MaidSnackCabinetMealSource snackCabinetMeals;
     private final TlmAffordancePerceptionService perception;
+    private final OwnerActivityTracker activityTracker;
 
     public TlmMaidFactReader(
             MaidStatusApi<EntityMaid> status,
@@ -37,6 +56,26 @@ public final class TlmMaidFactReader {
             MaidSnackCabinetMealSource snackCabinetMeals,
             TlmAffordancePerceptionService perception
     ) {
+        this(
+                status,
+                observer,
+                snackCabinetMeals,
+                perception,
+                new OwnerActivityTracker()
+        );
+    }
+
+    public TlmMaidFactReader(
+            MaidStatusApi<EntityMaid> status,
+            TlmMaidIntentObserver observer,
+            MaidSnackCabinetMealSource snackCabinetMeals,
+            TlmAffordancePerceptionService perception,
+            OwnerActivityTracker activityTracker
+    ) {
+        this.activityTracker = Objects.requireNonNull(
+                activityTracker,
+                "activityTracker"
+        );
         this.status = Objects.requireNonNull(status, "status");
         this.observer = Objects.requireNonNull(observer, "observer");
         this.snackCabinetMeals = Objects.requireNonNull(
@@ -56,9 +95,115 @@ public final class TlmMaidFactReader {
             double[] output
     ) {
         Snapshot snapshot = snapshot(maid, gameTime);
-        for (int index = 0; index < facts.size(); index++) {
-            output[index] = value(facts.get(index), snapshot);
+        LivingEntity owner = validOwner(maid);
+        /*
+         * Sampled here rather than on a timer of its own because this already
+         * runs on the owner's behalf at a sensible cadence. The tracker only
+         * records when the activity actually changes, so several maids sharing
+         * an owner cannot inflate the same transition.
+         */
+        if (owner != null) {
+            activityTracker.observe(
+                    owner.getUUID(),
+                    OwnerActivityClassifier.classify(owner, gameTime),
+                    gameTime
+            );
         }
+        for (int index = 0; index < facts.size(); index++) {
+            OrchestrationId fact = facts.get(index);
+            CompanionActivity forecast = FORECAST_FACTS.get(fact);
+            CompanionActivity lift = FORECAST_LIFT_FACTS.get(fact);
+            if (forecast == null && lift == null) {
+                output[index] = value(fact, snapshot);
+            } else if (owner == null) {
+                /*
+                 * No owner is no evidence, not a prediction of zero: a zero
+                 * would veto every intent that multiplies this in. The two
+                 * families have different neutral points — a flat probability
+                 * for one, "as likely as usual" for the other.
+                 */
+                output[index] = forecast != null
+                        ? 1.0D / CompanionActivity.count()
+                        : 0.5D;
+            } else if (forecast != null) {
+                output[index] = activityTracker.probability(
+                        owner.getUUID(),
+                        forecast,
+                        gameTime
+                );
+            } else {
+                output[index] = activityTracker.lift(
+                        owner.getUUID(),
+                        lift
+                );
+            }
+        }
+    }
+
+    /**
+     * How much of the forecast came from observed sequence rather than the time
+     * of day. Read by {@code ai explain} so a prediction is never reported
+     * without saying how much is actually known.
+     */
+    public double forecastConfidence(EntityMaid maid) {
+        LivingEntity owner = validOwner(maid);
+        return owner == null
+                ? 0.0D
+                : activityTracker.confidence(owner.getUUID());
+    }
+
+    /**
+     * The owner activity that is most unusually likely right now, or
+     * {@code null} when there is no owner.
+     *
+     * <p>Ranked by lift rather than by raw probability. Travelling is close to
+     * half of all transitions, so ranking by probability would nominate it
+     * almost always and the panel would say the same thing forever.
+     */
+    public MaidInsight.Hunch bestHunch(EntityMaid maid) {
+        LivingEntity owner = validOwner(maid);
+        if (owner == null) {
+            return null;
+        }
+        CompanionActivity best = null;
+        double bestLift = 0.0D;
+        for (CompanionActivity activity : CompanionActivity.values()) {
+            double lift = activityTracker.lift(owner.getUUID(), activity);
+            if (best == null || lift > bestLift) {
+                best = activity;
+                bestLift = lift;
+            }
+        }
+        return new MaidInsight.Hunch(
+                best.name().toLowerCase(java.util.Locale.ROOT),
+                Math.max(0.0D, Math.min(0.999D, bestLift)),
+                activityTracker.evidence(owner.getUUID())
+        );
+    }
+
+    public CompanionActivity currentOwnerActivity(EntityMaid maid) {
+        LivingEntity owner = validOwner(maid);
+        return owner == null
+                ? CompanionActivity.IDLE
+                : activityTracker.current(owner.getUUID());
+    }
+
+    private static Map<OrchestrationId, CompanionActivity> forecastFacts() {
+        Map<OrchestrationId, CompanionActivity> facts =
+                new LinkedHashMap<>();
+        for (CompanionActivity activity : CompanionActivity.values()) {
+            facts.put(activity.forecastFact(), activity);
+        }
+        return Map.copyOf(facts);
+    }
+
+    private static Map<OrchestrationId, CompanionActivity> forecastLiftFacts() {
+        Map<OrchestrationId, CompanionActivity> facts =
+                new LinkedHashMap<>();
+        for (CompanionActivity activity : CompanionActivity.values()) {
+            facts.put(activity.forecastLiftFact(), activity);
+        }
+        return Map.copyOf(facts);
     }
 
     @SuppressWarnings("null")
@@ -137,7 +282,8 @@ public final class TlmMaidFactReader {
                         : occupancy.movementSource().priority(),
                 occupancy.movementFailOpen(),
                 occupancy.level().code(),
-                occupancy.reason().code()
+                occupancy.reason().code(),
+                ownerFacts.read(owner, gameTime)
         );
     }
 
@@ -228,7 +374,9 @@ public final class TlmMaidFactReader {
         if (fact.equals(CompanionIntentIds.BEHAVIOR_OCCUPANCY_REASON)) {
             return snapshot.behaviorOccupancyReason();
         }
-        return Double.NaN;
+        // Owner facts answer for themselves, and NaN for anything that is
+        // not one, which is the same answer this method gave before.
+        return snapshot.owner().value(fact);
     }
 
     private static LivingEntity validOwner(EntityMaid maid) {
@@ -280,7 +428,8 @@ public final class TlmMaidFactReader {
             int movementLeasePriority,
             boolean movementFailOpen,
             int behaviorOccupancyLevel,
-            int behaviorOccupancyReason
+            int behaviorOccupancyReason,
+            OwnerFacts owner
     ) {
     }
 }

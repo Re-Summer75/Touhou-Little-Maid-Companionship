@@ -44,6 +44,7 @@ public record TlmBehaviorComposition(
         OwnerGazeRecallHandler gazeRecallHandler,
         AffordancePerceptionHandler perceptionHandler,
         TlmAffordancePerceptionService perception,
+        TlmMaidIntentContext context,
         BehaviorTlmModule tlmModule
 ) {
     private static final int HUNGER_REQUEST_SIGNAL_TTL = 1200;
@@ -166,6 +167,7 @@ public record TlmBehaviorComposition(
                 gazeHandler,
                 new AffordancePerceptionHandler(perception),
                 perception,
+                context,
                 new BehaviorTlmModule(
                         intents,
                         observer,

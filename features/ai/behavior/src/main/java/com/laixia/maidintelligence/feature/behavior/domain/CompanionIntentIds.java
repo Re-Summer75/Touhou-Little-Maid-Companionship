@@ -4,8 +4,12 @@ import com.laixia.maidintelligence.feature.orchestration.domain.IntentVocabulary
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
 import com.laixia.maidintelligence.feature.orchestration.domain.action.ActionParameterType;
 import com.laixia.maidintelligence.feature.orchestration.domain.action.ActionSchema;
+import com.laixia.maidintelligence.feature.behavior.domain.forecast.CompanionActivity;
+import com.laixia.maidintelligence.feature.behavior.domain.owner.OwnerFactIds;
 import com.laixia.maidintelligence.feature.orchestration.domain.fact.FactType;
 
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -83,6 +87,29 @@ public final class CompanionIntentIds {
     private CompanionIntentIds() {
     }
 
+    /**
+     * Adds one forecast fact per {@link CompanionActivity}, derived from the
+     * enum rather than listed a second time — a new activity would otherwise
+     * arrive with a fact that data packs cannot reference.
+     *
+     * <p>They are numbers, not booleans: each one is the probability that the
+     * owner does that thing next, so a consideration normalizes it over
+     * {@code [0, 1]} directly.
+     */
+    private static Map<OrchestrationId, FactType> withForecastFacts(
+            Map<OrchestrationId, FactType> base
+    ) {
+        Map<OrchestrationId, FactType> merged = new LinkedHashMap<>(base);
+        for (CompanionActivity activity : CompanionActivity.values()) {
+            merged.put(activity.forecastFact(), FactType.NUMBER);
+            merged.put(activity.forecastLiftFact(), FactType.NUMBER);
+        }
+        // Everything a maid notices about her owner is catalogued with itself,
+        // so this file does not grow a second subject.
+        merged.putAll(OwnerFactIds.facts());
+        return Map.copyOf(merged);
+    }
+
     public static IntentVocabulary vocabulary() {
         Set<OrchestrationId> signals = Set.of(
                 GAZE_RECALL,
@@ -90,7 +117,7 @@ public final class CompanionIntentIds {
                 RANDOM_STROLL_RETURN,
                 HUNGER_REQUEST
         );
-        Set<OrchestrationId> facts = Set.of(
+        Set<OrchestrationId> facts = new LinkedHashSet<>(Set.of(
                 OWNER_VALID,
                 OWNER_DISTANCE,
                 FAVORABILITY,
@@ -122,7 +149,16 @@ public final class CompanionIntentIds {
                 POST_TASK_RETURN,
                 RANDOM_STROLL_RETURN,
                 HUNGER_REQUEST
-        );
+        ));
+        // Registered from the enum rather than listed again, so a new activity
+        // cannot arrive with its fact left unusable by data packs.
+        for (CompanionActivity activity : CompanionActivity.values()) {
+            facts.add(activity.forecastFact());
+            facts.add(activity.forecastLiftFact());
+        }
+        // Same reason, one subject over: an owner fact that is typed but not
+        // declared would be a fact no data pack is allowed to name.
+        facts.addAll(OwnerFactIds.facts().keySet());
         return new IntentVocabulary(
                 facts,
                 Set.of(
@@ -133,7 +169,7 @@ public final class CompanionIntentIds {
                         DEPLOY_BOAT
                 ),
                 signals,
-                Map.ofEntries(
+                withForecastFacts(Map.ofEntries(
                         Map.entry(OWNER_VALID, FactType.BOOLEAN),
                         Map.entry(OWNER_DISTANCE, FactType.NUMBER),
                         Map.entry(FAVORABILITY, FactType.NUMBER),
@@ -198,7 +234,7 @@ public final class CompanionIntentIds {
                                 HUNGER_REQUEST,
                                 FactType.SIGNAL
                         )
-                ),
+                )),
                 Map.of(
                         APPROACH_OWNER,
                         new ActionSchema(

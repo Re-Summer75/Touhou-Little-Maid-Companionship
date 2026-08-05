@@ -35,10 +35,17 @@ public record AffordanceAdvertisement(
                     "Invalid affordance advertisement contents"
             );
         }
+        /*
+         * One ruler for every advertiser. Ranking weighs a commodity against a
+         * distance penalty that is itself a fraction of the search radius, so
+         * an advertiser answering 100 where its neighbours answer 1 would not
+         * be a hundred times more attractive — it would silently switch off
+         * distance for every query it appeared in.
+         */
         for (double value : commodities.values()) {
-            if (!Double.isFinite(value)) {
+            if (!Double.isFinite(value) || value < 0.0D || value > 1.0D) {
                 throw new IllegalArgumentException(
-                        "Commodity value must be finite"
+                        "Commodity value must be within [0, 1]"
                 );
             }
         }

@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.feature.orchestration.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.orchestration.api.insight.MaidInsight;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
 import com.laixia.maidintelligence.feature.orchestration.port.IntentContextPort;
 import com.laixia.maidintelligence.feature.orchestration.tlm.context.TlmMaidFactReader;
@@ -62,5 +63,15 @@ public final class TlmMaidIntentContext
             double[] output
     ) {
         facts.readFacts(maid, gameTime, requestedFacts, output);
+    }
+
+    /**
+     * The owner-activity hunch behind this maid's forecast facts, for the soul
+     * lens panel. Exposed here because the fact reader is this context's to
+     * own, and the panel should read the same tracker the intents do rather
+     * than start a second one that would learn a different history.
+     */
+    public MaidInsight.Hunch bestHunch(EntityMaid maid) {
+        return facts.bestHunch(maid);
     }
 }

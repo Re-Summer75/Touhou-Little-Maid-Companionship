@@ -20,8 +20,8 @@
   "selection": {
     "base_score": 0.6,
     "minimum_score": 0.0,
-    "activation_chance": 0.1,
-    "evaluation_interval_ticks": 100,
+    "activation_chance": 0.35,
+    "evaluation_interval_ticks": 40,
     "minimum_commit_ticks": 40,
     "switch_margin": 0.15,
     "interrupt_priority": 40,

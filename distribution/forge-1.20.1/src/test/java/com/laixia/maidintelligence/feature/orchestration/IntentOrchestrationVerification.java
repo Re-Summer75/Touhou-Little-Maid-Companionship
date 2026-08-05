@@ -4,8 +4,8 @@ import com.laixia.maidintelligence.feature.orchestration.domain.FactComparison;
 import com.laixia.maidintelligence.feature.orchestration.domain.IntentCatalog;
 import com.laixia.maidintelligence.feature.orchestration.domain.IntentDefinition;
 import com.laixia.maidintelligence.feature.orchestration.domain.PlanDefinition;
-import com.laixia.maidintelligence.feature.orchestration.domain.UtilityConsideration;
-import com.laixia.maidintelligence.feature.orchestration.domain.UtilityCurve;
+import com.laixia.maidintelligence.feature.orchestration.domain.utility.UtilityConsideration;
+import com.laixia.maidintelligence.feature.orchestration.domain.utility.UtilityCurve;
 
 import java.util.LinkedHashMap;
 import java.util.List;

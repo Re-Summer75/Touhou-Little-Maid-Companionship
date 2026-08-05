@@ -82,15 +82,18 @@ public final class IntentDataCodecVerification {
 
         Map<OrchestrationId, IntentDefinition> intents =
                 new LinkedHashMap<>();
-        List<String> intentNames = List.of(
-                "gaze_recall",
-                "hungry_feedback",
-                "hungry_standard",
-                "hungry_high_trust",
-                "post_task_return",
-                "snack_cabinet_meal",
-                "wander_return"
+        /*
+         * Scanned rather than listed. A hardcoded list means a new intent file
+         * ships untested by the one suite that compiles the built-in data as a
+         * whole, and nothing about adding the file would reveal that.
+         */
+        List<String> intentNames = bundledNames(
+                MaidIntentReloadListener.INTENT_PREFIX
         );
+        require(intentNames.size() >= 7,
+                "Only found " + intentNames.size()
+                        + " bundled intents; the scan is not seeing the "
+                        + "resource directory");
         for (String name : intentNames) {
             intents.put(id(name), parseIntent(name));
         }
@@ -192,10 +195,19 @@ public final class IntentDataCodecVerification {
                 plans.values(),
                 CompanionIntentIds.vocabulary()
         );
-        require(catalog.intents().size() == 7,
-                "Built-in intent inventory is incomplete");
-        require(catalog.planCount() == 4,
-                "Built-in plan inventory is incomplete");
+        /*
+         * Compared against what was scanned rather than a fixed number. A
+         * count that has to be edited alongside every new file is a count that
+         * gets edited to whatever makes the build pass; comparing against the
+         * directory also catches two files that collapse onto one id.
+         */
+        require(catalog.intents().size() == intentNames.size(),
+                "Catalog holds " + catalog.intents().size()
+                        + " intents but " + intentNames.size()
+                        + " files were bundled");
+        require(catalog.planCount() == plans.size(),
+                "Catalog holds " + catalog.planCount()
+                        + " plans but " + plans.size() + " were loaded");
     }
 
     private static void invalidCompiledReloadKeepsPreviousGeneration() {
@@ -355,6 +367,29 @@ public final class IntentDataCodecVerification {
                 null,
                 null
         );
+    }
+
+    /**
+     * Definition names bundled under {@code prefix}, read from the resource
+     * tree on disk because a classpath directory cannot be listed portably.
+     */
+    private static List<String> bundledNames(String prefix)
+            throws IOException {
+        java.nio.file.Path directory = java.nio.file.Path.of(
+                "src", "main", "resources"
+        ).resolve(RESOURCE_ROOT + prefix);
+        if (!java.nio.file.Files.isDirectory(directory)) {
+            throw new IOException("Missing resource directory " + directory);
+        }
+        try (java.util.stream.Stream<java.nio.file.Path> entries =
+                     java.nio.file.Files.list(directory)) {
+            return entries
+                    .map(entry -> entry.getFileName().toString())
+                    .filter(name -> name.endsWith(".json"))
+                    .map(name -> name.substring(0, name.length() - 5))
+                    .sorted()
+                    .toList();
+        }
     }
 
     private static IntentDefinition parseIntent(String name)

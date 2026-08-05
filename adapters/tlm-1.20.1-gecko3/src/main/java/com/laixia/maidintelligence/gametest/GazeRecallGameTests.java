@@ -131,7 +131,7 @@ public final class GazeRecallGameTests {
                 "Gaze occlusion fixture did not block normal line of sight"
         );
         helper.assertTrue(
-                OwnerGazeRecallHandler.findLookedAtMaid(owner, 8.0D) == maid,
+                OwnerGazeRecallHandler.findAimedAtMaid(owner, 8.0D) == maid,
                 "Block occlusion prevented gaze targeting"
         );
         helper.succeed();
@@ -201,7 +201,13 @@ public final class GazeRecallGameTests {
                 "Registered gaze service rejected a valid owner and maid"
         );
 
-        helper.runAfterDelay(3, () -> {
+        /*
+         * Longer than one evaluation interval, not shorter. The orchestrator
+         * only looks at a maid every few ticks, so waiting three left it a
+         * coin toss whether she had been considered at all — and a test that
+         * fails at random teaches everyone to ignore a red run.
+         */
+        helper.runAfterDelay(15, () -> {
             var trace = productionIntents().inspect(fixture.maid());
             var activeIntent = trace.activeIntent();
             helper.assertTrue(

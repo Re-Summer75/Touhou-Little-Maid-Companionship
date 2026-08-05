@@ -2,7 +2,8 @@ package com.laixia.maidintelligence.feature.orchestration.data;
 
 import com.laixia.maidintelligence.feature.orchestration.domain.FactComparison;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
-import com.laixia.maidintelligence.feature.orchestration.domain.UtilityCurve;
+import com.laixia.maidintelligence.feature.orchestration.domain.utility.UtilityAggregation;
+import com.laixia.maidintelligence.feature.orchestration.domain.utility.UtilityCurve;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 
@@ -22,6 +23,11 @@ final class OrchestrationCodecSupport {
             OrchestrationCodecSupport::parseCurve,
             curve -> curve.name().toLowerCase(Locale.ROOT)
     );
+    static final Codec<UtilityAggregation> AGGREGATION =
+            Codec.STRING.comapFlatMap(
+                    OrchestrationCodecSupport::parseAggregation,
+                    aggregation -> aggregation.name().toLowerCase(Locale.ROOT)
+            );
 
     private OrchestrationCodecSupport() {
     }
@@ -67,6 +73,20 @@ final class OrchestrationCodecSupport {
         } catch (IllegalArgumentException exception) {
             return DataResult.error(
                     () -> "Unknown utility curve: " + value
+            );
+        }
+    }
+
+    private static DataResult<UtilityAggregation> parseAggregation(
+            String value
+    ) {
+        try {
+            return DataResult.success(UtilityAggregation.valueOf(
+                    value.toUpperCase(Locale.ROOT)
+            ));
+        } catch (IllegalArgumentException exception) {
+            return DataResult.error(
+                    () -> "Unknown utility aggregation: " + value
             );
         }
     }

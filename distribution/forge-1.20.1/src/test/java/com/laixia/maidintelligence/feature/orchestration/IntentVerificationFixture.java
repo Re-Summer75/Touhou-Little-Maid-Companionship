@@ -11,8 +11,8 @@ import com.laixia.maidintelligence.feature.orchestration.domain.IntentDefinition
 import com.laixia.maidintelligence.feature.orchestration.domain.IntentVocabulary;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
 import com.laixia.maidintelligence.feature.orchestration.domain.PlanDefinition;
-import com.laixia.maidintelligence.feature.orchestration.domain.UtilityConsideration;
-import com.laixia.maidintelligence.feature.orchestration.domain.UtilityCurve;
+import com.laixia.maidintelligence.feature.orchestration.domain.utility.UtilityConsideration;
+import com.laixia.maidintelligence.feature.orchestration.domain.utility.UtilityCurve;
 import com.laixia.maidintelligence.feature.orchestration.port.IntentActionPort;
 
 import java.util.HashMap;
