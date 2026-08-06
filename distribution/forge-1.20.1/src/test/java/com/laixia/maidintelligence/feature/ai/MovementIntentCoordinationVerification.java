@@ -7,7 +7,7 @@ import com.laixia.maidintelligence.feature.ai.domain.MovementIntentDecision;
 import com.laixia.maidintelligence.feature.ai.domain.MovementIntentLease;
 import com.laixia.maidintelligence.feature.ai.domain.MovementIntentSource;
 import com.laixia.maidintelligence.feature.ai.domain.MovementTargetKind;
-import com.laixia.maidintelligence.feature.ai.domain.PassiveFollowPolicy;
+import com.laixia.maidintelligence.feature.ai.domain.OwnerFollowPolicy;
 
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -19,7 +19,7 @@ public final class MovementIntentCoordinationVerification {
         verifiesNativePriorityAndRenewal();
         verifiesCombatPreemptsRoutineMovement();
         verifiesPickupCommitmentDefersFollow();
-        verifiesPassiveFollowDeferralBoundaries();
+        verifiesOwnerTeleportBackstopBoundaries();
         verifiesExpiryAndClockRollback();
         verifiesObservationAndOffModes();
         verifiesExternalWriteFailOpen();
@@ -198,27 +198,30 @@ public final class MovementIntentCoordinationVerification {
         );
     }
 
-    private static void verifiesPassiveFollowDeferralBoundaries() {
-        PassiveFollowPolicy policy = PassiveFollowPolicy.INSTANCE;
+    private static void verifiesOwnerTeleportBackstopBoundaries() {
+        OwnerFollowPolicy policy = OwnerFollowPolicy.INSTANCE;
+        double threshold = OwnerFollowPolicy.TELEPORT_DISTANCE;
         require(
-                policy.shouldDefer(true, true, 49.0D, 6.0D, 10.0D),
-                "Stationary owner interrupted protected work in walking range"
+                threshold == 16.0D,
+                "Owner teleport backstop is no longer the documented 16 blocks"
         );
         require(
-                !policy.shouldDefer(false, true, 49.0D, 6.0D, 10.0D),
-                "Moving owner did not resume following"
+                !policy.shouldTeleport(threshold * threshold),
+                "Exactly at the backstop counted as stranded"
         );
         require(
-                !policy.shouldDefer(true, false, 49.0D, 6.0D, 10.0D),
-                "Idle maid was allowed to remain behind"
+                policy.shouldTeleport(threshold * threshold + 1.0D),
+                "Past the backstop did not strand her"
         );
         require(
-                !policy.shouldDefer(true, true, 25.0D, 6.0D, 10.0D),
-                "Already-near maid unnecessarily deferred following"
+                !policy.shouldTeleport(100.0D),
+                "Ten blocks still teleported, so the old radius coupling "
+                        + "survived"
         );
         require(
-                !policy.shouldDefer(true, true, 100.0D, 6.0D, 10.0D),
-                "Emergency teleport distance was deferred"
+                !policy.shouldTeleport(Double.NaN)
+                        && !policy.shouldTeleport(-1.0D),
+                "A distance that cannot be measured was treated as far"
         );
     }
 

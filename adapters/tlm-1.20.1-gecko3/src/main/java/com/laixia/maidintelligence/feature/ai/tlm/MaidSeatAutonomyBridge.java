@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.feature.ai.tlm;
 import com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
+import com.laixia.maidintelligence.feature.ai.domain.OwnerFollowPolicy;
 import com.laixia.maidintelligence.feature.behavior.tlm.MaidCommandSeatBridge;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -101,11 +102,9 @@ public final class MaidSeatAutonomyBridge {
                 || maid.level() != owner.level()) {
             return false;
         }
-        int followDistance = Math.max(
-                0,
-                (int) maid.getRestrictRadius() - 2
+        return OwnerFollowPolicy.INSTANCE.shouldTeleport(
+                maid.distanceToSqr(owner)
         );
-        return !maid.closerThan(owner, followDistance + 4);
     }
 
     public static void leaveSeatForPickup(EntityMaid maid) {

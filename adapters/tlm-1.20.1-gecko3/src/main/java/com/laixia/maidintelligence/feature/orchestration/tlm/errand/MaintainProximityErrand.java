@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.feature.orchestration.tlm.errand;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.ai.tlm.MaidSeatAutonomyBridge;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.LivingEntity;
 
@@ -30,22 +31,53 @@ public final class MaintainProximityErrand implements Errand {
         ApproachTarget locate(EntityMaid maid);
     }
 
-    private final String name;
-    private final Anchor anchor;
-
-    public MaintainProximityErrand(String name, Anchor anchor) {
-        this.name = Objects.requireNonNull(name, "name");
-        this.anchor = Objects.requireNonNull(anchor, "anchor");
+    /** What she has to do to herself before the errand is possible at all. */
+    @FunctionalInterface
+    public interface Preparation {
+        void apply(EntityMaid maid);
     }
 
-    /** Keeping up with whoever tamed her. */
+    private static final Preparation NOTHING_TO_PREPARE = maid -> {
+    };
+
+    private final String name;
+    private final Anchor anchor;
+    private final Preparation preparation;
+
+    public MaintainProximityErrand(String name, Anchor anchor) {
+        this(name, anchor, NOTHING_TO_PREPARE);
+    }
+
+    public MaintainProximityErrand(
+            String name,
+            Anchor anchor,
+            Preparation preparation
+    ) {
+        this.name = Objects.requireNonNull(name, "name");
+        this.anchor = Objects.requireNonNull(anchor, "anchor");
+        this.preparation = Objects.requireNonNull(preparation, "preparation");
+    }
+
+    /**
+     * Keeping up with whoever tamed her.
+     *
+     * <p>Getting up off a seat is part of it. The native follow task used to do
+     * this on her behalf, and with that gone a maid who had sat down on a stool
+     * would have watched her owner leave without moving.
+     */
     public static MaintainProximityErrand followingOwner() {
-        return new MaintainProximityErrand("follow_owner", maid -> {
-            LivingEntity owner = maid.getOwner();
-            return owner == null || !owner.isAlive() || owner.isSpectator()
-                    ? null
-                    : new EntityApproachTarget(owner);
-        });
+        return new MaintainProximityErrand(
+                "follow_owner",
+                maid -> {
+                    LivingEntity owner = maid.getOwner();
+                    return owner == null
+                            || !owner.isAlive()
+                            || owner.isSpectator()
+                            ? null
+                            : new EntityApproachTarget(owner);
+                },
+                MaidSeatAutonomyBridge::leaveSeatForFollow
+        );
     }
 
     /**
@@ -74,6 +106,11 @@ public final class MaintainProximityErrand implements Errand {
     @Override
     public boolean requiresClaim() {
         return false;
+    }
+
+    @Override
+    public void prepare(EntityMaid maid) {
+        preparation.apply(maid);
     }
 
     @Override

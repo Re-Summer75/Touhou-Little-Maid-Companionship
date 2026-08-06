@@ -90,8 +90,9 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
   跨系统权威矩阵（紧急 > 硬承诺 > 主人命令 > 软/被动）和 Brain priority 决胜；
   `BehaviorOccupancySnapshot` 将原版占用分为 IDLE/SOFT/HARD，注视等 `OWNER_COMMAND`
   可干净抢占 SOFT。状态不持久化，也不包含 Minecraft 对象。
-- `PassiveFollowPolicy`：只在主人静止、已识别原版任务仍有效且未达到紧急传送距离时暂缓
-  普通跟随；它仍属于原版 AI 调度优化。
+- `OwnerFollowPolicy`：走向主人由 `follow_owner` 意图决定，`MaidFollowOwnerTask` 不再写入
+  移动目标，只保留距离兜底。`TELEPORT_DISTANCE` 固定为 16 格，不再由 `restrictRadius`
+  推导，因此调整活动半径不会连带改变传送距离。溺水救援仍完全交给本体。
 - 性能 API 仍只降低原有判断成本；移动协调不接管 Brain 周期、Activity 或任务列表。
   未知 Task、ExtraBrain 与自定义目标采用 fail-open，保留第三方写入并临时退出仲裁。
 
