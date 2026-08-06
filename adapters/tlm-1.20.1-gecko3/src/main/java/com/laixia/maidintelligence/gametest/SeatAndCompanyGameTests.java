@@ -1,25 +1,16 @@
 package com.laixia.maidintelligence.gametest;
 
-import com.github.tartaricacid.touhoulittlemaid.entity.item.EntityChair;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
 import com.laixia.maidintelligence.feature.orchestration.domain.ActionResult;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
 import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentActions;
-import com.laixia.maidintelligence.feature.perception.tlm.TlmAffordancePerceptionService;
-import com.laixia.maidintelligence.feature.status.tlm.MaidMealAccess;
-import com.laixia.maidintelligence.feature.status.tlm.MaidSnackCabinetMealSource;
-import com.laixia.maidintelligence.gametest.support.GameTestPositions;
+import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
-import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
@@ -47,12 +38,12 @@ public final class SeatAndCompanyGameTests {
 
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void aFreeChairIsWalkedToward(GameTestHelper helper) {
-        Player owner = helper.makeMockPlayer();
-        EntityMaid maid = maid(helper, owner, 1, 2, 1);
-        chair(helper, 8, 2, 1);
+        CompanionScene scene = CompanionScene.room(helper, 6, 2);
+        EntityMaid maid = scene.maid(1, 2, 1);
+        scene.chair(6, 2, 1);
 
         helper.assertTrue(
-                run(helper, maid, CompanionIntentIds.REST_ON_SEAT)
+                run(scene, maid, CompanionIntentIds.REST_ON_SEAT)
                         == ActionResult.RUNNING,
                 "A free chair across the room was not walked toward"
         );
@@ -65,12 +56,12 @@ public final class SeatAndCompanyGameTests {
 
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void aChairWithinReachIsSatOn(GameTestHelper helper) {
-        Player owner = helper.makeMockPlayer();
-        EntityMaid maid = maid(helper, owner, 1, 2, 1);
-        Entity chair = chair(helper, 2, 2, 1);
+        CompanionScene scene = CompanionScene.room(helper, 3, 2);
+        EntityMaid maid = scene.maid(1, 2, 1);
+        Entity chair = scene.chair(2, 2, 1);
 
         helper.assertTrue(
-                run(helper, maid, CompanionIntentIds.REST_ON_SEAT)
+                run(scene, maid, CompanionIntentIds.REST_ON_SEAT)
                         == ActionResult.SUCCEEDED,
                 "A chair at her feet was not sat on"
         );
@@ -82,12 +73,12 @@ public final class SeatAndCompanyGameTests {
     /** One chair holds one person, so the second maid must be turned away. */
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void twoMaidsDoNotShareOneChair(GameTestHelper helper) {
-        Player owner = helper.makeMockPlayer();
-        EntityMaid first = maid(helper, owner, 1, 2, 1);
-        EntityMaid second = maid(helper, owner, 3, 2, 1);
-        chair(helper, 2, 2, 1);
-        TlmMaidIntentActions actions = actions();
-        long gameTime = helper.getLevel().getGameTime();
+        CompanionScene scene = CompanionScene.room(helper, 3, 2);
+        EntityMaid first = scene.maid(1, 2, 1);
+        EntityMaid second = scene.maid(3, 2, 1);
+        scene.chair(2, 2, 1);
+        TlmMaidIntentActions actions = scene.actions();
+        long gameTime = scene.gameTime();
 
         ActionResult one = actions.execute(
                 first,
@@ -113,11 +104,11 @@ public final class SeatAndCompanyGameTests {
 
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void nothingToSitOnFailsCleanly(GameTestHelper helper) {
-        Player owner = helper.makeMockPlayer();
-        EntityMaid maid = maid(helper, owner, 1, 2, 1);
+        CompanionScene scene = CompanionScene.room(helper, 3, 2);
+        EntityMaid maid = scene.maid(1, 2, 1);
 
         helper.assertTrue(
-                run(helper, maid, CompanionIntentIds.REST_ON_SEAT)
+                run(scene, maid, CompanionIntentIds.REST_ON_SEAT)
                         == ActionResult.FAILED,
                 "An empty room did not fail cleanly"
         );
@@ -139,12 +130,12 @@ public final class SeatAndCompanyGameTests {
      */
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void maidsDoNotSitOnEachOther(GameTestHelper helper) {
-        Player owner = helper.makeMockPlayer();
-        EntityMaid first = maid(helper, owner, 1, 2, 1);
-        EntityMaid second = maid(helper, owner, 2, 2, 1);
+        CompanionScene scene = CompanionScene.room(helper, 3, 2);
+        EntityMaid first = scene.maid(1, 2, 1);
+        EntityMaid second = scene.maid(2, 2, 1);
 
         helper.assertTrue(
-                run(helper, first, CompanionIntentIds.REST_ON_SEAT)
+                run(scene, first, CompanionIntentIds.REST_ON_SEAT)
                         == ActionResult.FAILED,
                 "A maid treated her colleague as somewhere to sit"
         );
@@ -163,12 +154,12 @@ public final class SeatAndCompanyGameTests {
     public static void severalMaidsMayKeepOneOwnerCompany(
             GameTestHelper helper
     ) {
-        Player owner = helper.makeMockPlayer();
-        owner.setPos(GameTestPositions.center(helper, 9, 2, 1));
-        EntityMaid first = maid(helper, owner, 1, 2, 1);
-        EntityMaid second = maid(helper, owner, 1, 2, 2);
-        TlmMaidIntentActions actions = actions();
-        long gameTime = helper.getLevel().getGameTime();
+        CompanionScene scene = CompanionScene.room(helper, 6, 2)
+                .ownerAt(6, 2, 1);
+        EntityMaid first = scene.maid(1, 2, 1);
+        EntityMaid second = scene.maid(1, 2, 2);
+        TlmMaidIntentActions actions = scene.actions();
+        long gameTime = scene.gameTime();
 
         ActionResult one = actions.execute(
                 first,
@@ -195,13 +186,11 @@ public final class SeatAndCompanyGameTests {
     /** She goes to her own owner, and has no business with anyone else's. */
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void companyRequiresAnOwner(GameTestHelper helper) {
-        EntityMaid maid = new EntityMaid(helper.getLevel());
-        floor(helper);
-        maid.setPos(GameTestPositions.center(helper, 1, 2, 1));
-        helper.getLevel().addFreshEntity(maid);
+        CompanionScene scene = CompanionScene.room(helper, 3, 2);
+        EntityMaid stray = scene.strayMaid(1, 2, 1);
 
         helper.assertTrue(
-                run(helper, maid, CompanionIntentIds.KEEP_COMPANY)
+                run(scene, stray, CompanionIntentIds.KEEP_COMPANY)
                         == ActionResult.FAILED,
                 "An untamed maid went to keep somebody company"
         );
@@ -209,74 +198,16 @@ public final class SeatAndCompanyGameTests {
     }
 
     private static ActionResult run(
-            GameTestHelper helper,
+            CompanionScene scene,
             EntityMaid maid,
             OrchestrationId action
     ) {
-        return actions().execute(
+        return scene.actions().execute(
                 maid,
                 action,
                 PARAMETERS,
-                helper.getLevel().getGameTime(),
+                scene.gameTime(),
                 0
         );
-    }
-
-    private static TlmMaidIntentActions actions() {
-        return new TlmMaidIntentActions(
-                ignored -> {
-                },
-                new MaidSnackCabinetMealSource(
-                        new MaidMealAccess(),
-                        new TlmAffordancePerceptionService()
-                )
-        );
-    }
-
-    private static Entity chair(
-            GameTestHelper helper,
-            int x,
-            int y,
-            int z
-    ) {
-        Vec3 position = GameTestPositions.center(helper, x, y, z);
-        // The constructor is protected; the registered type is the way in.
-        EntityChair chair = EntityChair.TYPE.create(helper.getLevel());
-        if (chair == null) {
-            throw new AssertionError("A chair could not be created");
-        }
-        chair.setPos(position.x, position.y, position.z);
-        helper.getLevel().addFreshEntity(chair);
-        return chair;
-    }
-
-    private static void floor(GameTestHelper helper) {
-        for (int x = 0; x <= 10; x++) {
-            for (int z = 0; z <= 3; z++) {
-                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
-            }
-        }
-    }
-
-    private static EntityMaid maid(
-            GameTestHelper helper,
-            Player owner,
-            int x,
-            int y,
-            int z
-    ) {
-        floor(helper);
-        EntityMaid maid = new EntityMaid(helper.getLevel()) {
-            @Override
-            public LivingEntity getOwner() {
-                return owner;
-            }
-        };
-        maid.setPos(GameTestPositions.center(helper, x, y, z));
-        maid.setTame(true);
-        maid.setHomeModeEnable(false);
-        maid.setOwnerUUID(owner.getUUID());
-        helper.getLevel().addFreshEntity(maid);
-        return maid;
     }
 }

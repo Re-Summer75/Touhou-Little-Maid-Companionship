@@ -8,6 +8,7 @@
     "EntityMaidPlaceBlockMixin",
     "MaidFeedAnimalTaskMixin",
     "MaidPickupEntitiesSensorOptimizationMixin",
+    "TaskManagerFreedomOrderMixin",
     "ai.EntitySitCommandSeatLockMixin",
     "ai.EntityMaidMovementCoordinationMixin",
     "ai.MaidBegMovementCoordinationMixin",

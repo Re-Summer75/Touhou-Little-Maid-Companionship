@@ -10,8 +10,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.item.Item;
@@ -29,8 +29,7 @@ import java.util.List;
  * look for. Every maid used to be spawned alone in a bare box, and the one
  * scenario that happened to include a second maid found a crash that had been
  * sitting in the seating errand from the day it was written. A household has
- * several maids, furniture, a boat at the shore and something hostile in the
- * dark, and behaviour that only holds together in an empty room is not
+ * several maids, furniture, and a boat at the shore, and behaviour that only holds together in an empty room is not
  * behaviour that holds together.
  *
  * <p>Also the one place these fixtures live. The same twenty-line maid spawner
@@ -162,43 +161,19 @@ public final class CompanionScene {
     }
 
     /**
-     * Something hostile, and a maid told to fight it.
+     * Puts a maid into combat, without putting a fight into the world.
      *
-     * <p>Setting the target explicitly rather than waiting for her to notice:
-     * what these tests are about is what a maid in combat declines to do, and
-     * how long her senses take to find a zombie is a different question.
+     * <p>What these scenarios examine is what she declines to do while
+     * occupied, and the occupancy classifier only asks whether she holds an
+     * attack target at all. A monster spawned to supply one is a monster every
+     * other test in the grid can also see — targeting reaches sixteen blocks
+     * and pays no attention to the height these scenes are lifted by — so the
+     * target is somebody already standing here. Who she is nominally fighting
+     * is not what any assertion here is about.
      */
-    public Zombie threat(int x, int y, int z, EntityMaid engagedBy) {
-        Zombie zombie = net.minecraft.world.entity.EntityType.ZOMBIE
-                .create(helper.getLevel());
-        if (zombie == null) {
-            throw new AssertionError("A zombie could not be created");
-        }
-        Vec3 position = GameTestPositions.center(helper, x, y + LIFT - 1, z);
-        zombie.setPos(position.x, position.y, position.z);
-        zombie.setNoAi(true);
-        /*
-         * Deliberately never added to the level.
-         *
-         * <p>What these tests need is a maid who has something to fight, not a
-         * fight. A zombie actually in the world is visible to every other test
-         * in the grid — targeting reaches sixteen blocks in any direction, so
-         * neither rooting it in place nor lifting these scenes clear of the
-         * floor below put it out of reach, and a command-seating test three
-         * rooms over kept failing because its maid had gone hostile at ours.
-         *
-         * <p>The occupancy classifier asks whether she holds an attack target,
-         * which this satisfies without putting anything hostile in the world.
-         */
-        if (engagedBy != null) {
-            engagedBy.setTarget(zombie);
-            engagedBy.getBrain().setMemory(
-                    net.minecraft.world.entity.ai.memory.MemoryModuleType
-                            .ATTACK_TARGET,
-                    zombie
-            );
-        }
-        return zombie;
+    public void engageInCombat(EntityMaid maid) {
+        maid.setTarget(owner);
+        maid.getBrain().setMemory(MemoryModuleType.ATTACK_TARGET, owner);
     }
 
     /** The production action dispatcher, wired the way the mod wires it. */

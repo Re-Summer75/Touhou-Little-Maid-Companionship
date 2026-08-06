@@ -3,17 +3,18 @@ package com.laixia.maidintelligence.gametest;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
 import com.laixia.maidintelligence.feature.behavior.tlm.FreedomMaidTask;
-import com.laixia.maidintelligence.gametest.support.GameTestPositions;
+import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
-import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 import com.laixia.maidintelligence.feature.ai.tlm.TlmBehaviorOccupancyClassifier;
 import com.laixia.maidintelligence.feature.ai.domain.arbitration.BehaviorOccupancyReason;
 import com.laixia.maidintelligence.feature.ai.domain.arbitration.BehaviorOccupancySnapshot;
+import com.github.tartaricacid.touhoulittlemaid.api.task.IMaidTask;
+
+import java.util.List;
 
 /**
  * The freedom task, whose whole job is to bring nothing of its own.
@@ -47,7 +48,8 @@ public final class FreedomTaskGameTests {
     public static void freedomContributesNoCompetingBehaviour(
             GameTestHelper helper
     ) {
-        EntityMaid maid = maid(helper);
+        EntityMaid maid = CompanionScene.room(helper, 3, 2)
+                .maid(1, 2, 1);
         int contributed = new FreedomMaidTask()
                 .createBrainTasks(maid)
                 .size();
@@ -63,7 +65,8 @@ public final class FreedomTaskGameTests {
      */
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void freedomKeepsSelfPreservation(GameTestHelper helper) {
-        EntityMaid maid = maid(helper);
+        EntityMaid maid = CompanionScene.room(helper, 3, 2)
+                .maid(1, 2, 1);
         FreedomMaidTask task = new FreedomMaidTask();
 
         helper.assertTrue(task.enablePanic(maid),
@@ -80,12 +83,49 @@ public final class FreedomTaskGameTests {
     /** Assigning it must actually take, and must be what she reports being on. */
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void aMaidCanBeSetFree(GameTestHelper helper) {
-        EntityMaid maid = maid(helper);
+        EntityMaid maid = CompanionScene.room(helper, 3, 2)
+                .maid(1, 2, 1);
         maid.setTask(TaskManager.findTask(FreedomMaidTask.UID).orElseThrow());
 
         helper.assertTrue(
                 FreedomMaidTask.UID.equals(maid.getTask().getUid()),
                 "The maid did not take the freedom task"
+        );
+        helper.succeed();
+    }
+
+    /**
+     * Second in the list a player picks from.
+     *
+     * <p>Task order is insertion order and extensions register last, so without
+     * help this would sit at the bottom past two dozen work tasks. Idle keeps
+     * first place as the default a maid is tamed with.
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void freedomIsOfferedSecond(GameTestHelper helper) {
+        /*
+         * Never added to the level. The hidden-task filter only asks about her
+         * state, and a maid actually standing in the shared grid is herself a
+         * rideable entity — one extra body here re-broke a command-seating
+         * test rooms away, the same neighbour interference the zombie fixture
+         * already has to sidestep.
+         */
+        EntityMaid maid = new EntityMaid(helper.getLevel());
+        List<IMaidTask> offered = TaskManager.getNotHiddenTaskList(maid);
+
+        helper.assertTrue(offered.size() > 1,
+                "Only " + offered.size() + " task(s) were offered at all");
+        helper.assertTrue(
+                FreedomMaidTask.UID.equals(offered.get(1).getUid()),
+                "Freedom was offered at another position; second was "
+                        + offered.get(1).getUid()
+        );
+        // The registry itself is untouched: only the presented list moves.
+        helper.assertFalse(
+                FreedomMaidTask.UID.equals(
+                        TaskManager.getTaskIndex().get(1).getUid()
+                ),
+                "The canonical task order was reordered as well"
         );
         helper.succeed();
     }
@@ -97,7 +137,8 @@ public final class FreedomTaskGameTests {
      */
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void beingHomeIsNotBeingBusy(GameTestHelper helper) {
-        EntityMaid maid = maid(helper);
+        EntityMaid maid = CompanionScene.room(helper, 3, 2)
+                .maid(1, 2, 1);
         maid.setHomeModeEnable(true);
         maid.restrictTo(maid.blockPosition(), 8);
         long gameTime = helper.getLevel().getGameTime();
@@ -114,7 +155,8 @@ public final class FreedomTaskGameTests {
     /** But actually walking back is an errand, and does occupy her. */
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void walkingHomeStillOccupiesHer(GameTestHelper helper) {
-        EntityMaid maid = maid(helper);
+        EntityMaid maid = CompanionScene.room(helper, 3, 2)
+                .maid(1, 2, 1);
         maid.setHomeModeEnable(true);
         // A home she is demonstrably not standing in.
         maid.restrictTo(maid.blockPosition().offset(200, 0, 200), 4);
@@ -132,17 +174,4 @@ public final class FreedomTaskGameTests {
         helper.succeed();
     }
 
-    private static EntityMaid maid(GameTestHelper helper) {
-        for (int x = 0; x <= 3; x++) {
-            for (int z = 0; z <= 3; z++) {
-                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
-            }
-        }
-        EntityMaid maid = new EntityMaid(helper.getLevel());
-        maid.setPos(GameTestPositions.center(helper, 1, 2, 1));
-        maid.setTame(true);
-        maid.setHomeModeEnable(false);
-        helper.getLevel().addFreshEntity(maid);
-        return maid;
-    }
 }

@@ -30,6 +30,13 @@ public final class DefaultAffordanceIndex implements AffordanceIndexPort {
                             candidate -> candidate.advertisement().target()
                     );
 
+    /**
+     * Fewest advertisements any single query may look at, however busy the tick
+     * already was. Enough to reach the handful nearest a maid, so a starved
+     * query answers with a sample rather than with a denial.
+     */
+    private static final int MINIMUM_EXAMINATIONS = 8;
+
     private final IntSupplier examinationBudget;
     private final Map<AffordanceTargetId, AffordanceAdvertisement> targets =
             new HashMap<>();
@@ -37,6 +44,13 @@ public final class DefaultAffordanceIndex implements AffordanceIndexPort {
             byAffordance = new HashMap<>();
     private final Map<OrchestrationId, Set<AffordanceTargetId>>
             byCommodity = new HashMap<>();
+    /**
+     * Where each advertisement is, so a bounded query visits bounded ground.
+     * Without it the allowance below truncated candidates in registration
+     * order, which is unrelated to whether they are anywhere near the asker.
+     */
+    private final Map<AffordanceCell, Set<AffordanceTargetId>> byCell =
+            new HashMap<>();
     private long budgetTick = Long.MIN_VALUE;
     private int examinedThisTick;
 
@@ -84,24 +98,46 @@ public final class DefaultAffordanceIndex implements AffordanceIndexPort {
             AffordanceQuery query
     ) {
         resetBudget(query.gameTime());
+        /*
+         * Every query gets a floor, even on a tick whose budget is already
+         * spent. Returning nothing is indistinguishable from "there is nothing
+         * nearby", and a maid told that walks away from the chair beside her —
+         * a busy household starved this silently, and it showed up as a test
+         * that failed only when enough other maids were being ticked.
+         *
+         * A sampled answer degrades ranking quality, which is what a budget is
+         * for. A wrong answer is not.
+         */
         int remaining = Math.max(
-                0,
+                MINIMUM_EXAMINATIONS,
                 boundedBudget() - examinedThisTick
         );
-        if (remaining == 0) {
-            return List.of();
-        }
         Set<AffordanceTargetId> indexed = narrowestIndex(query);
         if (indexed.isEmpty()) {
+            return List.of();
+        }
+        /*
+         * Narrowed by ground before anything is spent. Whichever of the two
+         * sets is smaller drives the walk; the other is a membership test.
+         */
+        Set<AffordanceTargetId> nearby = withinReach(query);
+        Set<AffordanceTargetId> walked = nearby.size() < indexed.size()
+                ? nearby
+                : indexed;
+        Set<AffordanceTargetId> gate = walked == nearby ? indexed : nearby;
+        if (walked.isEmpty()) {
             return List.of();
         }
 
         double maximumDistanceSquared =
                 query.maximumDistance() * query.maximumDistance();
         List<AffordanceCandidate> candidates = new ArrayList<>();
-        for (AffordanceTargetId target : List.copyOf(indexed)) {
+        for (AffordanceTargetId target : List.copyOf(walked)) {
             if (remaining-- == 0) {
                 break;
+            }
+            if (!gate.contains(target)) {
+                continue;
             }
             examinedThisTick++;
             AffordanceAdvertisement advertisement = targets.get(target);
@@ -160,6 +196,23 @@ public final class DefaultAffordanceIndex implements AffordanceIndexPort {
         return selected == null ? Set.of() : selected;
     }
 
+    /**
+     * Targets filed in any cube the query's radius reaches.
+     */
+    private Set<AffordanceTargetId> withinReach(AffordanceQuery query) {
+        Set<AffordanceTargetId> reachable = new LinkedHashSet<>();
+        for (AffordanceCell cell : AffordanceCell.covering(
+                query.origin(),
+                query.maximumDistance()
+        )) {
+            Set<AffordanceTargetId> filed = byCell.get(cell);
+            if (filed != null) {
+                reachable.addAll(filed);
+            }
+        }
+        return reachable;
+    }
+
     private void addReverse(AffordanceAdvertisement advertisement) {
         for (OrchestrationId affordance
                 : advertisement.affordances()) {
@@ -175,6 +228,10 @@ public final class DefaultAffordanceIndex implements AffordanceIndexPort {
                     ignored -> new LinkedHashSet<>()
             ).add(advertisement.target());
         }
+        byCell.computeIfAbsent(
+                AffordanceCell.of(advertisement.position()),
+                ignored -> new LinkedHashSet<>()
+        ).add(advertisement.target());
     }
 
     private void removeInternal(AffordanceAdvertisement advertisement) {
@@ -190,6 +247,14 @@ public final class DefaultAffordanceIndex implements AffordanceIndexPort {
         for (OrchestrationId commodity
                 : advertisement.commodities().keySet()) {
             removeFrom(byCommodity, commodity, advertisement.target());
+        }
+        AffordanceCell cell = AffordanceCell.of(advertisement.position());
+        Set<AffordanceTargetId> filed = byCell.get(cell);
+        if (filed != null) {
+            filed.remove(advertisement.target());
+            if (filed.isEmpty()) {
+                byCell.remove(cell);
+            }
         }
     }
 

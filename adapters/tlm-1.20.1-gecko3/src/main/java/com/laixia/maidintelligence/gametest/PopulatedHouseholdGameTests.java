@@ -19,8 +19,8 @@ import net.minecraftforge.gametest.PrefixGameTestTemplate;
 import java.util.Map;
 
 /**
- * A household rather than a bare box: several maids, furniture, a boat, and
- * something hostile in the room.
+ * A household rather than a bare box: several maids, furniture, a boat, and a
+ * maid already occupied.
  *
  * <p>Every other suite puts one maid alone with one thing to react to, which is
  * how a behaviour gets to look correct while being wrong. The seating crash
@@ -149,8 +149,8 @@ public final class PopulatedHouseholdGameTests {
 
     /**
      * Fighting outranks everything a companion errand might want. This is the
-     * arbitration the whole design leans on, and it deserves a check with an
-     * actual monster in the room rather than a flag set by hand.
+     * arbitration the whole design leans on, so a maid holding a target must be
+     * seen to refuse every one of them, not merely the one that was checked.
      */
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void aFightingMaidIgnoresEverythingElse(
@@ -160,7 +160,7 @@ public final class PopulatedHouseholdGameTests {
         EntityMaid maid = scene.maid(1, 2, 1);
         scene.chair(2, 2, 1);
         ItemEntity steak = scene.drop(Items.COOKED_BEEF, 2, 2, 2);
-        scene.threat(3, 2, 0, maid);
+        scene.engageInCombat(maid);
 
         for (OrchestrationId errand : new OrchestrationId[]{
                 CompanionIntentIds.REST_ON_SEAT,
@@ -189,7 +189,7 @@ public final class PopulatedHouseholdGameTests {
         EntityMaid fighter = scene.maid(1, 2, 1);
         EntityMaid bystander = scene.maid(1, 2, 2);
         scene.chair(2, 2, 2);
-        scene.threat(3, 2, 0, fighter);
+        scene.engageInCombat(fighter);
 
         helper.assertTrue(
                 run(scene, fighter, CompanionIntentIds.REST_ON_SEAT)

@@ -354,6 +354,12 @@ public final class GazeCommandGameTests {
         return chair;
     }
 
+    private static String describe(net.minecraft.world.entity.Entity entity) {
+        return entity == null
+                ? "none"
+                : entity.getType().toShortString() + "#" + entity.getId();
+    }
+
     private static EntitySit lockCommandSeat(
             GameTestHelper helper,
             OwnedFixture fixture,
@@ -371,10 +377,21 @@ public final class GazeCommandGameTests {
         fixture.owner().startRiding(ownerSeat, true);
 
         TlmMaidIntentActions actions = actions();
+        ActionResult mirrored = execute(actions, fixture, 0);
         helper.assertTrue(
-                execute(actions, fixture, 0) == ActionResult.RUNNING
+                mirrored == ActionResult.RUNNING
                         && fixture.maid().getVehicle() == maidSeat,
-                "Maid did not mirror the owner's seat"
+                "Maid did not mirror the owner's seat: result=" + mirrored
+                        + " vehicle=" + describe(fixture.maid().getVehicle())
+                        + " ownerVehicle="
+                        + describe(fixture.owner().getVehicle())
+                        + " seatAlive=" + maidSeat.isAlive()
+                        + " seatPassengers=" + maidSeat.getPassengers().size()
+                        + " maidToSeat="
+                        + String.format(
+                                "%.2f",
+                                Math.sqrt(fixture.maid().distanceToSqr(maidSeat))
+                        )
         );
         if (completeCommandWindow) {
             helper.assertTrue(

@@ -5,21 +5,16 @@ import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
 import com.laixia.maidintelligence.feature.orchestration.domain.ActionResult;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
 import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentActions;
-import com.laixia.maidintelligence.feature.perception.tlm.TlmAffordancePerceptionService;
-import com.laixia.maidintelligence.feature.status.tlm.MaidMealAccess;
-import com.laixia.maidintelligence.feature.status.tlm.MaidSnackCabinetMealSource;
-import com.laixia.maidintelligence.gametest.support.GameTestPositions;
+import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.behavior.BlockPosTracker;
 import net.minecraft.world.entity.ai.behavior.EntityTracker;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.memory.WalkTarget;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
@@ -44,16 +39,16 @@ public final class ProximityErrandGameTests {
 
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void aDistantOwnerIsWalkedToward(GameTestHelper helper) {
-        Player owner = helper.makeMockPlayer();
-        owner.setPos(GameTestPositions.center(helper, 9, 2, 1));
-        EntityMaid maid = maid(helper, owner, 1, 2, 1);
+        CompanionScene scene = CompanionScene.room(helper, 6, 2)
+                .ownerAt(6, 2, 1);
+        EntityMaid maid = scene.maid(1, 2, 1);
 
         helper.assertTrue(
-                run(helper, maid, CompanionIntentIds.FOLLOW_OWNER_ANCHOR)
+                run(scene, maid, CompanionIntentIds.FOLLOW_OWNER_ANCHOR)
                         == ActionResult.RUNNING,
                 "Following a distant owner did not report as running"
         );
-        helper.assertTrue(headingFor(maid, owner),
+        helper.assertTrue(headingFor(maid, scene.owner()),
                 "She was not sent toward her owner");
         helper.succeed();
     }
@@ -65,12 +60,12 @@ public final class ProximityErrandGameTests {
      */
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void everyMaidMayFollowTheSameOwner(GameTestHelper helper) {
-        Player owner = helper.makeMockPlayer();
-        owner.setPos(GameTestPositions.center(helper, 9, 2, 1));
-        EntityMaid first = maid(helper, owner, 1, 2, 1);
-        EntityMaid second = maid(helper, owner, 1, 2, 2);
-        TlmMaidIntentActions actions = actions();
-        long gameTime = helper.getLevel().getGameTime();
+        CompanionScene scene = CompanionScene.room(helper, 6, 2)
+                .ownerAt(6, 2, 1);
+        EntityMaid first = scene.maid(1, 2, 1);
+        EntityMaid second = scene.maid(1, 2, 2);
+        TlmMaidIntentActions actions = scene.actions();
+        long gameTime = scene.gameTime();
 
         ActionResult one = execute(actions, first, gameTime);
         ActionResult two = execute(actions, second, gameTime);
@@ -80,7 +75,8 @@ public final class ProximityErrandGameTests {
                         + two + ")"
         );
         helper.assertTrue(
-                headingFor(first, owner) && headingFor(second, owner),
+                headingFor(first, scene.owner())
+                        && headingFor(second, scene.owner()),
                 "Only one of the two was actually sent"
         );
         helper.succeed();
@@ -88,12 +84,12 @@ public final class ProximityErrandGameTests {
 
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void arrivingAtTheOwnerFinishes(GameTestHelper helper) {
-        Player owner = helper.makeMockPlayer();
-        owner.setPos(GameTestPositions.center(helper, 2, 2, 1));
-        EntityMaid maid = maid(helper, owner, 1, 2, 1);
+        CompanionScene scene = CompanionScene.room(helper, 3, 2)
+                .ownerAt(2, 2, 1);
+        EntityMaid maid = scene.maid(1, 2, 1);
 
         helper.assertTrue(
-                run(helper, maid, CompanionIntentIds.FOLLOW_OWNER_ANCHOR)
+                run(scene, maid, CompanionIntentIds.FOLLOW_OWNER_ANCHOR)
                         == ActionResult.SUCCEEDED,
                 "Standing beside her owner did not count as having arrived"
         );
@@ -102,14 +98,14 @@ public final class ProximityErrandGameTests {
 
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void aStrayedMaidIsSentHome(GameTestHelper helper) {
-        Player owner = helper.makeMockPlayer();
-        EntityMaid maid = maid(helper, owner, 9, 2, 1);
-        BlockPos home = helper.absolutePos(new BlockPos(1, 2, 1));
+        CompanionScene scene = CompanionScene.room(helper, 6, 2);
+        EntityMaid maid = scene.maid(6, 2, 1);
+        BlockPos home = scene.at(1, 2, 1);
         maid.setHomeModeEnable(true);
         maid.restrictTo(home, 4);
 
         helper.assertTrue(
-                run(helper, maid, CompanionIntentIds.RETURN_HOME_ANCHOR)
+                run(scene, maid, CompanionIntentIds.RETURN_HOME_ANCHOR)
                         == ActionResult.RUNNING,
                 "A maid far from home was not sent back"
         );
@@ -121,12 +117,12 @@ public final class ProximityErrandGameTests {
     /** Having no home means nowhere to be sent, not the world origin. */
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void withoutAHomeThereIsNowhereToGo(GameTestHelper helper) {
-        Player owner = helper.makeMockPlayer();
-        EntityMaid maid = maid(helper, owner, 1, 2, 1);
+        CompanionScene scene = CompanionScene.room(helper, 3, 2);
+        EntityMaid maid = scene.maid(1, 2, 1);
         maid.setHomeModeEnable(false);
 
         helper.assertTrue(
-                run(helper, maid, CompanionIntentIds.RETURN_HOME_ANCHOR)
+                run(scene, maid, CompanionIntentIds.RETURN_HOME_ANCHOR)
                         == ActionResult.FAILED,
                 "A maid with no home was sent somewhere anyway"
         );
@@ -138,15 +134,15 @@ public final class ProximityErrandGameTests {
     }
 
     private static ActionResult run(
-            GameTestHelper helper,
+            CompanionScene scene,
             EntityMaid maid,
             OrchestrationId action
     ) {
-        return actions().execute(
+        return scene.actions().execute(
                 maid,
                 action,
                 PARAMETERS,
-                helper.getLevel().getGameTime(),
+                scene.gameTime(),
                 0
         );
     }
@@ -185,42 +181,5 @@ public final class ProximityErrandGameTests {
                 .map(BlockPosTracker::currentBlockPosition)
                 .filter(position::equals)
                 .isPresent();
-    }
-
-    private static TlmMaidIntentActions actions() {
-        return new TlmMaidIntentActions(
-                ignored -> {
-                },
-                new MaidSnackCabinetMealSource(
-                        new MaidMealAccess(),
-                        new TlmAffordancePerceptionService()
-                )
-        );
-    }
-
-    private static EntityMaid maid(
-            GameTestHelper helper,
-            Player owner,
-            int x,
-            int y,
-            int z
-    ) {
-        for (int floorX = 0; floorX <= 10; floorX++) {
-            for (int floorZ = 0; floorZ <= 3; floorZ++) {
-                helper.setBlock(new BlockPos(floorX, 1, floorZ), Blocks.STONE);
-            }
-        }
-        EntityMaid maid = new EntityMaid(helper.getLevel()) {
-            @Override
-            public LivingEntity getOwner() {
-                return owner;
-            }
-        };
-        maid.setPos(GameTestPositions.center(helper, x, y, z));
-        maid.setTame(true);
-        maid.setHomeModeEnable(false);
-        maid.setOwnerUUID(owner.getUUID());
-        helper.getLevel().addFreshEntity(maid);
-        return maid;
     }
 }
