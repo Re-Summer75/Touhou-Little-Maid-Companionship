@@ -1,5 +1,6 @@
 package com.laixia.maidintelligence.feature.physics.forge;
 
+import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -11,7 +12,7 @@ import net.minecraftforge.fml.event.config.ModConfigEvent;
  */
 public final class PhysicsClientConfig {
     public static final String FILE_NAME =
-            "tlm_companionship-client.toml";
+            ModResources.configPath("client.toml");
 
     private static final ForgeConfigSpec SPEC;
     private static final ForgeConfigSpec.BooleanValue ENABLED;

@@ -27,7 +27,7 @@ final class PhysicsConfigurationVerification {
                     "The live client preference did not re-enable physics"
             );
             require(
-                    "tlm_companionship-client.toml".equals(
+                    "tlm_companionship/client.toml".equals(
                             PhysicsClientConfig.FILE_NAME
                     ),
                     "The physics preference uses an unexpected config file"

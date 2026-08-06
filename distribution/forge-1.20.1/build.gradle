@@ -216,16 +216,44 @@ tasks.register('verifyAll') {
     dependsOn stableModules.collect { "${it.path}:verifyArchitecture" }
 }
 
+// The composition root is allowed to split, because the 500-line source layout
+// limit applies to it too and the two rules would otherwise contradict each
+// other. What must not appear here is business code: a helper stays legitimate
+// only while it is package-private, since anything another module can reference
+// belongs in a feature or an adapter instead.
+def compositionRoot = 'MaidIntelligence.java'
+def compositionRootHelpers = ['DomainEventWiring.java']
+
 tasks.register('verifyDistributionBoundary') {
     group = 'verification'
     inputs.files(fileTree('src/main/java') { include '**/*.java' })
     doLast {
         def productionSources = inputs.files.files
-        if (productionSources.size() != 1
-                || productionSources.first().name != 'MaidIntelligence.java') {
+        def presentNames = productionSources.collect { it.name } as Set
+        if (!presentNames.contains(compositionRoot)) {
             throw new GradleException(
-                    'Distribution production code must contain only the @Mod composition root.'
+                    "Distribution production code must contain ${compositionRoot}."
             )
+        }
+        def unexpected = presentNames - compositionRoot - compositionRootHelpers
+        if (!unexpected.isEmpty()) {
+            throw new GradleException(
+                    'Distribution production code must contain only the @Mod '
+                            + 'composition root and its declared helpers; found: '
+                            + unexpected.sort().join(', ')
+            )
+        }
+        def publicTypePattern =
+                ~/^public\s+(?:final\s+|abstract\s+)?(?:class|interface|enum|record)\s.*/
+        productionSources.findAll {
+            compositionRootHelpers.contains(it.name)
+        }.each { helper ->
+            if (helper.readLines('UTF-8').any { it ==~ publicTypePattern }) {
+                throw new GradleException(
+                        "${helper.name} must stay package-private: a distribution "
+                                + 'helper other modules can reference is business code.'
+                )
+            }
         }
     }
 }
@@ -247,6 +275,7 @@ tasks.register('verifyMixinLayout') {
                     'EntityMaidPlaceBlockMixin',
                     'MaidFeedAnimalTaskMixin',
                     'MaidPickupEntitiesSensorOptimizationMixin',
+                    'TaskManagerFreedomOrderMixin',
                     'ai.EntitySitCommandSeatLockMixin',
                     'ai.EntityMaidMovementCoordinationMixin',
                     'ai.MaidBegMovementCoordinationMixin',

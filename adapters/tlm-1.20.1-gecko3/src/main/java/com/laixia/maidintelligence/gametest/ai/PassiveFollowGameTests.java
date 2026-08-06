@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.gametest;
+package com.laixia.maidintelligence.gametest.ai;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.task.MaidFollowOwnerTask;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;

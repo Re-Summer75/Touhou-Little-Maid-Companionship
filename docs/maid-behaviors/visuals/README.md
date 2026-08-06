@@ -35,7 +35,7 @@
 enabled = true
 ```
 
-文件：`config/tlm_companionship-client.toml`
+文件：`config/tlm_companionship/client.toml`
 
 ## 物理约束与碰撞
 

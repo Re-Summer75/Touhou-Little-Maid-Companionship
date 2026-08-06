@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.feature.ai.forge;
 
 import com.laixia.maidintelligence.feature.ai.api.MaidAiTuning;
 import com.laixia.maidintelligence.feature.ai.api.MovementCoordinationMode;
+import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -13,7 +14,7 @@ import net.minecraftforge.fml.event.config.ModConfigEvent;
  */
 public final class AiServerConfig {
     public static final String FILE_NAME =
-            "tlm_companionship-server.toml";
+            ModResources.configPath("server.toml");
 
     private static final ForgeConfigSpec SPEC;
     private static final ForgeConfigSpec.BooleanValue ENABLED;

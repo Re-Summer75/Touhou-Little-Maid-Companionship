@@ -15,7 +15,7 @@
 
 ## 玩家配置
 
-Forge 首次启动客户端后自动生成 `config/tlm_companionship-client.toml`：
+Forge 首次启动客户端后自动生成 `config/tlm_companionship/client.toml`：
 
 ```toml
 [physics]

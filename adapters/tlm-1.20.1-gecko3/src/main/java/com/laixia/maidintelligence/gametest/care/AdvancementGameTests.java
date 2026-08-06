@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.gametest;
+package com.laixia.maidintelligence.gametest.care;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;

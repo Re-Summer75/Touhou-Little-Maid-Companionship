@@ -33,6 +33,7 @@ public final class InteractionForgeInstaller
             return;
         }
         installed = true;
+        InteractionConfig.register(lifecycle.modEventBus());
         eventHandlers.forEach(lifecycle.gameEventBus()::register);
         DistExecutor.unsafeRunWhenOn(
                 Dist.CLIENT,

@@ -102,7 +102,7 @@
 
 配置与定义：
 
-- `config/tlm_companionship-behavior-server.toml`
+- `config/tlm_companionship/behavior-server.toml`
 - `data/tlm_companionship/maid_ai/intents/gaze_recall.json`
 - `data/tlm_companionship/maid_ai/plans/gaze_recall_session.json`
 
@@ -335,8 +335,8 @@ Home 模式不会为普通跟随离座。允许坐式工作的任务不会因普
 
 ## 配置与诊断
 
-- `config/tlm_companionship-server.toml`：AI 优化、活动半径、战斗扫描和移动协调。
-- `config/tlm_companionship-behavior-server.toml`：意图预算、rollout、学习模式和注视传感器。
+- `config/tlm_companionship/server.toml`：AI 优化、活动半径、战斗扫描和移动协调。
+- `config/tlm_companionship/behavior-server.toml`：意图预算、rollout、学习模式和注视传感器。
 - `/tlmcompanionship ai stats`：查看目录代际与调度计数。
 - `/tlmcompanionship ai explain <女仆>`：查看当前意图、状态、候选分数、Outcome 与阻塞原因。
 

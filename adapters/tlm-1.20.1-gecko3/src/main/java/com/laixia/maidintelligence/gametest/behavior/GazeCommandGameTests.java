@@ -131,7 +131,7 @@ public final class GazeCommandGameTests {
                     fixture.maid().getVehicle() == maidSeat,
                     "Maid automatically left a command seat"
             );
-            new MaidInteractionHandler().onNormalInteract(
+            new MaidInteractionHandler(() -> true).onNormalInteract(
                     new InteractMaidEvent(
                             fixture.owner(),
                             fixture.maid(),

@@ -55,6 +55,7 @@ import com.laixia.maidintelligence.feature.interaction.client.ClientInteractionS
 import com.laixia.maidintelligence.feature.interaction.client.runtime.TlmInteractionClientPacketHandler;
 import com.laixia.maidintelligence.feature.interaction.client.runtime.TlmInteractionClientRuntime;
 import com.laixia.maidintelligence.feature.interaction.event.MaidFedEvent;
+import com.laixia.maidintelligence.feature.interaction.forge.InteractionConfig;
 import com.laixia.maidintelligence.feature.interaction.forge.InteractionForgeInstaller;
 import com.laixia.maidintelligence.feature.interaction.handler.MaidAutomaticEatingParticleHandler;
 import com.laixia.maidintelligence.feature.interaction.handler.MaidDirectItemInteractionHandler;
@@ -374,7 +375,9 @@ public final class MaidIntelligence {
                 ),
                 new InteractionForgeInstaller(
                         List.of(
-                                new MaidInteractionHandler(),
+                                new MaidInteractionHandler(
+                                        InteractionConfig::usesCustomKeys
+                                ),
                                 new MaidDirectItemInteractionHandler(
                                         feeding
                                 ),

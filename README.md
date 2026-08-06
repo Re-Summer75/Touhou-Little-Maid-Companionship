@@ -62,6 +62,7 @@
 - **面部追踪粒子**：喂食碎屑精确追踪模型面部坐标动态生成，兼容 Gecko、Bedrock 与 YSM 三套几何来源。
 - **状态气泡**：饥饿、背包已满、工具耐久过低、自动换工具等场景弹出带防刷冷却的专属聊天气泡；需要协助的状态会附带短暂请求动作。
 - **准星提示**：手持食物、药品或可交互物品时给出对应提示，并处理河童罗盘等例外。
+- **交互按键开关**：`Shift + 右键`开界面、空手右键坐下这套手势可在 `config/tlm_companionship/interaction.toml` 中关闭，关闭后右键交互交还车万女仆本体。
 
 ### 骨骼物理（VRM 弹簧骨）
 
@@ -74,7 +75,7 @@
 - **统一碰撞代理**：自动生成 Plane / Sphere / Capsule / Box 与网格碰撞体，配合布料分层规划减少常见穿模。
 - **零分配热路径**：最小活动骨架 + 扁平预序迭代 + scratch 复用，逐帧堆分配为 `0 B`，并附带独立性能基准任务。
 - **模型物理元数据**：资源包可提供 sidecar 配置显式指定软体链、排除节点与物理参数，覆盖自动结果。
-- **玩家开关**：首次启动后可在 `config/tlm_companionship-client.toml` 中设置 `physics.enabled`，关闭客户端骨骼物理。
+- **玩家开关**：首次启动后可在 `config/tlm_companionship/client.toml` 中设置 `physics.enabled`，关闭客户端骨骼物理。
 - **调试工具**：`/maidphysicsdebug` 获取骨骼调试棒，可视化骨架分类、碰撞代理与决策链路。
 
 ### 环境风场
@@ -99,7 +100,7 @@
 - 主人连续静止 1 秒后，女仆的空闲、工作与战斗活动范围会瞬时扩展，战斗默认可从常见的 8 格提升至 20 格；主人移动 3 tick 后恢复原范围，Home、坐下、睡眠、拴绳和载具状态不扩展，也不会改写存档半径。
 - 内置攻击任务会优先响应女仆受击、主人受击与主人正在攻击的目标，并以 10/20 tick 的受限扫描补充主动索敌；不修改伤害、攻击间隔、武器逻辑或第三方任务。
 - 女仆在本体凳子、娱乐座位或未被指挥锁定的原版船只上，可因跟随、拾取或战斗需要自主下乘；主人离开普通船只后女仆也会立即下船，不再受本体短暂离船窗口限制。指挥锁定、主人命令坐下和其他模组载具仍受保护，坐式工作也不会被拾取打断。
-- 服务端可通过 `tlm_companionship-server.toml` 配置动态半径、战斗扫描和 `OFF / OBSERVE / CONSERVATIVE` 协调模式，并用 `/tlmcompanionship ai stats` 查看性能、范围、索敌与协调指标。
+- 服务端可通过 `tlm_companionship/server.toml` 配置动态半径、战斗扫描和 `OFF / OBSERVE / CONSERVATIVE` 协调模式，并用 `/tlmcompanionship ai stats` 查看性能、范围、索敌与协调指标。
 
 ### 数据驱动意图 AI
 
@@ -113,7 +114,7 @@
 - 计划可在战斗打断后按策略重启步骤、恢复检查点或重规划后缀；执行终态以去重 Outcome 记录。短期事件和 trace 有界保存在内存，高价值记忆才随女仆持久化。
 - `maid_ai/abilities/*.json` 可把受支持的高层模板编译为同一套 Intent/Plan。首个能力 `deploy_boat` 会优先复用空船，否则安全 Claim 水面并在生成成功后才扣物；同一主人下多名女仆通过公平竞标只选一个自主响应者。
 - 有界学习把 Outcome 分别投影为对象可靠性、主人偏好和时段习惯；默认只做影子记录。启用后也只能软修正 Utility，不能绕过安全条件、命令、能力授权或资源容量，并支持查看、冻结、重置和导出。
-- `tlm_companionship-behavior-server.toml` 只保留总开关、评估预算、rollout、学习模式、诊断开关以及注视传感器范围/持续时间；饥饿阈值、概率、等待、冷却和计划步骤均以 Data Pack 为唯一来源。
+- `tlm_companionship/behavior-server.toml` 只保留总开关、评估预算、rollout、学习模式、诊断开关以及注视传感器范围/持续时间；饥饿阈值、概率、等待、冷却和计划步骤均以 Data Pack 为唯一来源。
 - 管理员可用 `/tlmcompanionship ai stats` 查看目录代际和调度计数，用 `/tlmcompanionship ai explain <女仆>` 查看当前意图、计划状态、候选效用和阻塞原因，并通过 `ai ability` 与 `ai learning` 子命令管理能力和学习。数据格式与扩展方式见 [`docs/architecture/intent-ai-data.md`](docs/architecture/intent-ai-data.md)。
 
 ---

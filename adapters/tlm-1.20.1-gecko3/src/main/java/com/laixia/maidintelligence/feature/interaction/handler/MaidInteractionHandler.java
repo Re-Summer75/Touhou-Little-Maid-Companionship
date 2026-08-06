@@ -14,6 +14,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
+import java.util.Objects;
+import java.util.function.BooleanSupplier;
+
 /**
  * 调整主人与女仆的默认交互：
  * <ul>
@@ -21,10 +24,22 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  *     <li>空手右键：切换坐下/起立</li>
  *     <li>手持物品右键：只执行物品交互，不再回退打开界面</li>
  * </ul>
+ *
+ * <p>整套手势可由配置关闭，关闭后右键交互完全交还车万女仆本体。开关值经构造
+ * 注入：配置属于 Forge 平台，TLM adapter 不反向读取它。
  */
 public final class MaidInteractionHandler {
+    private final BooleanSupplier enabled;
+
+    public MaidInteractionHandler(BooleanSupplier enabled) {
+        this.enabled = Objects.requireNonNull(enabled, "enabled");
+    }
+
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public void onShiftInteract(InteractMaidEvent event) {
+        if (!enabled.getAsBoolean()) {
+            return;
+        }
         Player player = event.getPlayer();
         EntityMaid maid = event.getMaid();
         if (!maid.isOwnedBy(player)
@@ -39,6 +54,9 @@ public final class MaidInteractionHandler {
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onNormalInteract(InteractMaidEvent event) {
+        if (!enabled.getAsBoolean()) {
+            return;
+        }
         Player player = event.getPlayer();
         EntityMaid maid = event.getMaid();
         if (!maid.isOwnedBy(player) || player.isShiftKeyDown()) {

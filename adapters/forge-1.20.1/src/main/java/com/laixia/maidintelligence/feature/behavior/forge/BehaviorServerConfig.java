@@ -4,6 +4,7 @@ import com.laixia.maidintelligence.feature.behavior.api.BehaviorTuning;
 import com.laixia.maidintelligence.feature.behavior.domain.GazeRecallPolicy;
 import com.laixia.maidintelligence.feature.behavior.domain.learning.LearningMode;
 import com.laixia.maidintelligence.feature.orchestration.api.IntentRolloutMode;
+import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -15,7 +16,7 @@ import net.minecraftforge.fml.event.config.ModConfigEvent;
  */
 public final class BehaviorServerConfig {
     public static final String FILE_NAME =
-            "tlm_companionship-behavior-server.toml";
+            ModResources.configPath("behavior-server.toml");
 
     private static final ForgeConfigSpec SPEC;
     private static final ForgeConfigSpec.BooleanValue ENABLED;

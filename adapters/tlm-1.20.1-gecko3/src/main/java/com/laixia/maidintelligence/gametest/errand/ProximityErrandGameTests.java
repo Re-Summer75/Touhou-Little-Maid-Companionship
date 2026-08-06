@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.gametest;
+package com.laixia.maidintelligence.gametest.errand;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;

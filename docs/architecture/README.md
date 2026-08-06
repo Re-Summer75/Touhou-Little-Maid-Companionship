@@ -239,7 +239,10 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 - `mods.toml`、语言、advancement、Mixin descriptor 和生成资源；
 - run 配置、reobf、功能验证、IDE 元数据与发布产物。
 
-生产 Java 源除组合根外不得放入 distribution。发布 jar 仍位于
+生产 Java 源除组合根及其 package-private 辅助类外不得放入 distribution。组合根同样
+受 500 行限制，因此允许按职责拆出辅助类；但辅助类必须保持 package-private——其他模块
+能引用到的东西属于 feature 或 adapter，不属于组合根。`verifyDistributionBoundary`
+同时检查文件白名单与可见性。发布 jar 仍位于
 `distribution/forge-<mc>/build/libs`，当前 release 路径保持
 `distribution/forge-1.20.1/build/libs`。
 
@@ -363,7 +366,10 @@ GameTest Server 继续验证注视、三秒指挥跟随、载具共乘、座位�
 覆盖全部夹具坐标，实体坐标必须通过 `GameTestPositions` 转换，避免并行测试和跨轮残留串扰。
 
 GameTest 类由 Forge 按 `@GameTestHolder` 自动发现，不存在显式注册目录——先前的
-`GameTestCatalog` 正因让人误以为可以借注册控制测试集而被删除。多元素场景统一通过
+`GameTestCatalog` 正因让人误以为可以借注册控制测试集而被删除。测试按被验证的边界
+分包：`ai`（原版 AI 优化）、`behavior`（陪伴行为与仲裁）、`errand`（差事与归队）、
+`care`（成长、进度与状态反馈）、`interaction`（主人交互与按键指令）、`support`
+（夹具）。分包只服务于导航和目录密度，不参与发现。多元素场景统一通过
 `CompanionScene` 构建（多女仆、无主女仆、椅子、船、掉落物、交战目标），并遵守网格纪律：
 
 - 场景整体抬高 12 格，使家具落在邻居座位查询的 ±4 格垂直带之外；测试放出的椅子和船
