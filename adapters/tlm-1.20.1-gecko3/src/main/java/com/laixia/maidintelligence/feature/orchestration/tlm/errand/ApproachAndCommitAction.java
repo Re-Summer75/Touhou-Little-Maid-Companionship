@@ -109,7 +109,8 @@ public final class ApproachAndCommitAction {
         }
         if (!eligible(maid)
                 || !errand.stillWorthwhile(maid, held.target(), gameTime)
-                || !held.claims().owns(held.claim(), gameTime)) {
+                || (held.claim() != null
+                        && !held.claims().owns(held.claim(), gameTime))) {
             cancel(maid);
             return false;
         }
@@ -129,11 +130,12 @@ public final class ApproachAndCommitAction {
         clearMovement(maid, held);
         // Upgrading the reservation before touching anything is what stops two
         // maids who both arrived from both succeeding.
-        boolean occupied = held.claims().occupy(
-                held.claim(),
-                gameTime,
-                COMMIT_LEASE_TICKS
-        ) && held.claims().owns(held.claim(), gameTime);
+        boolean occupied = held.claim() == null
+                || (held.claims().occupy(
+                        held.claim(),
+                        gameTime,
+                        COMMIT_LEASE_TICKS
+                ) && held.claims().owns(held.claim(), gameTime));
         boolean done = occupied && errand.commit(maid, target, gameTime);
         if (progress.get(maid) == held) {
             progress.remove(maid);
@@ -187,6 +189,19 @@ public final class ApproachAndCommitAction {
     ) {
         if (!(maid.level() instanceof ServerLevel level)) {
             return null;
+        }
+        if (!errand.requiresClaim()) {
+            // Nothing to contend for, so progress is only about which walk
+            // target is ours to withdraw.
+            Progress current = progress.get(maid);
+            if (current != null
+                    && current.target().identity().equals(target.identity())) {
+                return current;
+            }
+            cancel(maid);
+            Progress unclaimed = new Progress(target, null, null, null);
+            progress.put(maid, unclaimed);
+            return unclaimed;
         }
         Progress current = progress.get(maid);
         if (current != null
@@ -259,6 +274,9 @@ public final class ApproachAndCommitAction {
             return;
         }
         clearMovement(maid, held);
+        if (held.claim() == null) {
+            return;
+        }
         held.claims().release(
                 held.claim(),
                 maid.level().getGameTime(),

@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import net.minecraft.core.BlockPos;
 
 /**
  * Builds one immutable TLM fact snapshot per orchestration read.
@@ -297,6 +298,7 @@ public final class TlmMaidFactReader {
                         && occupancy.allowsPassiveCompanion()
                         && !perception.queryLooseFood(maid, 1, gameTime)
                                 .isEmpty(),
+                homeDistance(maid),
                 ownerFacts.read(owner, gameTime)
         );
     }
@@ -391,9 +393,34 @@ public final class TlmMaidFactReader {
         if (fact.equals(CompanionIntentIds.LOOSE_FOOD_AVAILABLE)) {
             return bool(snapshot.looseFoodAvailable());
         }
+        if (fact.equals(CompanionIntentIds.HOME_DISTANCE)) {
+            return snapshot.homeDistance();
+        }
         // Owner facts answer for themselves, and NaN for anything that is
         // not one, which is the same answer this method gave before.
         return snapshot.owner().value(fact);
+    }
+
+    /**
+     * How far she is from the middle of her home, or NaN when she has none.
+     *
+     * <p>Not zero: a maid without a home is not standing in the middle of one,
+     * and a condition asking whether she has strayed should fail rather than
+     * quietly hold.
+     */
+    private static double homeDistance(EntityMaid maid) {
+        if (!maid.isHomeModeEnable()) {
+            return Double.NaN;
+        }
+        BlockPos home = maid.getRestrictCenter();
+        if (home == null || BlockPos.ZERO.equals(home)) {
+            return Double.NaN;
+        }
+        return Math.sqrt(maid.distanceToSqr(
+                home.getX() + 0.5D,
+                home.getY() + 0.5D,
+                home.getZ() + 0.5D
+        ));
     }
 
     private static LivingEntity validOwner(EntityMaid maid) {
@@ -447,6 +474,7 @@ public final class TlmMaidFactReader {
             int behaviorOccupancyLevel,
             int behaviorOccupancyReason,
             boolean looseFoodAvailable,
+            double homeDistance,
             OwnerFacts owner
     ) {
     }

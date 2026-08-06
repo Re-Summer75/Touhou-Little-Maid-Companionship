@@ -24,6 +24,9 @@ public final class CompanionIntentIds {
             id("fact/owner_distance");
     public static final OrchestrationId FAVORABILITY = id("fact/favorability");
     public static final OrchestrationId HUNGER = id("fact/hunger");
+    /** Blocks from the centre of her home, or NaN when she has none. */
+    public static final OrchestrationId HOME_DISTANCE =
+            id("fact/home_distance");
     /** Something edible is lying within reach and free to take. */
     public static final OrchestrationId LOOSE_FOOD_AVAILABLE =
             id("fact/loose_food_available");
@@ -80,6 +83,18 @@ public final class CompanionIntentIds {
             id("action/approach_owner");
     public static final OrchestrationId FETCH_SNACK_CABINET_MEAL =
             id("action/fetch_snack_cabinet_meal");
+    /** Keep up with her owner: an anchor that moves. */
+    public static final OrchestrationId FOLLOW_OWNER_ANCHOR =
+            id("action/follow_owner");
+    /** Go back to where she has been told she belongs. */
+    public static final OrchestrationId RETURN_HOME_ANCHOR =
+            id("action/return_home");
+    /** Take a free seat: one chair holds one person. */
+    public static final OrchestrationId REST_ON_SEAT =
+            id("action/rest_on_seat");
+    /** Drift over and be near her owner for its own sake. */
+    public static final OrchestrationId KEEP_COMPANY =
+            id("action/keep_company");
     /** Walk to a dropped item and take it, rather than opening anything. */
     public static final OrchestrationId PICK_UP_LOOSE_FOOD =
             id("action/pick_up_loose_food");
@@ -130,6 +145,7 @@ public final class CompanionIntentIds {
                 HUNGER,
                 SNACK_CABINET_MEAL_AVAILABLE,
                 LOOSE_FOOD_AVAILABLE,
+                HOME_DISTANCE,
                 FOLLOW_MODE,
                 HOME_MODE,
                 ORDERED_SIT,
@@ -172,6 +188,10 @@ public final class CompanionIntentIds {
                         APPROACH_OWNER,
                         FETCH_SNACK_CABINET_MEAL,
                         PICK_UP_LOOSE_FOOD,
+                        FOLLOW_OWNER_ANCHOR,
+                        RETURN_HOME_ANCHOR,
+                        REST_ON_SEAT,
+                        KEEP_COMPANY,
                         COMPANION_COMMAND_WINDOW,
                         REQUEST_HUNGER_ATTENTION,
                         DEPLOY_BOAT
@@ -190,6 +210,7 @@ public final class CompanionIntentIds {
                                 LOOSE_FOOD_AVAILABLE,
                                 FactType.BOOLEAN
                         ),
+                        Map.entry(HOME_DISTANCE, FactType.NUMBER),
                         Map.entry(FOLLOW_MODE, FactType.BOOLEAN),
                         Map.entry(HOME_MODE, FactType.BOOLEAN),
                         Map.entry(ORDERED_SIT, FactType.BOOLEAN),
@@ -275,6 +296,50 @@ public final class CompanionIntentIds {
                         PICK_UP_LOOSE_FOOD,
                         new ActionSchema(
                                 PICK_UP_LOOSE_FOOD,
+                                Map.of(
+                                        "speed",
+                                        ActionParameterType.NUMBER,
+                                        "close_distance",
+                                        ActionParameterType.INTEGER
+                                ),
+                                Set.of()
+                        ),
+                        FOLLOW_OWNER_ANCHOR,
+                        new ActionSchema(
+                                FOLLOW_OWNER_ANCHOR,
+                                Map.of(
+                                        "speed",
+                                        ActionParameterType.NUMBER,
+                                        "close_distance",
+                                        ActionParameterType.INTEGER
+                                ),
+                                Set.of()
+                        ),
+                        RETURN_HOME_ANCHOR,
+                        new ActionSchema(
+                                RETURN_HOME_ANCHOR,
+                                Map.of(
+                                        "speed",
+                                        ActionParameterType.NUMBER,
+                                        "close_distance",
+                                        ActionParameterType.INTEGER
+                                ),
+                                Set.of()
+                        ),
+                        REST_ON_SEAT,
+                        new ActionSchema(
+                                REST_ON_SEAT,
+                                Map.of(
+                                        "speed",
+                                        ActionParameterType.NUMBER,
+                                        "close_distance",
+                                        ActionParameterType.INTEGER
+                                ),
+                                Set.of()
+                        ),
+                        KEEP_COMPANY,
+                        new ActionSchema(
+                                KEEP_COMPANY,
                                 Map.of(
                                         "speed",
                                         ActionParameterType.NUMBER,

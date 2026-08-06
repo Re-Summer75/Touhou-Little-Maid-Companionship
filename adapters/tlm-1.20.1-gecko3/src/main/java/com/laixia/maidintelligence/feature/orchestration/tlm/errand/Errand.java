@@ -20,6 +20,18 @@ public interface Errand {
     String name();
 
     /**
+     * Whether arriving somewhere means taking something nobody else may have.
+     *
+     * <p>Fetching a meal does; keeping near her owner does not, and reserving
+     * him would be actively wrong — the first maid to set off would hold the
+     * only claim and every other maid in the household would stop following.
+     * Errands about being somewhere rather than taking something say false.
+     */
+    default boolean requiresClaim() {
+        return true;
+    }
+
+    /**
      * A chance to put herself in a state where the errand is possible at all,
      * run before she is checked for being free. Only errands that genuinely
      * need it should do anything here — getting up off a decorative chair is

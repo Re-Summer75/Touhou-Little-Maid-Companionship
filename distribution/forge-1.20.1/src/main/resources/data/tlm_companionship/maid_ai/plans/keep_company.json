@@ -1,0 +1,19 @@
+{
+  "format_version": 2,
+  "initial_state": "go",
+  "resume_policy": "restart_step",
+  "maximum_suspend_ticks": 300,
+  "states": {
+    "go": {
+      "action": "tlm_companionship:action/keep_company",
+      "parameters": {
+        "speed": "0.5",
+        "close_distance": "4"
+      },
+      "timeout_ticks": 300,
+      "on_success": "$success",
+      "on_failure": "$failure",
+      "on_cancel": "$failure"
+    }
+  }
+}

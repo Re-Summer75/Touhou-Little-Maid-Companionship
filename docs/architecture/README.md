@@ -100,8 +100,19 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 - `:features:ai:behavior` 是独立 Gradle 子模块，包边界为 `feature.behavior`，只保留原创
   陪伴行为的稳定事实/刺激/动作词表、传感器时序与刺激门面；它依赖编排模块，但不依赖
   `:features:ai` 的原版 AI 优化实现。
-- `MaidGazeRecallApi<O, M>` 是注视手势提交入口；`ContinuousLookTracker` 只处理连续
-  注视的边沿触发。好感度、模式、距离和动作语义不再硬编码于该模块。
+- `MaidGazeRecallApi<O, M>` 是注视手势提交入口；`GazeGestureTracker` 实现两段式手势
+  （注视令女仆回望，再指向附近地面才构成召唤），任何纯时长阈值都无法区分欣赏与召唤，
+  这一性质由"注视 600 tick 不得触发"验证钉住。好感度、模式、距离和动作语义不再硬编码
+  于该模块。
+- `OwnerFactIds`/`OwnerFacts` 提供 25 项主人事实（手持、体征、姿态、效果、背包），分数
+  一律归一到 `[0,1]`；无主人时返回 NaN 而非 0，使"血量偏低"不会对不存在的主人成立。
+  TLM 侧按主人而非按女仆缓存，背包扫描走独立慢时钟。
+- Affordance 商品值受 `[0,1]` 构造约束：排序按搜索半径比例扣减距离，越界值等于关闭该查
+  询的距离因素。零食柜按实际库存计值（空柜为 0），掉落物广告带 TTL 并靠再次观察续期；
+  容器同时广告 `open_container`，使"需走到方块"的查询不被地面食物挤占。
+- `FreedomMaidTask`（`tlm_companionship:freedom`）是本模组唯一的 TLM 工作项：
+  `createBrainTasks` 返回空列表，把行为决策完整交给陪伴编排；保留惊慌、进食与随机走动。
+  行为占用分类只在家园模式且身处限制区之外时才计 `HOME_RETURN`，在家不算被占用。
 - `AffordanceAdvertisement`/`AffordanceQuery` 与 `DefaultAffordanceIndex` 提供有 revision、
   TTL、top-K 和每 tick 检查预算的对象中心感知；零食柜、主人和座位由 TLM Provider
   在已加载世界事件上发布，查询绝不加载区块。
@@ -144,12 +155,24 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
   [`intent-ai-data.md`](intent-ai-data.md)。
 - TLM adapter 用一个 `MaidIntentBehavior` 统一更新工作释放/随机游走边沿、采集事实并推进
   调度器。注视处理器与缺食反馈只提交 TTL 刺激；`TlmMaidIntentActions` 只做动作分派，
-  主人交互、零食柜和放船副作用由各自 action family 实现，并以 `COMPANION` 移动来源复用
-  拾取保护、硬状态和 fail-open。零食柜与兼容座位只从共享 Affordance 索引粗筛，再对少量
-  候选复验世界状态；容器槽、座位与放置点必须取得 Claim 后才能提交。
+  主人交互与放船副作用由各自 action family 实现，并以 `COMPANION` 移动来源复用拾取保
+  护、硬状态和 fail-open。
+- "走过去、占住、做掉"形状的差事统一由 `errand.ApproachAndCommitAction` 骨架执行，它是
+  陪伴差事唯一写入 `WALK_TARGET`、唯一认领资源的位置；`Errand` 只提供差异部分（找什么、
+  到了做什么、可选 prepare 与复验），`ApproachTarget` 抽象方块槽位/方块/实体三类目标。
+  `requiresClaim=false` 表示"到某处"而非"取某物"——跟随、回家与陪伴不认领，否则第一个
+  出发者会锁住主人；椅子、掉落物与容器槽按各自粒度认领。放船由能力生命周期驱动、无移动
+  写入，形状不同，不纳入骨架。
+- 感知查询统一经 `queryAffordances(affordances, commodity, …)` 单一入口，具体查询只保留
+  结果解析与世界复验；合格集合作为参数，使数据包可指向本模组未内置的广告主。座位判定
+  采用正向清单（TLM 家具、船、矿车），因为原版几乎任何实体都接受乘客——排除法曾先后漏
+  掉"椅子也是 LivingEntity"与"女仆坐在掉落物上"两类错误。
 - 内置目录定义 `gaze_recall`、`hungry_feedback`、`hungry_standard`、
-  `hungry_high_trust`、`post_task_return`、`snack_cabinet_meal`、`wander_return`，
-  以及 `approach_owner`、`fetch_snack_cabinet_meal`、`request_food` 计划。
+  `hungry_high_trust`、`post_task_return`、`snack_cabinet_meal`、`wander_return`、
+  `anticipate_departure`、`loose_food_meal`、`follow_owner`、`return_home`、
+  `rest_on_seat`、`keep_company` 等意图与对应计划；优先级编码语义（回家 50 > 跟随 40 >
+  陪伴 30 > 落座 10，地面食物 65 > 零食柜 60）。意图数据验证按目录自动发现计划，
+  不维护手工清单。
   饥饿阈值、概率、归队等待和冷却全部由 Data Pack 决定；TOML 只控制引擎预算、诊断和
   注视传感器安全参数。
 
@@ -338,6 +361,16 @@ GameTest Server 继续验证注视、三秒指挥跟随、载具共乘、座位�
 放船不重复消费以及同一主人下两名女仆只响应一个共享放船 Request。
 `runGameTestServer` 使用独立 `run-gametest` 工作目录，每次启动前删除旧测试世界；空模板
 覆盖全部夹具坐标，实体坐标必须通过 `GameTestPositions` 转换，避免并行测试和跨轮残留串扰。
+
+GameTest 类由 Forge 按 `@GameTestHolder` 自动发现，不存在显式注册目录——先前的
+`GameTestCatalog` 正因让人误以为可以借注册控制测试集而被删除。多元素场景统一通过
+`CompanionScene` 构建（多女仆、无主女仆、椅子、船、掉落物、交战目标），并遵守网格纪律：
+
+- 场景整体抬高 12 格，使家具落在邻居座位查询的 ±4 格垂直带之外；测试放出的椅子和船
+  正是隔壁测试要找的东西，曾令三格开外的指挥落座测试间歇失败。
+- 敌对目标只创建、不加入世界：占用分类只问"是否持有攻击目标"，而真实僵尸的索敌达
+  16 格，钉住或抬高都无法隔离。
+- 断言不等待寻路：够得着的目标一次调用出结果，够不着的只断言"她被派往何处"。
 
 target 负向检查示例（失败为预期）：
 

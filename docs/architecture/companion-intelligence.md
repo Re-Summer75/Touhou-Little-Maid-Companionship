@@ -142,6 +142,32 @@ BlockJoy 上座兜底（仅 IDLE 娱乐）、Breath/Home/Pickup/偷吃/工作目
   `Level.getBlockEntity` 二次请求正在完成加载的 Chunk，否则会形成主线程自等待。
 - BlockEntity、实体或槽位在提交前必须再次复验；Affordance 只代表候选，不代表所有权。
 
+### 差事骨架
+
+- 「走过去做点什么」这一形状只有 `ApproachAndCommitAction` 一个实现。它是本模组唯一为陪伴
+  差事写入 `WALK_TARGET` 的地方，也是唯一认领她正前往之物的地方。
+- 新增此类动作只写一个 `Errand`：叫什么、去找什么、到了做什么。资格检查、认领续期、移动
+  撤回与各失败路径上的释放都不重写，否则数份副本会在被分别改进之后产生分歧，症状是难以
+  复现的偶发卡住。
+- `requiresClaim()` 区分「拿走某物」与「待在某处」。拿食物、坐椅子要认领；跟随主人、回到
+  家园不得认领，否则第一只出发的女仆会持有唯一认领，其余女仆全部停在原地。
+- `ApproachTarget.identity()` 必须跨 tick 稳定，`matches()` 用于识别已写入的走路目标。
+  `PositionTracker` 每次调用都会重建，对象身份比较必然失败。
+- 容器槽位的身份包含槽位序号：两只女仆同时从一个柜子取物并不冲突，只要伸向不同的格子。
+- 目标筛选用肯定判据而非否定判据。原版几乎任何实体都接受乘客，「排除不是座位的东西」必然
+  漏 —— 曾先后漏出同事（导致导航互指与栈溢出）和地上的熟牛排。
+
+### 自由工作项
+
+- `tlm_companionship:freedom` 的 `createBrainTasks` 必须返回空列表。任何在此注册的行为都是
+  与编排器竞争的第二种意见，而仲裁的设计是让着工作任务的。
+- 惊慌、进食、看向与随机走动保持开启。去掉它们不会让她更自由，只会让她在火里挨饿或在两次
+  决策之间僵立。
+- `isBuiltInTask` 必须把本模组的工作项算作可观察；第三方工作项仍不予干预。遗漏会关闭
+  `wander_return`，症状是「设成自由后她游走完不回来」。
+- 家园模式只在她确实位于限制区域之外时才计入行为占用。把模式本身当作 HARD 占用会关闭全部
+  陪伴意图，症状是她待在家中饥饿却对脚边的食物无动于衷。
+
 ### Recoverable Plan
 
 - `NEVER_RESUME` 直接终止；`RESTART_STEP` 重启当前语义步骤；`RESUME_CHECKPOINT` 回到检查点；
@@ -214,6 +240,24 @@ BlockJoy 上座兜底（仅 IDLE 娱乐）、Breath/Home/Pickup/偷吃/工作目
 2. 明确 Grant、Request、assignment、Claim 和世界提交的先后关系。
 3. 为 request identity、fanOut、幂等消费及 reload 失效补验证。
 
+## GameTest 场景纪律
+
+- 陪伴场景统一由 `CompanionScene` 构建，提供多女仆、无主女仆、椅子、船、掉落物与怪物。
+  夹具不再各文件自写：同一段女仆生成代码曾被复制进五个测试文件，其中两份已在「女仆初始是否
+  家园模式」上悄悄分歧。
+- 场景整体抬高 `CompanionScene.LIFT` 格。GameTest 将全部测试排布在同一世界的网格中，水平
+  间距由框架按模板尺寸决定、从测试代码无法加宽，而座位广告的扫描范围垂直仅 ±4 格，高度是
+  这段代码确实能控制的隔离手段。曾有一个指挥落座测试因捡到本套件的椅子而失败。
+- 需要「交战状态」时用 `threat(...)` 设定攻击目标，怪物本身不得加入世界。索敌范围是任意方向
+  十六格，因此钉住 AI 与抬高场景都不足以隔离；曾有指挥落座测试因其女仆盯上本套件的僵尸而
+  持续失败。占用分类只询问她是否持有攻击目标，无需世界中真有敌人。
+- 断言只针对本动作的决定。够得着的场景把目标放在身边使结果由一次调用决定；够不着的场景断言
+  她被派往何处，而非她是否已经到达 —— 寻路耗时是引擎的事，等待它会在慢机器上随机失败。
+- `GameTestCatalog` 看似冗余而实际必要。Forge 确实会自动发现 `@GameTestHolder` 类，但测试是
+  按注册顺序在同一世界中排布成网格的；删去该清单会把顺序交给发现过程，布局随之改变，测试
+  换了邻居，曾导致一个指挥落座测试因捡到其他套件的家具而失败。它买到的是稳定的顺序，以及
+  由此而来的稳定布局。
+
 ## 验证注册契约
 
 - 独立纯 JVM 套件命名为 `*Verification.java`，并提供 `public static void main(String[] args)`。
@@ -247,6 +291,11 @@ BlockJoy 上座兜底（仅 IDLE 娱乐）、Breath/Home/Pickup/偷吃/工作目
 - 多女仆竞标：`OwnerCoordinationVerification` 与 `OwnerCoordinationGameTests`。
 - 行为占用：`BehaviorOccupancyVerification`、`MovementIntentCoordinationVerification` 与
   `NativeBehaviorArbitrationGameTests`。
+- 差事骨架：`LooseFoodGameTests`、`SeatAndCompanyGameTests` 与 `ProximityErrandGameTests`。
+- 多元素环境：`PopulatedHouseholdGameTests`（多女仆、家具、船、怪物同场）。
+- 自由工作项与家园占用：`FreedomTaskGameTests`。
+- 注视手势：`GazeGestureVerification` 与 `OwnerAwarenessGameTests`。
+- 主人状态事实：`OwnerFactVerification` 与 `OwnerAwarenessGameTests`。
 
 ## 完成判据
 

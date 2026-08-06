@@ -136,6 +136,7 @@
   "fact.tlm_companionship.owner_inventory_fullness": "your pack is not full",
   "fact.tlm_companionship.owner_experience_level": "your level is not high enough",
   "fact.tlm_companionship.loose_food_available": "no food is lying about",
+  "fact.tlm_companionship.home_distance": "she has no home, or is already in it",
   "task.tlm_companionship.freedom": "Freedom",
   "task.tlm_companionship.freedom.desc": "No set work. She decides what to do herself.",
   "task.tlm_companionship.freedom.desc.1": "She still flees danger, eats, and wanders about.",

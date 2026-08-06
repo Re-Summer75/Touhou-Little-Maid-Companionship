@@ -15,6 +15,9 @@ import java.util.function.Consumer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.ApproachAndCommitAction;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.LooseFoodErrand;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.CabinetMealErrand;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.MaintainProximityErrand;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.KeepCompanyErrand;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.RestOnSeatErrand;
 
 /**
  * The sole dispatcher allowed to apply data-driven companion side effects.
@@ -24,6 +27,10 @@ public final class TlmMaidIntentActions
     private final TlmOwnerCompanionIntentAction ownerAction;
     private final ApproachAndCommitAction snackCabinetAction;
     private final ApproachAndCommitAction looseFoodAction;
+    private final ApproachAndCommitAction followOwnerAction;
+    private final ApproachAndCommitAction returnHomeAction;
+    private final ApproachAndCommitAction restOnSeatAction;
+    private final ApproachAndCommitAction keepCompanyAction;
     private final TlmDeployBoatIntentAction deployBoatAction;
 
     public TlmMaidIntentActions(
@@ -56,6 +63,18 @@ public final class TlmMaidIntentActions
         );
         // Built from the meal source's own perception and feeding, so both
         // ways of eating agree on what is edible and what is in reach.
+        followOwnerAction = new ApproachAndCommitAction(
+                MaintainProximityErrand.followingOwner()
+        );
+        returnHomeAction = new ApproachAndCommitAction(
+                MaintainProximityErrand.returningHome()
+        );
+        restOnSeatAction = new ApproachAndCommitAction(
+                new RestOnSeatErrand(snackCabinetMeals.perception())
+        );
+        keepCompanyAction = new ApproachAndCommitAction(
+                new KeepCompanyErrand(snackCabinetMeals.perception())
+        );
         looseFoodAction = new ApproachAndCommitAction(
                 new LooseFoodErrand(
                         snackCabinetMeals.perception(),
@@ -89,6 +108,18 @@ public final class TlmMaidIntentActions
         }
         if (action.equals(CompanionIntentIds.PICK_UP_LOOSE_FOOD)) {
             return looseFoodAction.execute(maid, parameters, gameTime);
+        }
+        if (action.equals(CompanionIntentIds.FOLLOW_OWNER_ANCHOR)) {
+            return followOwnerAction.execute(maid, parameters, gameTime);
+        }
+        if (action.equals(CompanionIntentIds.RETURN_HOME_ANCHOR)) {
+            return returnHomeAction.execute(maid, parameters, gameTime);
+        }
+        if (action.equals(CompanionIntentIds.REST_ON_SEAT)) {
+            return restOnSeatAction.execute(maid, parameters, gameTime);
+        }
+        if (action.equals(CompanionIntentIds.KEEP_COMPANY)) {
+            return keepCompanyAction.execute(maid, parameters, gameTime);
         }
         if (action.equals(
                 CompanionIntentIds.COMPANION_COMMAND_WINDOW
@@ -126,6 +157,14 @@ public final class TlmMaidIntentActions
             snackCabinetAction.cancel(maid);
         } else if (action.equals(CompanionIntentIds.PICK_UP_LOOSE_FOOD)) {
             looseFoodAction.cancel(maid);
+        } else if (action.equals(CompanionIntentIds.FOLLOW_OWNER_ANCHOR)) {
+            followOwnerAction.cancel(maid);
+        } else if (action.equals(CompanionIntentIds.RETURN_HOME_ANCHOR)) {
+            returnHomeAction.cancel(maid);
+        } else if (action.equals(CompanionIntentIds.REST_ON_SEAT)) {
+            restOnSeatAction.cancel(maid);
+        } else if (action.equals(CompanionIntentIds.KEEP_COMPANY)) {
+            keepCompanyAction.cancel(maid);
         } else if (action.equals(
                 CompanionIntentIds.COMPANION_COMMAND_WINDOW
         )) {
@@ -147,6 +186,18 @@ public final class TlmMaidIntentActions
         }
         if (action.equals(CompanionIntentIds.PICK_UP_LOOSE_FOOD)) {
             return looseFoodAction.revalidate(maid, gameTime);
+        }
+        if (action.equals(CompanionIntentIds.FOLLOW_OWNER_ANCHOR)) {
+            return followOwnerAction.revalidate(maid, gameTime);
+        }
+        if (action.equals(CompanionIntentIds.RETURN_HOME_ANCHOR)) {
+            return returnHomeAction.revalidate(maid, gameTime);
+        }
+        if (action.equals(CompanionIntentIds.REST_ON_SEAT)) {
+            return restOnSeatAction.revalidate(maid, gameTime);
+        }
+        if (action.equals(CompanionIntentIds.KEEP_COMPANY)) {
+            return keepCompanyAction.revalidate(maid, gameTime);
         }
         if (action.equals(CompanionIntentIds.APPROACH_OWNER)
                 || action.equals(

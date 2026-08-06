@@ -113,7 +113,6 @@ import com.laixia.maidintelligence.feature.status.tlm.MaidMealAccess;
 import com.laixia.maidintelligence.feature.status.tlm.StatusTlmModule;
 import com.laixia.maidintelligence.feature.status.tlm.TlmMaidStatusService;
 import com.laixia.maidintelligence.feature.status.tlm.TlmMaidStatusStore;
-import com.laixia.maidintelligence.gametest.GameTestCatalog;
 import com.laixia.maidintelligence.kernel.event.DomainEventBus;
 import com.laixia.maidintelligence.kernel.service.MutableServiceRegistry;
 import com.laixia.maidintelligence.platform.forge.ForgeFeatureInstaller;
@@ -407,7 +406,6 @@ public final class MaidIntelligence {
                         () -> new MaidHungerGuiHandler(statusService)
                 )
         );
-        modEventBus.addListener(GameTestCatalog::register);
         forgeFeatures.forEach(feature -> feature.install(forge));
     }
 
