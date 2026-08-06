@@ -28,7 +28,9 @@ final class IntentDefinitionCodec {
                     OrchestrationCodecSupport.COMPARISON.fieldOf("operator")
                             .forGetter(FactCondition::comparison),
                     Codec.DOUBLE.fieldOf("value")
-                            .forGetter(FactCondition::expected)
+                            .forGetter(FactCondition::expected),
+                    Codec.BOOL.optionalFieldOf("entry_only", false)
+                            .forGetter(FactCondition::entryOnly)
             ).apply(instance, FactCondition::new));
 
     /** Shared with {@link TaskDefinitionCodec} for the same reason as

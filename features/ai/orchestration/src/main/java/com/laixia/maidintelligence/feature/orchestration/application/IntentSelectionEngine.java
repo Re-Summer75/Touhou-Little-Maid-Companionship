@@ -190,6 +190,12 @@ final class IntentSelectionEngine<M> {
             if (catalog.signalFact(condition.factIndex())) {
                 continue;
             }
+            if (condition.condition().entryOnly()) {
+                // Decided whether she could begin; re-deciding it every tick
+                // would cancel her for a distraction she has already left
+                // behind.
+                continue;
+            }
             if (!condition.condition().test(
                     facts[condition.factIndex()]
             )) {

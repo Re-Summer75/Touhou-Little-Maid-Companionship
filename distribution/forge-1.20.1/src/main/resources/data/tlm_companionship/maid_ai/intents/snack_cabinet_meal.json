@@ -2,11 +2,48 @@
   "format_version": 1,
   "plan": "tlm_companionship:fetch_snack_cabinet_meal",
   "conditions": [
-    { "fact": "tlm_companionship:fact/hunger", "operator": "lte", "value": 40.0 },
-    { "fact": "tlm_companionship:fact/snack_cabinet_meal_available", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/can_move", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/passenger", "operator": "eq", "value": 0.0 },
-    { "fact": "tlm_companionship:fact/behavior_occupancy_level", "operator": "eq", "value": 0.0 }
+    {
+      "fact": "tlm_companionship:fact/hunger",
+      "operator": "lte",
+      "value": 40.0
+    },
+    {
+      "fact": "tlm_companionship:fact/snack_cabinet_meal_available",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/can_move",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/passenger",
+      "operator": "eq",
+      "value": 0.0
+    },
+    {
+      "fact": "tlm_companionship:fact/behavior_occupancy_level",
+      "operator": "eq",
+      "value": 0.0,
+      "entry_only": true
+    },
+    {
+      "fact": "tlm_companionship:fact/attack_target_present",
+      "operator": "eq",
+      "value": 0.0
+    },
+    {
+      "fact": "tlm_companionship:fact/panic_active",
+      "operator": "eq",
+      "value": 0.0
+    },
+    {
+      "fact": "tlm_companionship:fact/using_item",
+      "operator": "eq",
+      "value": 0.0,
+      "entry_only": true
+    }
   ],
   "selection": {
     "base_score": 1.0,

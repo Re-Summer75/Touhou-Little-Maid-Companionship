@@ -243,17 +243,23 @@ public final class TlmMaidFactReader {
                 TlmBehaviorOccupancyClassifier.snapshot(maid, gameTime);
         boolean homeMode = maid.isHomeModeEnable();
         int hunger = status.getState(maid).hunger();
+        /*
+         * Only whether there is a meal to be had, and deliberately nothing
+         * about whether she is free to go and get it.
+         *
+         * <p>This used to fold in hunger, movement, combat, panic, item use and
+         * occupancy as well. Every one of those is already a fact of its own
+         * that the intent tests separately, so the duplication bought nothing —
+         * and it cost a great deal, because an opportunity is re-tested every
+         * tick while she walks. A single tick of soft occupancy made the meal
+         * "unavailable", cancelled the errand, handed her to the intent that
+         * asks her owner for food instead, and handed her back when it cleared.
+         * Measured against a fact that blinks every twenty ticks, she changed
+         * her mind ten times in two hundred; every blink cost a switch.
+         */
         boolean snackCabinetMealAvailable =
-                hunger <= DefaultHungerPolicy.AUTO_EAT_THRESHOLD
-                        && canMove
-                        && !attackTargetPresent
-                        && !panicActive
-                        && !usingItem
-                        && occupancy.allowsPassiveCompanion()
-                        && snackCabinetMeals.findAvailableMeal(
-                                maid,
-                                gameTime
-                        ).isPresent();
+                snackCabinetMeals.findAvailableMeal(maid, gameTime)
+                        .isPresent();
         return new Snapshot(
                 ownerValid,
                 ownerDistance,
@@ -285,19 +291,14 @@ public final class TlmMaidFactReader {
                 occupancy.level().code(),
                 occupancy.reason().code(),
                 /*
-                 * Same gating as the cabinet meal above: whether anything is
-                 * worth walking to is a separate question from whether she is
-                 * free to walk at all, and an intent should not have to repeat
-                 * the second one.
+                 * Only whether something edible is lying about, for the same
+                 * reason the cabinet fact above says only whether a meal is to
+                 * be had: an opportunity is re-tested every tick she walks, so
+                 * folding her freedom into it turns a passing distraction into
+                 * an abandoned errand. Her freedom is already several facts of
+                 * its own, and the intent tests them itself.
                  */
-                hunger <= DefaultHungerPolicy.AUTO_EAT_THRESHOLD
-                        && canMove
-                        && !attackTargetPresent
-                        && !panicActive
-                        && !usingItem
-                        && occupancy.allowsPassiveCompanion()
-                        && !perception.queryLooseFood(maid, 1, gameTime)
-                                .isEmpty(),
+                !perception.queryLooseFood(maid, 1, gameTime).isEmpty(),
                 homeDistance(maid),
                 ownerFacts.read(owner, gameTime)
         );

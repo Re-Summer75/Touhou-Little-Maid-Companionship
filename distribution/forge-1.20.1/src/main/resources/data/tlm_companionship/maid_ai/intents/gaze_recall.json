@@ -2,11 +2,32 @@
   "format_version": 1,
   "plan": "tlm_companionship:gaze_recall_session",
   "conditions": [
-    { "fact": "tlm_companionship:signal/gaze_recall", "operator": "gte", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/owner_valid", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/favorability", "operator": "gte", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/follow_mode", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/behavior_occupancy_level", "operator": "lte", "value": 1.0 }
+    {
+      "fact": "tlm_companionship:signal/gaze_recall",
+      "operator": "gte",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/owner_valid",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/favorability",
+      "operator": "gte",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/follow_mode",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/behavior_occupancy_level",
+      "operator": "lte",
+      "value": 1.0,
+      "entry_only": true
+    }
   ],
   "selection": {
     "base_score": 1.0,

@@ -8,6 +8,8 @@ import com.laixia.maidintelligence.platform.runtime.AdapterRuntime;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.behavior.EntityTracker;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import com.laixia.maidintelligence.feature.ai.domain.MovementIntentLease;
+import com.laixia.maidintelligence.feature.ai.domain.MovementIntentSource;
 
 /**
  * Adapts live TLM state to the platform-neutral passive-follow policy.
@@ -47,10 +49,40 @@ public final class PassiveFollowBridge {
         );
     }
 
+    /**
+     * Whether she is in the middle of something worth not yanking her out of.
+     *
+     * <p>Occupancy alone was not enough. A companion errand deliberately reads
+     * as idle — its movement lease is passive, so that native behaviour is
+     * never wrongly told she is busy — and the consequence was that walking to
+     * a cabinet ten blocks away crossed the follow threshold at eight, native
+     * follow rewrote her walk target, and she turned round every single time.
+     *
+     * <p>So a passive companion lease counts here too. It is the narrowest way
+     * to say "she is already going somewhere on purpose", and it changes
+     * nothing about how she looks to anything else that asks about occupancy.
+     */
     private static boolean hasProtectedTask(EntityMaid maid) {
         long gameTime = maid.level().getGameTime();
-        return TlmBehaviorOccupancyClassifier.snapshot(maid, gameTime)
-                .level() != BehaviorOccupancyLevel.IDLE;
+        if (TlmBehaviorOccupancyClassifier.snapshot(maid, gameTime)
+                .level() != BehaviorOccupancyLevel.IDLE) {
+            return true;
+        }
+        return companionErrandUnderWay(maid, gameTime);
+    }
+
+    private static boolean companionErrandUnderWay(
+            EntityMaid maid,
+            long gameTime
+    ) {
+        if (!(maid instanceof MovementCoordinationAccess access)) {
+            return false;
+        }
+        MovementIntentLease lease =
+                access.maidIntelligence$movementIntentLease();
+        return lease != null
+                && lease.hasActiveLease(gameTime)
+                && lease.holder() == MovementIntentSource.COMPANION;
     }
 
     private static boolean currentTargetIsOwner(

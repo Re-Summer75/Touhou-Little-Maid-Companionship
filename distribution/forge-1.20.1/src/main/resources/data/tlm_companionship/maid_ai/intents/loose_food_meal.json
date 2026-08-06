@@ -25,7 +25,24 @@
     {
       "fact": "tlm_companionship:fact/behavior_occupancy_level",
       "operator": "eq",
+      "value": 0.0,
+      "entry_only": true
+    },
+    {
+      "fact": "tlm_companionship:fact/attack_target_present",
+      "operator": "eq",
       "value": 0.0
+    },
+    {
+      "fact": "tlm_companionship:fact/panic_active",
+      "operator": "eq",
+      "value": 0.0
+    },
+    {
+      "fact": "tlm_companionship:fact/using_item",
+      "operator": "eq",
+      "value": 0.0,
+      "entry_only": true
     }
   ],
   "selection": {

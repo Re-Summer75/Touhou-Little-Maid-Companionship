@@ -3,13 +3,42 @@
   "plan": "tlm_companionship:approach_owner",
   "aggregation": "product",
   "conditions": [
-    { "fact": "tlm_companionship:fact/forecast_lift/travelling", "operator": "gte", "value": 0.6 },
-    { "fact": "tlm_companionship:fact/owner_valid", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/owner_distance", "operator": "gte", "value": 5.0 },
-    { "fact": "tlm_companionship:fact/follow_mode", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/can_move", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/passenger", "operator": "eq", "value": 0.0 },
-    { "fact": "tlm_companionship:fact/behavior_occupancy_level", "operator": "lte", "value": 1.0 }
+    {
+      "fact": "tlm_companionship:fact/forecast_lift/travelling",
+      "operator": "gte",
+      "value": 0.6
+    },
+    {
+      "fact": "tlm_companionship:fact/owner_valid",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/owner_distance",
+      "operator": "gte",
+      "value": 5.0
+    },
+    {
+      "fact": "tlm_companionship:fact/follow_mode",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/can_move",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/passenger",
+      "operator": "eq",
+      "value": 0.0
+    },
+    {
+      "fact": "tlm_companionship:fact/behavior_occupancy_level",
+      "operator": "lte",
+      "value": 1.0,
+      "entry_only": true
+    }
   ],
   "utility": [
     {

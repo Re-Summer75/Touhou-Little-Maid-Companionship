@@ -177,6 +177,7 @@ public final class IntentOrchestrationVerification {
                 "Equal-score selection was not deterministic");
     }
 
+
     private static void commitmentAndHysteresisPreventThrashing() {
         Fixture fixture = new Fixture();
         PlanDefinition plan = plan(id("plan/hysteresis"), WAIT, 100);

@@ -2,12 +2,37 @@
   "format_version": 1,
   "plan": "tlm_companionship:approach_owner",
   "conditions": [
-    { "fact": "tlm_companionship:signal/random_stroll_return", "operator": "gte", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/owner_valid", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/follow_mode", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/can_move", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/built_in_task", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/behavior_occupancy_level", "operator": "eq", "value": 0.0 }
+    {
+      "fact": "tlm_companionship:signal/random_stroll_return",
+      "operator": "gte",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/owner_valid",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/follow_mode",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/can_move",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/built_in_task",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/behavior_occupancy_level",
+      "operator": "eq",
+      "value": 0.0,
+      "entry_only": true
+    }
   ],
   "utility": [
     {

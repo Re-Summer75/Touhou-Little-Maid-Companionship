@@ -25,7 +25,8 @@
     {
       "fact": "tlm_companionship:fact/behavior_occupancy_level",
       "operator": "eq",
-      "value": 0.0
+      "value": 0.0,
+      "entry_only": true
     }
   ],
   "aggregation": "product",
