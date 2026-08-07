@@ -69,6 +69,24 @@ public final class TlmCoordinationClaims {
         );
     }
 
+    /**
+     * A joy block, which seats exactly one maid at a fixed position.
+     *
+     * <p>Typed as a seat rather than a placement point because that is what it
+     * is, and because a placement claim on the same block would mean putting a
+     * boat down beside a bookshelf could lose a race against reading it.
+     */
+    public static CoordinationResourceKey joyBlock(
+            ServerLevel level,
+            BlockPos position
+    ) {
+        return key(
+                level,
+                CoordinationResourceType.SEAT,
+                "joy/" + position.asLong()
+        );
+    }
+
     public static CoordinationResourceKey placement(
             ServerLevel level,
             BlockPos position

@@ -39,6 +39,7 @@
   "intent.tlm_companionship.hungry_feedback": "ask you for food",
   "intent.tlm_companionship.hungry_standard": "ask you for food",
   "intent.tlm_companionship.hungry_high_trust": "beg you for food",
+  "intent.tlm_companionship.enjoy_pastime": "go and amuse herself",
   "intent.tlm_companionship.snack_cabinet_meal": "fetch food from the cabinet",
   "intent.tlm_companionship.post_task_return": "return to you after work",
   "intent.tlm_companionship.wander_return": "return to you after wandering",

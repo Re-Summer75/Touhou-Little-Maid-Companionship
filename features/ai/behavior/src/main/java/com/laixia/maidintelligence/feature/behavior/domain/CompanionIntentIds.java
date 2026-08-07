@@ -92,6 +92,9 @@ public final class CompanionIntentIds {
     /** Take a free seat: one chair holds one person. */
     public static final OrchestrationId REST_ON_SEAT =
             id("action/rest_on_seat");
+    /** Settle in at a bookshelf, a chessboard or a computer. */
+    public static final OrchestrationId USE_JOY_BLOCK =
+            id("action/use_joy_block");
     /** Drift over and be near her owner for its own sake. */
     public static final OrchestrationId KEEP_COMPANY =
             id("action/keep_company");
@@ -191,6 +194,7 @@ public final class CompanionIntentIds {
                         FOLLOW_OWNER_ANCHOR,
                         RETURN_HOME_ANCHOR,
                         REST_ON_SEAT,
+                        USE_JOY_BLOCK,
                         KEEP_COMPANY,
                         COMPANION_COMMAND_WINDOW,
                         REQUEST_HUNGER_ATTENTION,
@@ -268,115 +272,148 @@ public final class CompanionIntentIds {
                                 FactType.SIGNAL
                         )
                 )),
-                Map.of(
-                        APPROACH_OWNER,
-                        new ActionSchema(
+                Map.ofEntries(
+                        Map.entry(
                                 APPROACH_OWNER,
-                                Map.of(
-                                        "speed",
-                                        ActionParameterType.NUMBER,
-                                        "close_distance",
-                                        ActionParameterType.INTEGER,
-                                        "authority",
-                                        ActionParameterType.STRING
-                                ),
-                                Set.of()
-                        ),
-                        FETCH_SNACK_CABINET_MEAL,
-                        new ActionSchema(
-                                FETCH_SNACK_CABINET_MEAL,
-                                Map.of(
-                                        "speed",
-                                        ActionParameterType.NUMBER,
-                                        "close_distance",
-                                        ActionParameterType.INTEGER
-                                ),
-                                Set.of()
-                        ),
-                        PICK_UP_LOOSE_FOOD,
-                        new ActionSchema(
-                                PICK_UP_LOOSE_FOOD,
-                                Map.of(
-                                        "speed",
-                                        ActionParameterType.NUMBER,
-                                        "close_distance",
-                                        ActionParameterType.INTEGER
-                                ),
-                                Set.of()
-                        ),
-                        FOLLOW_OWNER_ANCHOR,
-                        new ActionSchema(
-                                FOLLOW_OWNER_ANCHOR,
-                                Map.of(
-                                        "speed",
-                                        ActionParameterType.NUMBER,
-                                        "close_distance",
-                                        ActionParameterType.INTEGER
-                                ),
-                                Set.of()
-                        ),
-                        RETURN_HOME_ANCHOR,
-                        new ActionSchema(
-                                RETURN_HOME_ANCHOR,
-                                Map.of(
-                                        "speed",
-                                        ActionParameterType.NUMBER,
-                                        "close_distance",
-                                        ActionParameterType.INTEGER
-                                ),
-                                Set.of()
-                        ),
-                        REST_ON_SEAT,
-                        new ActionSchema(
-                                REST_ON_SEAT,
-                                Map.of(
-                                        "speed",
-                                        ActionParameterType.NUMBER,
-                                        "close_distance",
-                                        ActionParameterType.INTEGER
-                                ),
-                                Set.of()
-                        ),
-                        KEEP_COMPANY,
-                        new ActionSchema(
-                                KEEP_COMPANY,
-                                Map.of(
-                                        "speed",
-                                        ActionParameterType.NUMBER,
-                                        "close_distance",
-                                        ActionParameterType.INTEGER
-                                ),
-                                Set.of()
-                        ),
-                        COMPANION_COMMAND_WINDOW,
-                        new ActionSchema(
-                                COMPANION_COMMAND_WINDOW,
-                                Map.of(
-                                        "duration_ticks",
-                                        ActionParameterType.INTEGER,
-                                        "speed",
-                                        ActionParameterType.NUMBER,
-                                        "close_distance",
-                                        ActionParameterType.INTEGER
-                                ),
-                                Set.of(
-                                        "duration_ticks",
-                                        "speed",
-                                        "close_distance"
+                                new ActionSchema(
+                                        APPROACH_OWNER,
+                                        Map.of(
+                                                "speed",
+                                                ActionParameterType.NUMBER,
+                                                "close_distance",
+                                                ActionParameterType.INTEGER,
+                                                "authority",
+                                                ActionParameterType.STRING
+                                        ),
+                                        Set.of()
                                 )
                         ),
-                        REQUEST_HUNGER_ATTENTION,
-                        ActionSchema.withoutParameters(
-                                REQUEST_HUNGER_ATTENTION
+                        Map.entry(
+                                FETCH_SNACK_CABINET_MEAL,
+                                new ActionSchema(
+                                        FETCH_SNACK_CABINET_MEAL,
+                                        Map.of(
+                                                "speed",
+                                                ActionParameterType.NUMBER,
+                                                "close_distance",
+                                                ActionParameterType.INTEGER
+                                        ),
+                                        Set.of()
+                                )
                         ),
-                        DEPLOY_BOAT,
-                        new ActionSchema(
+                        Map.entry(
+                                PICK_UP_LOOSE_FOOD,
+                                new ActionSchema(
+                                        PICK_UP_LOOSE_FOOD,
+                                        Map.of(
+                                                "speed",
+                                                ActionParameterType.NUMBER,
+                                                "close_distance",
+                                                ActionParameterType.INTEGER
+                                        ),
+                                        Set.of()
+                                )
+                        ),
+                        Map.entry(
+                                FOLLOW_OWNER_ANCHOR,
+                                new ActionSchema(
+                                        FOLLOW_OWNER_ANCHOR,
+                                        Map.of(
+                                                "speed",
+                                                ActionParameterType.NUMBER,
+                                                "close_distance",
+                                                ActionParameterType.INTEGER
+                                        ),
+                                        Set.of()
+                                )
+                        ),
+                        Map.entry(
+                                RETURN_HOME_ANCHOR,
+                                new ActionSchema(
+                                        RETURN_HOME_ANCHOR,
+                                        Map.of(
+                                                "speed",
+                                                ActionParameterType.NUMBER,
+                                                "close_distance",
+                                                ActionParameterType.INTEGER
+                                        ),
+                                        Set.of()
+                                )
+                        ),
+                        Map.entry(
+                                REST_ON_SEAT,
+                                new ActionSchema(
+                                        REST_ON_SEAT,
+                                        Map.of(
+                                                "speed",
+                                                ActionParameterType.NUMBER,
+                                                "close_distance",
+                                                ActionParameterType.INTEGER
+                                        ),
+                                        Set.of()
+                                )
+                        ),
+                        Map.entry(
+                                USE_JOY_BLOCK,
+                                new ActionSchema(
+                                        USE_JOY_BLOCK,
+                                        Map.of(
+                                                "speed",
+                                                ActionParameterType.NUMBER,
+                                                "close_distance",
+                                                ActionParameterType.INTEGER
+                                        ),
+                                        Set.of()
+                                )
+                        ),
+                        Map.entry(
+                                KEEP_COMPANY,
+                                new ActionSchema(
+                                        KEEP_COMPANY,
+                                        Map.of(
+                                                "speed",
+                                                ActionParameterType.NUMBER,
+                                                "close_distance",
+                                                ActionParameterType.INTEGER
+                                        ),
+                                        Set.of()
+                                )
+                        ),
+                        Map.entry(
+                                COMPANION_COMMAND_WINDOW,
+                                new ActionSchema(
+                                        COMPANION_COMMAND_WINDOW,
+                                        Map.of(
+                                                "duration_ticks",
+                                                ActionParameterType.INTEGER,
+                                                "speed",
+                                                ActionParameterType.NUMBER,
+                                                "close_distance",
+                                                ActionParameterType.INTEGER
+                                        ),
+                                        Set.of(
+                                                "duration_ticks",
+                                                "speed",
+                                                "close_distance"
+                                        )
+                                )
+                        ),
+                        Map.entry(
+                                REQUEST_HUNGER_ATTENTION,
+                                ActionSchema.withoutParameters(
+                                        REQUEST_HUNGER_ATTENTION
+                                )
+                        ),
+                        Map.entry(
                                 DEPLOY_BOAT,
-                                Map.of(
-                                        "ability_id",
-                                        ActionParameterType.STRING
-                                ),
-                                Set.of("ability_id")
+                                new ActionSchema(
+                                        DEPLOY_BOAT,
+                                        Map.of(
+                                                "ability_id",
+                                                ActionParameterType.STRING
+                                        ),
+                                        Set.of("ability_id")
+                                )
                         )
                 )
         );

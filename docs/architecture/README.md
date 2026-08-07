@@ -171,9 +171,13 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 - 内置目录定义 `gaze_recall`、`hungry_feedback`、`hungry_standard`、
   `hungry_high_trust`、`post_task_return`、`snack_cabinet_meal`、`wander_return`、
   `anticipate_departure`、`loose_food_meal`、`follow_owner`、`return_home`、
-  `rest_on_seat`、`keep_company` 等意图与对应计划；优先级编码语义（回家 50 > 跟随 40 >
-  陪伴 30 > 落座 10，地面食物 65 > 零食柜 60）。意图数据验证按目录自动发现计划，
-  不维护手工清单。
+  `rest_on_seat`、`keep_company`、`enjoy_pastime` 等意图与对应计划；优先级编码语义
+  （回家 50 > 跟随 40 > 陪伴 30 > 消遣 12 > 落座 10，地面食物 65 > 零食柜 60）。
+  意图数据验证按目录自动发现计划，不维护手工清单。
+- 娱乐方块（书架、棋盘、电脑）在自由模式下由 `enjoy_pastime` 决定，
+  `MaidJoyTaskMovementCoordinationMixin` 令本体 `MaidJoyTask` 在该模式下让位；
+  其它工作模式保持本体行为。落座仍走本体 `BlockJoy.startMaidSit` 并照常触发
+  `MAID_SIT_JOY` 进度，改变的只是"何时去"这个决定归谁。
   饥饿阈值、概率、归队等待和冷却全部由 Data Pack 决定；TOML 只控制引擎预算、诊断和
   注视传感器安全参数。
 

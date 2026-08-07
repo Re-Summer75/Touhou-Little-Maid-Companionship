@@ -39,6 +39,7 @@
   "intent.tlm_companionship.hungry_feedback": "跟你要吃的",
   "intent.tlm_companionship.hungry_standard": "跟你要吃的",
   "intent.tlm_companionship.hungry_high_trust": "撒娇要吃的",
+  "intent.tlm_companionship.enjoy_pastime": "去找点乐子",
   "intent.tlm_companionship.snack_cabinet_meal": "去零食柜拿吃的",
   "intent.tlm_companionship.post_task_return": "干完活回到你身边",
   "intent.tlm_companionship.wander_return": "溜达完回到你身边",

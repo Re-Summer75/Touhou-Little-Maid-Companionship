@@ -15,10 +15,31 @@ import java.util.Objects;
  * container to open.
  */
 public final class BlockApproachTarget implements ApproachTarget {
+    /**
+     * What sharing this place means, for errands that reserve it.
+     *
+     * <p>Two blocks at the same coordinates are not the same resource when one
+     * is a spot to put a boat down and the other is a chessboard to sit at, so
+     * the errand says which it means rather than every block sharing one
+     * namespace.
+     */
+    public enum Exclusivity {
+        /** Somewhere to stand or place something. */
+        PLACEMENT,
+        /** Somewhere that seats exactly one maid. */
+        JOY_BLOCK
+    }
+
     private final BlockPos position;
+    private final Exclusivity exclusivity;
 
     public BlockApproachTarget(BlockPos position) {
+        this(position, Exclusivity.PLACEMENT);
+    }
+
+    public BlockApproachTarget(BlockPos position, Exclusivity exclusivity) {
         this.position = Objects.requireNonNull(position, "position");
+        this.exclusivity = Objects.requireNonNull(exclusivity, "exclusivity");
     }
 
     public BlockPos position() {
@@ -46,7 +67,10 @@ public final class BlockApproachTarget implements ApproachTarget {
      */
     @Override
     public CoordinationResourceKey claimKey(ServerLevel level) {
-        return TlmCoordinationClaims.placement(level, position);
+        return switch (exclusivity) {
+            case PLACEMENT -> TlmCoordinationClaims.placement(level, position);
+            case JOY_BLOCK -> TlmCoordinationClaims.joyBlock(level, position);
+        };
     }
 
     @Override

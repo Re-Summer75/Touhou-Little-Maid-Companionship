@@ -18,6 +18,7 @@ import com.laixia.maidintelligence.feature.orchestration.tlm.errand.CabinetMealE
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.MaintainProximityErrand;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.KeepCompanyErrand;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.RestOnSeatErrand;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.JoyBlockErrand;
 
 /**
  * The sole dispatcher allowed to apply data-driven companion side effects.
@@ -29,7 +30,15 @@ public final class TlmMaidIntentActions
     private final ApproachAndCommitAction looseFoodAction;
     private final ApproachAndCommitAction followOwnerAction;
     private final ApproachAndCommitAction returnHomeAction;
+    /**
+     * Blocks searched for a pastime. TLM used the restrict radius, which this
+     * mod already rewrites for other reasons; a fixed range keeps how far she
+     * will go to read from moving when combat range is tuned.
+     */
+    private static final int JOY_BLOCK_SEARCH_RANGE = 12;
+
     private final ApproachAndCommitAction restOnSeatAction;
+    private final ApproachAndCommitAction joyBlockAction;
     private final ApproachAndCommitAction keepCompanyAction;
     private final TlmDeployBoatIntentAction deployBoatAction;
 
@@ -71,6 +80,9 @@ public final class TlmMaidIntentActions
         );
         restOnSeatAction = new ApproachAndCommitAction(
                 new RestOnSeatErrand(snackCabinetMeals.perception())
+        );
+        joyBlockAction = new ApproachAndCommitAction(
+                new JoyBlockErrand(JOY_BLOCK_SEARCH_RANGE)
         );
         keepCompanyAction = new ApproachAndCommitAction(
                 new KeepCompanyErrand(snackCabinetMeals.perception())
@@ -118,6 +130,9 @@ public final class TlmMaidIntentActions
         if (action.equals(CompanionIntentIds.REST_ON_SEAT)) {
             return restOnSeatAction.execute(maid, parameters, gameTime);
         }
+        if (action.equals(CompanionIntentIds.USE_JOY_BLOCK)) {
+            return joyBlockAction.execute(maid, parameters, gameTime);
+        }
         if (action.equals(CompanionIntentIds.KEEP_COMPANY)) {
             return keepCompanyAction.execute(maid, parameters, gameTime);
         }
@@ -163,6 +178,8 @@ public final class TlmMaidIntentActions
             returnHomeAction.cancel(maid);
         } else if (action.equals(CompanionIntentIds.REST_ON_SEAT)) {
             restOnSeatAction.cancel(maid);
+        } else if (action.equals(CompanionIntentIds.USE_JOY_BLOCK)) {
+            joyBlockAction.cancel(maid);
         } else if (action.equals(CompanionIntentIds.KEEP_COMPANY)) {
             keepCompanyAction.cancel(maid);
         } else if (action.equals(
@@ -195,6 +212,9 @@ public final class TlmMaidIntentActions
         }
         if (action.equals(CompanionIntentIds.REST_ON_SEAT)) {
             return restOnSeatAction.revalidate(maid, gameTime);
+        }
+        if (action.equals(CompanionIntentIds.USE_JOY_BLOCK)) {
+            return joyBlockAction.revalidate(maid, gameTime);
         }
         if (action.equals(CompanionIntentIds.KEEP_COMPANY)) {
             return keepCompanyAction.revalidate(maid, gameTime);

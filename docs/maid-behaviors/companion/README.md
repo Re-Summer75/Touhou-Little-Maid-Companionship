@@ -232,6 +232,26 @@ TLM 零食柜：
 - `/tlmcompanionship ai learning reset <maid>`
 - `/tlmcompanionship ai learning export <maid>`
 
+## 自由模式的消遣
+
+自由模式下，去书架看书、去棋盘下棋、去用电脑由 `enjoy_pastime` 意图决定，
+本体 `MaidJoyTask` 让位。落座过程、动画与 `MAID_SIT_JOY` 进度仍由本体执行，
+改变的只是"什么时候去"这个决定归谁。
+
+- 条件：饥饿值不低于 50、可移动、未乘坐、进入时占用为 `IDLE`。
+- 机会：每 40 tick 参与评估，胜出后按 50% 概率激活；意图优先级 12，
+  完成后冷却 400 tick（20 秒）。
+- 搜索 12 格内的娱乐方块 POI，取最近且无人就座的一个；Home 模式下仍需在限制区内。
+- 娱乐方块需取得座位 Claim 才能前往，两名女仆不会走向同一个书架。
+- 饥饿值低于 50 时该意图直接不参与评估，因此她不会坐在棋盘前饿着。
+
+其它工作模式不受影响，本体娱乐行为保持原样。
+
+配置与定义：
+
+- `data/tlm_companionship/maid_ai/intents/enjoy_pastime.json`
+- `data/tlm_companionship/maid_ai/plans/enjoy_pastime.json`
+
 ## 跟随主人
 
 走向主人由 `follow_owner` 意图决定，与她的其它决定一起排序，而不再是一条独立的原版行为。
