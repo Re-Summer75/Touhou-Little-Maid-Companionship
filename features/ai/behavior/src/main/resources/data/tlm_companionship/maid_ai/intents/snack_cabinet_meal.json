@@ -1,6 +1,7 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "plan": "tlm_companionship:fetch_snack_cabinet_meal",
+  "aggregation": "product",
   "conditions": [
     {
       "fact": "tlm_companionship:fact/hunger",
@@ -45,14 +46,23 @@
       "entry_only": true
     }
   ],
+  "utility": [
+    {
+      "fact": "tlm_companionship:fact/hunger",
+      "minimum": 0.0,
+      "maximum": 40.0,
+      "weight": 1.0,
+      "curve": "inverse_linear"
+    }
+  ],
   "selection": {
-    "base_score": 1.0,
-    "minimum_score": 0.0,
+    "base_score": 0.85,
+    "minimum_score": 0.02,
     "activation_chance": 1.0,
     "evaluation_interval_ticks": 20,
     "minimum_commit_ticks": 20,
     "switch_margin": 0.1,
-    "interrupt_priority": 60,
+    "interrupt_priority": 50,
     "cooldown_ticks": 40
   }
 }

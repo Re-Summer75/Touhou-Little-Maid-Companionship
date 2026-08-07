@@ -6,7 +6,7 @@
     {
       "fact": "tlm_companionship:fact/hunger",
       "operator": "gte",
-      "value": 50.0
+      "value": 35.0
     },
     {
       "fact": "tlm_companionship:fact/can_move",
@@ -28,20 +28,20 @@
   "utility": [
     {
       "fact": "tlm_companionship:fact/hunger",
-      "minimum": 50.0,
-      "maximum": 100.0,
+      "minimum": 35.0,
+      "maximum": 70.0,
       "weight": 1.0,
       "curve": "linear"
     }
   ],
   "selection": {
-    "base_score": 0.6,
-    "minimum_score": 0.0,
-    "activation_chance": 0.5,
+    "base_score": 0.8,
+    "minimum_score": 0.02,
+    "activation_chance": 1.0,
     "evaluation_interval_ticks": 40,
     "minimum_commit_ticks": 60,
     "switch_margin": 0.2,
-    "interrupt_priority": 12,
+    "interrupt_priority": 10,
     "cooldown_ticks": 400
   }
 }

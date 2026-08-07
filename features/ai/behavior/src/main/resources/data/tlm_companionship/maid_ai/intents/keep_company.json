@@ -43,8 +43,8 @@
   "utility": [
     {
       "fact": "tlm_companionship:fact/favorability",
-      "minimum": 32.0,
-      "maximum": 128.0,
+      "minimum": 0.0,
+      "maximum": 3.0,
       "weight": 1.0,
       "curve": "logistic"
     },
@@ -57,9 +57,9 @@
     }
   ],
   "selection": {
-    "base_score": 0.7,
-    "minimum_score": 0.0,
-    "activation_chance": 0.5,
+    "base_score": 0.6,
+    "minimum_score": 0.02,
+    "activation_chance": 1.0,
     "evaluation_interval_ticks": 40,
     "minimum_commit_ticks": 40,
     "switch_margin": 0.15,

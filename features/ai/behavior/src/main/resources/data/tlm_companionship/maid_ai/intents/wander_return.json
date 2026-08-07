@@ -1,6 +1,7 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "plan": "tlm_companionship:approach_owner",
+  "aggregation": "product",
   "conditions": [
     {
       "fact": "tlm_companionship:signal/random_stroll_return",
@@ -39,18 +40,18 @@
       "fact": "tlm_companionship:fact/owner_distance",
       "minimum": 2.0,
       "maximum": 16.0,
-      "weight": 0.1,
+      "weight": 0.6,
       "curve": "linear"
     }
   ],
   "selection": {
-    "base_score": 0.4,
-    "minimum_score": 0.0,
-    "activation_chance": 0.1,
+    "base_score": 0.5,
+    "minimum_score": 0.02,
+    "activation_chance": 1.0,
     "evaluation_interval_ticks": 1,
     "minimum_commit_ticks": 20,
     "switch_margin": 0.1,
-    "interrupt_priority": 20,
+    "interrupt_priority": 30,
     "cooldown_ticks": 400
   }
 }

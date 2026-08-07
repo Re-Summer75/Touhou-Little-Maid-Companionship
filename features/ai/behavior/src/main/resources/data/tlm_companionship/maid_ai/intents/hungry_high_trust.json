@@ -1,31 +1,70 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "plan": "tlm_companionship:request_food",
+  "aggregation": "product",
   "conditions": [
-    { "fact": "tlm_companionship:fact/owner_valid", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/hunger", "operator": "lte", "value": 20.0 },
-    { "fact": "tlm_companionship:fact/favorability", "operator": "gte", "value": 3.0 },
-    { "fact": "tlm_companionship:fact/follow_mode", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/can_move", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/behavior_occupancy_level", "operator": "eq", "value": 0.0 }
+    {
+      "fact": "tlm_companionship:fact/owner_valid",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/hunger",
+      "operator": "lte",
+      "value": 20.0
+    },
+    {
+      "fact": "tlm_companionship:fact/favorability",
+      "operator": "gte",
+      "value": 3.0
+    },
+    {
+      "fact": "tlm_companionship:fact/follow_mode",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/can_move",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/behavior_occupancy_level",
+      "operator": "eq",
+      "value": 0.0
+    }
   ],
   "utility": [
     {
       "fact": "tlm_companionship:fact/hunger",
       "minimum": 0.0,
       "maximum": 20.0,
-      "weight": 0.1,
+      "weight": 1.0,
       "curve": "inverse_linear"
+    },
+    {
+      "fact": "tlm_companionship:fact/owner_holding_food",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "weight": 0.4,
+      "curve": "linear"
+    },
+    {
+      "fact": "tlm_companionship:fact/favorability",
+      "minimum": 0.0,
+      "maximum": 3.0,
+      "weight": 0.35,
+      "curve": "linear"
     }
   ],
   "selection": {
-    "base_score": 0.8,
-    "minimum_score": 0.0,
-    "activation_chance": 0.6,
+    "base_score": 0.75,
+    "minimum_score": 0.02,
+    "activation_chance": 1.0,
     "evaluation_interval_ticks": 40,
     "minimum_commit_ticks": 40,
     "switch_margin": 0.15,
-    "interrupt_priority": 45,
+    "interrupt_priority": 50,
     "cooldown_ticks": 100
   }
 }

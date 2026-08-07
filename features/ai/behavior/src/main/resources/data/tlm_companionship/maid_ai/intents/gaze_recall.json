@@ -1,6 +1,7 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "plan": "tlm_companionship:gaze_recall_session",
+  "aggregation": "product",
   "conditions": [
     {
       "fact": "tlm_companionship:signal/gaze_recall",

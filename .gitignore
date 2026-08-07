@@ -128,3 +128,6 @@ _reference/
 **/.vscode/tasks.json
 **/.vscode/settings.json
 logs/
+
+# 语义索引产物（codebase-index skill）
+.cbindex/

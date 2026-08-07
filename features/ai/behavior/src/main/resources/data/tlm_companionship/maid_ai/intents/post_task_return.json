@@ -1,6 +1,7 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "plan": "tlm_companionship:approach_owner",
+  "aggregation": "product",
   "conditions": [
     {
       "fact": "tlm_companionship:signal/post_task_return",
@@ -44,12 +45,12 @@
       "fact": "tlm_companionship:fact/owner_distance",
       "minimum": 2.0,
       "maximum": 16.0,
-      "weight": 0.1,
+      "weight": 0.6,
       "curve": "linear"
     }
   ],
   "selection": {
-    "base_score": 0.5,
+    "base_score": 0.7,
     "minimum_score": 0.0,
     "activation_chance": 1.0,
     "evaluation_interval_ticks": 1,

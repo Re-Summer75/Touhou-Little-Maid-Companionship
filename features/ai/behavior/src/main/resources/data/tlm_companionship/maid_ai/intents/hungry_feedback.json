@@ -1,18 +1,70 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "plan": "tlm_companionship:request_food",
+  "aggregation": "product",
   "conditions": [
-    { "fact": "tlm_companionship:signal/hunger_request", "operator": "gte", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/owner_valid", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/owner_distance", "operator": "lte", "value": 8.0 },
-    { "fact": "tlm_companionship:fact/hunger", "operator": "lte", "value": 40.0 },
-    { "fact": "tlm_companionship:fact/follow_mode", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/can_move", "operator": "eq", "value": 1.0 },
-    { "fact": "tlm_companionship:fact/behavior_occupancy_level", "operator": "eq", "value": 0.0 }
+    {
+      "fact": "tlm_companionship:signal/hunger_request",
+      "operator": "gte",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/owner_valid",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/owner_distance",
+      "operator": "lte",
+      "value": 8.0
+    },
+    {
+      "fact": "tlm_companionship:fact/hunger",
+      "operator": "lte",
+      "value": 40.0
+    },
+    {
+      "fact": "tlm_companionship:fact/follow_mode",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/can_move",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/behavior_occupancy_level",
+      "operator": "eq",
+      "value": 0.0
+    }
+  ],
+  "utility": [
+    {
+      "fact": "tlm_companionship:fact/hunger",
+      "minimum": 0.0,
+      "maximum": 40.0,
+      "weight": 1.0,
+      "curve": "inverse_linear"
+    },
+    {
+      "fact": "tlm_companionship:fact/owner_holding_food",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "weight": 0.4,
+      "curve": "linear"
+    },
+    {
+      "fact": "tlm_companionship:fact/owner_distance",
+      "minimum": 0.0,
+      "maximum": 8.0,
+      "weight": 0.3,
+      "curve": "inverse_linear"
+    }
   ],
   "selection": {
-    "base_score": 1.0,
-    "minimum_score": 0.0,
+    "base_score": 0.7,
+    "minimum_score": 0.02,
     "activation_chance": 1.0,
     "evaluation_interval_ticks": 1,
     "minimum_commit_ticks": 40,
