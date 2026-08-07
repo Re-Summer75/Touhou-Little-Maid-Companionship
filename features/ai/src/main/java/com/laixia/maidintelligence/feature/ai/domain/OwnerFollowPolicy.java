@@ -25,13 +25,21 @@ public final class OwnerFollowPolicy {
      * far she shoots; the teleport distance is stated outright here instead so
      * that changing it changes only itself.
      *
-     * <p>Sixteen rather than ten because an errand has to be able to finish.
-     * The things she goes to of her own accord — a snack cabinet across the
-     * room, an apple on the floor, the way home — sit comfortably beyond ten
-     * blocks, and being snapped back partway through reads to anyone watching
-     * as the maid glitching rather than as a rule being enforced.
+     * <p>Twenty-four rather than ten because an errand has to be able to
+     * finish. The things she goes to of her own accord — a snack cabinet across
+     * the room, an apple on the floor, a zombie between her and her owner — sit
+     * comfortably beyond ten blocks, and being snapped back partway through
+     * reads to anyone watching as the maid glitching rather than as a rule
+     * being enforced.
+     *
+     * <p>Deliberately larger than perception, which is capped at sixteen. She
+     * only ever walks toward something she has noticed, so the teleport leash
+     * has to be longer than the noticing or it fires during perfectly ordinary
+     * errands — a hostile spotted at the edge of perception is chased to
+     * roughly there, and the leash must not tighten around that. This is the
+     * one distance allowed past sixteen, and it grants no additional awareness.
      */
-    public static final double TELEPORT_DISTANCE = 16.0D;
+    public static final double TELEPORT_DISTANCE = 24.0D;
 
     public static final OwnerFollowPolicy INSTANCE = new OwnerFollowPolicy();
 

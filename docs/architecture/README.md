@@ -85,7 +85,9 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
   `MaidAiTuning` 将 Forge 配置收敛为不可变稳定值，TLM adapter 不反向读取平台配置。
 - `PathReachabilityCache`：按女仆实例持有的固定容量可达结果缓存，不保存游戏对象或可变路径。
 - `OwnerMotionTracker` 与 `DynamicActivityRadiusPolicy`：以 20 tick 静止、3 tick 移动滞回计算
-  瞬时空闲/工作/战斗半径，统一上限 24；只持有内存状态，不修改 TLM NBT 或持久化半径。
+  瞬时空闲/工作/战斗半径，统一上限 16——与感知半径一致；她只会走向已经注意到的东西，
+  比感知更宽的活动半径不会带来任何新目标，只会让她离主人更远。只持有内存状态，
+  不修改 TLM NBT 或持久化半径。
 - `CombatReactionPolicy` 与 `CombatThreatKind`：固定“女仆攻击者、主人攻击者、主人目标、
   最近敌对实体”的排序，规定可见性、范围、扫描节流和候选上限，不涉及伤害或武器行为。
 - `MaidMovementCoordinationApi` 与 `MovementIntentLease`：为 TLM 内置移动写入提供短租约、
@@ -93,10 +95,26 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
   `BehaviorOccupancySnapshot` 将原版占用分为 IDLE/SOFT/HARD，注视等 `OWNER_COMMAND`
   可干净抢占 SOFT。状态不持久化，也不包含 Minecraft 对象。
 - `OwnerFollowPolicy`：走向主人由 `follow_owner` 意图决定，`MaidFollowOwnerTask` 不再写入
-  移动目标，只保留距离兜底。`TELEPORT_DISTANCE` 固定为 16 格，不再由 `restrictRadius`
-  推导，因此调整活动半径不会连带改变传送距离。溺水救援仍完全交给本体。
+  移动目标，只保留距离兜底。`TELEPORT_DISTANCE` 固定为 24 格，不再由 `restrictRadius`
+  推导，因此调整活动半径不会连带改变传送距离。它是唯一允许超过 16 的距离：牵引绳必须
+  长于视野，否则一次发生在感知边缘的差事会在半路把她扯回去。溺水救援仍完全交给本体。
 - 性能 API 仍只降低原有判断成本；移动协调不接管 Brain 周期、Activity 或任务列表。
   未知 Task、ExtraBrain 与自定义目标采用 fail-open，保留第三方写入并临时退出仲裁。
+
+### 感知半径是行为的地基
+
+- `PerceptionRange`（`:features:ai:behavior`）是唯一的感知距离来源，值为 **16 格**。
+  拾取掉落物、寻找零食柜与座位、发现敌对生物、注视召唤全部以它为界。
+- 之所以收敛成一个常量：捡东西、拿东西、发现怪物本质是同一件事——她必须先注意到，
+  才谈得上想要。各行为各写各的距离，就会出现"能捡到比能看见更远的东西"这类
+  无人写下、也无人察觉的矛盾。新增行为应以它表达射程；确实需要更近的（椅子不值得
+  穿过一片田野去坐）应显式收窄并说明理由。
+- 它与活动半径**刻意分离**。活动半径回答"我可以去哪"，是动态的；感知回答"我知道
+  那里有东西"。感知不得随活动半径扩大，否则她会跑去处理主人根本看不见的东西。
+- `FreedomMaidTask.searchDimension` 因此对 `restrictRadius` 取 clamp。该方法曾被覆盖为
+  女仆自己的碰撞箱，而 `MaidNearestLivingEntitySensor` 正是扫描这个盒子来填充可见实体
+  记忆——于是记忆恒空、威胁压力恒为零、战斗意图永不触发。单看那个覆盖是合理的，
+  只有把感知当作整体约束才能发现它错了。`verifyPerceptionRange` 钉住这组关系。
 
 ### ai:behavior
 

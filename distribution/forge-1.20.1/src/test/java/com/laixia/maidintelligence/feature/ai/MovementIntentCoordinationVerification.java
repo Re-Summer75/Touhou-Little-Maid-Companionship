@@ -202,8 +202,8 @@ public final class MovementIntentCoordinationVerification {
         OwnerFollowPolicy policy = OwnerFollowPolicy.INSTANCE;
         double threshold = OwnerFollowPolicy.TELEPORT_DISTANCE;
         require(
-                threshold == 16.0D,
-                "Owner teleport backstop is no longer the documented 16 blocks"
+                threshold == 24.0D,
+                "Owner teleport backstop is no longer the documented 24 blocks"
         );
         require(
                 !policy.shouldTeleport(threshold * threshold),

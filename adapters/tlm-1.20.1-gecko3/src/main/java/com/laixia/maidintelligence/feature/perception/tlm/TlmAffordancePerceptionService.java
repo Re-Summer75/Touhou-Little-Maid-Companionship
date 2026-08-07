@@ -10,6 +10,7 @@ import com.laixia.maidintelligence.feature.behavior.domain.perception.CompanionA
 import com.laixia.maidintelligence.feature.behavior.port.AffordanceIndexPort;
 import net.minecraft.core.BlockPos;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
+import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -43,7 +44,8 @@ public final class TlmAffordancePerceptionService {
      * house over. Seats already used this figure, so this brings food in line
      * with them rather than introducing a new number.
      */
-    public static final double PERCEPTION_RANGE = 16.0D;
+    /** Single source: every advertiser and query is bounded by perception. */
+    public static final double PERCEPTION_RANGE = PerceptionRange.BLOCKS;
 
     /** Cabinets re-read for stock per observation. */
     private static final int MAX_RESTOCK_CHECKS = 8;

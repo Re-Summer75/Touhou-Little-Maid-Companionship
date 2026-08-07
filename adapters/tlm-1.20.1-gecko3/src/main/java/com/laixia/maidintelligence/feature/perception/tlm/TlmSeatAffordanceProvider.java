@@ -9,6 +9,7 @@ import com.laixia.maidintelligence.feature.behavior.domain.perception.Affordance
 import com.laixia.maidintelligence.feature.behavior.domain.perception.CompanionAffordanceIds;
 import com.laixia.maidintelligence.feature.behavior.port.AffordanceIndexPort;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
+import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -26,7 +27,7 @@ import java.util.Set;
  */
 @SuppressWarnings("null")
 final class TlmSeatAffordanceProvider {
-    private static final double OBSERVATION_RANGE = 16.0D;
+    private static final double OBSERVATION_RANGE = PerceptionRange.BLOCKS;
     private static final int MAX_NEARBY_ENTITIES = 32;
 
     private final Map<AffordanceTargetId, Long> revisions =

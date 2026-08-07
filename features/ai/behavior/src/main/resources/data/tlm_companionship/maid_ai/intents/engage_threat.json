@@ -1,0 +1,41 @@
+{
+  "format_version": 2,
+  "plan": "tlm_companionship:engage_threat",
+  "aggregation": "product",
+  "conditions": [
+    {
+      "fact": "tlm_companionship:fact/hostile_pressure",
+      "operator": "gte",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/can_move",
+      "operator": "eq",
+      "value": 1.0
+    },
+    {
+      "fact": "tlm_companionship:fact/ordered_sit",
+      "operator": "eq",
+      "value": 0.0
+    }
+  ],
+  "utility": [
+    {
+      "fact": "tlm_companionship:fact/hostile_pressure",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "weight": 1.0,
+      "curve": "linear"
+    }
+  ],
+  "selection": {
+    "base_score": 1.0,
+    "minimum_score": 0.0,
+    "activation_chance": 1.0,
+    "evaluation_interval_ticks": 10,
+    "minimum_commit_ticks": 20,
+    "switch_margin": 0.3,
+    "interrupt_priority": 100,
+    "cooldown_ticks": 60
+  }
+}

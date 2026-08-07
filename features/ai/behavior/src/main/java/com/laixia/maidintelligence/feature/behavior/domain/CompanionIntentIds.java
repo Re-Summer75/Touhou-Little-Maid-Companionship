@@ -32,6 +32,15 @@ public final class CompanionIntentIds {
             id("fact/loose_food_available");
     public static final OrchestrationId SNACK_CABINET_MEAL_AVAILABLE =
             id("fact/snack_cabinet_meal_available");
+    /**
+     * How many hostiles can reach her where she stands.
+     *
+     * <p>A count rather than a flag, and of what converges rather than of what
+     * exists: one hostile across the room and five around her feet are
+     * different situations, and only this number tells them apart.
+     */
+    public static final OrchestrationId HOSTILE_PRESSURE =
+            id("fact/hostile_pressure");
     public static final OrchestrationId FOLLOW_MODE = id("fact/follow_mode");
     public static final OrchestrationId HOME_MODE = id("fact/home_mode");
     public static final OrchestrationId ORDERED_SIT = id("fact/ordered_sit");
@@ -104,6 +113,9 @@ public final class CompanionIntentIds {
             id("action/request_hunger_attention");
     public static final OrchestrationId DEPLOY_BOAT =
             id("action/deploy_boat");
+    /** Fight what is threatening her or her owner, choosing her own weapon. */
+    public static final OrchestrationId ENGAGE_THREAT =
+            id("action/engage_threat");
 
     private CompanionIntentIds() {
     }
@@ -128,6 +140,21 @@ public final class CompanionIntentIds {
         // Everything a maid notices about her owner is catalogued with itself,
         // so this file does not grow a second subject.
         merged.putAll(OwnerFactIds.facts());
+        return Map.copyOf(merged);
+    }
+
+    /**
+     * Adds the combat actions, kept out of the literal above because
+     * {@code Map.of} tops out at ten pairs and that literal is already full.
+     */
+    private static Map<OrchestrationId, ActionSchema> withCombatActions(
+            Map<OrchestrationId, ActionSchema> base
+    ) {
+        Map<OrchestrationId, ActionSchema> merged = new LinkedHashMap<>(base);
+        merged.put(
+                ENGAGE_THREAT,
+                ActionSchema.withoutParameters(ENGAGE_THREAT)
+        );
         return Map.copyOf(merged);
     }
 
@@ -156,6 +183,7 @@ public final class CompanionIntentIds {
                 PASSIVE_SEAT,
                 CAN_MOVE,
                 COMBAT_ACTIVE,
+                HOSTILE_PRESSURE,
                 ATTACK_TARGET_PRESENT,
                 PANIC_ACTIVE,
                 WORK_TARGET_PRESENT,
@@ -194,7 +222,8 @@ public final class CompanionIntentIds {
                         KEEP_COMPANY,
                         COMPANION_COMMAND_WINDOW,
                         REQUEST_HUNGER_ATTENTION,
-                        DEPLOY_BOAT
+                        DEPLOY_BOAT,
+                        ENGAGE_THREAT
                 ),
                 signals,
                 withForecastFacts(Map.ofEntries(
@@ -257,6 +286,10 @@ public final class CompanionIntentIds {
                                 BEHAVIOR_OCCUPANCY_REASON,
                                 FactType.NUMBER
                         ),
+                        Map.entry(
+                                HOSTILE_PRESSURE,
+                                FactType.NUMBER
+                        ),
                         Map.entry(GAZE_RECALL, FactType.SIGNAL),
                         Map.entry(POST_TASK_RETURN, FactType.SIGNAL),
                         Map.entry(
@@ -268,7 +301,7 @@ public final class CompanionIntentIds {
                                 FactType.SIGNAL
                         )
                 )),
-                Map.of(
+                withCombatActions(Map.of(
                         APPROACH_OWNER,
                         new ActionSchema(
                                 APPROACH_OWNER,
@@ -378,7 +411,7 @@ public final class CompanionIntentIds {
                                 ),
                                 Set.of("ability_id")
                         )
-                )
+                ))
         );
     }
 

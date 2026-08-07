@@ -5,6 +5,7 @@ import com.laixia.maidintelligence.feature.behavior.domain.perception.Affordance
 import com.laixia.maidintelligence.feature.behavior.domain.perception.AffordanceTargetId;
 import com.laixia.maidintelligence.feature.behavior.domain.perception.CompanionAffordanceIds;
 import com.laixia.maidintelligence.feature.behavior.port.AffordanceIndexPort;
+import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
@@ -26,7 +27,7 @@ import java.util.Set;
  */
 @SuppressWarnings("null")
 final class TlmItemEntityAffordanceProvider {
-    private static final double OBSERVATION_RANGE = 16.0D;
+    private static final double OBSERVATION_RANGE = PerceptionRange.BLOCKS;
 
     /** Enough to cover a scattered drop without sweeping a whole field. */
     private static final int MAX_NEARBY_ITEMS = 24;

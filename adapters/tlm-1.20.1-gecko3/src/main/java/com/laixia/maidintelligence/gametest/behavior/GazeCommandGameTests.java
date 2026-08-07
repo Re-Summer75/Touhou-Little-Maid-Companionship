@@ -155,8 +155,10 @@ public final class GazeCommandGameTests {
     ) {
         OwnedFixture fixture = ownedFixture(helper);
         lockCommandSeat(helper, fixture, false);
-        fillFloor(helper, 16, 24, 0, 4);
-        fixture.owner().setPos(position(helper, 20, 2));
+        // Beyond the 24-block teleport leash, which is deliberately wider than
+        // perception so an errand at the edge of sight is not cut short.
+        fillFloor(helper, 16, 34, 0, 4);
+        fixture.owner().setPos(position(helper, 30, 2));
         double distanceBefore = fixture.maid().distanceToSqr(
                 fixture.owner()
         );
