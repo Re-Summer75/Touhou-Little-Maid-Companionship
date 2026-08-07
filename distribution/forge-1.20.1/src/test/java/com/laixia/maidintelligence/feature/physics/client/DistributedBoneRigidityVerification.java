@@ -9,7 +9,7 @@ import com.laixia.maidintelligence.feature.physics.engine.*;
 import com.laixia.maidintelligence.feature.physics.session.*;
 
 import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.metadata.PhysicsMetadataJsonParser;
 import com.laixia.maidintelligence.feature.physics.layout.BoneKinematics;
 
 import java.nio.file.Files;

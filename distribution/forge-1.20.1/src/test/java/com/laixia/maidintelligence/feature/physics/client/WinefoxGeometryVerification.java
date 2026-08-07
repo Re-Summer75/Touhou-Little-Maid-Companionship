@@ -11,7 +11,7 @@ import com.laixia.maidintelligence.feature.physics.session.*;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoModel;
 import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.metadata.PhysicsMetadataJsonParser;
 
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.decision;
 import static com.laixia.maidintelligence.feature.physics.client.BonePhysicsVerificationSupport.discover;

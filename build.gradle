@@ -40,20 +40,10 @@ if (selectedVersionTarget == null) {
 ext.versionMatrix = versionMatrix
 ext.selectedVersionTarget = selectedVersionTarget
 
-def stableModules = [
-        ':kernel',
-        ':shared:geometry',
-        ':features:level',
-        ':features:status',
-        ':features:ai',
-        ':features:ai:behavior',
-        ':features:ai:orchestration',
-        ':features:advancement',
-        ':features:interaction',
-        ':features:physics',
-        ':features:shading',
-        ':features:atmosphere'
-]
+// Sourced from settings.gradle. The list existed in three places before; a new
+// stable module had to be added to all of them or it silently missed the
+// toolchain, the aggregate tasks or the published jar.
+def stableModules = gradle.ext.stableProjectPaths
 def distributionPaths = versionTargets.collect {
     it.projects.distribution.toString()
 }.unique()

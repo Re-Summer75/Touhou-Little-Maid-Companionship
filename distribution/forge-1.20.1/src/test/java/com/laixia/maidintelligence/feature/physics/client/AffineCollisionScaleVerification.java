@@ -8,7 +8,7 @@ import com.laixia.maidintelligence.feature.physics.layout.*;
 import com.laixia.maidintelligence.feature.physics.engine.*;
 import com.laixia.maidintelligence.feature.physics.session.*;
 
-import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.metadata.PhysicsMetadataJsonParser;
 import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
 import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionScratch;

@@ -6,4 +6,8 @@ dependencies {
     api project(':kernel')
     api project(':shared:geometry')
     api libs.joml
+    // Resource-pack metadata parsing. Both are provided at runtime by the game,
+    // so the stable module only needs them on the compile classpath.
+    compileOnly libs.gson
+    compileOnly libs.slf4j.api
 }

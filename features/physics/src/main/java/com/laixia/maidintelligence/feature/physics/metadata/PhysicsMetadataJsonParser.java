@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.feature.physics.client.metadata;
+package com.laixia.maidintelligence.feature.physics.metadata;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;

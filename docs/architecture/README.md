@@ -23,10 +23,12 @@ Java、Parchment、TLM、Gecko 及项目路径组合复制到 `gradle.properties
 依赖只能从外层指向内层：
 
 1. `kernel` 提供身份、事件、结果和服务注册等最小稳定原语。
-2. `shared:geometry` 提供不含游戏类型的几何值对象与算法。
+2. `shared:geometry` 提供不含游戏类型的几何值对象与算法；`shared:assets` 只含资源、
+   没有 Java 源码，承载跨版本通用的语言、贴图与物品模型。
 3. 八个顶层 `features/*` 及 `:features:ai:behavior`、`:features:ai:orchestration`
    子模块只依赖 `kernel`、必要的 `shared:*` 和通用 JVM 库；feature 之间通过 Port 或领域
-   事件协作，不直接绑定彼此实现。
+   事件协作，不直接绑定彼此实现。稳定模块也可携带资源：`jar` 装配的是
+   `sourceSets.main.output`，其中已包含 `processResources` 的产物。
 4. `adapters/forge-*` 与 `adapters/tlm-*-gecko*` 实现 Port，并把 MC、Forge、TLM、Gecko
    类型转换为稳定模型。
 5. `distribution/*` 是组合根、资源容器和唯一 ForgeGradle 编译边界，同时装配稳定模块与两个
@@ -151,8 +153,10 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
   token 管理 claimed → occupied → released 生命周期；容器槽、座位、放置点和共享 request
   与单女仆 `MovementIntentLease` 严格分离。
 - Forge adapter 读取 `data/<namespace>/maid_ai/intents/*.json` 与
-  `data/<namespace>/maid_ai/plans/*.json`。资源栈按优先级覆盖；无效上层定义回退下层，整批
-  编译失败保留上一代。格式与扩展注册见
+  `data/<namespace>/maid_ai/plans/*.json`。**读取逻辑属于 adapter**（ReloadListener 是各
+  loader 的 API），**数据本身随 `:features:ai:behavior` 发布**——目录里 41 处 ID 全在本模组
+  命名空间内，与 MC 版本无关，放在 distribution 会让每个版本 target 复制一遍。
+  资源栈按优先级覆盖；无效上层定义回退下层，整批编译失败保留上一代。格式与扩展注册见
   [`intent-ai-data.md`](intent-ai-data.md)。
 - TLM adapter 用一个 `MaidIntentBehavior` 统一更新工作释放/随机游走边沿、采集事实并推进
   调度器。注视处理器与缺食反馈只提交 TTL 刺激；`TlmMaidIntentActions` 只做动作分派，
@@ -237,21 +241,26 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 
 - 唯一 `net.minecraftforge.gradle` 插件边界与 `@Mod` 组合根；
 - 将两个 adapter 的 Java 源目录和稳定模块输出装入同一个发布 jar；
-- `mods.toml`、语言、advancement、Mixin descriptor 和生成资源；
+- `mods.toml`、advancement、`pack.mcmeta`、Mixin descriptor 和生成资源——即全部绑版本
+  资源；语言、贴图、物品模型与意图数据包不在此列，见下方归属判据；
 - run 配置、reobf、功能验证、IDE 元数据与发布产物。
 
 生产 Java 源除组合根及其 package-private 辅助类外不得放入 distribution。组合根同样
 受 500 行限制，因此允许按职责拆出辅助类；但辅助类必须保持 package-private——其他模块
 能引用到的东西属于 feature 或 adapter，不属于组合根。`verifyDistributionBoundary`
-同时检查文件白名单与可见性。发布 jar 仍位于
+同时检查 Java 文件白名单、辅助类可见性与资源白名单。发布 jar 仍位于
 `distribution/forge-<mc>/build/libs`，当前 release 路径保持
 `distribution/forge-1.20.1/build/libs`。
 
 ## 矩阵装配与 target 选择
 
-`settings.gradle` 永远只 include 一份 `kernel`、`shared:geometry`、八个顶层 feature 和
-`:features:ai:behavior`、`:features:ai:orchestration` 子模块，然后从矩阵的每条 target
-动态 include 两个 adapter 与一个 distribution。
+`settings.gradle` 永远只 include 一份 `kernel`、`shared:geometry`、`shared:assets`、
+八个顶层 feature 和 `:features:ai:behavior`、`:features:ai:orchestration` 子模块，
+然后从矩阵的每条 target 动态 include 两个 adapter 与一个 distribution。
+
+稳定模块清单只在 `settings.gradle` 定义一次，并通过 `gradle.ext.stableProjectPaths`
+发布给根构建与各 distribution。此前同一份清单存在于三处，新增稳定模块必须同时改全，
+漏掉任何一处都会静默丢失 Java toolchain 注入、聚合任务或发布 jar 中的内容。
 
 根构建把矩阵值注入对应 distribution。稳定模块使用所有 target 中最低的 Java 版本编译，
 保证单份稳定字节码可被每个 distribution 消费。每个 distribution 使用本 target 的 Java、
@@ -332,10 +341,17 @@ MixinGradle 对单个 source set 只可靠生成一份 refmap，因此 common �
 - Parchment channel/version 只从矩阵注入 ForgeGradle mappings。
 - MC/Forge/TLM/Gecko 类型、方法签名和资源格式差异封装在 adapter/distribution，禁止用
   版本判断污染 feature。
-- 数据生成、`mods.toml` 展开、Mixin descriptor、语言和 advancement 属于 distribution；
-  可跨版本复用的算法与值模型属于 feature/shared。
-- 若资源格式跨 MC 版本变化，为对应 distribution 提供版本资源或转换器，不在稳定模块中
-  分叉。
+- 资源归属按**是否绑版本**判断，不按资源类型列举。判据是内容本身：
+  - 引用了 `minecraft:`、loader 专有文件名或随 MC 版本变化的格式（advancement、
+    `pack.mcmeta` 的 `pack_format`、`mods.toml`、Mixin descriptor）→ 归 distribution。
+  - 只使用本模组自己的命名空间（意图数据包、语言、贴图、物品模型）→ 归稳定模块，
+    否则每新增一个版本 target 都要复制一份。
+  - `verifyDistributionBoundary` 以白名单实现这条判据：distribution 出现未声明的资源
+    即失败，迫使作者当场决定它属于哪一侧，而不是让它悄悄成为下一个复制项。
+- 数据生成与 `mods.toml` 展开属于 distribution；可跨版本复用的算法与值模型属于
+  feature/shared。
+- 若资源格式确实跨 MC 版本变化，把该资源移回对应 distribution 并登记进白名单，
+  不在稳定模块中分叉。
 
 ## 验证与性能约束
 

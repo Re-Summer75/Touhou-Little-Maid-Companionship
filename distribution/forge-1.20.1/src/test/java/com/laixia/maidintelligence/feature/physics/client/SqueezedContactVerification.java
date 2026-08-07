@@ -1,7 +1,7 @@
 package com.laixia.maidintelligence.feature.physics.client;
 
 import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.metadata.PhysicsMetadataJsonParser;
 import com.laixia.maidintelligence.feature.physics.discovery.PhysicsBoneDiscoverer;
 import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProjector;

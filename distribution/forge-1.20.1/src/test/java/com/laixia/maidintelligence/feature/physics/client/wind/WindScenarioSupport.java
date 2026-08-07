@@ -4,7 +4,7 @@ import com.google.gson.JsonParser;
 import com.laixia.maidintelligence.feature.atmosphere.client.wind.JomlWindVectorPort;
 import com.laixia.maidintelligence.feature.atmosphere.port.MutableWindVectorPort;
 import com.laixia.maidintelligence.feature.physics.api.PhysicsBoneSelectionPlan;
-import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.metadata.PhysicsMetadataJsonParser;
 import com.laixia.maidintelligence.feature.physics.discovery.PhysicsBoneDiscoverer;
 import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 import com.laixia.maidintelligence.feature.physics.geometry.BoneModelSnapshot;

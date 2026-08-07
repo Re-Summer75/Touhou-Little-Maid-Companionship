@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.feature.physics.client.metadata;
+package com.laixia.maidintelligence.feature.physics.metadata;
 
 import com.laixia.maidintelligence.feature.physics.api.*;
 import com.laixia.maidintelligence.feature.physics.metadata.*;
@@ -12,8 +12,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.laixia.maidintelligence.feature.physics.api.PhysicsBoneSelectionPlan;
-import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,7 +21,8 @@ import java.util.Locale;
 import java.util.Optional;
 
 final class CollisionMetadataParser {
-    private static final Logger LOGGER = LogUtils.getLogger();
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(CollisionMetadataParser.class);
 
     private CollisionMetadataParser() {
     }
