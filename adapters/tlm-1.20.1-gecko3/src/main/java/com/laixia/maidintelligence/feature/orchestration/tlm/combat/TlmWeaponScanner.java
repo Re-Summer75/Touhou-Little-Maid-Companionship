@@ -188,6 +188,21 @@ public final class TlmWeaponScanner {
         return 1.0D + impaling * IMPALING_PER_LEVEL;
     }
 
+    /**
+     * Whether this exact stack could fire right now.
+     *
+     * <p>Asked of what is in her hand rather than of what was chosen. The two
+     * are not the same stack: a swap is refused while she is drawing, so a
+     * decision to use one weapon can coexist with another still being held —
+     * and drawing is performed on whatever is held. Without this the bow she
+     * emptied is still drawn, over and over, because the arsenal scan correctly
+     * says a different weapon is the one to use.
+     */
+    public boolean canFire(EntityMaid maid, ItemStack weapon) {
+        WeaponKind kind = classify(weapon);
+        return kind != null && hasAmmunition(maid, weapon, kind);
+    }
+
     private boolean hasAmmunition(
             EntityMaid maid,
             ItemStack weapon,

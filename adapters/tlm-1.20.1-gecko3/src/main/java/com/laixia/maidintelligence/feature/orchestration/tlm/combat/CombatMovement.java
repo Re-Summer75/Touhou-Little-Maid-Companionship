@@ -26,11 +26,8 @@ import net.minecraft.world.phys.Vec3;
  * callers.
  */
 public final class CombatMovement {
-    /** How close a tracked target may drift before the chase is re-issued. */
-    private static final double CHASE_SLACK = 1.0D;
-
     /** How far a fixed destination may drift before it counts as somewhere new. */
-    private static final double DESTINATION_SLACK = 4.0D;
+    private static final double DESTINATION_SLACK = 2.0D;
 
     private CombatMovement() {
     }
@@ -40,6 +37,15 @@ public final class CombatMovement {
      *
      * <p>An {@link EntityTracker} follows the entity by itself, so re-issuing
      * it every tick buys nothing and costs the write, as above.
+     *
+     * <p>How close is part of what is being said, though. This once compared
+     * only positions, and an entity tracker reports the entity's own position —
+     * so the comparison was zero against zero and always matched. A chase
+     * issued at bow range then survived the switch to melee: she was still
+     * walking at the same target, so nothing was rewritten, and the stopping
+     * distance stayed at eight blocks while her sword reached one and a half.
+     * She closed to eight, stopped, and stood there swinging at nothing for as
+     * long as the fight lasted.
      */
     public static void chase(
             EntityMaid maid,
@@ -47,7 +53,7 @@ public final class CombatMovement {
             int closeEnough,
             float speed
     ) {
-        if (tracking(maid, victim.position(), CHASE_SLACK)) {
+        if (alreadyChasing(maid, victim, closeEnough)) {
             return;
         }
         write(
@@ -121,6 +127,36 @@ public final class CombatMovement {
         );
     }
 
+    /**
+     * Whether she is already walking at this entity, stopping where asked.
+     *
+     * <p>Both halves matter. The entity, because a tracker aimed at something
+     * else is not this chase; the stopping distance, because it is the only
+     * part of a chase that changes when her stance does.
+     */
+    private static boolean alreadyChasing(
+            EntityMaid maid,
+            LivingEntity victim,
+            int closeEnough
+    ) {
+        return maid.getBrain()
+                .getMemory(MemoryModuleType.WALK_TARGET)
+                .filter(target -> target.getCloseEnoughDist() == closeEnough)
+                .map(WalkTarget::getTarget)
+                .filter(EntityTracker.class::isInstance)
+                .map(EntityTracker.class::cast)
+                .map(EntityTracker::getEntity)
+                .filter(victim::equals)
+                .isPresent();
+    }
+
+    /**
+     * Whether a fixed destination is close enough to the one she already has.
+     *
+     * <p>Compared as squares on both sides. The slack was stated in blocks and
+     * tested against {@code distanceToSqr}, so a four-block tolerance behaved
+     * as two.
+     */
     private static boolean tracking(
             EntityMaid maid,
             Vec3 destination,
@@ -130,7 +166,7 @@ public final class CombatMovement {
                 .getMemory(MemoryModuleType.WALK_TARGET)
                 .map(WalkTarget::getTarget)
                 .map(tracker -> tracker.currentPosition()
-                        .distanceToSqr(destination) < slack)
+                        .distanceToSqr(destination) < slack * slack)
                 .orElse(false);
     }
 }

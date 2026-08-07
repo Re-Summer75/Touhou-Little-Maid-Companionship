@@ -230,6 +230,19 @@ public final class TlmCombatAction {
             }
             return;
         }
+        // Drawing is done on whatever is held, while choosing was done over
+        // everything she carries — and a swap is refused mid-draw, so the two
+        // can disagree. An empty bow left in her hand was therefore drawn on
+        // every tick that a usable weapon existed somewhere else, and with a
+        // crossbow the draw was cancelled again the moment her stance flipped:
+        // the visible result is a maid winding up and letting go many times a
+        // second without a single shot leaving.
+        if (!weapons.canFire(maid, maid.getMainHandItem())) {
+            if (maid.isUsingItem()) {
+                maid.stopUsingItem();
+            }
+            return;
+        }
         if (!maid.isUsingItem()) {
             maid.setSwingingArms(true);
             maid.startUsingItem(InteractionHand.MAIN_HAND);
@@ -425,10 +438,17 @@ public final class TlmCombatAction {
     /** Walk directly away from a threat, at the same speed as everything else. */
 
     private void equip(EntityMaid maid, WeaponCandidate weapon) {
-        // Swapping voids the use state, so a swap landing mid-draw restarts
-        // the draw — every tick, forever. Melee switching releases the draw
-        // deliberately before it gets here.
-        if (weapon == null || weapon.inHand() || maid.isUsingItem()) {
+        if (weapon == null || weapon.inHand()) {
+            return;
+        }
+        // Swapping voids the use state, so a swap landing mid-draw restarts the
+        // draw. Refusing outright was worse: the draw belongs to the weapon she
+        // is holding, and if the decision has moved on to a different one that
+        // draw will never finish, so refusing the swap kept her winding up a
+        // weapon she had already stopped choosing. Letting go first costs one
+        // wasted draw and then the swap goes through.
+        if (maid.isUsingItem()) {
+            maid.stopUsingItem();
             return;
         }
         TaskEquipUtil.tryEquipFromBackpack(

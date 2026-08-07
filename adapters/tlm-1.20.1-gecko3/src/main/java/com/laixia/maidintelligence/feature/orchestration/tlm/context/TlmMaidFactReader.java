@@ -12,6 +12,7 @@ import com.laixia.maidintelligence.feature.behavior.domain.forecast.CompanionAct
 import com.laixia.maidintelligence.feature.orchestration.api.insight.MaidInsight;
 import com.laixia.maidintelligence.feature.behavior.tlm.MaidCommandSeatBridge;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.ThreatProfile;
 import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentObserver;
 import com.laixia.maidintelligence.feature.perception.tlm.TlmAffordancePerceptionService;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
@@ -473,7 +474,7 @@ public final class TlmMaidFactReader {
                 .map(visible -> {
                     int count = 0;
                     for (LivingEntity hostile : visible.findAll(
-                            candidate -> maid.canAttack(candidate)
+                            candidate -> ThreatProfile.isHostileTo(maid, candidate)
                                     && maid.distanceToSqr(candidate)
                                     <= HOSTILE_TRIGGER_RANGE_SQR
                     )) {
