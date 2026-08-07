@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.feature.physics.client.metadata;
+package com.laixia.maidintelligence.feature.physics.metadata;
 
 import com.laixia.maidintelligence.feature.physics.api.*;
 import com.laixia.maidintelligence.feature.physics.metadata.*;

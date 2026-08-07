@@ -11,7 +11,7 @@ import com.laixia.maidintelligence.feature.physics.session.*;
 import com.github.tartaricacid.touhoulittlemaid.client.resource.CustomPackLoader;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.metadata.PhysicsMetadataJsonParser;
 import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;

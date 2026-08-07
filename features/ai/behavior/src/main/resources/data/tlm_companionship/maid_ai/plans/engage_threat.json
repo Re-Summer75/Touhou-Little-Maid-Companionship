@@ -1,0 +1,16 @@
+{
+  "format_version": 2,
+  "initial_state": "fight",
+  "resume_policy": "restart_step",
+  "maximum_suspend_ticks": 100,
+  "states": {
+    "fight": {
+      "action": "tlm_companionship:action/engage_threat",
+      "parameters": {},
+      "timeout_ticks": 1200,
+      "on_success": "$success",
+      "on_failure": "$failure",
+      "on_cancel": "$failure"
+    }
+  }
+}

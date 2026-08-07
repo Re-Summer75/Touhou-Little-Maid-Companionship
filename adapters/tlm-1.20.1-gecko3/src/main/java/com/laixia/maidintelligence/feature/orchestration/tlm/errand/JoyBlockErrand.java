@@ -6,6 +6,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.init.InitPoi;
 import com.github.tartaricacid.touhoulittlemaid.init.InitTrigger;
 import com.github.tartaricacid.touhoulittlemaid.tileentity.TileEntityJoy;
+import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -32,10 +33,28 @@ import java.util.Comparator;
  * instead of being taken before any of them are asked.
  */
 public final class JoyBlockErrand implements Errand {
+    /**
+     * Deliberately narrower than {@link PerceptionRange#BLOCKS}, and the same
+     * as {@link RestOnSeatErrand}'s, because these are the same kind of
+     * destination: somewhere to settle for its own sake. She may notice a
+     * bookshelf sixteen blocks off and still not think it worth the walk, which
+     * is exactly the case the perception contract says to narrow explicitly.
+     *
+     * <p>TLM used the restrict radius here. That is the radius this mod already
+     * rewrites while her owner stands still, so reading distance would have
+     * drifted whenever combat range was tuned.
+     */
+    private static final int SEARCH_RANGE =
+            (int) PerceptionRange.clamp(12.0D);
+
     private final int searchRange;
 
+    public JoyBlockErrand() {
+        this(SEARCH_RANGE);
+    }
+
     public JoyBlockErrand(int searchRange) {
-        this.searchRange = searchRange;
+        this.searchRange = (int) PerceptionRange.clamp(searchRange);
     }
 
     @Override

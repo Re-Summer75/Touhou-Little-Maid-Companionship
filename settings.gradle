@@ -46,6 +46,7 @@ rootProject.name = "TLM-Companionship-${defaultVersionTarget.minecraft.version}"
 def stableProjects = [
         'kernel',
         'shared:geometry',
+        'shared:assets',
         'features:level',
         'features:status',
         'features:ai',
@@ -75,3 +76,7 @@ def versionedProjects = versionMatrix.targets.collectMany { target ->
 }
 
 include(*((stableProjects + versionedProjects).unique() as String[]))
+
+// Every distribution assembles the same stable modules. Publishing the list
+// here keeps a new version target from having to copy it.
+gradle.ext.stableProjectPaths = stableProjects.collect { ":${it}" }

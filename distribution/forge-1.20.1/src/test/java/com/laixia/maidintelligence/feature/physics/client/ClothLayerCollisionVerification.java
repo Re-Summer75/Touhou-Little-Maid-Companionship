@@ -6,7 +6,7 @@ import com.laixia.maidintelligence.feature.physics.discovery.*;
 import com.laixia.maidintelligence.feature.physics.geometry.*;
 
 import com.google.gson.JsonParser;
-import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.metadata.PhysicsMetadataJsonParser;
 import com.laixia.maidintelligence.feature.physics.layout.PhysicsSolverLayout;
 import com.laixia.maidintelligence.feature.physics.engine.SpringBoneSolver;
 import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxyKind;

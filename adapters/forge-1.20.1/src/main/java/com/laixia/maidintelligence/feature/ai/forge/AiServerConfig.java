@@ -90,8 +90,17 @@ public final class AiServerConfig {
                 .comment("Extra blocks for built-in combat activity.")
                 .defineInRange("combat_bonus", 12, 0, 32);
         MAXIMUM_ACTIVITY_RADIUS = builder
-                .comment("Hard cap for every transient expanded radius.")
-                .defineInRange("maximum_radius", 24, 3, 64);
+                .comment(
+                        "Hard cap for every transient expanded radius.",
+                        "Matches perception (16): she only ever goes to things "
+                                + "she has noticed, so a radius wider than "
+                                + "perception buys nothing and only sends her "
+                                + "wandering further from her owner.",
+                        "The teleport leash sits beyond this at 24 so an "
+                                + "errand at the edge of perception is not cut "
+                                + "short."
+                )
+                .defineInRange("maximum_radius", 16, 3, 64);
         builder.pop();
         builder.push("combat_reaction");
         COMBAT_REACTION_ENABLED = builder

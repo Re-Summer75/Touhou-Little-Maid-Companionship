@@ -17,6 +17,7 @@ import com.laixia.maidintelligence.feature.perception.tlm.TlmAffordancePerceptio
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.feature.status.domain.DefaultHungerPolicy;
 import com.laixia.maidintelligence.feature.status.tlm.MaidSnackCabinetMealSource;
+import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.schedule.Activity;
@@ -32,6 +33,16 @@ import net.minecraft.core.BlockPos;
  */
 public final class TlmMaidFactReader {
     private static final String TLM_NAMESPACE = "touhou_little_maid";
+
+    /**
+     * Squared range within which a hostile counts toward the trigger.
+     *
+     * <p>Sixteen blocks, matching the reach assumed for anything that shoots:
+     * a skeleton picking at her from range is a fight whether or not she likes
+     * the distance.
+     */
+    private static final double HOSTILE_TRIGGER_RANGE_SQR =
+            PerceptionRange.SQUARED;
 
     private final TlmOwnerFactReader ownerFacts =
             new TlmOwnerFactReader();
@@ -95,7 +106,7 @@ public final class TlmMaidFactReader {
             List<OrchestrationId> facts,
             double[] output
     ) {
-        Snapshot snapshot = snapshot(maid, gameTime);
+        MaidFactSnapshot snapshot = snapshot(maid, gameTime);
         LivingEntity owner = validOwner(maid);
         /*
          * Sampled here rather than on a timer of its own because this already
@@ -208,7 +219,7 @@ public final class TlmMaidFactReader {
     }
 
     @SuppressWarnings("null")
-    private Snapshot snapshot(EntityMaid maid, long gameTime) {
+    private MaidFactSnapshot snapshot(EntityMaid maid, long gameTime) {
         perception.observeMaid(maid, gameTime);
         LivingEntity owner = validOwner(maid);
         boolean ownerValid = owner != null;
@@ -260,7 +271,7 @@ public final class TlmMaidFactReader {
         boolean snackCabinetMealAvailable =
                 snackCabinetMeals.findAvailableMeal(maid, gameTime)
                         .isPresent();
-        return new Snapshot(
+        return new MaidFactSnapshot(
                 ownerValid,
                 ownerDistance,
                 maid.getFavorabilityManager().getLevel(),
@@ -276,6 +287,7 @@ public final class TlmMaidFactReader {
                 passiveSeat,
                 canMove,
                 attackTargetPresent || panicActive,
+                hostilePressure(maid),
                 attackTargetPresent,
                 panicActive,
                 workTargetPresent,
@@ -306,7 +318,7 @@ public final class TlmMaidFactReader {
 
     private static double value(
             OrchestrationId fact,
-            Snapshot snapshot
+            MaidFactSnapshot snapshot
     ) {
         if (fact.equals(CompanionIntentIds.OWNER_VALID)) {
             return bool(snapshot.ownerValid());
@@ -354,6 +366,9 @@ public final class TlmMaidFactReader {
         }
         if (fact.equals(CompanionIntentIds.COMBAT_ACTIVE)) {
             return bool(snapshot.combatActive());
+        }
+        if (fact.equals(CompanionIntentIds.HOSTILE_PRESSURE)) {
+            return snapshot.hostilePressure();
         }
         if (fact.equals(CompanionIntentIds.ATTACK_TARGET_PRESENT)) {
             return bool(snapshot.attackTargetPresent());
@@ -442,41 +457,34 @@ public final class TlmMaidFactReader {
         );
     }
 
-    private static double bool(boolean value) {
-        return value ? 1.0D : 0.0D;
+    /**
+     * How many hostiles are close enough to matter, as a trigger only.
+     *
+     * <p>Deliberately cheap and deliberately generous: this decides whether the
+     * combat intent is worth evaluating, not whether the fight is winnable. The
+     * full assessment — crowd density, her gear, who is hitting her owner —
+     * happens inside the action, which answers STAND_DOWN if the situation
+     * turns out not to warrant it. Doing that arithmetic here would run it for
+     * every maid on every fact read.
+     */
+    private double hostilePressure(EntityMaid maid) {
+        return maid.getBrain()
+                .getMemory(MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES)
+                .map(visible -> {
+                    int count = 0;
+                    for (LivingEntity hostile : visible.findAll(
+                            candidate -> maid.canAttack(candidate)
+                                    && maid.distanceToSqr(candidate)
+                                    <= HOSTILE_TRIGGER_RANGE_SQR
+                    )) {
+                        count++;
+                    }
+                    return (double) count;
+                })
+                .orElse(0.0D);
     }
 
-    private record Snapshot(
-            boolean ownerValid,
-            double ownerDistance,
-            int favorability,
-            int hunger,
-            boolean snackCabinetMealAvailable,
-            boolean followMode,
-            boolean homeMode,
-            boolean orderedSit,
-            boolean sittingPose,
-            boolean sleeping,
-            boolean leashed,
-            boolean passenger,
-            boolean passiveSeat,
-            boolean canMove,
-            boolean combatActive,
-            boolean attackTargetPresent,
-            boolean panicActive,
-            boolean workTargetPresent,
-            boolean usingItem,
-            boolean builtInTask,
-            boolean movementHardBlocked,
-            double workReleaseAge,
-            boolean movementLeaseActive,
-            int movementLeasePriority,
-            boolean movementFailOpen,
-            int behaviorOccupancyLevel,
-            int behaviorOccupancyReason,
-            boolean looseFoodAvailable,
-            double homeDistance,
-            OwnerFacts owner
-    ) {
+    private static double bool(boolean value) {
+        return value ? 1.0D : 0.0D;
     }
 }

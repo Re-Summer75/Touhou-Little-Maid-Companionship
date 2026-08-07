@@ -12,6 +12,10 @@ import com.laixia.maidintelligence.feature.status.tlm.MaidSnackCabinetMealSource
 
 import java.util.Map;
 import java.util.function.Consumer;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.RangedWeaponRecognizer;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmThreatScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmWeaponScanner;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.ApproachAndCommitAction;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.LooseFoodErrand;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.CabinetMealErrand;
@@ -30,17 +34,11 @@ public final class TlmMaidIntentActions
     private final ApproachAndCommitAction looseFoodAction;
     private final ApproachAndCommitAction followOwnerAction;
     private final ApproachAndCommitAction returnHomeAction;
-    /**
-     * Blocks searched for a pastime. TLM used the restrict radius, which this
-     * mod already rewrites for other reasons; a fixed range keeps how far she
-     * will go to read from moving when combat range is tuned.
-     */
-    private static final int JOY_BLOCK_SEARCH_RANGE = 12;
-
     private final ApproachAndCommitAction restOnSeatAction;
     private final ApproachAndCommitAction joyBlockAction;
     private final ApproachAndCommitAction keepCompanyAction;
     private final TlmDeployBoatIntentAction deployBoatAction;
+    private final TlmCombatAction combatAction;
 
     public TlmMaidIntentActions(
             Consumer<EntityMaid> hungerRequestAction
@@ -67,6 +65,12 @@ public final class TlmMaidIntentActions
         ownerAction = new TlmOwnerCompanionIntentAction(
                 hungerRequestAction
         );
+        // No recogniser is registered yet, so only vanilla weapons are
+        // known. A gun mod supplies one and needs nothing else changed.
+        combatAction = new TlmCombatAction(
+                new TlmThreatScanner(),
+                new TlmWeaponScanner(RangedWeaponRecognizer.NONE)
+        );
         snackCabinetAction = new ApproachAndCommitAction(
                 new CabinetMealErrand(snackCabinetMeals)
         );
@@ -82,7 +86,7 @@ public final class TlmMaidIntentActions
                 new RestOnSeatErrand(snackCabinetMeals.perception())
         );
         joyBlockAction = new ApproachAndCommitAction(
-                new JoyBlockErrand(JOY_BLOCK_SEARCH_RANGE)
+                new JoyBlockErrand()
         );
         keepCompanyAction = new ApproachAndCommitAction(
                 new KeepCompanyErrand(snackCabinetMeals.perception())
@@ -106,6 +110,9 @@ public final class TlmMaidIntentActions
             long gameTime,
             int elapsedTicks
     ) {
+        if (action.equals(CompanionIntentIds.ENGAGE_THREAT)) {
+            return combatAction.execute(maid, elapsedTicks);
+        }
         if (action.equals(CompanionIntentIds.APPROACH_OWNER)) {
             return ownerAction.approach(maid, parameters, gameTime);
         }

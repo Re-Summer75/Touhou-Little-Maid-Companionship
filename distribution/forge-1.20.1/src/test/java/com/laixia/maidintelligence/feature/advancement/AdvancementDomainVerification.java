@@ -37,7 +37,11 @@ import java.util.stream.Stream;
 public final class AdvancementDomainVerification {
     private static final Path ADVANCEMENTS =
             Path.of("src/main/resources/data/tlm_companionship/advancements/maid");
-    private static final Path LANG = Path.of("src/main/resources/assets/tlm_companionship/lang");
+    // Translations ship with :shared:assets: their keys are all in the mod's
+    // own namespace, so they do not change with the Minecraft version.
+    private static final Path LANG = Path.of(
+            "../../shared/assets/src/main/resources/assets/tlm_companionship/lang"
+    );
     private static final String ROOT_ID = "tlm_companionship:maid/root";
     private static final ItemId CAKE =
             ItemId.of("minecraft", "cake");

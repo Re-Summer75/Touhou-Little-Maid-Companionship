@@ -49,7 +49,10 @@ tasks.register('verifyArchitecture') {
     description = 'Rejects game-loader and model-library references in stable modules.'
     dependsOn tasks.named('classes')
     inputs.files(javaSources)
-    inputs.dir(mainClassesDir).optional()
+    // files() rather than dir(): a resource-only stable module never produces a
+    // classes directory, and dir() still demands the path exist even when
+    // declared optional.
+    inputs.files(mainClassesDir).optional()
 
     doLast {
         def violations = []

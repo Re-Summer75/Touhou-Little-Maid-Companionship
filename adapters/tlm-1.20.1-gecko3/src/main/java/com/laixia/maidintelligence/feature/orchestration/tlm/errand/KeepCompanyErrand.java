@@ -4,6 +4,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.domain.perception.CompanionAffordanceIds;
 import com.laixia.maidintelligence.feature.behavior.domain.perception.AffordanceCandidate;
 import com.laixia.maidintelligence.feature.perception.tlm.TlmAffordancePerceptionService;
+import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
 import net.minecraft.world.entity.LivingEntity;
 
 import java.util.List;
@@ -25,7 +26,7 @@ import java.util.Set;
  */
 public final class KeepCompanyErrand implements Errand {
     private static final int CANDIDATES = 2;
-    private static final double SEARCH_RANGE = 16.0D;
+    private static final double SEARCH_RANGE = PerceptionRange.BLOCKS;
 
     private final TlmAffordancePerceptionService perception;
 

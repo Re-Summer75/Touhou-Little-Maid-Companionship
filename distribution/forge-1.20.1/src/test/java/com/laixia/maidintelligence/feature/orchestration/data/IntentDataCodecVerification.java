@@ -374,7 +374,12 @@ public final class IntentDataCodecVerification {
      */
     private static List<String> bundledNames(String prefix)
             throws IOException {
+        // The data pack ships with :features:ai:behavior, not with this
+        // distribution — its ids are all in the mod's own namespace, so a new
+        // version target inherits it instead of copying it. Two levels up is
+        // the repository root for any distribution/<loader>-<mc> directory.
         java.nio.file.Path directory = java.nio.file.Path.of(
+                "..", "..", "features", "ai", "behavior",
                 "src", "main", "resources"
         ).resolve(RESOURCE_ROOT + prefix);
         if (!java.nio.file.Files.isDirectory(directory)) {

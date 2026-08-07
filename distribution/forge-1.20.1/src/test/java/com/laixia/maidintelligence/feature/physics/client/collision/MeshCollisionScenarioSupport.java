@@ -2,7 +2,7 @@ package com.laixia.maidintelligence.feature.physics.client.collision;
 
 import com.google.gson.JsonParser;
 import com.laixia.maidintelligence.feature.physics.api.PhysicsBoneSelectionPlan;
-import com.laixia.maidintelligence.feature.physics.client.metadata.PhysicsMetadataJsonParser;
+import com.laixia.maidintelligence.feature.physics.metadata.PhysicsMetadataJsonParser;
 import com.laixia.maidintelligence.feature.physics.discovery.PhysicsBoneDiscoverer;
 import com.laixia.maidintelligence.feature.physics.engine.collision.model.CollisionProxySet;
 import com.laixia.maidintelligence.feature.physics.geometry.BoneModelSnapshot;

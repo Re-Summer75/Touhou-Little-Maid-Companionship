@@ -1,0 +1,8 @@
+plugins {
+    id 'tlm.java-library-conventions'
+}
+
+// Resources only: assets whose content is the mod's own and does not change
+// with the Minecraft version — translations, item models and textures. Version
+// bound resources (advancements, pack.mcmeta, mods.toml, Mixin descriptors)
+// stay in their distribution.

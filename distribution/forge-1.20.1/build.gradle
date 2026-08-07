@@ -22,20 +22,9 @@ description = "Forge ${forge_version} / Minecraft ${minecraft_version} " +
         'distribution and the only ForgeGradle compilation boundary.'
 archivesBaseName = "tlm-companionship-${minecraft_version}-forge"
 
-def stableModules = [
-        project(':kernel'),
-        project(':shared:geometry'),
-        project(':features:level'),
-        project(':features:status'),
-        project(':features:ai'),
-        project(':features:ai:behavior'),
-        project(':features:ai:orchestration'),
-        project(':features:advancement'),
-        project(':features:interaction'),
-        project(':features:physics'),
-        project(':features:shading'),
-        project(':features:atmosphere')
-]
+// Sourced from settings.gradle so a new version target inherits the list
+// instead of copying it.
+def stableModules = gradle.ext.stableProjectPaths.collect { project(it) }
 def forgeAdapter = project(forge_adapter_project_path)
 def tlmAdapter = project(tlm_adapter_project_path)
 def gameTestRunDir = rootProject.file('run-gametest')
@@ -224,11 +213,48 @@ tasks.register('verifyAll') {
 def compositionRoot = 'MaidIntelligence.java'
 def compositionRootHelpers = ['DomainEventWiring.java']
 
+// Resources are the other half of this boundary, and they went unguarded until
+// a whole intent data pack had already settled here. A distribution may only
+// carry resources whose content is bound to this Minecraft/loader target;
+// anything expressed purely in the mod's own namespace — translations,
+// textures, item models, the intent data pack — belongs in a stable module,
+// or every new version target has to copy it.
+//
+// The list is a whitelist on purpose: a new kind of resource fails here and
+// forces the author to decide which side it is on, rather than silently
+// becoming the next thing to duplicate.
+def versionBoundResources = [
+        ~/^META-INF\/(neoforge\.)?mods\.toml$/,
+        ~/^pack\.mcmeta$/,
+        ~/^[a-z_0-9.\-]+\.mixins\.json$/,
+        // Advancements name vanilla items and triggers, so they move with the
+        // game version.
+        ~/^data\/[a-z_]+\/advancements\/.+$/
+]
+
 tasks.register('verifyDistributionBoundary') {
     group = 'verification'
     inputs.files(fileTree('src/main/java') { include '**/*.java' })
+    inputs.files(fileTree('src/main/resources'))
     doLast {
-        def productionSources = inputs.files.files
+        def resourceRoot = file('src/main/resources').toPath()
+        def strayResources = fileTree('src/main/resources').files.collect {
+            resourceRoot.relativize(it.toPath()).toString().replace('\\', '/')
+        }.findAll { relative ->
+            !versionBoundResources.any { relative ==~ it }
+        }.sort()
+        if (!strayResources.isEmpty()) {
+            throw new GradleException(
+                    'Distribution resources must be version bound; move these '
+                            + 'to a stable module or declare them in '
+                            + "versionBoundResources:\n - "
+                            + strayResources.join('\n - ')
+            )
+        }
+
+        def productionSources = inputs.files.files.findAll {
+            it.name.endsWith('.java')
+        }
         def presentNames = productionSources.collect { it.name } as Set
         if (!presentNames.contains(compositionRoot)) {
             throw new GradleException(
