@@ -102,6 +102,20 @@ public record ThreatSample(
         return distance <= reach;
     }
 
+    /**
+     * Whether it could hurt her after closing {@code margin} blocks.
+     *
+     * <p>{@link #threatensNow()} asks the same question with no margin, and that
+     * turns out to be the wrong question almost everywhere it matters. A zombie
+     * reaches about a block and a half; she stands a little further out than
+     * that on purpose, so "can it hit me right now" is false for every hostile
+     * in a crowd that is nonetheless about to hit her. Anything deciding whether
+     * she is surrounded has to ask about the step, not the instant.
+     */
+    public boolean threatensWithin(double margin) {
+        return distance <= reach + Math.max(0.0D, margin);
+    }
+
     /** Whether it can hurt her from further than a sword can answer. */
     public boolean outranges(double meleeReach) {
         return reach > meleeReach;

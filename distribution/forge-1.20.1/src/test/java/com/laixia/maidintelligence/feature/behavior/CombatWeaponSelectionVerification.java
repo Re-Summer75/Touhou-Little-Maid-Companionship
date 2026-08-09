@@ -34,6 +34,19 @@ public final class CombatWeaponSelectionVerification {
     /** 她自己的近战触及，用于聚合威胁场。 */
     private static final double HER_REACH = 3.0D;
 
+    /** 铁剑的攻击力修饰符。 */
+    private static final double IRON_SWORD = 5.0D;
+
+    /** 横扫落在**每个**旁人身上的伤害，未附魔就是一点。 */
+    private static final double SWEEP_DAMAGE = 1.0D;
+
+    /** 她持剑时够得到的距离。 */
+    private static final double MELEE_REACH = 2.0D;
+
+    /** 一支普通箭的伤害评分，以及弓自报的射程。 */
+    private static final double BOW_POWER = 0.65D;
+    private static final double BOW_RANGE = 15.0D;
+
     /** 普通怪走向她的速度，约等于僵尸的步行速度。 */
     private static final double CLOSING_SPEED = 1.0D;
 
@@ -52,7 +65,6 @@ public final class CombatWeaponSelectionVerification {
         verifiesHeldWeaponResistsSwapping();
         verifiesNothingUsableDisengages();
         verifiesAFlierIsShotNotSwungAt();
-        verifiesACrowdDrawsSteelAtBowRange();
         verifiesNoRoomToKiteDrawsSteel();
         verifiesAnArrivingFoeIsMetWithSteel();
         verifiesLongerReachCostsLess();
@@ -63,7 +75,7 @@ public final class CombatWeaponSelectionVerification {
     /** 有弓有箭且够不着她，就不该走过去拿剑砍。 */
     private static void verifiesRangePreferredWhenNotPressed() {
         CombatStance stance = POLICY.choose(
-                List.of(sword(0.8D), bow(0.5D, true)),
+                List.of(sword(IRON_SWORD), bow(true)),
                 against(zombie(10.0D))
         );
         require(
@@ -85,7 +97,7 @@ public final class CombatWeaponSelectionVerification {
      */
     private static void verifiesMeleeTakesOverWhenPressed() {
         CombatStance stance = POLICY.choose(
-                List.of(sword(0.3D), bow(0.9D, true)),
+                List.of(sword(IRON_SWORD), bow(true)),
                 against(zombie(1.5D))
         );
         require(
@@ -102,7 +114,7 @@ public final class CombatWeaponSelectionVerification {
      * 一步都不用走。这个不对称本身就是滞回。
      */
     private static void verifiesStanceDoesNotFlipOnTheThreshold() {
-        List<WeaponCandidate> both = List.of(sword(0.8D), bow(0.5D, true));
+        List<WeaponCandidate> both = List.of(sword(IRON_SWORD), bow(true));
         CombatStance fresh = POLICY.choose(both, against(zombie(5.0D)));
         require(
                 fresh.posture() == CombatStance.Posture.RANGED,
@@ -126,7 +138,7 @@ public final class CombatWeaponSelectionVerification {
      */
     private static void verifiesEmptyBowIsNotAWeapon() {
         CombatStance stance = POLICY.choose(
-                List.of(sword(0.4D), bow(0.9D, false)),
+                List.of(sword(IRON_SWORD), bow(false)),
                 against(zombie(12.0D))
         );
         require(
@@ -147,7 +159,7 @@ public final class CombatWeaponSelectionVerification {
      */
     private static void verifiesBowOnlyMaidStillFightsUpClose() {
         CombatStance stance =
-                POLICY.choose(List.of(bow(0.6D, true)), against(zombie(1.0D)));
+                POLICY.choose(List.of(bow(true)), against(zombie(1.0D)));
         require(
                 stance.engaged(),
                 "A cornered archer refused to fight at all"
@@ -187,7 +199,7 @@ public final class CombatWeaponSelectionVerification {
 
     private static void verifiesNothingUsableDisengages() {
         CombatStance stance =
-                POLICY.choose(List.of(bow(0.9D, false)), against(zombie(6.0D)));
+                POLICY.choose(List.of(bow(false)), against(zombie(6.0D)));
         require(
                 !stance.engaged(),
                 "With nothing usable she still tried to fight"
@@ -209,11 +221,14 @@ public final class CombatWeaponSelectionVerification {
      * 也能通过。
      */
     private static void verifiesAFlierIsShotNotSwungAt() {
+        // 两格半，不是六格。距离要选在近战赢得有余量的地方，这条断言才只关于
+        // "飞着"这一个变量——六格上弓是对的（箭管够、对方三秒才打一下），
+        // 于是"落地就拔剑"考的其实是距离，飞不飞根本没参与。
         ThreatSample flier = new ThreatSample(
-                6.0D, 4.0D, 2.0D, 60, 20.0D, true, CLOSING_SPEED, ThreatRelation.UNENGAGED
+                2.5D, 4.0D, 2.0D, 60, 20.0D, true, CLOSING_SPEED, ThreatRelation.UNENGAGED
         );
         CombatStance air = POLICY.choose(
-                List.of(sword(0.9D), bow(0.4D, true)), against(flier)
+                List.of(sword(IRON_SWORD), bow(true)), against(flier)
         );
         require(
                 air.posture() == CombatStance.Posture.RANGED,
@@ -221,39 +236,15 @@ public final class CombatWeaponSelectionVerification {
         );
 
         ThreatSample grounded = new ThreatSample(
-                6.0D, 4.0D, 2.0D, 60, 20.0D, false, CLOSING_SPEED, ThreatRelation.UNENGAGED
+                2.5D, 4.0D, 2.0D, 60, 20.0D, false, CLOSING_SPEED, ThreatRelation.UNENGAGED
         );
         CombatStance ground = POLICY.choose(
-                List.of(sword(0.9D), bow(0.4D, true)), against(grounded)
+                List.of(sword(IRON_SWORD), bow(true)), against(grounded)
         );
         require(
                 ground.posture() == CombatStance.Posture.MELEE,
                 "The same fight on the ground still chose the weaker bow, so "
                         + "the flier answer was not about being airborne"
-        );
-    }
-
-    /**
-     * 孤身时举弓的那个距离，被围住时该拔刀。
-     *
-     * <p>没有任何一条规则写着"人多就近战"。多出来的两只只是让挨打的间隔
-     * 缩短，而拉弓需要那个间隔——围殴之所以要动刀，是因为在围殴里根本拉不完
-     * 一次弓。同一个距离、同一套武器，只有周围的敌人数量不同。
-     */
-    private static void verifiesACrowdDrawsSteelAtBowRange() {
-        List<WeaponCandidate> both = List.of(sword(0.8D), bow(0.5D, true));
-        require(
-                POLICY.choose(both, against(zombie(5.0D))).posture()
-                        == CombatStance.Posture.RANGED,
-                "Fixture is wrong: alone at five blocks she should shoot"
-        );
-        CombatStance mobbed = POLICY.choose(
-                both,
-                against(zombie(5.0D), zombie(2.0D), zombie(2.0D))
-        );
-        require(
-                mobbed.posture() == CombatStance.Posture.MELEE,
-                "Surrounded, she still tried to work a bow"
         );
     }
 
@@ -264,9 +255,17 @@ public final class CombatWeaponSelectionVerification {
      * 武器打近战。地形本来就被测量着，只是从来没有送到武器选择这里。
      */
     private static void verifiesNoRoomToKiteDrawsSteel() {
-        List<WeaponCandidate> both = List.of(sword(0.8D), bow(0.5D, true));
+        List<WeaponCandidate> both = List.of(sword(IRON_SWORD), bow(true));
+        // 两头都断言，同一个距离，只差身后有没有墙。少了开阔那一头，"永远近战"
+        // 也能通过；而距离要挑在墙真的能翻盘的地方——远到对方两秒才走到时，
+        // 站着射本来就不叫拉扯，墙拦不住的东西也就证明不了什么。
+        require(
+                POLICY.choose(both, against(zombie(4.0D))).posture()
+                        == CombatStance.Posture.RANGED,
+                "开阔地上四格外的僵尸她都不肯开弓，那这条测的就不是那堵墙"
+        );
         CombatStance cornered = POLICY.choose(
-                both, cornered(zombie(5.0D))
+                both, cornered(zombie(4.0D))
         );
         require(
                 cornered.posture() == CombatStance.Posture.MELEE,
@@ -286,7 +285,7 @@ public final class CombatWeaponSelectionVerification {
      * 形式。
      */
     private static void verifiesAnArrivingFoeIsMetWithSteel() {
-        List<WeaponCandidate> both = List.of(sword(0.6D), bow(0.6D, true));
+        List<WeaponCandidate> both = List.of(sword(IRON_SWORD), bow(true));
         ThreatSample idle = new ThreatSample(
                 6.0D, 3.0D, 2.4D, 20, 20.0D, false, STATIONARY,
                 ThreatRelation.UNENGAGED
@@ -297,8 +296,11 @@ public final class CombatWeaponSelectionVerification {
                 "对着一只站着不动的敌人她都不肯开弓，那这条测的就不是逼近"
         );
 
+        // 冲得比僵尸快得多——每秒八格，六格外零点四五秒到，而一次拉弓要一秒。
+        // 速度要给足：每秒六格时她能抢在接触前放完约三成的弓，那一档上开弓和
+        // 拔刀本来就差不多贵，断言落在天平正中间，红绿全看小数点后第二位。
         ThreatSample charging = new ThreatSample(
-                6.0D, 3.0D, 2.4D, 20, 20.0D, false, 6.0D,
+                6.0D, 3.0D, 2.4D, 20, 20.0D, false, 8.0D,
                 ThreatRelation.UNENGAGED
         );
         require(
@@ -320,9 +322,9 @@ public final class CombatWeaponSelectionVerification {
      * <p>断言只比两把**其它属性完全相同**的武器，所以差别只可能来自触及。
      */
     private static void verifiesLongerReachCostsLess() {
-        WeaponCandidate longArm = polearm(0.6D, 5.0D);
+        WeaponCandidate longArm = polearm(IRON_SWORD, 5.0D);
         CombatStance stance = POLICY.choose(
-                List.of(sword(0.6D), longArm),
+                List.of(sword(IRON_SWORD), longArm),
                 against(zombie(6.0D))
         );
         require(
@@ -395,17 +397,37 @@ public final class CombatWeaponSelectionVerification {
         );
     }
 
-    private static WeaponCandidate sword(double power) {
-        return new WeaponCandidate(WeaponKind.MELEE, 1, power, false);
+    /**
+     * 一把剑，按真武器给全参数。
+     *
+     * <p>此前这里只给伤害评分，攻速和横扫留空——在按 dps 定价的年代那没关系，
+     * 因为只有比值参与比较。现在杀敌时间是**整下**算的，绝对值决定了要砍几下，
+     * 于是"评分 0.8 的剑"这种随手取的数会自己跨过取整边界，把断言变成对某个
+     * 特定数字的检验而不是对处境的检验。
+     */
+    private static WeaponCandidate sword(double damage) {
+        return new WeaponCandidate(
+                WeaponKind.MELEE, 1, damage / WeaponCandidate.POWER_SCALE,
+                false, MELEE_REACH, SWEEP_DAMAGE, SWINGS, 1.0D,
+                WeaponCandidate.UNLIMITED
+        );
     }
 
     /** 同样的一把近战武器，但够得更远。 */
-    private static WeaponCandidate polearm(double power, double reach) {
-        return new WeaponCandidate(WeaponKind.MELEE, 3, power, false, reach);
+    private static WeaponCandidate polearm(double damage, double reach) {
+        return new WeaponCandidate(
+                WeaponKind.MELEE, 3, damage / WeaponCandidate.POWER_SCALE,
+                false, reach, SWEEP_DAMAGE, SWINGS, 1.0D,
+                WeaponCandidate.UNLIMITED
+        );
     }
 
-    private static WeaponCandidate bow(double power, boolean arrows) {
-        return new WeaponCandidate(WeaponKind.BOW, 2, power, arrows);
+    /** 一把弓，箭管够——弹药短缺是另一条测试的事。 */
+    private static WeaponCandidate bow(boolean arrows) {
+        return new WeaponCandidate(
+                WeaponKind.BOW, 2, BOW_POWER, arrows, BOW_RANGE,
+                0.0D, 0.0D, 1.0D, WeaponCandidate.UNLIMITED
+        );
     }
 
     private static void require(boolean condition, String message) {

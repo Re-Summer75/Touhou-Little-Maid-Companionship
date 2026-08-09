@@ -7,11 +7,13 @@ import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMode;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.CombatMovement;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.RangedWeaponRecognizer;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ScannedThreat;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ThreatProfile;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmAlertness;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
+import com.laixia.maidintelligence.gametest.support.CombatProbe;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.gametest.framework.GameTest;
@@ -165,16 +167,40 @@ public final class CombatApproachGameTests {
         zombie.setNoAi(true);
         helper.getLevel().addFreshEntity(zombie);
 
+        // 每一次换手记一行。她最后手里拿着什么是结果，而"她是在几格上改的主意"
+        // 才是原因——两者差着整条决定链，只看结果的话，"从没选过远程"和"选了
+        // 又反悔"长得完全一样。
+        List<String> swaps = new java.util.ArrayList<>();
+        String[] previous = {""};
+        String[] priced = {"-"};
+        long start = helper.getLevel().getGameTime();
+
         // 只观察，不驱动：编排器在生产里每 tick 自己跑一次，测试再手动推一次
         // 就成了每 tick 两次，拉弦节奏与真实环境对不上。
         helper.startSequence()
                 .thenExecuteFor(200, () -> {
+                    String held = maid.getMainHandItem().getItem().toString();
+                    if (!held.equals(previous[0])) {
+                        // Priced before the swap is recorded, so the line
+                        // describes the situation the choice was made in rather
+                        // than the one it produced.
+                        if (previous[0].isEmpty()) {
+                            priced[0] = CombatProbe.pricingNow(maid);
+                        }
+                        previous[0] = held;
+                        swaps.add(String.format("%d:%s@%.1f",
+                                helper.getLevel().getGameTime() - start,
+                                held, maid.distanceTo(zombie)));
+                    }
                 })
                 .thenExecute(() -> {
                     helper.assertFalse(
                             hasArrow(maid),
                             "两百 tick 里那支箭一直在，她根本没打出去，"
-                                    + "这条测试没有验证到换手"
+                                    + "这条测试没有验证到换手。"
+                                    + CombatProbe.holdingAndSeeing(maid)
+                                    + " 换手=" + swaps
+                                    + "\n定价: " + priced[0]
                     );
                     helper.assertTrue(
                             maid.getMainHandItem().is(Items.IRON_SWORD),

@@ -12,8 +12,10 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ProjectileWeaponItem;
 import net.minecraft.world.item.SnowballItem;
 import net.minecraft.world.item.TridentItem;
+import net.minecraft.world.entity.MobType;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.item.enchantment.SweepingEdgeEnchantment;
 import net.minecraftforge.common.ForgeMod;
 import net.minecraftforge.common.ToolActions;
 import net.minecraftforge.items.IItemHandler;
@@ -113,27 +115,13 @@ public final class TlmWeaponScanner {
                 power(stack, kind),
                 hasAmmunition(maid, stack, kind),
                 reach(maid, stack, kind),
-                arcDamage(maid, stack, kind),
+                arcDamage(stack, kind),
                 usesPerSecond(maid, stack, kind),
                 durability(stack),
                 shots(maid, stack, kind)
         ));
     }
 
-    /**
-     * How far this weapon can actually hurt something.
-     *
-     * <p>Asked of the item, which is the only thing that knows: vanilla rates a
-     * bow at fifteen blocks and a crossbow at eight, and a modded launcher
-     * states its own. Holding one number for all of them cost a bow-armed maid
-     * seven blocks of standoff — and a skeleton reaches fifteen, so the number
-     * she was holding put her inside its range to reach her own.
-     *
-     * <p>Melee reports zero: how close she stands with a blade is decided by
-     * her own attack reach and her swing recovery, not by the item's rating.
-     * Thrown weapons likewise, since they are used at whatever distance she
-     * happens to be.
-     */
     /**
      * What one swing of this lands on each <em>other</em> body beside the one
      * she aimed at.
@@ -151,16 +139,20 @@ public final class TlmWeaponScanner {
      * best at, and a bow the situation it is worst at. Measured, she opened
      * every six-on-one by spending two hundred ticks emptying a quiver.
      */
-    private double arcDamage(
-            EntityMaid maid,
-            ItemStack stack,
-            WeaponKind kind
-    ) {
+    private double arcDamage(ItemStack stack, WeaponKind kind) {
         if (kind != WeaponKind.MELEE
                 || !stack.canPerformAction(ToolActions.SWORD_SWEEP)) {
             return 0.0D;
         }
-        return 1.0D + EnchantmentHelper.getSweepingDamageRatio(maid)
+        // Asked of the candidate, not of the maid. The convenience overload
+        // reads the enchantment off whatever is in her hand, which is the one
+        // stack this must not be about: rating a Sweeping Edge blade in her
+        // pack by the plain axe she happens to be holding gets the arc exactly
+        // backwards, and the axe rated by the blade is worse still.
+        int sweeping = EnchantmentHelper.getItemEnchantmentLevel(
+                Enchantments.SWEEPING_EDGE, stack
+        );
+        return 1.0D + SweepingEdgeEnchantment.getSweepingDamageRatio(sweeping)
                 * meleeDamage(stack);
     }
 
@@ -306,6 +298,25 @@ public final class TlmWeaponScanner {
         return Math.max(0.0D, left / stack.getMaxDamage());
     }
 
+    /**
+     * How far this weapon can actually hurt something.
+     *
+     * <p>Asked of the item, which is the only thing that knows: vanilla rates a
+     * bow at fifteen blocks and a crossbow at eight, and a modded launcher
+     * states its own. Holding one number for all of them cost a bow-armed maid
+     * seven blocks of standoff — and a skeleton reaches fifteen, so the number
+     * she was holding put her inside its range to reach her own.
+     *
+     * <p>Melee is answered by {@link #meleeReachWith}, not by zero. It used to
+     * report zero on the grounds that a blade's stand-off is decided by her
+     * attack reach rather than by the item — which is true and is exactly why
+     * the answer is not zero: the item is one term of that reach, so two blades
+     * in the same pack measured alike and choosing between them could never
+     * account for the one that keeps her out of a zombie's arms.
+     *
+     * <p>Thrown weapons still report zero, since they are used at whatever
+     * distance she happens to be.
+     */
     private double reach(EntityMaid maid, ItemStack stack, WeaponKind kind) {
         if (kind == WeaponKind.MELEE) {
             return meleeReachWith(maid, stack);
@@ -459,6 +470,22 @@ public final class TlmWeaponScanner {
         return false;
     }
 
+    /**
+     * What one swing of this stack lands, before her own arm.
+     *
+     * <p>The attribute modifier is only half of it. Vanilla pays Sharpness in
+     * {@code getDamageBonus} rather than as an attribute, so a Sharpness V blade
+     * carries the same modifier as a plain one and rated identically here —
+     * while {@code doHurtTarget} went on paying the bonus. She dealt the extra
+     * damage and never counted it, so choosing between an enchanted sword and a
+     * bare axe was decided on the half of the number that does not vary.
+     *
+     * <p>{@code UNDEFINED} on purpose. Smite and Bane of Arthropods pay out
+     * against particular mobs, and the arsenal is scanned once for the whole
+     * field rather than per target — pricing them here would credit a Smite
+     * blade against zombies and spiders alike. Sharpness applies to everything
+     * and is the part that can honestly be known without a target.
+     */
     private double meleeDamage(ItemStack stack) {
         double damage = 0.0D;
         for (AttributeModifier modifier
@@ -466,6 +493,7 @@ public final class TlmWeaponScanner {
                 .get(Attributes.ATTACK_DAMAGE)) {
             damage += modifier.getAmount();
         }
-        return damage;
+        return damage
+                + EnchantmentHelper.getDamageBonus(stack, MobType.UNDEFINED);
     }
 }

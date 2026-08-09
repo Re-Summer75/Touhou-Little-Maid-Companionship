@@ -29,9 +29,19 @@ import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatS
  * @param secondsBetweenHits  gap between incoming blows, infinite when quiet
  * @param secondsToContact    until the first of them can reach her, at the
  *                            speed they are actually travelling
- * @param hostilesConverging  how many arrive inside the window being planned
- *                            over — a count, because a sweeping weapon is paid
- *                            once per body it reaches
+ * @param fieldHealth         health of everything she can see, unweighted — what
+ *                            finishing the fight would cost in total, which is
+ *                            what a magazine has to be measured against
+ * @param crowding            how many arrive inside the window being planned
+ *                            over — a weighted count, because a sweeping weapon
+ *                            is paid once per body it reaches
+ * @param hostilesPressing    how many could strike her after one step. The
+ *                            micro fact the aggregate otherwise erases: every
+ *                            other figure here describes the crowd as a whole
+ *                            or the one hostile she picked, so "two of them are
+ *                            about to be able to hit me" had nowhere to be
+ *                            stated, and a decision made about the one in front
+ *                            is exactly how she gets hit from the side.
  * @param underAttack         whether anything can strike her where she stands
  * @param canOpenGround       whether she has the room and the legs to back off
  * @param meleeUsesPerSecond  her swings a second
@@ -48,6 +58,7 @@ public record EngagementContext(
         double secondsToContact,
         double fieldHealth,
         double crowding,
+        int hostilesPressing,
         boolean underAttack,
         boolean canOpenGround,
         double meleeUsesPerSecond,
@@ -87,8 +98,18 @@ public record EngagementContext(
                 field.incomingDps(),
                 field.secondsBetweenHits(),
                 field.soonestContact(),
-                field.convergingHealth(),
+                // Everything she can see, not only what arrives inside the
+                // planning window. This feeds one question — whether her
+                // ammunition covers the fight — and that question does not
+                // shrink because the crowd is still walking. Fed the weighted
+                // figure it read zero the moment she backed off far enough,
+                // which is precisely when a bow looks free: six arrows against
+                // an empty field cost nothing, so she kited a hundred and fifty
+                // ticks and arrived at the melee with the same six zombies and
+                // no arrows.
+                field.standingHealth(),
                 field.crowding(),
+                field.pressing(),
                 // Anything at all being able to reach her, not merely the one
                 // she is aiming at. A second zombie on her flank interrupts a
                 // draw just as thoroughly as the one in front does.

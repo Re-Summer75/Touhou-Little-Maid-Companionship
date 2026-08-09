@@ -66,6 +66,16 @@ public final class TradeCost {
     private static final double IN_HAND_DISCOUNT = 0.15D;
 
     /**
+     * Pairs of arms she will walk into before the walk itself is charged.
+     *
+     * <p>The same figure {@code MeleeSwing} tolerates before it breaks contact,
+     * and it has to be: one of them decides whether closing is worth it and the
+     * other decides whether she actually closes, and they cannot disagree about
+     * how crowded is too crowded.
+     */
+    private static final int TOLERATED_ATTACKERS = 1;
+
+    /**
      * Distance she wants for shooting, once she has decided to shoot.
      *
      * <p>Only used to price <em>leaving</em> melee: stepping just outside a
@@ -128,8 +138,32 @@ public final class TradeCost {
         double killSeconds =
                 context.targetHealth() / (dps + arcDps(weapon, context));
         double closeSeconds = approachSeconds(weapon, context);
-        return killSeconds * context.incomingDps()
+        return (killSeconds + exposedApproach(context, closeSeconds))
+                * context.incomingDps()
                 + impatience(context, killSeconds + closeSeconds);
+    }
+
+    /**
+     * How much of the walk in she actually pays for in blood.
+     *
+     * <p>None of it, while the thing she is closing on is the only thing that
+     * could answer: it has to walk in too, so the approach is a race neither of
+     * them is landing blows during. That was stated as a blanket assumption and
+     * it is only true one-on-one.
+     *
+     * <p>With somebody else already inside a step of her, the walk is not a race
+     * — it is a walk into a second pair of arms, and the blow she went in for is
+     * paid for whether or not it lands. This is the condition that keeps a
+     * one-blow kill from looking free in the middle of a crowd: the kill costs
+     * no recovery, and going to collect it still costs her the approach.
+     */
+    private double exposedApproach(
+            EngagementContext context,
+            double closeSeconds
+    ) {
+        return context.hostilesPressing() > TOLERATED_ATTACKERS
+                ? closeSeconds
+                : 0.0D;
     }
 
     /**
@@ -244,6 +278,19 @@ public final class TradeCost {
         return field / deliverable;
     }
 
+    /**
+     * The share of each blow that lands on somebody other than the target.
+     *
+     * <p>Used to shorten the fight rather than to kill this one faster, which is
+     * the honest way round: the arc does not take health off the body she aimed
+     * at, it takes health off the ones she has not got to yet. Expressed as a
+     * share so it composes with a blow count — half the swing landing elsewhere
+     * means the fight is half again as short — where the old rate form had to be
+     * added to a damage-per-second that no longer exists here.
+     *
+     * <p>Zero for anything that does not sweep, and zero against a single
+     * hostile, so in both cases the arithmetic is exactly the blow count.
+     */
     private double arcDps(WeaponCandidate weapon, EngagementContext context) {
         double others = Math.max(0.0D, context.crowding() - 1.0D);
         if (others <= 0.0D || weapon.arcDamage() <= 0.0D) {

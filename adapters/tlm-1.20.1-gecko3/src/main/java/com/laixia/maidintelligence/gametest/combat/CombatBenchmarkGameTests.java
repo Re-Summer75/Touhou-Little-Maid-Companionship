@@ -4,6 +4,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.gametest.support.CombatTrace;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
+import com.laixia.maidintelligence.gametest.support.WeaponLedger;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -32,10 +33,13 @@ import java.util.Arrays;
 @PrefixGameTestTemplate(false)
 @SuppressWarnings("null")
 public final class CombatBenchmarkGameTests {
-    /** 基准局：六只僵尸、五格起手、二十秒、零伤害。 */
+    /** 基准局：六只僵尸、五格起手、十五秒、零伤害。 */
     private static final int PACK_SIZE = 6;
-    private static final int BUDGET_TICKS = 400;
+    private static final int BUDGET_TICKS = 300;
     private static final double PACK_DISTANCE = 5.0D;
+
+    /** 六支箭：只够解决一只多一点，所以纯远程一定输，这是刻意的。 */
+    private static final int ARROWS = 6;
 
     /**
      * 竞技场尺寸，沿用本套件里已经跑通的那一副。
@@ -59,15 +63,28 @@ public final class CombatBenchmarkGameTests {
 
 
     /**
-     * 基准局：六只僵尸、五格起手、二十秒之内清完、一点伤害都不许挨。
+     * 基准局：六只僵尸、五格起手、十五秒之内清完、一点伤害都不许挨。
      *
      * <p>这不是回归测试，是一道**标尺**。前面每条都只钉住一个具体缺陷（有没有后撤、
      * 有没有换刀、有没有站着不动），全绿只说明那些缺陷不在了，不说明她打得好。这条
-     * 问的是合起来够不够聪明：六只从同一侧压过来，她带一把铁剑、一把弓和十支箭——
-     * 十支箭最多解决两只，所以纯远程赢不了，必须风筝、换手、找角度。
+     * 问的是合起来够不够聪明。
+     *
+     * <p>发下去的三样各有各的短处，凑不出一件万能的：
+     *
+     * <ul>
+     *   <li><b>铁斧</b>——每击 9 点，但一秒只挥 0.9 下，且不横扫。一进一出只落一击
+     *       的时候它最划算。</li>
+     *   <li><b>铁剑</b>——每击 6 点、一秒 1.6 下，带横扫。站在人堆里连续挥的时候它
+     *       最划算。</li>
+     *   <li><b>弓</b>——只有六支箭，够解决一只多一点。射程内不挨打，但清不了场。</li>
+     * </ul>
+     *
+     * <p>所以纯用哪一样都赢不了：全程弓不够箭，全程斧砍不完，全程剑挨得最多。要过就
+     * 得在合适的距离上换合适的那件。武器账本那一行就是为了看她有没有这么做——只看
+     * BENCH 那行的话，"三样都用了但配比不对"和"斧头一次没拿"读起来一模一样。
      *
      * <p>零伤害是刻意苛刻的。僵尸移速 0.23、她 0.6，速度差足以让"一次都不该挨"在
-     * 理论上成立；挨了就说明某个环节把她送进了别人的触及范围。二十秒同样刻意：不设
+     * 理论上成立；挨了就说明某个环节把她送进了别人的触及范围。十五秒同样刻意：不设
      * 时限的话，"退到墙角站一辈子"也算过。
      *
      * <p>默认 {@code required = false}。一条注定红的必测项只会教人忽略整个套件，
@@ -148,14 +165,16 @@ public final class CombatBenchmarkGameTests {
     /**
      * 一局。
      *
-     * <p>跑五局而不是一局，每局独占一个批次。两件事逼出来的：
+     * <p>跑十二局而不是一局，每局独占一个批次。两件事逼出来的：
      *
      * <p>批次——GameTest 的批次串行、批内并发。六只带 AI 的真僵尸放进并发批次会
      * 走进邻座夹具打别人的女仆（隔壁以"她挨了 28 点"变红），邻座的卫道士也会溜
      * 进来（本局伤害在两次运行间从 0 跳到 21）。独占批次两个方向都断掉。
      *
-     * <p>五局——僵尸寻路带随机，单局读数在 {0 杀 3 伤} 和 {2 杀 25 伤} 之间跳。
-     * 拿这种噪声调裁决参数等于对着随机数拧螺丝。要看的是五局的分布，不是某一局。
+     * <p>十二局——僵尸寻路带随机，单局读数在 {0 杀 3 伤} 和 {2 杀 25 伤} 之间跳。
+     * 拿这种噪声调裁决参数等于对着随机数拧螺丝。要看的是整批的分布，不是某一局。
+     * 五局仍然不够：同一份代码跑两遍给过 5.4 和 13.4 两个均值，两者都能"证明"
+     * 相反的结论。十二局是能把这一档噪声压住的最小规模。
      */
     private static void trial(GameTestHelper helper, int index) {
         CompanionScene scene = CompanionScene.room(helper, ARENA_X, ARENA_Z);
@@ -170,10 +189,13 @@ public final class CombatBenchmarkGameTests {
                 0, new ItemStack(Items.IRON_SWORD)
         );
         maid.getAvailableBackpackInv().setStackInSlot(
-                1, new ItemStack(Items.BOW)
+                1, new ItemStack(Items.IRON_AXE)
         );
         maid.getAvailableBackpackInv().setStackInSlot(
-                2, new ItemStack(Items.ARROW, 10)
+                2, new ItemStack(Items.BOW)
+        );
+        maid.getAvailableBackpackInv().setStackInSlot(
+                3, new ItemStack(Items.ARROW, ARROWS)
         );
 
         Zombie[] pack = new Zombie[PACK_SIZE];
@@ -202,6 +224,7 @@ public final class CombatBenchmarkGameTests {
         }
 
         CombatTrace trace = new CombatTrace("benchmark trial " + index);
+        WeaponLedger ledger = new WeaponLedger(pack);
         long start = helper.getLevel().getGameTime();
         long[] killedAt = new long[PACK_SIZE];
         Arrays.fill(killedAt, -1L);
@@ -217,6 +240,7 @@ public final class CombatBenchmarkGameTests {
                     }
                     lowestHealth[0] =
                             Math.min(lowestHealth[0], maid.getHealth());
+                    ledger.record(maid);
                     trace.sample(tick, maid, nearestOf(maid, pack));
                 })
                 .thenExecute(() -> {
@@ -226,6 +250,7 @@ public final class CombatBenchmarkGameTests {
                         trace.dump();
                     }
                     report(index, maid, pack, killedAt, lowestHealth[0], trace);
+                    System.out.println("  " + ledger.line());
 
                     int standing = alive(pack);
                     helper.assertTrue(
@@ -240,8 +265,8 @@ public final class CombatBenchmarkGameTests {
                     );
                     helper.assertTrue(
                             standing == 0,
-                            "二十秒过去还剩 " + standing + " 只没解决。"
-                                    + trace.summary()
+                            "十五秒过去还剩 " + standing + " 只没解决。"
+                                    + ledger.line() + " " + trace.summary()
                     );
                 })
                 .thenSucceed();
@@ -250,7 +275,7 @@ public final class CombatBenchmarkGameTests {
     /**
      * 一个顶，没有墙。
      *
-     * <p>顶是为了僵尸不着火：露天的话它们白天会自燃，"二十秒内解决六只"就变成
+     * <p>顶是为了僵尸不着火：露天的话它们白天会自燃，"十五秒内解决六只"就变成
      * 太阳解决的。
      *
      * <p>墙则是不能砌。第一版四面围了五格高，隔壁那条"看不见就不该算"的测试当场

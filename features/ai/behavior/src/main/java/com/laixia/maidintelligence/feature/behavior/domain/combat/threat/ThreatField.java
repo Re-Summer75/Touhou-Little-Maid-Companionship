@@ -1,5 +1,7 @@
 package com.laixia.maidintelligence.feature.behavior.domain.combat.threat;
 
+import com.laixia.maidintelligence.feature.behavior.domain.combat.SpacingPolicy;
+
 import java.util.Collection;
 import java.util.Objects;
 
@@ -23,6 +25,13 @@ import java.util.Objects;
  *
  * @param total            hostiles considered, including ones that cannot reach her
  * @param converging       how many could strike her where she stands
+ * @param pressing         how many could strike her after one step. The count
+ *                         {@code converging} was meant to be and is not: she
+ *                         holds station a little outside a zombie's arms on
+ *                         purpose, so "in reach this instant" is zero for a
+ *                         crowd that is nonetheless closing on her from three
+ *                         sides. Anything asking "am I surrounded" has to ask
+ *                         this one.
  * @param crowding         how many of them are effectively in the fight,
  *                         weighted by arrival — the count a sweeping weapon is
  *                         paid by, and not the same as {@code converging},
@@ -31,6 +40,14 @@ import java.util.Objects;
  * @param incomingDps      expected damage per second, weighted by arrival time
  * @param incomingHitRate  expected hits per second, weighted the same way
  * @param convergingHealth expected health to remove, weighted by arrival time
+ * @param standingHealth   health of everything she can see, unweighted. The same
+ *                         quantity {@code convergingHealth} measures, asked over
+ *                         the fight instead of over the planning window — six
+ *                         zombies twelve blocks out arrive at nothing inside
+ *                         three seconds and are still six zombies. Only for
+ *                         questions whose horizon is the whole engagement, of
+ *                         which there is exactly one: whether her ammunition can
+ *                         finish it.
  * @param anyAirborne      whether any of them is beyond a swung weapon
  * @param anyOutranging    whether any of them can hurt her from beyond melee
  * @param soonestContact   seconds until the first of them can strike her
@@ -39,11 +56,13 @@ import java.util.Objects;
 public record ThreatField(
         int total,
         int converging,
+        int pressing,
         double crowding,
         double nearestDistance,
         double incomingDps,
         double incomingHitRate,
         double convergingHealth,
+        double standingHealth,
         boolean anyAirborne,
         boolean anyOutranging,
         double soonestContact,
@@ -51,8 +70,8 @@ public record ThreatField(
 ) {
     /** Nothing hostile in sight. */
     public static final ThreatField EMPTY = new ThreatField(
-            0, 0, 0.0D, Double.POSITIVE_INFINITY, 0.0D, 0.0D, 0.0D, false, false,
-            Double.POSITIVE_INFINITY, 0.0D
+            0, 0, 0, 0.0D, Double.POSITIVE_INFINITY, 0.0D, 0.0D, 0.0D, 0.0D,
+            false, false, Double.POSITIVE_INFINITY, 0.0D
     );
 
     /**
@@ -106,10 +125,12 @@ public record ThreatField(
         Objects.requireNonNull(samples, "samples");
         int total = 0;
         int converging = 0;
+        int pressing = 0;
         double nearest = Double.POSITIVE_INFINITY;
         double incoming = 0.0D;
         double hits = 0.0D;
         double health = 0.0D;
+        double standing = 0.0D;
         boolean airborne = false;
         boolean outranging = false;
         double soonest = Double.POSITIVE_INFINITY;
@@ -133,8 +154,29 @@ public record ThreatField(
             // produce the same rate and are not remotely the same risk to a
             // maid with twenty health.
             heaviest = Math.max(heaviest, sample.strikeDamage());
+            // Unweighted by distance, and deliberately outside the arrival gate
+            // below: distance changes when a fight happens, not whether it
+            // happens, and this is read by the one question whose horizon is
+            // the whole fight.
+            //
+            // Gated on attention instead. The question is whether her
+            // ammunition covers what she has to get through, and something busy
+            // with somebody else — or that has not noticed anyone — is not
+            // something she has to get through. Distance is the obvious filter
+            // and it is the wrong one: a crowd she is kiting is far away
+            // precisely because the kiting is working, and it is still entirely
+            // her problem. Without the gate she counted every hostile within
+            // sixteen blocks, which in a shared world meant the neighbours.
+            if (sample.relation() != ThreatRelation.UNENGAGED) {
+                standing += sample.health();
+            }
             if (sample.threatensNow()) {
                 converging++;
+            }
+            // The margin is the one her feet already use, so "she thinks she is
+            // surrounded" and "she behaves as though she is" cannot drift apart.
+            if (sample.threatensWithin(SpacingPolicy.instance().safeGap())) {
+                pressing++;
             }
             // Weighted by arrival rather than gated on reach, so one closing in
             // counts for most of itself while one across the map counts for
@@ -162,8 +204,8 @@ public record ThreatField(
             return EMPTY;
         }
         return new ThreatField(
-                total, converging, crowd, nearest, incoming, hits, health,
-                airborne, outranging, soonest, heaviest
+                total, converging, pressing, crowd, nearest, incoming, hits,
+                health, standing, airborne, outranging, soonest, heaviest
         );
     }
 

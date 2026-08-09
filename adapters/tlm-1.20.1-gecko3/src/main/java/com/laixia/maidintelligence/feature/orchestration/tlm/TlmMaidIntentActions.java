@@ -171,7 +171,19 @@ public final class TlmMaidIntentActions
             OrchestrationId action,
             Map<String, String> parameters
     ) {
-        if (action.equals(CompanionIntentIds.APPROACH_OWNER)) {
+        if (action.equals(CompanionIntentIds.ENGAGE_THREAT)) {
+            // Her hands, and deliberately not the rest of the fight. Nothing in
+            // the world clears a use state — only letting go does — so an
+            // archer whose fight ended between two ticks stayed at full draw
+            // for good, aiming at nothing. That is what this call is for.
+            //
+            // The full teardown belongs to the fight itself, which performs it
+            // when the fight is actually over. This hook fires when a step times
+            // out, and a step timing out during a long fight is a clock running
+            // down, not a fight ending: erasing her retreat there costs her
+            // ninety-two motionless ticks out of two hundred.
+            combatAction.releaseHands(maid);
+        } else if (action.equals(CompanionIntentIds.APPROACH_OWNER)) {
             ownerAction.cancelApproach(maid, parameters);
         } else if (action.equals(
                 CompanionIntentIds.FETCH_SNACK_CABINET_MEAL

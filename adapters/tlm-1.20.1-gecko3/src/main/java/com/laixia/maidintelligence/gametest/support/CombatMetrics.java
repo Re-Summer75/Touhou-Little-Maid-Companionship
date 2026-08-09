@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.gametest.support;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ThreatProfile;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.phys.Vec3;
@@ -15,12 +16,13 @@ import net.minecraft.world.phys.Vec3;
  * column is a debugging need, a new total is a new requirement — so they are
  * separate here.
  *
- * <p>{@link #stationaryShare()} is the one that matters most. "She stands there
- * and dies" is not a claim about distance covered or damage taken: a maid
+ * <p>{@link #stationaryInReachShare()} is the one that matters most. "She stands
+ * there and dies" is not a claim about distance covered or damage taken: a maid
  * holding seven blocks and taking nothing is fine, one covering twenty while
  * being run down is not, and the distance reading is higher for the second.
- * It is a claim about whether her feet move while something is trying to kill
- * her, so that is measured directly.
+ * It is a claim about her feet — but only where standing still costs her
+ * something, which is inside whatever is swinging at her. Standing still
+ * outside that is most of what good spacing looks like.
  */
 public final class CombatMetrics {
     /** Movement below this in a tick is standing still, allowing for jitter. */
@@ -28,7 +30,6 @@ public final class CombatMetrics {
 
     /** About how far an ordinary walking hostile can strike from. */
     private static final double MELEE_REACH = 2.5D;
-
 
     private double closest = Double.POSITIVE_INFINITY;
     private double closestEngaged = Double.POSITIVE_INFINITY;
@@ -39,6 +40,7 @@ public final class CombatMetrics {
     private int withinReach;
     private int withFoes;
     private int stationaryWithFoes;
+    private int stationaryInReach;
     private int samples;
     private float damage;
     private float lastHealth = -1.0F;
@@ -82,6 +84,21 @@ public final class CombatMetrics {
             withFoes++;
             if (movedThisTick < STILL) {
                 stationaryWithFoes++;
+                // The conjunction, which is the claim people actually make.
+                // Motionless is not a defect on its own — the whole melee
+                // tactic is to hold a spot just outside its arms and swing from
+                // there, and an archer holding her range stands still by
+                // definition. Motionless *inside* its arms is the defect, and
+                // it is what "she stands there and gets beaten" describes.
+                //
+                // Measured against the hostile's own geometry rather than a
+                // constant, because the margin between the two is the whole
+                // question here: a vindicator reaches about 1.43 and her strike
+                // window sits at 1.75, so a fixed 2.5 counts her correct
+                // stand-off as standing in danger.
+                if (maid.distanceTo(foe) <= ThreatProfile.reach(foe, maid)) {
+                    stationaryInReach++;
+                }
             }
         }
     }
@@ -89,6 +106,20 @@ public final class CombatMetrics {
     /** The reported defect as a number: motionless while hunted. */
     public double stationaryShare() {
         return withFoes == 0 ? 0.0D : (double) stationaryWithFoes / withFoes;
+    }
+
+    /**
+     * Motionless inside something's reach, as a share of the time hunted.
+     *
+     * <p>What {@link #stationaryShare()} was meant to be. That one goes up when
+     * the fight gets <em>better</em> — holding a strike window is standing
+     * still, and an archer keeping her distance is standing still for almost
+     * the whole engagement — so a threshold on it drifts into the middle of its
+     * own distribution and decides by luck. Two required scenarios were
+     * alternating red and green on identical code because of it.
+     */
+    public double stationaryInReachShare() {
+        return withFoes == 0 ? 0.0D : (double) stationaryInReach / withFoes;
     }
 
     /** Share of the engagement spent inside a walking hostile's reach. */
@@ -139,6 +170,7 @@ public final class CombatMetrics {
                 + " withinReach=" + Math.round(shareWithinReach() * 100.0D)
                 + "% damageTaken=" + round(damage)
                 + " stationaryWithFoes=" + stationaryWithFoes + "/" + withFoes
+                + " stationaryInReach=" + stationaryInReach + "/" + withFoes
                 + " rootedTicks=" + rooted;
     }
 

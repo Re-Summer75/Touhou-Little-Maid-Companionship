@@ -236,6 +236,10 @@ public final class CombatTrace {
         return metrics.stationaryShare();
     }
 
+    public double stationaryInReachShare() {
+        return metrics.stationaryInReachShare();
+    }
+
     public int rootedTicks() {
         return metrics.rootedTicks();
     }

@@ -95,6 +95,8 @@ public final class TlmCombatAction {
      *
      * <p>Power is derived from the item, so the same sword scores the same
      * twice; the tolerance only absorbs floating point, not genuine difference.
+     * Two different weapons that rate identically are interchangeable by the
+     * only measure the choice used, so either satisfying it is correct.
      */
     private static final double POWER_MATCH_SLACK = 1.0E-6D;
 
@@ -205,12 +207,34 @@ public final class TlmCombatAction {
     /** Drop everything this action owns; the orchestrator may resume later. */
     public void cancel(EntityMaid maid) {
         maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);
+        releaseHands(maid);
+        CombatMovement.clear(maid);
+    }
+
+    /**
+     * Let go of whatever her hands are holding open, and nothing else.
+     *
+     * <p>Split from {@link #cancel} because the two are asked at different
+     * moments. The fight calls {@code cancel} when it is genuinely over and can
+     * safely tear down everything; the orchestrator calls this when the step it
+     * is running has merely timed out, which during a long fight is a clock
+     * expiring rather than a fight ending.
+     *
+     * <p>Tearing down movement there is measurably wrong: the retreat she is
+     * halfway through is erased, re-issued, erased again, and she spends half
+     * the fight rooted — measured at ninety-two motionless ticks out of two
+     * hundred with three hostiles on her.
+     *
+     * <p>A draw is different, and it is the reason this exists at all. Nothing
+     * in the world clears a use state; only letting go does. So an archer whose
+     * fight ended between one tick and the next stayed at full draw for the rest
+     * of her life, aiming at nothing.
+     */
+    public void releaseHands(EntityMaid maid) {
         if (maid.isUsingItem()) {
-            // Otherwise she walks away still holding the bow at full draw.
             maid.stopUsingItem();
         }
         maid.setSwingingArms(false);
-        CombatMovement.clear(maid);
     }
 
     private ActionResult fight(
@@ -450,7 +474,24 @@ public final class TlmCombatAction {
         );
     }
 
-    /** Whether this stack is the weapon that was chosen, or better of its kind. */
+    /**
+     * Whether this stack is the weapon that was chosen.
+     *
+     * <p>That one, not "that one or anything stronger of its kind". The looser
+     * form reads as harmless — a better weapon is better — and it is what locked
+     * her into an axe. The host's search consults her main hand first and stops
+     * if it already satisfies the predicate; an axe rates higher than a sword,
+     * so an axe in her hand satisfied every request for a sword and the search
+     * never reached the pack. The ratchet only turns one way: holding the sword
+     * she would swap to the axe, holding the axe she would never swap back, and
+     * from outside that is a maid who owns two weapons and uses one.
+     *
+     * <p>Which is the wrong question anyway. Damage is not the ordering the
+     * choice was made on — the whole point of pricing is that the heavier weapon
+     * is sometimes the worse one, because it does not sweep, or swings too
+     * slowly to fit between two incoming blows. Having the swap re-decide on
+     * power throws that away at the last step.
+     */
     private boolean matches(
             EntityMaid maid,
             ItemStack stack,
@@ -458,8 +499,8 @@ public final class TlmCombatAction {
     ) {
         return weapons.classifyFor(stack) == weapon.kind()
                 && weapons.isUsable(maid, stack)
-                && weapons.powerOf(stack)
-                        >= weapon.power() - POWER_MATCH_SLACK;
+                && Math.abs(weapons.powerOf(stack) - weapon.power())
+                        <= POWER_MATCH_SLACK;
     }
 
     private ActionResult finish(EntityMaid maid) {

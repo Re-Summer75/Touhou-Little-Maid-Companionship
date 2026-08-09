@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.gametest.combat;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
+import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.RangedWeaponRecognizer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
@@ -27,6 +28,7 @@ import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 端到端：她怎么把远程武器打出去。
@@ -40,6 +42,54 @@ import java.util.List;
 @SuppressWarnings("null")
 public final class RangedFireGameTests {
     private RangedFireGameTests() {
+    }
+
+    /**
+     * 战斗被打断时，那张拉满的弓要放下来。
+     *
+     * <p>玩家报的是"蓄力好了但敌人没了，她就一直保持蓄力"。使用状态只有主动松手
+     * 才会清除，世界不会替她清；而编排器的 cancel 分发里当时有九个动作，唯独没有
+     * 战斗。敌人消失、意图不再合格、动作不再被 tick——她就那么一直瞄着空气。
+     *
+     * <p>别的动作被中途丢下都无所谓，它们至多持有一个移动目标。战斗持有的是攻击
+     * 目标、挥臂状态和一张拉满的弓，这是唯一一个必须被通知"你结束了"的动作。
+     *
+     * <p>断言走编排器的 cancel，而不是直接调动作自己的 cancel：坏掉的从来不是
+     * 动作，是那根线没接上。
+     */
+    @GameTest(
+            templateNamespace = "minecraft",
+            template = "empty",
+            timeoutTicks = 60
+    )
+    public static void aDrawnBowIsLetGoWhenTheFightEnds(GameTestHelper helper) {
+        CompanionScene scene = CompanionScene.room(helper, 3, 2);
+        EntityMaid maid = scene.maid(1, 2, 1);
+        maid.setItemInHand(
+                InteractionHand.MAIN_HAND, new ItemStack(Items.BOW)
+        );
+        maid.getAvailableBackpackInv().setStackInSlot(
+                0, new ItemStack(Items.ARROW, 32)
+        );
+        seeHostile(helper, maid, 10.0D);
+
+        new TlmCombatAction(
+                new TlmThreatScanner(),
+                new TlmWeaponScanner(RangedWeaponRecognizer.NONE)
+        ).execute(maid);
+        helper.assertTrue(
+                maid.isUsingItem(),
+                "夹具没让她拉起弓，这条什么都测不到"
+        );
+
+        scene.actions().cancel(
+                maid, CompanionIntentIds.ENGAGE_THREAT, Map.of()
+        );
+        helper.assertFalse(
+                maid.isUsingItem(),
+                "战斗被中断后她仍保持着蓄力，而没有任何东西会替她松手"
+        );
+        helper.succeed();
     }
 
     /**

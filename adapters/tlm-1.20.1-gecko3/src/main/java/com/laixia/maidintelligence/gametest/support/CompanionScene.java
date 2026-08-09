@@ -55,11 +55,13 @@ public final class CompanionScene {
 
     private final GameTestHelper helper;
     private final Player owner;
+    private final int lift;
     private final List<EntityMaid> maids = new ArrayList<>();
 
-    private CompanionScene(GameTestHelper helper, Player owner) {
+    private CompanionScene(GameTestHelper helper, Player owner, int lift) {
         this.helper = helper;
         this.owner = owner;
+        this.lift = lift;
     }
 
     /**
@@ -73,14 +75,23 @@ public final class CompanionScene {
             int width,
             int depth
     ) {
+        return room(helper, width, depth, LIFT);
+    }
+
+    private static CompanionScene room(
+            GameTestHelper helper,
+            int width,
+            int depth,
+            int lift
+    ) {
         for (int x = 0; x <= width; x++) {
             for (int z = 0; z <= depth; z++) {
-                helper.setBlock(new BlockPos(x, LIFT, z), Blocks.STONE);
+                helper.setBlock(new BlockPos(x, lift, z), Blocks.STONE);
             }
         }
         Player owner = helper.makeMockPlayer();
-        owner.setPos(GameTestPositions.center(helper, 1, LIFT + 1, 1));
-        return new CompanionScene(helper, owner);
+        owner.setPos(GameTestPositions.center(helper, 1, lift + 1, 1));
+        return new CompanionScene(helper, owner, lift);
     }
 
     public Player owner() {
@@ -88,7 +99,7 @@ public final class CompanionScene {
     }
 
     public CompanionScene ownerAt(int x, int y, int z) {
-        owner.setPos(GameTestPositions.center(helper, x, y + LIFT - 1, z));
+        owner.setPos(GameTestPositions.center(helper, x, y + lift - 1, z));
         return this;
     }
 
@@ -117,7 +128,7 @@ public final class CompanionScene {
                 return owner;
             }
         };
-        maid.setPos(GameTestPositions.center(helper, x, y + LIFT - 1, z));
+        maid.setPos(GameTestPositions.center(helper, x, y + lift - 1, z));
         maid.setTame(true);
         maid.setHomeModeEnable(false);
         maid.setOwnerUUID(owner.getUUID());
@@ -145,7 +156,7 @@ public final class CompanionScene {
     /** A maid nobody owns, for checking what she declines to do. */
     public EntityMaid strayMaid(int x, int y, int z) {
         EntityMaid maid = new EntityMaid(helper.getLevel());
-        maid.setPos(GameTestPositions.center(helper, x, y + LIFT - 1, z));
+        maid.setPos(GameTestPositions.center(helper, x, y + lift - 1, z));
         helper.getLevel().addFreshEntity(maid);
         maids.add(maid);
         return maid;
@@ -161,7 +172,7 @@ public final class CompanionScene {
         if (chair == null) {
             throw new AssertionError("A chair could not be created");
         }
-        Vec3 position = GameTestPositions.center(helper, x, y + LIFT - 1, z);
+        Vec3 position = GameTestPositions.center(helper, x, y + lift - 1, z);
         chair.setPos(position.x, position.y, position.z);
         helper.getLevel().addFreshEntity(chair);
         return chair;
@@ -172,7 +183,7 @@ public final class CompanionScene {
      * piece of furniture that answers two commodities at once.
      */
     public Boat boat(int x, int y, int z) {
-        Vec3 position = GameTestPositions.center(helper, x, y + LIFT - 1, z);
+        Vec3 position = GameTestPositions.center(helper, x, y + lift - 1, z);
         Boat boat = new Boat(helper.getLevel(), position.x, position.y,
                 position.z);
         helper.getLevel().addFreshEntity(boat);
@@ -180,7 +191,7 @@ public final class CompanionScene {
     }
 
     public ItemEntity drop(Item item, int x, int y, int z) {
-        Vec3 position = GameTestPositions.center(helper, x, y + LIFT - 1, z);
+        Vec3 position = GameTestPositions.center(helper, x, y + lift - 1, z);
         ItemEntity entity = new ItemEntity(
                 helper.getLevel(),
                 position.x,
@@ -249,7 +260,7 @@ public final class CompanionScene {
 
     /** Absolute position of a template-relative block, for home points. */
     public BlockPos at(int x, int y, int z) {
-        return helper.absolutePos(new BlockPos(x, y + LIFT - 1, z));
+        return helper.absolutePos(new BlockPos(x, y + lift - 1, z));
     }
 
     public Entity vehicleOf(EntityMaid maid) {

@@ -5,6 +5,7 @@ import com.laixia.maidintelligence.feature.behavior.domain.combat.CombatCapabili
 import com.laixia.maidintelligence.feature.behavior.domain.combat.CombatStance;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.EngagementContext;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.EngagementRiskPolicy;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.TradeCost;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponCandidate;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponSelectionPolicy;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatField;
@@ -132,6 +133,90 @@ public final class CombatProbe {
         }
         return chosen.posture().name()
                 + "/" + String.format("%.2f", chosen.weapon().power());
+    }
+
+    /**
+     * Every candidate she is carrying, priced, beside the inputs that priced it.
+     *
+     * <p>The stance column says which one won. It never says why, and "why" here
+     * is a comparison between numbers none of which are visible from outside —
+     * so a choice that looks wrong cannot be told apart from an input that is
+     * wrong. Reconstructing those inputs by hand is what cost several rounds of
+     * diagnosis on the same decision, each time against a model of the situation
+     * rather than the situation.
+     */
+    public static String prices(
+            EntityMaid maid,
+            ThreatSample target,
+            ThreatField field,
+            boolean canOpenGround,
+            boolean holdingMelee
+    ) {
+        if (target == null) {
+            return "-";
+        }
+        EngagementContext context = EngagementContext.of(
+                target,
+                field,
+                CombatReadiness.swingsPerSecond(maid),
+                CombatReadiness.SHOTS_PER_SECOND,
+                canOpenGround,
+                holdingMelee
+        );
+        TradeCost cost = new TradeCost(
+                WeaponSelectionPolicy.instance().preferredRange()
+        );
+        StringBuilder out = new StringBuilder(String.format(
+                "canOpen=%s melee=%s dist=%.1f theirReach=%.2f field=%.1f "
+                        + "crowd=%.2f conv=%d inDps=%.2f toC=%.2f",
+                canOpenGround, holdingMelee, context.distance(),
+                context.targetReach(), context.fieldHealth(),
+                context.crowding(), field.converging(), context.incomingDps(),
+                context.secondsToContact()
+        ));
+        for (WeaponCandidate candidate : WEAPONS.scan(maid)) {
+            out.append(String.format(
+                    " [%s slot=%d p=%.2f reach=%.1f ups=%.2f arc=%.1f "
+                            + "shots=%s cost=%.2f]",
+                    candidate.kind(), candidate.slot(), candidate.power(),
+                    candidate.reach(), candidate.usesPerSecond(),
+                    candidate.arcDamage(),
+                    candidate.shots() == WeaponCandidate.UNLIMITED
+                            ? "inf" : Integer.toString(candidate.shots()),
+                    cost.of(candidate, context)
+            ));
+        }
+        return out.toString();
+    }
+
+    /** What is in her hand and what she can see, as one line. */
+    public static String holdingAndSeeing(EntityMaid maid) {
+        List<ScannedThreat> seen = scan(maid);
+        StringBuilder out = new StringBuilder("手里=")
+                .append(maid.getMainHandItem().getItem())
+                .append(" 看见=").append(seen.size()).append(" 只");
+        for (ScannedThreat threat : seen) {
+            out.append(String.format(" [%s@%.1f]",
+                    threat.entity().getType().toShortString(),
+                    threat.sample().distance()));
+        }
+        return out.toString();
+    }
+
+    /** {@link #prices} against whatever she is currently looking at. */
+    public static String pricingNow(EntityMaid maid) {
+        List<ScannedThreat> seen = scan(maid);
+        if (seen.isEmpty()) {
+            return "看不见任何东西";
+        }
+        ScannedThreat first = seen.get(0);
+        return prices(
+                maid,
+                first.sample(),
+                field(maid, seen),
+                canOpenGround(maid, first.entity()),
+                false
+        );
     }
 
     /** Whether backing off to shooting distance is possible at all. */

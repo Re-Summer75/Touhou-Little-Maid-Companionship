@@ -4,11 +4,17 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponCandidate;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponKind;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.RangedWeaponRecognizer;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.ai.memory.NearestVisibleLivingEntities;
+import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraftforge.gametest.GameTestHolder;
@@ -19,10 +25,13 @@ import java.util.List;
 /**
  * 她翻自己的背包，而不是只看手上有什么。
  *
- * <p>这里不放任何敌对生物。真实僵尸的索敌达十六格，放进共享测试世界会波及
- * 邻座的测试，而"背包里有什么、能不能用"这半条链本来就不需要有人来打她。
- * 交战本身的判断由 CombatRiskAssessmentVerification 与
+ * <p>这里不放任何**会动的**敌对生物。真实僵尸的索敌达十六格，放进共享测试
+ * 世界会波及邻座的测试，而"背包里有什么、能不能用"这半条链本来就不需要有人
+ * 来打她。交战本身的判断由 CombatRiskAssessmentVerification 与
  * CombatWeaponSelectionVerification 以纯 JVM 断言覆盖。
+ *
+ * <p>换手是例外：它要跑真正的战斗动作才发生，而战斗动作要有敌人才启动。那些
+ * 用 {@code placeInert} 放下——无 AI、不索敌、不移动，只作为几何存在。
  */
 @GameTestHolder(ModResources.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -117,6 +126,53 @@ public final class CombatArsenalGameTests {
         helper.assertTrue(
                 SCANNER.scan(maid).isEmpty(),
                 "Something inedible-as-a-weapon was offered as one"
+        );
+        helper.succeed();
+    }
+
+    /**
+     * 手上那把更重，不等于手上那把更该用。
+     *
+     * <p>玩家报的是"主手拿着斧头她就只用斧头，再也不换"。既有的换手测试只验了
+     * 变强的那一半——石剑换钻石剑——而谓词写的是"选中那把**或同类里更强的**"，
+     * 于是宿主先看主手就直接命中：斧头的伤害评分高于剑，任何"去拿剑"的请求
+     * 都被手里的斧头满足，查找根本到不了背包。棘轮只朝一个方向转。
+     *
+     * <p>用一堆敌人做场景，因为这正是剑该赢的那一档：斧头一下重，剑一下打好
+     * 几个。断言看的是最终握着什么——选择那一层本来就选对了。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void aHeavierBladeInHandDoesNotVetoTheChoice(
+            GameTestHelper helper
+    ) {
+        CompanionScene scene = CompanionScene.room(helper, 6, 6);
+        EntityMaid maid = scene.maid(3, 2, 3);
+        maid.setItemInHand(
+                InteractionHand.MAIN_HAND, new ItemStack(Items.IRON_AXE)
+        );
+        give(maid, 0, new ItemStack(Items.IRON_SWORD));
+
+        List<Zombie> pack = new java.util.ArrayList<>();
+        for (int slot = 0; slot < 5; slot++) {
+            Zombie zombie = new Zombie(helper.getLevel());
+            zombie.setPos(
+                    maid.getX() + 2.0D + slot * 0.2D, maid.getY(), maid.getZ()
+            );
+            pack.add(CompanionScene.placeInert(helper, zombie));
+        }
+        maid.getBrain().setMemory(
+                MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES,
+                new NearestVisibleLivingEntities(maid, List.copyOf(pack))
+        );
+
+        new TlmCombatAction(
+                new TlmThreatScanner(), SCANNER
+        ).execute(maid);
+
+        helper.assertTrue(
+                maid.getMainHandItem().is(Items.IRON_SWORD),
+                "五只围着她，她仍握着 " + maid.getMainHandItem().getItem()
+                        + "；重武器一进手就否决了后面每一次选择"
         );
         helper.succeed();
     }

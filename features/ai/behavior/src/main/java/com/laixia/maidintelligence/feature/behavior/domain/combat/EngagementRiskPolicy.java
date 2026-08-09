@@ -170,12 +170,25 @@ public final class EngagementRiskPolicy {
             return RiskVerdict.WITHDRAW;
         }
 
-        if (field.convergingHealth() <= 0.0D) {
-            // Visible, but none of them arrives inside the window being planned
-            // over. There is no exchange to price, and pricing it anyway would
-            // have her act on a fight that is not happening.
-            return RiskVerdict.STAND_DOWN;
-        }
+        // Nothing arriving inside the planning window used to answer
+        // STAND_DOWN here, on the reasoning that there is no exchange to price.
+        // The reasoning is right and the verdict was wrong: STAND_DOWN means
+        // "nothing to fight", the caller ends the whole action on it, and six
+        // zombies walking at her from thirteen blocks are very much a fight.
+        //
+        // Measured, it was a limit cycle rather than a missed opportunity. She
+        // gave ground until the last of them fell outside the three-second
+        // horizon, stood down, went calm, idled while they closed, engaged,
+        // gave ground again — twenty-odd dead ticks a lap, for the whole fight.
+        // Six zombies, fifteen seconds, and she landed between one and seven
+        // blows in it.
+        //
+        // Deleted rather than replaced. With nothing converging the arithmetic
+        // below costs the exchange at zero and returns ENGAGE, which is the
+        // honest answer: nothing can reach her, so there is no reason not to.
+        // {@code field.isEmpty()} above is what actually means "nothing to
+        // fight", and the caller already returns before this on an empty scan.
+        //
         // Price the whole fight, not the first kill. This once cost only the
         // nearest one's health, on the reasoning that putting it down already
         // changes things — but that gives ten zombies and one zombie the same

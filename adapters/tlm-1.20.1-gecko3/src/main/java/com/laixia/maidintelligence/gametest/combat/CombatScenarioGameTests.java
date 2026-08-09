@@ -38,6 +38,23 @@ public final class CombatScenarioGameTests {
     /** 够她走完一整轮"被逼近—后撤—再射"的循环。 */
     private static final int SOAK_TICKS = 200;
 
+    /**
+     * How much of a mobbing she may spend motionless inside their arms.
+     *
+     * <p>Not zero, and not a tuned number. A blow lands and knocks the target
+     * into her, a corner takes a moment to path out of, a swing recovery ends
+     * with something already inside the window — each costs a tick or two where
+     * standing still is a consequence rather than a posture. A tenth of the
+     * fight is the boundary between that and the reported defect, which is her
+     * spending the mobbing rooted in the middle of it.
+     *
+     * <p>Deliberately far from what the fight actually produces. The figure this
+     * replaces sat at a quarter while runs came in between a fifth and a half,
+     * so it decided by luck; anything that lands near a tenth here is a real
+     * change in behaviour rather than a different roll.
+     */
+    private static final double IN_REACH_SHARE = 0.10D;
+
     /** 僵尸的触及约两格半，退到这个距离以内就等于在挨打。 */
     private static final double MELEE_DANGER = 2.5D;
 
@@ -140,11 +157,17 @@ public final class CombatScenarioGameTests {
                     // 距离和伤害都是它的下游而且都更吵：守住七格不掉血是好的，
                     // 被追着跑二十格是坏的，两者的距离读数却相反。玩家报的是
                     // "她站在原地不动"，那就直接量这个。
+                    //
+                    // 但要量的是"站在人家手里不动"，不是"站着不动"。后者会随
+                    // 战斗**变好**而升高——站在击打窗口上不动正是近战该做的，
+                    // 射手保持距离拉弓更是整场都不动——于是阈值滑进了它自己
+                    // 分布的正中间，同一份代码红绿交替。这两条曾因此反复误报。
                     helper.assertTrue(
-                            trace.stationaryShare() < 0.25D,
+                            trace.stationaryInReachShare() < IN_REACH_SHARE,
                             "被三只围住时她有 " + Math.round(
-                                    trace.stationaryShare() * 100)
-                                    + "% 的时间站着不动。" + trace.summary()
+                                    trace.stationaryInReachShare() * 100)
+                                    + "% 的时间站在对方触及范围内不动。"
+                                    + trace.summary()
                     );
                 })
                 .thenSucceed();
