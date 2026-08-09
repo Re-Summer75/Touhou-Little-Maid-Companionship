@@ -28,10 +28,19 @@
 
 ## TLM 本体参考
 
+- [本体机制参考总索引](upstream/README.md)
+  - [好感度：四项加成与升降途径](upstream/favorability.md)
+  - [属性表：哪些是属性、哪些必须问方法](upstream/attributes.md)
+  - [女仆的同步状态字段](upstream/entity-state.md)
+  - [工作模式与 Brain 钩子](upstream/tasks-and-brain.md)
+  - [可挂钩的事件与饰品回调](upstream/events-and-baubles.md)
 - [表情与聊天气泡](expressions/README.md)
 - [动作与动画状态](actions/README.md)
 
 这些文档用于适配 TLM，不代表本模组新增了其中全部行为。
+
+**改战斗、感知或行为之前先查本体机制参考。** 我们已经两次重写了本体早就有的东西
+（好感度加攻击距离、好感度缩放的横扫范围），两次都不是想法错，是没查。
 
 ## 发布资料
 
