@@ -5,13 +5,13 @@ import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskAttack;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMode;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.CombatMovement;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.RangedWeaponRecognizer;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.ThreatProfile;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmAlertness;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.CombatMovement;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.RangedWeaponRecognizer;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ThreatProfile;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmAlertness;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmThreatScanner;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmWeaponScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.gametest.framework.GameTest;
@@ -385,6 +385,7 @@ public final class CombatApproachGameTests {
     ) {
         Zombie zombie = new Zombie(helper.getLevel());
         zombie.setPos(maid.getX() + offset, maid.getY(), maid.getZ());
+        CompanionScene.placeInert(helper, zombie);
         maid.getBrain().setMemory(
                 MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES,
                 new NearestVisibleLivingEntities(maid, List.of(zombie))
@@ -399,6 +400,7 @@ public final class CombatApproachGameTests {
     ) {
         Zombie zombie = new Zombie(helper.getLevel());
         zombie.setPos(maid.getX() + offset, maid.getY(), maid.getZ());
+        CompanionScene.placeInert(helper, zombie);
         maid.getBrain().setMemory(
                 MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES,
                 new NearestVisibleLivingEntities(maid, List.of(zombie))

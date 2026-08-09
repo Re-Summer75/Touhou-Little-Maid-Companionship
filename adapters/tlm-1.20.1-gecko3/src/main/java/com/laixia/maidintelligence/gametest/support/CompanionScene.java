@@ -12,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
@@ -190,6 +191,28 @@ public final class CompanionScene {
         entity.setNoPickUpDelay();
         helper.getLevel().addFreshEntity(entity);
         return entity;
+    }
+
+    /**
+     * Puts a hostile in the world without letting it join in.
+     *
+     * <p>Writing one into her visible-entity memory used to be enough. It is
+     * not any more: the threat scan sweeps the world rather than reading that
+     * memory, so a monster that exists only in her brain is a monster she
+     * cannot find, and every combat scenario quietly became a maid standing in
+     * an empty room.
+     *
+     * <p>Inert, because that is what these scenarios were always written
+     * against. A hostile that was never added to the level never pathed, never
+     * swung and never burned; switching its AI on as a side effect of making it
+     * findable would trade one fiction for a noisier one, and the assertions
+     * here are about what <em>she</em> does.
+     */
+    public static <T extends Mob> T placeInert(GameTestHelper helper, T hostile) {
+        hostile.setNoAi(true);
+        hostile.setPersistenceRequired();
+        helper.getLevel().addFreshEntity(hostile);
+        return hostile;
     }
 
     /**

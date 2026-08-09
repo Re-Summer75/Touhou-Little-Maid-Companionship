@@ -3,7 +3,11 @@ package com.laixia.maidintelligence.gametest.behavior;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
+import com.laixia.maidintelligence.feature.behavior.domain.OwnerFollowPolicy;
 import com.laixia.maidintelligence.feature.behavior.domain.owner.OwnerFacts;
+import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMovement;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.RetreatSpace;
 import com.laixia.maidintelligence.feature.behavior.handler.OwnerGazeRecallHandler;
 import com.laixia.maidintelligence.feature.orchestration.tlm.context.TlmOwnerFactReader;
 import com.laixia.maidintelligence.feature.perception.tlm.TlmAffordancePerceptionService;
@@ -15,6 +19,8 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.ai.memory.WalkTarget;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -264,6 +270,93 @@ public final class OwnerAwarenessGameTests {
     }
 
     // Fixtures.
+
+    // The teleport leash, as something she plans around rather than suffers.
+
+    /**
+     * 她自己走不到会被拉回来的地方去。
+     *
+     * <p>兜底传送一直是发生在她身上的事，不是她知道的事：任何计划都可以把
+     * 目的地设在二十四格之外，走到了就被拽回主人身边，看起来像瞬移 bug。
+     * 检验点选在所有移动写入的唯一出口上——后撤、追击、差事、消遣都从这里
+     * 过，所以规则只需要在这里成立一次。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void sheIsNeverSentPastTheLeash(GameTestHelper helper) {
+        Fixture fixture = fixture(helper);
+        Vec3 owner = fixture.owner().position();
+        Vec3 tooFar = owner.add(OwnerFollowPolicy.TELEPORT_DISTANCE * 4.0D,
+                0.0D, 0.0D);
+
+        FreedomMovement.write(
+                fixture.maid(), new WalkTarget(tooFar, 0.6F, 1)
+        );
+
+        Vec3 sent = fixture.maid().getBrain()
+                .getMemory(MemoryModuleType.WALK_TARGET)
+                .orElseThrow(() -> new AssertionError("她没有被派往任何地方"))
+                .getTarget()
+                .currentPosition();
+        helper.assertTrue(
+                !OwnerFollowPolicy.INSTANCE.shouldTeleport(
+                        sent.distanceToSqr(owner)
+                ),
+                "她被派往主人 " + sent.distanceTo(owner)
+                        + " 格外，走到就会被传送回来"
+        );
+        // 而且是朝着原本想去的方向走到边界，不是被打回原地——否则"限制在
+        // 范围内移动"就成了"不许移动"。
+        helper.assertTrue(
+                sent.x > fixture.maid().getX(),
+                "目的地被压回了她身后，她根本没有往想去的方向走"
+        );
+        helper.succeed();
+    }
+
+    /**
+     * 后撤同样受这条线约束，而且是按方向约束。
+     *
+     * <p>后撤挑的是朝向而不是点：拿"最开阔的方向"再截一刀，会让她一头扎进
+     * 绳子绷紧的那一侧然后走两步就停。所以牵引绳要在逐扇区测距里一起算，
+     * 这条钉住结果——她退到的地方必须仍在绳内。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void aRetreatStaysInsideTheLeash(GameTestHelper helper) {
+        Fixture fixture = fixture(helper);
+        EntityMaid maid = fixture.maid();
+        // 站在夹具地板西端，威胁在她西侧，于是后撤只会朝东。地板本身给得起
+        // 好几格，两次测量的差别因此只可能来自牵引绳。
+        maid.setPos(GameTestPositions.center(helper, 2, 2, 1));
+        Vec3 threat = maid.position().subtract(2.0D, 0.0D, 0.0D);
+        // 主人远在威胁那一侧，且已经快到绳子尽头：远离威胁的那个方向，
+        // 正好也是走出传送范围的方向。
+        Vec3 owner = maid.position().subtract(
+                OwnerFollowPolicy.TELEPORT_DISTANCE - 2.0D, 0.0D, 0.0D
+        );
+        fixture.owner().setPos(owner);
+
+        Vec3 escape = RetreatSpace.escapeTo(
+                maid, List.of(threat), PerceptionRange.BLOCKS
+        );
+
+        helper.assertTrue(
+                escape != null,
+                "绳子把她钉住了；限制在范围内移动不等于不许移动"
+        );
+        // 而且确实是在后撤，不是"没动所以当然没出界"。
+        helper.assertTrue(
+                escape.distanceTo(threat) > maid.position().distanceTo(threat),
+                "她选的落点离威胁更近，这根本不是一次后撤"
+        );
+        helper.assertTrue(
+                !OwnerFollowPolicy.INSTANCE.shouldTeleport(
+                        escape.distanceToSqr(owner)
+                ),
+                "她退到主人 " + escape.distanceTo(owner)
+                        + " 格外，正好是会被传送回战斗里的距离"
+        );
+        helper.succeed();
+    }
 
     private static Fixture fixture(GameTestHelper helper) {
         for (int x = 0; x <= 8; x++) {

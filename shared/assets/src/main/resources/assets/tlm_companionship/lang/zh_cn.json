@@ -34,15 +34,13 @@
   "gui.tlm_companionship.insight.no_data": "还没看清她的心思",
 
   "_comment_intent": "==== 灵魂透镜 · 意图名称 ====",
-  "intent.tlm_companionship.anticipate_departure": "提前跟上你",
+  "intent.tlm_companionship.anticipate_departure": "跟上你",
   "intent.tlm_companionship.gaze_recall": "回应你的注视",
   "intent.tlm_companionship.hungry_feedback": "跟你要吃的",
   "intent.tlm_companionship.hungry_standard": "跟你要吃的",
   "intent.tlm_companionship.hungry_high_trust": "撒娇要吃的",
   "intent.tlm_companionship.enjoy_pastime": "去找点乐子",
   "intent.tlm_companionship.snack_cabinet_meal": "去零食柜拿吃的",
-  "intent.tlm_companionship.post_task_return": "干完活回到你身边",
-  "intent.tlm_companionship.wander_return": "溜达完回到你身边",
   "intent.tlm_companionship.unknown": "%s",
 
   "_comment_fact": "==== 灵魂透镜 · 条件未满足的原因 ====",

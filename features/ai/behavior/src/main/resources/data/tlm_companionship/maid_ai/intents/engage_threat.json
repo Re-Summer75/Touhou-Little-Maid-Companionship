@@ -32,10 +32,10 @@
     "base_score": 1.0,
     "minimum_score": 0.0,
     "activation_chance": 1.0,
-    "evaluation_interval_ticks": 10,
+    "evaluation_interval_ticks": 4,
     "minimum_commit_ticks": 20,
     "switch_margin": 0.3,
     "interrupt_priority": 100,
-    "cooldown_ticks": 60
+    "cooldown_ticks": 0
   }
 }

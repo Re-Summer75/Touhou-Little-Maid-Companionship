@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.feature.orchestration.tlm.combat;
+package com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
@@ -26,6 +26,25 @@ import net.minecraft.world.phys.Vec3;
  * nothing, and each one errs towards caution.
  */
 public final class ThreatProfile {
+    /**
+     * When each of them was last seen swinging.
+     *
+     * <p>Weak keys, one entry each, overwritten rather than accumulated: a
+     * creature that unloads must not be kept alive by our memory of its last
+     * punch.
+     */
+    private static final java.util.Map<LivingEntity, Long> LAST_SWING =
+            new java.util.WeakHashMap<>();
+
+    /**
+     * Ticks of a spent cooldown we refuse to count on.
+     *
+     * <p>The period is an estimate and she needs time to get out again, not
+     * only to get in. Six ticks off the end is the difference between a tactic
+     * and a coin flip.
+     */
+    private static final int SWING_WINDOW_SAFETY = 6;
+
     /**
      * Damage assumed when the creature declares none.
      *
@@ -168,6 +187,43 @@ public final class ThreatProfile {
     public static double strikeDamage(LivingEntity hostile) {
         double declared = value(hostile, Attributes.ATTACK_DAMAGE);
         return declared > 0.0D ? declared : UNDECLARED_DAMAGE;
+    }
+
+    /**
+     * Note what it is doing this tick. Called once per measurement.
+     *
+     * <p>{@code swinging} is set on the server for the few ticks a mob's attack
+     * animation runs, and a mob only swings when it attacks — so watching it is
+     * how she learns, with no private field, that this one has spent its blow.
+     */
+    public static void observe(LivingEntity hostile, long tick) {
+        if (hostile.swinging) {
+            LAST_SWING.put(hostile, tick);
+        }
+    }
+
+    /**
+     * Whether its blow is spent and cannot land again for a moment.
+     *
+     * <p>The other half of hit-and-run, and the half she did not have. Reach
+     * and cadence are both asymmetries she can exploit, but only reach was
+     * modelled: she knew how far each of them could hit from and nothing about
+     * <em>when</em>. Every approach was therefore priced as though the thing in
+     * front of her were always about to swing — true on average, and wrong in
+     * the only moment that matters.
+     *
+     * <p>Against a crowd this has to be asked of all of them, not of the one
+     * she is aiming at. Asking only the target is a mistake with a measurable
+     * cost: she closes because that one is spent, and the other five are not.
+     */
+    public static boolean swingSpent(LivingEntity hostile, long tick) {
+        Long last = LAST_SWING.get(hostile);
+        if (last == null) {
+            return false;
+        }
+        long elapsed = tick - last;
+        return elapsed >= 0
+                && elapsed < attackPeriod(hostile) - SWING_WINDOW_SAFETY;
     }
 
     /** Ticks between its attacks, from its own attribute where it has one. */

@@ -16,6 +16,7 @@ import net.minecraft.world.item.Items;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
+
 /**
  * 活场景：真的敌人、真的时间、真的竞争者。
  *
@@ -91,6 +92,10 @@ public final class CombatScenarioGameTests {
             ItemStack weapon
     ) {
         CompanionScene scene = CompanionScene.room(helper, 23, 15);
+        // 主人站在她身边，好让强制传送的牵引绳完全不构成限制：这几条问的是
+        // 她被围住时动不动，不是绳子。默认的主人在房间角落十几格外，她一旦
+        // 风筝到二十三格开外就会被绳子拦住，读数上和"站着不动"一模一样。
+        scene.ownerAt(15, 2, 7);
         EntityMaid maid = scene.maid(15, 2, 7);
         maid.setTask(new FreedomMaidTask());
         maid.getAvailableBackpackInv().setStackInSlot(0, weapon);
@@ -162,6 +167,10 @@ public final class CombatScenarioGameTests {
     )
     public static void aSwordMaidDoesNotStandAndTakeIt(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 23, 11);
+        // 主人站在她身边，好让强制传送的牵引绳完全不构成限制：这几条问的是
+        // 她被围住时动不动，不是绳子。默认的主人在房间角落十几格外，她一旦
+        // 风筝到二十三格开外就会被绳子拦住，读数上和"站着不动"一模一样。
+        scene.ownerAt(11, 2, 5);
         EntityMaid maid = scene.maid(11, 2, 5);
         maid.setTask(new FreedomMaidTask());
         maid.getAvailableBackpackInv().setStackInSlot(
@@ -225,6 +234,10 @@ public final class CombatScenarioGameTests {
         // 三格，于是"退得开吗"答否、走清空分支、她原地站着——测出来的是夹具的
         // 墙，不是她的判断。
         CompanionScene scene = CompanionScene.room(helper, 23, 11);
+        // 主人站在她身边，好让强制传送的牵引绳完全不构成限制：这几条问的是
+        // 她被围住时动不动，不是绳子。默认的主人在房间角落十几格外，她一旦
+        // 风筝到二十三格开外就会被绳子拦住，读数上和"站着不动"一模一样。
+        scene.ownerAt(11, 2, 5);
         EntityMaid maid = scene.maid(11, 2, 5);
         maid.setTask(new FreedomMaidTask());
         maid.setItemInHand(

@@ -151,21 +151,21 @@ public final class CompanionPriorityBandVerification {
      * because a product factor of {@code 1 - 1.0 * (1 - 0)} is nothing. Under
      * the old sum it merely added nothing to the base and the intent still won.
      *
-     * <p>That difference is invisible in a passing catalog and cost
-     * {@code follow_owner} every contest in its band: at six blocks it scored
-     * zero, and even at eighteen it lost to a returning intent whose base was
-     * higher. Following is the band's whole point, so it is pinned here.
+     * <p>That difference is invisible in a passing catalog and cost the follow
+     * intent every contest in its band: at six blocks it scored zero, and even
+     * at eighteen it lost to a returning intent whose base was higher.
+     * Following is the band's whole point, so it is pinned here.
      */
     private static void followingStaysTheAnswerToDistance(
             Map<String, IntentDefinition> intents
     ) {
-        IntentDefinition following = intents.get("follow_owner");
+        IntentDefinition following = intents.get("anticipate_departure");
         for (double distance : new double[]{6.0D, 12.0D, 24.0D}) {
             double follow =
                     score(following, facts(60.0D, 0.0D, 0.0D, distance));
             require(
                     follow > 0.0D,
-                    "follow_owner scored zero at " + distance + " blocks; a "
+                    "following scored zero at " + distance + " blocks; a "
                             + "full-weight lone consideration has collapsed it"
             );
             for (String rival : new String[]{
@@ -178,7 +178,7 @@ public final class CompanionPriorityBandVerification {
                 require(
                         follow >= other,
                         "At " + distance + " blocks " + rival + " (" + other
-                                + ") outranks follow_owner (" + follow
+                                + ") outranks following (" + follow
                                 + "), so walking to her owner is decided by "
                                 + "something other than how far away he is"
                 );
@@ -202,9 +202,9 @@ public final class CompanionPriorityBandVerification {
         for (double distance : new double[]{6.0D, 10.0D, 18.0D}) {
             System.out.println(
                     "companionship band, owner " + (int) distance
-                            + " blocks: follow_owner="
+                            + " blocks: following="
                             + String.format("%.3f", score(
-                                    intents.get("follow_owner"),
+                                    intents.get("anticipate_departure"),
                                     facts(60.0D, 0.0D, 0.0D, distance)
                             ))
                             + " keep_company="
@@ -428,7 +428,7 @@ public final class CompanionPriorityBandVerification {
             intents.put(name, BundledIntentResources.intent(name));
         }
         require(
-                intents.size() >= 13,
+                intents.size() >= 12,
                 "Only found " + intents.size() + " bundled intents"
         );
         return intents;

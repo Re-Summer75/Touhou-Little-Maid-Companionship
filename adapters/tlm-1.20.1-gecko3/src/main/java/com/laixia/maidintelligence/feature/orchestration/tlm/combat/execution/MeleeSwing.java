@@ -1,15 +1,18 @@
-package com.laixia.maidintelligence.feature.orchestration.tlm.combat;
+package com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.SpacingPolicy;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ScannedThreat;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ThreatProfile;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.util.Mth;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
-import net.minecraftforge.common.ToolActions;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.common.ToolActions;
 
 /**
  * Landing a blow: when she may swing, and where she should stand to do it.
@@ -39,6 +42,53 @@ public final class MeleeSwing {
     private static final double SWEEP_BOX_HEIGHTEN = 0.25D;
     private static final double SWEEP_RANGE_SQR = 9.0D;
     private static final float SWEEP_KNOCKBACK = 0.4F;
+
+    /**
+     * Ground behind her that a swing has to be able to retreat into.
+     *
+     * <p>One block, and it gates <em>going in</em>, not only coming out. That
+     * is the difference between hit-and-run and standing in a crowd swinging:
+     * closing is only half a tactic, and the half she was doing unconditionally.
+     * With six of them around her the body-clearance behind her is routinely
+     * under a block, the step-out silently failed, and she spent every cooldown
+     * inside their arms — measured at a fifth to a half of the whole fight, for
+     * nine to twenty-eight damage a run.
+     *
+     * <p>Refusing to close without an exit does not make her passive. She backs
+     * off instead, and a pack that follows strings out because it paths at
+     * uneven speeds; the moment the leader is clear of the rest there is room
+     * behind her again and she goes in. Turning six-on-one into six one-on-ones
+     * is the tactic, and it falls out of this one condition rather than being
+     * scripted.
+     */
+    private static final double STEP_OUT_GROUND = 1.0D;
+
+    /**
+     * How far inside her own maximum she stands to swing.
+     *
+     * <p>Reach is measured to the target's position, and a target walking
+     * away crosses a quarter of a block between the tick she decides and the
+     * tick she swings. Standing exactly on the limit turns that into a miss.
+     */
+    private static final double OWN_REACH_MARGIN = 0.25D;
+
+    /**
+     * Clearance the strike stand-off keeps beyond the target's own reach.
+     *
+     * <p>Small on purpose, and deliberately not {@code safeGap}. That gap is a
+     * whole block and it exists for a different question — where to wait out a
+     * recovery, where being generous costs nothing. Spent here it closes the
+     * window entirely at low favour: a zombie reaches 1.43 and she reaches 2,
+     * so demanding 1.43 + 1 leaves nothing between them and she goes back to
+     * walking into its arms.
+     *
+     * <p>A quarter block is what the geometry actually affords untrained. It
+     * widens on its own as favour grows, because her reach does.
+     */
+    private static final double THEIR_REACH_MARGIN = 0.25D;
+
+    /** How many pairs of arms she will stand inside before breaking out. */
+    private static final int TOLERATED_ATTACKERS = 1;
 
     private MeleeSwing() {
     }
@@ -194,14 +244,49 @@ public final class MeleeSwing {
      * better of two bad options, since backing off would cost her the swing
      * and spare it nothing.
      */
+    /**
+     * Whether at most one of them could touch her where she is standing.
+     *
+     * <p>This is the whole tactic against a crowd, stated as one condition.
+     * Her reach and a zombie's are both about 1.4 blocks — the same formula
+     * decides both — so she has no range advantage to exploit and no timing
+     * window she can walk into and out of before six independent cooldowns
+     * come up. Against one attacker hit-and-run works and is already tested;
+     * against six simultaneously it cannot, at any spacing.
+     *
+     * <p>So she refuses to be in more than one pair of arms at a time. Backing
+     * off instead is not passivity: a pack that follows strings out, because
+     * they path at uneven speeds, and the moment the leader is clear of the
+     * rest this answers true again and she goes in. Six-on-one becomes six
+     * one-on-ones, which is the only shape of this fight she can win unhurt.
+     *
+     * <p>Counting rather than timing, deliberately. Whether each of them has
+     * spent its blow was tried first and measured worse: it relaxes the
+     * condition instead of tightening it, so she closes on a momentary lull and
+     * arrives after it has passed.
+     */
+    private static boolean facingOneAtATime(
+            java.util.List<ScannedThreat> pack
+    ) {
+        int able = 0;
+        for (ScannedThreat threat : pack) {
+            double clearance = SpacingPolicy.instance()
+                    .clearanceBeyond(threat.sample().reach());
+            if (threat.sample().distance() <= clearance
+                    && ++able > TOLERATED_ATTACKERS) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public static double holdDistance(
             EntityMaid maid,
             ScannedThreat target,
+            java.util.List<Vec3> crowd,
+            java.util.List<ScannedThreat> pack,
             float speed
     ) {
-        if (recovered(maid)) {
-            return 0.0D;
-        }
         double threatReach = target.sample().reach();
         double clearance =
                 SpacingPolicy.instance().clearanceBeyond(threatReach);
@@ -210,10 +295,60 @@ public final class MeleeSwing {
                 target.entity(),
                 speed,
                 clearance - target.sample().distance()
-        );
+        ) && RetreatSpace.escapeReach(maid, crowd, clearance)
+                >= STEP_OUT_GROUND;
+        if (!facingOneAtATime(pack)) {
+            // Already in more than one pair of arms. Refusing to close is not
+            // enough here — she is past that — so ask for a distance that
+            // actually breaks contact instead of the single block a melee hold
+            // shuffles. Standing in the huddle taking turns is where every
+            // point of damage in this fight comes from.
+            return clearance + SpacingPolicy.instance().retreatOvershoot();
+        }
+        if (recovered(maid)) {
+            // Her swing is ready. Where to take it from is the whole question,
+            // and it has an answer better than "as close as possible".
+            double window = strikeWindow(maid, target);
+            if (window > 0.0D) {
+                return window;
+            }
+            if (canStepOut) {
+                return 0.0D;
+            }
+        }
         return SpacingPolicy.instance().meleeHold(
                 false, threatReach, canStepOut
         );
+    }
+
+    /**
+     * A distance from which she can hit it and it cannot hit her.
+     *
+     * <p>Zero when no such distance exists, which is the caller's signal to
+     * close the usual way.
+     *
+     * <p>That such a gap exists at all was missed for a long time, and the
+     * miss is why she kept walking into arm's length. The host does not decide
+     * her reach by the vanilla body-width formula it uses for mobs — it
+     * overrides that with an attribute plus a favourability bonus, so she
+     * reaches two blocks untrained and up to seven at full favour, against a
+     * zombie's one and a half. She outranges most of what she fights, by a
+     * little at first and by a great deal later, and none of that was being
+     * spent: on a ready swing the spacing asked for zero, meaning "walk in".
+     *
+     * <p>Because the reach is an attribute, a weapon that grants entity reach
+     * widens this window by itself. Long weapons need no special case.
+     *
+     * <p>The margins are deliberate and asymmetric. She stands a little inside
+     * her own maximum, because a target drifting outward at the instant she
+     * swings is a wasted swing; and well outside theirs, because a target
+     * drifting inward is a hit taken. Missing costs a cooldown, being hit
+     * costs health.
+     */
+    private static double strikeWindow(EntityMaid maid, ScannedThreat target) {
+        double hers = reach(maid, target.entity()) - OWN_REACH_MARGIN;
+        double theirs = target.sample().reach() + THEIR_REACH_MARGIN;
+        return hers > theirs ? hers : 0.0D;
     }
 
     /**

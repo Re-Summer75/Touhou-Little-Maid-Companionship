@@ -23,6 +23,10 @@ import java.util.Objects;
  *
  * @param total            hostiles considered, including ones that cannot reach her
  * @param converging       how many could strike her where she stands
+ * @param crowding         how many of them are effectively in the fight,
+ *                         weighted by arrival — the count a sweeping weapon is
+ *                         paid by, and not the same as {@code converging},
+ *                         which is only those already able to hit her
  * @param nearestDistance  distance to the closest, or infinity when there are none
  * @param incomingDps      expected damage per second, weighted by arrival time
  * @param incomingHitRate  expected hits per second, weighted the same way
@@ -35,6 +39,7 @@ import java.util.Objects;
 public record ThreatField(
         int total,
         int converging,
+        double crowding,
         double nearestDistance,
         double incomingDps,
         double incomingHitRate,
@@ -46,7 +51,7 @@ public record ThreatField(
 ) {
     /** Nothing hostile in sight. */
     public static final ThreatField EMPTY = new ThreatField(
-            0, 0, Double.POSITIVE_INFINITY, 0.0D, 0.0D, 0.0D, false, false,
+            0, 0, 0.0D, Double.POSITIVE_INFINITY, 0.0D, 0.0D, 0.0D, false, false,
             Double.POSITIVE_INFINITY, 0.0D
     );
 
@@ -109,6 +114,7 @@ public record ThreatField(
         boolean outranging = false;
         double soonest = Double.POSITIVE_INFINITY;
         double heaviest = 0.0D;
+        double crowd = 0.0D;
         for (ThreatSample sample : samples) {
             if (sample == null) {
                 continue;
@@ -141,13 +147,22 @@ public record ThreatField(
                 incoming += sample.damagePerSecond() * weight;
                 hits += sample.hitsPerSecond() * weight;
                 health += sample.health() * weight;
+                // The same weight, counted rather than multiplied by anything.
+                // A sweeping weapon is paid once per body in the arc, so what
+                // it needs to know is how many bodies there are going to be —
+                // a question neither the incoming rate nor {@code converging}
+                // answers. The latter counts only those already able to hit
+                // her, which against a pack still walking in is zero, and zero
+                // is what silently switched the sword's arc off in exactly the
+                // fight it exists for.
+                crowd += weight;
             }
         }
         if (total == 0) {
             return EMPTY;
         }
         return new ThreatField(
-                total, converging, nearest, incoming, hits, health,
+                total, converging, crowd, nearest, incoming, hits, health,
                 airborne, outranging, soonest, heaviest
         );
     }

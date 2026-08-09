@@ -29,6 +29,9 @@ import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatS
  * @param secondsBetweenHits  gap between incoming blows, infinite when quiet
  * @param secondsToContact    until the first of them can reach her, at the
  *                            speed they are actually travelling
+ * @param hostilesConverging  how many arrive inside the window being planned
+ *                            over — a count, because a sweeping weapon is paid
+ *                            once per body it reaches
  * @param underAttack         whether anything can strike her where she stands
  * @param canOpenGround       whether she has the room and the legs to back off
  * @param meleeUsesPerSecond  her swings a second
@@ -43,6 +46,8 @@ public record EngagementContext(
         double incomingDps,
         double secondsBetweenHits,
         double secondsToContact,
+        double fieldHealth,
+        double crowding,
         boolean underAttack,
         boolean canOpenGround,
         double meleeUsesPerSecond,
@@ -82,6 +87,8 @@ public record EngagementContext(
                 field.incomingDps(),
                 field.secondsBetweenHits(),
                 field.soonestContact(),
+                field.convergingHealth(),
+                field.crowding(),
                 // Anything at all being able to reach her, not merely the one
                 // she is aiming at. A second zombie on her flank interrupts a
                 // draw just as thoroughly as the one in front does.

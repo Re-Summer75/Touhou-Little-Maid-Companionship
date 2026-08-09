@@ -107,13 +107,39 @@ public final class WeaponSelectionPolicy {
         }
         if (weapon.kind().isRanged()) {
             return new CombatStance(
-                    CombatStance.Posture.RANGED, weapon, preferredRange
+                    CombatStance.Posture.RANGED,
+                    weapon,
+                    rangeFor(weapon)
             );
         }
         return new CombatStance(CombatStance.Posture.MELEE, weapon, 0.0D);
     }
 
-    /** The distance a ranged stance asks her to hold. */
+    /**
+     * How far to stand off with this particular weapon.
+     *
+     * <p>The weapon's own reach, capped by the configured ceiling. One global
+     * number cannot be right for both: a bow reaches fifteen blocks and a
+     * crossbow eight, and holding eight with a bow hands seven blocks of
+     * advantage to anything that shoots back — a skeleton's range is fifteen,
+     * so she was walking into its envelope to reach her own.
+     *
+     * <p>Capped rather than taken raw, because reach is not the same as
+     * usefulness: past a point the arrow arrives late enough for the target to
+     * have moved, and she cannot see past her own perception anyway. The
+     * ceiling is what {@code ai.combat_balance.preferred_range} now means.
+     *
+     * <p>A weapon that never got measured reports zero reach and falls back to
+     * the ceiling, which is the old behaviour for anything this cannot ask.
+     */
+    private double rangeFor(WeaponCandidate weapon) {
+        double declared = weapon.reach();
+        return declared > 0.0D
+                ? Math.min(declared, preferredRange)
+                : preferredRange;
+    }
+
+    /** The ceiling a ranged stand-off is capped at. */
     public double preferredRange() {
         return preferredRange;
     }

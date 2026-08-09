@@ -38,10 +38,15 @@ public final class AiServerConfig {
         builder.push("combat_balance");
         PREFERRED_RANGE = builder
                 .comment(
-                        "Blocks she tries to hold while shooting: outside a "
-                                + "charge, inside aim drift."
+                        "Ceiling on the stand-off distance. The weapon states "
+                                + "its own reach - a vanilla bow fifteen "
+                                + "blocks, a crossbow eight - and she holds "
+                                + "the smaller of the two. The default is her "
+                                + "sixteen-block perception less the two she "
+                                + "is allowed to drift, so she can always see "
+                                + "the range she is holding."
                 )
-                .defineInRange("preferred_range", 8.0D, 2.0D, 32.0D);
+                .defineInRange("preferred_range", 14.0D, 2.0D, 32.0D);
         RETREAT_OVERSHOOT = builder
                 .comment(
                         "Extra blocks taken beyond the range being held, so a "

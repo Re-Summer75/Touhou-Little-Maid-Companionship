@@ -222,8 +222,8 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
   采用正向清单（TLM 家具、船、矿车），因为原版几乎任何实体都接受乘客——排除法曾先后漏
   掉"椅子也是 LivingEntity"与"女仆坐在掉落物上"两类错误。
 - 内置目录定义 `gaze_recall`、`hungry_feedback`、`hungry_standard`、
-  `hungry_high_trust`、`post_task_return`、`snack_cabinet_meal`、`wander_return`、
-  `anticipate_departure`、`loose_food_meal`、`follow_owner`、`return_home`、
+  `hungry_high_trust`、`snack_cabinet_meal`、
+  `anticipate_departure`、`loose_food_meal`、`return_home`、
   `rest_on_seat`、`keep_company`、`enjoy_pastime` 等意图与对应计划；优先级编码语义
   （回家 50 > 跟随 40 > 陪伴 30 > 消遣 12 > 落座 10，地面食物 65 > 零食柜 60）。
   意图数据验证按目录自动发现计划，不维护手工清单。

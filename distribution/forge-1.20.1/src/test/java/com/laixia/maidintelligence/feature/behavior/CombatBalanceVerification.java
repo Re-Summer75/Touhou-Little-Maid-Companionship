@@ -35,7 +35,7 @@ public final class CombatBalanceVerification {
     /** 未改配置的服务器，行为必须与引入配平记录之前逐字相同。 */
     private static void verifiesDefaultsAreWhatSheAlwaysUsed() {
         CombatBalance defaults = CombatBalance.defaults();
-        require(defaults.preferredRange() == 8.0D, "首选交战距离变了");
+        require(defaults.preferredRange() == 14.0D, "交战距离上限变了");
         require(defaults.retreatOvershoot() == 3.0D, "后撤超量变了");
         require(defaults.safeGap() == 1.0D, "安全间隙变了");
         require(defaults.meleeSuppression() == 0.8D, "近战压制估计变了");
@@ -45,7 +45,7 @@ public final class CombatBalanceVerification {
         require(defaults.blowCaution() == 2.0D, "重击警惕系数变了");
 
         require(
-                WeaponSelectionPolicy.instance().preferredRange() == 8.0D,
+                WeaponSelectionPolicy.instance().preferredRange() == 14.0D,
                 "默认策略没有采用默认配平"
         );
         require(
@@ -90,7 +90,7 @@ public final class CombatBalanceVerification {
 
         CombatPolicies.install(CombatBalance.defaults());
         require(
-                WeaponSelectionPolicy.instance().preferredRange() == 8.0D,
+                WeaponSelectionPolicy.instance().preferredRange() == 14.0D,
                 "装回默认值没有生效"
         );
     }

@@ -13,7 +13,17 @@ import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatS
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponCandidate;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponKind;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponSelectionPolicy;
+import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
 import com.laixia.maidintelligence.feature.orchestration.domain.ActionResult;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.CombatMovement;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.MeleeSwing;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.RangedDrawCycle;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.RetreatSpace;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.CombatReadiness;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.CombatSurvey;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ScannedThreat;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.item.ItemStack;
@@ -68,8 +78,14 @@ public final class TlmCombatAction {
      */
     public static final float MOVE_SPEED = 0.6F;
 
-    /** How far a losing fight puts between her and it. */
-    public static final double WITHDRAW_DISTANCE = 12.0D;
+    /**
+     * How far a losing fight puts between her and it.
+     *
+     * <p>Her whole perception, not less. Breaking off to twelve blocks left her
+     * inside the sixteen she can see — and inside the range most things can see
+     * her back — so the retreat ended while the fight did not.
+     */
+    public static final double WITHDRAW_DISTANCE = PerceptionRange.BLOCKS;
 
     /** Clearance a break-off needs to begin; it is re-decided every tick. */
     private static final double FLEE_FIRST_STEP = 3.0D;
@@ -111,7 +127,7 @@ public final class TlmCombatAction {
         CombatCapability capability = CombatReadiness.of(maid, arsenal);
 
         ThreatSample chosen = TargetSelectionPolicy.INSTANCE.select(samples);
-        ScannedThreat target = locate(scanned, chosen);
+        ScannedThreat target = CombatSurvey.locate(scanned, chosen);
         if (target == null) {
             return finish(maid);
         }
@@ -120,7 +136,7 @@ public final class TlmCombatAction {
         // Answered once and handed to both decisions. Whether she can give
         // ground settles "is keeping my distance a plan" and "is a bow the
         // right thing to hold", and the two must not disagree about it.
-        List<Vec3> crowd = crowdOf(scanned);
+        List<Vec3> crowd = CombatSurvey.crowdOf(scanned);
         boolean canOpenGround = canOpenGround(maid, target, crowd);
         RiskVerdict verdict = EngagementRiskPolicy.instance().assess(
                 field,
@@ -133,9 +149,25 @@ public final class TlmCombatAction {
             case STAND_DOWN -> finish(maid);
             case WITHDRAW -> withdraw(maid, target, crowd);
             case ENGAGE, SKIRMISH -> fight(
-                    maid, target, field, arsenal, canOpenGround, crowd
+                    maid, target, CombatSurvey.nearest(scanned), scanned, field, arsenal,
+                    canOpenGround, crowd
             );
         };
+    }
+
+    /**
+     * The distance this stance asks her to hold, with a floor.
+     *
+     * <p>A stance that reports nothing (an unmeasured weapon, or a posture
+     * chosen before the weapon was known) falls back to the configured
+     * ceiling rather than to zero — zero reads as "close in", which is the
+     * opposite of what a ranged posture wants.
+     */
+    private static double standoff(CombatStance stance) {
+        double declared = stance.preferredRange();
+        return declared > 0.0D
+                ? declared
+                : WeaponSelectionPolicy.instance().preferredRange();
     }
 
     /**
@@ -184,6 +216,8 @@ public final class TlmCombatAction {
     private ActionResult fight(
             EntityMaid maid,
             ScannedThreat target,
+            ScannedThreat pressing,
+            List<ScannedThreat> pack,
             ThreatField field,
             List<WeaponCandidate> arsenal,
             boolean canOpenGround,
@@ -236,12 +270,24 @@ public final class TlmCombatAction {
 
         // Blocked, she closes regardless: that usually restores the line of
         // sight, and failing that puts her close enough for melee next tick.
+        //
+        // The stance carries the distance, not the policy: it was chosen for
+        // this weapon and already capped, so a bow holds fifteen where a
+        // crossbow holds eight. Reading the global ceiling here instead is what
+        // made every ranged weapon fight at the same range.
+        //
+        // Spacing answers to whoever is nearest, never to the one she picked.
+        // The two are the same object most of the time and differ exactly when
+        // target choice stops being "the closest" — which is the whole point of
+        // finishing a hurt one. Judged off the quarry, she would call six
+        // blocks comfortable while a second zombie stood at her elbow.
         double desired = shooting
-                ? (canSee ? WeaponSelectionPolicy.instance().preferredRange()
-                        : 0.0D)
-                : MeleeSwing.holdDistance(maid, target, MOVE_SPEED);
+                ? (canSee ? standoff(stance) : 0.0D)
+                : MeleeSwing.holdDistance(
+                        maid, pressing, crowd, pack, MOVE_SPEED
+                );
         CombatMovement.keepRange(
-                maid, target, crowd, desired, shooting, MOVE_SPEED
+                maid, target, pressing, crowd, desired, shooting, MOVE_SPEED
         );
         if (canStrike) {
             strike(maid, target, shooting);
@@ -296,8 +342,12 @@ public final class TlmCombatAction {
      * within reach when she is losing, so "swing if you can, else retreat"
      * resolves to "never retreat".
      *
-     * <p>Never toward her owner. What is beating her follows, and leading it to
-     * the person she is guarding turns a lost fight into a lost owner.
+     * <p>Away from her owner where there is a choice, since what is beating her
+     * follows and leading it to the person she is guarding turns a lost fight
+     * into a lost owner. Not at any price, though: past twenty-four blocks the
+     * backstop teleports her to his feet, and it brings the pursuit with her.
+     * Breaking off toward him deliberately is better than being delivered to
+     * him involuntarily, so the leash caps this direction like any other.
      */
     private ActionResult withdraw(
             EntityMaid maid,
@@ -415,29 +465,5 @@ public final class TlmCombatAction {
     private ActionResult finish(EntityMaid maid) {
         cancel(maid);
         return ActionResult.SUCCEEDED;
-    }
-
-    /** Every hostile she can see, as positions — the crowd to escape, not one of it. */
-    private static List<Vec3> crowdOf(List<ScannedThreat> scanned) {
-        List<Vec3> positions = new java.util.ArrayList<>(scanned.size());
-        for (ScannedThreat threat : scanned) {
-            positions.add(threat.entity().position());
-        }
-        return positions;
-    }
-
-    private ScannedThreat locate(
-            List<ScannedThreat> scanned,
-            ThreatSample sample
-    ) {
-        if (sample == null) {
-            return null;
-        }
-        for (ScannedThreat threat : scanned) {
-            if (threat.sample() == sample) {
-                return threat;
-            }
-        }
-        return null;
     }
 }

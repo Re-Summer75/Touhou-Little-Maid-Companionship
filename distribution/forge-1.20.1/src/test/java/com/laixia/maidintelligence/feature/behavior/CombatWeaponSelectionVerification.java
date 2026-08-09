@@ -55,6 +55,7 @@ public final class CombatWeaponSelectionVerification {
         verifiesACrowdDrawsSteelAtBowRange();
         verifiesNoRoomToKiteDrawsSteel();
         verifiesAnArrivingFoeIsMetWithSteel();
+        verifiesLongerReachCostsLess();
         verifiesStowingWaitsForQuiet();
         System.out.println("Combat weapon selection verification passed.");
     }
@@ -308,6 +309,29 @@ public final class CombatWeaponSelectionVerification {
     }
 
     /** 收武器要等安静下来，不是等这一只死掉——怪是成波来的。 */
+    /**
+     * 够得更远的近战武器，代价更低。
+     *
+     * <p>攻击距离是 Forge 的 {@code ENTITY_REACH} 属性，物品可以给它加修饰符——
+     * 玩家的长柄武器就是这么变长的。此前近战候选的触及一律报 0，于是背包里的
+     * 长矛和匕首在定价里没有任何区别；她走到"能被对方打到"的距离才停，把长武器
+     * 唯一的好处丢掉了。
+     *
+     * <p>断言只比两把**其它属性完全相同**的武器，所以差别只可能来自触及。
+     */
+    private static void verifiesLongerReachCostsLess() {
+        WeaponCandidate longArm = polearm(0.6D, 5.0D);
+        CombatStance stance = POLICY.choose(
+                List.of(sword(0.6D), longArm),
+                against(zombie(6.0D))
+        );
+        require(
+                stance.weapon() == longArm,
+                "两把伤害相同的近战武器里她挑了够得更近的那把，"
+                        + "长柄武器的距离优势没有进入决定"
+        );
+    }
+
     private static void verifiesStowingWaitsForQuiet() {
         WeaponStowPolicy stow = WeaponStowPolicy.INSTANCE;
         require(
@@ -373,6 +397,11 @@ public final class CombatWeaponSelectionVerification {
 
     private static WeaponCandidate sword(double power) {
         return new WeaponCandidate(WeaponKind.MELEE, 1, power, false);
+    }
+
+    /** 同样的一把近战武器，但够得更远。 */
+    private static WeaponCandidate polearm(double power, double reach) {
+        return new WeaponCandidate(WeaponKind.MELEE, 3, power, false, reach);
     }
 
     private static WeaponCandidate bow(double power, boolean arrows) {

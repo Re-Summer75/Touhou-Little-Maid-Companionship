@@ -16,13 +16,117 @@ public final class PerceptionRangeVerification {
     private PerceptionRangeVerification() {
     }
 
+    /** 浮点求根的容差；牵引绳是几十格量级，这个余量远小于一格。 */
+    private static final double EPSILON = 1.0E-9D;
+
     public static void main(String[] args) {
         verifiesPerceptionIsTheStatedCap();
         verifiesSquaredMatchesLinear();
         verifiesClampNeverWidens();
         verifiesTeleportOutrunsPerception();
         verifiesGazeDoesNotExceedPerception();
+        verifiesPlanningStaysInsideTheLeash();
+        verifiesLeashNeverPinsAMaidAlreadyOutside();
+        verifiesEveryHeadingEndsInsideTheLeash();
+        verifiesHeightSpendsLeashToo();
         System.out.println("Perception range verification passed.");
+    }
+
+    /**
+     * 她自己规划的落点必须严格在传送线以内。
+     *
+     * <p>兜底传送是"超过就拉回"，所以正好停在线上的计划等于计划被撤销：
+     * 一次浮点误差、主人挪半步，她就被拽回刚刚逃离的战斗里。
+     */
+    private static void verifiesPlanningStaysInsideTheLeash() {
+        require(
+                OwnerFollowPolicy.INSTANCE.planningRadius(0.0D)
+                        < OwnerFollowPolicy.TELEPORT_DISTANCE,
+                "She plans right up to the teleport line, so a rounding error "
+                        + "is enough to undo the walk she just took"
+        );
+    }
+
+    /**
+     * 已经在绳外时不能把她钉死。
+     *
+     * <p>规划半径若小于她当前所在，每个方向都会算成"走不了"，于是她站着
+     * 不动等传送——而横向挪开和往主人那边走本来都是允许的。
+     */
+    private static void verifiesLeashNeverPinsAMaidAlreadyOutside() {
+        double stranded = OwnerFollowPolicy.TELEPORT_DISTANCE + 10.0D;
+        require(
+                OwnerFollowPolicy.INSTANCE.planningRadius(stranded) >= stranded,
+                "A maid already past the leash was told she may not stand "
+                        + "where she is standing"
+        );
+        require(
+                OwnerFollowPolicy.INSTANCE.reachBeforeTeleport(
+                        stranded, 0.0D, 0.0D, -1.0D, 0.0D
+                ) > 0.0D,
+                "Walking back toward her owner was refused"
+        );
+        require(
+                OwnerFollowPolicy.INSTANCE.reachBeforeTeleport(
+                        stranded, 0.0D, 0.0D, 1.0D, 0.0D
+                ) == 0.0D,
+                "Walking further out was allowed from outside the leash"
+        );
+    }
+
+    /**
+     * 任何朝向走完允许的距离后都仍在绳内。
+     *
+     * <p>这是这条几何唯一要保证的事，所以扫一圈朝向、几档起始位置一起验，
+     * 而不是只验"正后方"那一个好算的方向。
+     */
+    private static void verifiesEveryHeadingEndsInsideTheLeash() {
+        double radius = OwnerFollowPolicy.INSTANCE.planningRadius(0.0D);
+        for (double offset : new double[] {0.0D, 5.0D, 15.0D, 22.0D}) {
+            for (int step = 0; step < 24; step++) {
+                double angle = step * Math.PI / 12.0D;
+                double headingX = Math.cos(angle);
+                double headingZ = Math.sin(angle);
+                double reach = OwnerFollowPolicy.INSTANCE.reachBeforeTeleport(
+                        offset, 0.0D, 0.0D, headingX, headingZ
+                );
+                double endX = offset + reach * headingX;
+                double endZ = reach * headingZ;
+                double ended = Math.sqrt(endX * endX + endZ * endZ);
+                require(
+                        ended <= radius + EPSILON,
+                        "From " + offset + " blocks out, heading " + step
+                                + " left her " + ended + " blocks away, past "
+                                + "the " + radius + " she may plan to"
+                );
+                require(
+                        !OwnerFollowPolicy.INSTANCE.shouldTeleport(
+                                ended * ended
+                        ),
+                        "A walk she was told she may take ends in a teleport"
+                );
+            }
+        }
+    }
+
+    /**
+     * 爬高也消耗牵引绳。
+     *
+     * <p>兜底传送量的是三维距离，而后撤只在水平面上选方向。忽略高度差就会
+     * 得出"塔顶上还能再横着走二十格"，而她其实早已超线。
+     */
+    private static void verifiesHeightSpendsLeashToo() {
+        double level = OwnerFollowPolicy.INSTANCE.reachBeforeTeleport(
+                0.0D, 0.0D, 0.0D, 1.0D, 0.0D
+        );
+        double lifted = OwnerFollowPolicy.INSTANCE.reachBeforeTeleport(
+                0.0D, 20.0D, 0.0D, 1.0D, 0.0D
+        );
+        require(
+                lifted < level,
+                "Standing twenty blocks above her owner bought her no less "
+                        + "ground than standing beside him"
+        );
     }
 
     private static void verifiesPerceptionIsTheStatedCap() {

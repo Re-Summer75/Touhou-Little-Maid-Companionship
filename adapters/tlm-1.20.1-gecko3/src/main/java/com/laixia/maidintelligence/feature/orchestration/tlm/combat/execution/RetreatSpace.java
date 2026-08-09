@@ -1,12 +1,13 @@
-package com.laixia.maidintelligence.feature.orchestration.tlm.combat;
+package com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.ai.tlm.OwnerFollowBridge;
+import com.laixia.maidintelligence.feature.behavior.domain.perception.BearingField;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.pathfinder.PathComputationType;
-import com.laixia.maidintelligence.feature.behavior.domain.perception.BearingField;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
@@ -261,6 +262,13 @@ public final class RetreatSpace {
      * <p>{@link #required} rounds the demand up to a block for exactly the same
      * reason. Both ends of the comparison have to admit the same resolution, or
      * one of them is always wrong.
+     *
+     * <p>The owner leash is one of the things that stops her, alongside walls
+     * and bodies, and it belongs here rather than on the answer. Applied at the
+     * end it would let her pick the bearing with the most open ground and only
+     * then discover she may not walk it; applied per bearing, a direction that
+     * runs out of leash is simply a direction with less room, and the survey
+     * picks around it the same way it picks around a wall.
      */
     private static double reachAlong(
             EntityMaid maid,
@@ -268,8 +276,9 @@ public final class RetreatSpace {
             Vec3 direction,
             double distance
     ) {
+        double leash = OwnerFollowBridge.leashedReach(maid, from, direction);
         double reached = 0.0D;
-        double asked = Math.max(1.0D, distance);
+        double asked = Math.min(Math.max(1.0D, distance), leash);
         // Carried forward so a slope can be followed for several blocks. Judging
         // every step against her starting height would let her climb one stair
         // and then decide the second one is a wall.
@@ -285,7 +294,7 @@ public final class RetreatSpace {
             height += landing.getY() - ahead.getY();
             reached = walked;
         }
-        return reached;
+        return Math.min(reached, leash);
     }
 
     /**

@@ -29,6 +29,20 @@ public final class TargetSelectionPolicy {
      * <p>Ties within a relation break on distance, so among several things
      * mobbing her owner she starts with the one already in reach rather than
      * walking past it.
+     *
+     * <p>Health is deliberately not a tiebreak, and this is the second time
+     * that has been established. Finishing a wounded one first is sound
+     * arithmetic in the abstract — incoming damage is proportional to how many
+     * are still standing, so a kill cuts it and a wound cuts nothing — but the
+     * choice made here decides where her feet go, not only where she swings.
+     * Preferring the hurt one therefore walks her past whatever is standing
+     * between, and everything she passes gets a free hit.
+     *
+     * <p>It was tried with a guard limiting the preference to targets already
+     * inside her weapon's reach. That is not enough: measured in play she still
+     * fixated on wounded ones behind the front and took damage from the one at
+     * her elbow. Concentrating damage has to come from somewhere that does not
+     * also steer her — it is not this decision's to make.
      */
     public ThreatSample select(Collection<ThreatSample> samples) {
         Objects.requireNonNull(samples, "samples");

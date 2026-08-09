@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.feature.orchestration.tlm.combat;
+package com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.world.item.ItemStack;
@@ -36,6 +36,11 @@ public interface RangedWeaponRecognizer {
         public int chargeTicks(ItemStack weapon) {
             return 0;
         }
+
+        @Override
+        public double range(ItemStack weapon) {
+            return 0.0D;
+        }
     };
 
     /** Whether this stack is a ranged weapon this recogniser owns. */
@@ -60,4 +65,13 @@ public interface RangedWeaponRecognizer {
      * here instead of having this mod guess from a bow's timing.
      */
     int chargeTicks(ItemStack weapon);
+
+    /**
+     * How far this weapon can hurt something, in blocks.
+     *
+     * <p>Zero means "unmeasured", and the stand-off falls back to the
+     * configured ceiling. A recogniser that knows should say so: the number
+     * decides how far she stands from something shooting back.
+     */
+    double range(ItemStack weapon);
 }

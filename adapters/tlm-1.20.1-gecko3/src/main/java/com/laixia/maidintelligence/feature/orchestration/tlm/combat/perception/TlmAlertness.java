@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.feature.orchestration.tlm.combat;
+package com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionAlertness;

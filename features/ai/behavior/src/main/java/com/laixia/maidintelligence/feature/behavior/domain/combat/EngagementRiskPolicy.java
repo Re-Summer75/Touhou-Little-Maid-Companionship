@@ -194,18 +194,48 @@ public final class EngagementRiskPolicy {
             return RiskVerdict.ENGAGE;
         }
 
-        // Losing the straight trade. Distance is only an answer if she can use
-        // it, and that takes three things, not two: something to shoot with,
-        // nothing that shoots back from where she would stand, and somewhere to
-        // stand. The third was missing, and its absence is fatal rather than
-        // merely suboptimal — a maid pinned against a wall was told to skirmish,
-        // held her ground because there was none to give, and was eaten where
-        // she stood. "Keep your distance" with no distance available is just a
-        // long way of saying "stay here".
-        boolean canKeepDistance = capability.rangedDps() > 0.0D
-                && !field.anyOutranging()
-                && canOpenGround;
-        return canKeepDistance ? RiskVerdict.SKIRMISH : RiskVerdict.WITHDRAW;
+        if (hurt) {
+            // The bail-out is a floor, not a tactic. Below it she leaves.
+            return RiskVerdict.WITHDRAW;
+        }
+
+        // Losing the straight trade, which is not the same as losing the fight.
+        // Standing in the middle of them swinging is one way to fight and it is
+        // the only one the arithmetic above prices — it assumes every one of
+        // them is hitting her for the whole time it takes to clear the lot.
+        //
+        // Given room and the legs to use it, that assumption is simply false.
+        // She backs off, they string out behind her because they path at
+        // different speeds, and she fights the one at the front while the rest
+        // are still walking. What she pays is the leader's damage, not the
+        // crowd's, and a six-on-one becomes six one-on-ones.
+        //
+        // {@code canOpenGround} is exactly that precondition: the caller
+        // answers it with both a terrain probe and a speed comparison, so it
+        // already means "there is somewhere to go and she is faster than what
+        // follows". Where it holds, a fighting retreat strictly dominates a
+        // pure one — the pure retreat never kills anything, and they follow.
+        // Measured against six zombies, the pure retreat spent the last seven
+        // seconds of every run walking in circles with a drawn sword.
+        //
+        // What changed here is only that it no longer requires a bow. It used
+        // to, and that is why she stopped fighting the moment her quiver ran
+        // dry: a fighting retreat with a blade is the same tactic, and the
+        // ground is what makes it work, not the weapon.
+        //
+        // Something that outranges her still rules it out, and that condition
+        // is untouched. Backing away from a skeleton is not keeping her
+        // distance, it is being shot at from further away.
+        if (canOpenGround && !field.anyOutranging()) {
+            return RiskVerdict.SKIRMISH;
+        }
+
+        // Nowhere to give. Distance is not available, so it cannot be the plan.
+        // A maid pinned against a wall was once told to skirmish anyway, held
+        // her ground because there was no ground, and was eaten where she
+        // stood; "keep your distance" with no distance is a long way of saying
+        // "stay here".
+        return RiskVerdict.WITHDRAW;
     }
 
     /**

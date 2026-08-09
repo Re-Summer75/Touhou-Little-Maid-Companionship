@@ -1,8 +1,10 @@
-package com.laixia.maidintelligence.feature.orchestration.tlm.combat;
+package com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMovement;
+import com.laixia.maidintelligence.feature.ai.tlm.OwnerFollowBridge;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.SpacingPolicy;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMovement;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ScannedThreat;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.behavior.EntityTracker;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
@@ -91,8 +93,23 @@ public final class CombatMovement {
      */
     private static final double WORTHWHILE_GROUND = 2.0D;
 
-    /** What a melee step-out asks for: one block, because that is the tactic. */
-    private static final double WORTHWHILE_MELEE_GROUND = 1.0D;
+    /**
+     * What a melee step-out asks for: anything at all.
+     *
+     * <p>It asked for a whole block, and a whole block is more than a crowd
+     * leaves. With six of them around her the body-clearance behind her reads
+     * a fraction most ticks, the step-out failed its own threshold, and the
+     * branch below fell through to standing still — inside their arms, through
+     * every cooldown. Measured, that was a fifth to a half of the fight spent
+     * in reach and every point of damage she took.
+     *
+     * <p>Half a block out of a zombie's arc is half a block it has to walk back
+     * before it can swing, and she re-decides next tick anyway. Demanding a
+     * tidy full block is how the whole tactic got cancelled for tidiness.
+     * Ranged keeps its two-block minimum: a bow shuffling a few centimetres
+     * really is just twitching.
+     */
+    private static final double WORTHWHILE_MELEE_GROUND = 0.01D;
 
     private CombatMovement() {
     }
@@ -105,12 +122,24 @@ public final class CombatMovement {
      * policy the domain layer states and turns it into the one write that
      * matters.
      *
-     * @param desired the distance she is trying to hold, zero meaning close in
-     * @param ranged  whether she is shooting, which widens every tolerance
+     * <p>Two threats, not one, and they are usually the same object. The
+     * <em>quarry</em> is who she is trying to hit; the <em>pressing</em> one is
+     * whoever is closest to hurting her. Spacing has to answer to the second.
+     * Reading the quarry's distance for both is right until the moment they
+     * differ — and the whole point of choosing a target on anything other than
+     * distance is that they differ. She would then judge herself comfortable
+     * because the one she is aiming at is six blocks away, while another stands
+     * at her elbow hitting her, and nothing in the arithmetic would notice.
+     *
+     * @param quarry   who she is trying to hit
+     * @param pressing whoever is nearest to hurting her, spacing answers to it
+     * @param desired  the distance she is trying to hold, zero meaning close in
+     * @param ranged   whether she is shooting, which widens every tolerance
      */
     public static void keepRange(
             EntityMaid maid,
-            ScannedThreat target,
+            ScannedThreat quarry,
+            ScannedThreat pressing,
             java.util.List<Vec3> crowd,
             double desired,
             boolean ranged,
@@ -129,15 +158,15 @@ public final class CombatMovement {
         // reads as "she never keeps her distance" because the part a player
         // watches is the trough.
         double tolerance = ranged ? RANGE_TOLERANCE : MELEE_TOLERANCE;
-        double distance = target.sample().distance();
+        double distance = pressing.sample().distance();
         if (desired <= 0.0D) {
             // The edge of her reach, not the target's skin: knockback pushes a
             // nose-to-nose target straight out of range, so she spends the next
             // second walking instead of swinging.
             chase(
                     maid,
-                    target.entity(),
-                    MeleeSwing.standoff(maid, target.entity()),
+                    quarry.entity(),
+                    MeleeSwing.standoff(maid, quarry.entity()),
                     speed
             );
             return;
@@ -148,9 +177,9 @@ public final class CombatMovement {
             // whereas demanding the whole distance up front turns every indoor
             // fight into standing still.
             if (RetreatSpace.canGiveGround(
-                    maid, target.entity(), speed, RETREAT_FIRST_STEP
+                    maid, pressing.entity(), speed, RETREAT_FIRST_STEP
             ) && RetreatSpace.escapeReach(
-                    maid, target.entity().position(), RETREAT_FIRST_STEP
+                    maid, pressing.entity().position(), RETREAT_FIRST_STEP
             ) >= (ranged
                     ? WORTHWHILE_GROUND
                     : WORTHWHILE_MELEE_GROUND)) {
@@ -168,12 +197,19 @@ public final class CombatMovement {
                         speed
                 );
             } else {
+                // Nowhere to give. Hold what she has rather than walk anywhere:
+                // the distance being held is her swing-recovery step-out, and
+                // closing it on purpose walks her back inside the reach of
+                // everything that cornered her, to be hit by all of it in turn.
+                // Standing is not a tactic, but it is not that either, and the
+                // decision to close belongs to the tick where her swing is
+                // ready — which arrives on its own.
                 clear(maid);
             }
             return;
         }
         if (distance > desired + tolerance) {
-            chase(maid, target.entity(), (int) desired, speed);
+            chase(maid, quarry.entity(), (int) desired, speed);
             return;
         }
         // Comfortable — but a retreat already under way is not finished just
@@ -185,7 +221,7 @@ public final class CombatMovement {
         // the whole cycle repeated until a tick came where she did not re-issue
         // in time — which is why she kept distance sometimes and was eaten
         // others, from identical code.
-        if (givingGround(maid, target.entity())) {
+        if (givingGround(maid, pressing.entity())) {
             return;
         }
         clear(maid);
@@ -323,6 +359,13 @@ public final class CombatMovement {
         Vec3 destination = current.getTarget().currentPosition();
         if (destination.distanceToSqr(maid.position()) < 1.0D) {
             // Arrived, or as good as. Time for a new decision.
+            return false;
+        }
+        if (!OwnerFollowBridge.withinLeash(maid, destination)) {
+            // It was somewhere she could go when it was chosen. Her owner has
+            // been walking since, and a retreat that now ends outside the leash
+            // ends with her being dropped back into the fight she left. Better
+            // to spend the tick finding one she is allowed to finish.
             return false;
         }
         return nearestOf(destination, crowd) > nearestOf(maid.position(), crowd);

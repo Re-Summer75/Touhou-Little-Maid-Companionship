@@ -41,9 +41,87 @@ public final class OwnerFollowPolicy {
      */
     public static final double TELEPORT_DISTANCE = 24.0D;
 
+    /**
+     * Slack she plans inside the leash rather than up against it.
+     *
+     * <p>One block. The backstop fires strictly past
+     * {@link #TELEPORT_DISTANCE}, so a plan that ends exactly on it is one
+     * rounding error from being undone — and the ground behind her is probed in
+     * whole blocks, so it could not aim at the limit that precisely anyway.
+     */
+    private static final double PLANNING_MARGIN = 1.0D;
+
     public static final OwnerFollowPolicy INSTANCE = new OwnerFollowPolicy();
 
     private OwnerFollowPolicy() {
+    }
+
+    /**
+     * The radius a plan of hers may reach out to.
+     *
+     * <p>Exists because the backstop was something that happened <em>to</em>
+     * her rather than something she knew about. Retreating is the case that
+     * exposed it: she is chased away from her owner, the retreat is judged
+     * entirely on how much room it puts between her and the thing hitting her,
+     * and the moment it succeeds past twenty-four blocks she is snapped back
+     * into the middle of the fight she just escaped. Every part of that is
+     * working as written and the result is a maid who cannot run away.
+     *
+     * <p>Never smaller than where she already stands. A maid who has somehow
+     * ended up outside the leash must still be able to move — sideways, or back
+     * toward her owner — and a radius that excluded her own position would
+     * report every direction as blocked and pin her where she is.
+     *
+     * @param currentDistance blocks she currently stands from her owner
+     */
+    public double planningRadius(double currentDistance) {
+        double planned = TELEPORT_DISTANCE - PLANNING_MARGIN;
+        return Double.isFinite(currentDistance) && currentDistance > planned
+                ? currentDistance
+                : planned;
+    }
+
+    /**
+     * How far she may walk along a heading before the backstop would fire.
+     *
+     * <p>The leash is a sphere around her owner, so this is where a ray leaves
+     * one. Not a fixed allowance, because the same twenty-four blocks are most
+     * of a retreat while she stands next to him and none of it once she is at
+     * the edge; and not a case analysis either — walking toward him coming out
+     * unlimited and walking away coming out shortest both fall out of the same
+     * solve.
+     *
+     * <p>Positions arrive as an offset rather than as two points, and the
+     * heading as components, so that this stays arithmetic: nothing down here
+     * has vectors or a world to ask.
+     *
+     * @param offsetX  her position minus her owner's, east
+     * @param offsetY  the same, up — counted because the backstop measures in
+     *                 three dimensions, so ground that climbs still spends leash
+     * @param offsetZ  the same, south
+     * @param headingX east component of the heading she would walk; together
+     *                 with {@code headingZ} this must be a unit vector
+     * @param headingZ south component of the same
+     * @return blocks she may travel along it, never negative
+     */
+    public double reachBeforeTeleport(
+            double offsetX,
+            double offsetY,
+            double offsetZ,
+            double headingX,
+            double headingZ
+    ) {
+        double offsetSquared =
+                offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ;
+        double radius = planningRadius(Math.sqrt(offsetSquared));
+        double along = offsetX * headingX + offsetZ * headingZ;
+        // |offset + t * heading| = radius, taking the positive root. The
+        // discriminant cannot go negative: the radius is never smaller than the
+        // offset, so she is on or inside the sphere, and a ray from inside one
+        // always leaves it exactly once ahead of itself.
+        double outside = offsetSquared - radius * radius;
+        double root = Math.sqrt(Math.max(0.0D, along * along - outside));
+        return Math.max(0.0D, root - along);
     }
 
     /**

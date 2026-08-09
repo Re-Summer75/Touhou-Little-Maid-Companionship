@@ -12,10 +12,10 @@ import com.laixia.maidintelligence.feature.status.tlm.MaidSnackCabinetMealSource
 
 import java.util.Map;
 import java.util.function.Consumer;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.RangedWeaponRecognizer;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.RangedWeaponRecognizer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmThreatScanner;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmWeaponScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.ApproachAndCommitAction;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.LooseFoodErrand;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.CabinetMealErrand;

@@ -3,10 +3,10 @@ package com.laixia.maidintelligence.gametest.combat;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.RangedWeaponRecognizer;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.RangedWeaponRecognizer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmThreatScanner;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmWeaponScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import com.laixia.maidintelligence.platform.runtime.AdapterRuntime;
@@ -281,6 +281,7 @@ public final class RangedFireGameTests {
         Skeleton skeleton = EntityType.SKELETON.create(helper.getLevel());
         helper.assertTrue(skeleton != null, "夹具无法创建骷髅");
         skeleton.setPos(maid.getX() + 9.0D, maid.getY(), maid.getZ());
+        CompanionScene.placeInert(helper, skeleton);
         keepSeeing(maid, skeleton);
 
         // 攒一段真实的蓄力：拉弦是实体状态，要靠实体自己 tick 才会推进。
@@ -382,6 +383,7 @@ public final class RangedFireGameTests {
     ) {
         Zombie zombie = new Zombie(helper.getLevel());
         zombie.setPos(maid.getX() + offset, maid.getY(), maid.getZ());
+        CompanionScene.placeInert(helper, zombie);
         keepSeeing(maid, zombie);
         return zombie;
     }

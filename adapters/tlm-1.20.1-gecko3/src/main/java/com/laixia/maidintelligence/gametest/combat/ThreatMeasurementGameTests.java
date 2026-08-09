@@ -2,15 +2,19 @@ package com.laixia.maidintelligence.gametest.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.ThreatProfile;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ScannedThreat;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ThreatProfile;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
+import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.monster.Ravager;
 import net.minecraft.world.entity.monster.Skeleton;
 import net.minecraft.world.entity.monster.Zombie;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
@@ -83,4 +87,68 @@ public final class ThreatMeasurementGameTests {
         );
         helper.succeed();
     }
+
+    /**
+     * 墙那边的那群不算。
+     *
+     * <p>威胁扫描改成自己扫世界之后漏掉了这一条,而漏掉它不会让任何测试变红——
+     * 夹具里的敌人都站在空地上。代价是在真实世界里付的:地下和夜里,十六格内几乎
+     * 永远隔着墙站着点什么,于是她定价的那场仗根本不是屋里这一场。表现出来是
+     * 要么对着空气后撤,要么穿过身边三只去够一只她根本够不到的。
+     *
+     * <p>所以这条直接钉"看不看得见",而不是钉它下游的裁决:下游有十几个数一起
+     * 决定结果,而这里错的是最上面那个。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void sheDoesNotCountWhatSheCannotSee(GameTestHelper helper) {
+        CompanionScene scene = CompanionScene.room(helper, 7, 5);
+        EntityMaid maid = scene.maid(1, 2, 2);
+
+        Zombie behindWall = new Zombie(helper.getLevel());
+        behindWall.setPos(maid.getX() + 4.0D, maid.getY(), maid.getZ());
+        CompanionScene.placeInert(helper, behindWall);
+
+        // 先确认没有墙时她确实数得到它,否则下面的"数不到"什么都不说明。
+        //
+        // 问的是"这一只在不在清单里",不是"清单里有几个"。GameTest 共用一个
+        // 世界,邻座夹具的怪就在十六格内,按数量断言等于让这条测试的成败取决于
+        // 隔壁这一轮放了几只怪。
+        helper.assertTrue(
+                sees(maid, behindWall),
+                "空地上四格外的僵尸都没被扫到,这条测试没有验证到任何东西"
+        );
+
+        // 砌一堵挡在中间的墙。
+        for (int y = 2; y <= 4; y++) {
+            for (int z = 0; z <= 4; z++) {
+                helper.setBlock(new BlockPos(3, y + LIFT - 1, z), Blocks.STONE);
+            }
+        }
+        helper.assertFalse(
+                maid.hasLineOfSight(behindWall),
+                "夹具没能挡住视线"
+        );
+
+        helper.assertFalse(
+                sees(maid, behindWall),
+                "隔着一堵墙的僵尸仍然进了她的威胁清单,于是她按一场看不见的仗"
+                        + "决定站位"
+        );
+        helper.succeed();
+    }
+
+    /** 这一只在不在她当前的威胁清单里。 */
+    private static boolean sees(EntityMaid maid, Zombie zombie) {
+        // 每次都用新的扫描器:生产实例带 5 tick 缓存,同一 tick 内问两次会拿到
+        // 砌墙之前的那一份。
+        for (ScannedThreat threat : new TlmThreatScanner().scan(maid)) {
+            if (threat.entity() == zombie) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 与 {@link CompanionScene} 的抬升保持一致,好把墙砌在她那一层。 */
+    private static final int LIFT = 12;
 }

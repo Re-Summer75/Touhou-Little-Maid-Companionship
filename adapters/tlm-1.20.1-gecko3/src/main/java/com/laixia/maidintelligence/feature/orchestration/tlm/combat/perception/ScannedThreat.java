@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.feature.orchestration.tlm.combat;
+package com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception;
 
 import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatSample;
 import net.minecraft.world.entity.LivingEntity;

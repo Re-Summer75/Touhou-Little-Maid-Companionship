@@ -14,15 +14,82 @@ import java.util.Objects;
  * @param slot      backpack slot it sits in, or {@link #MAIN_HAND} if already held
  * @param power     normalised effectiveness in {@code [0,1]}
  * @param ammoReady whether it can actually be fired right now
+ * @param reach     how far it can hurt something, in blocks; zero if unmeasured
+ * @param arcDamage what one swing lands on <em>each</em> other body standing
+ *                  with the target; zero for anything that does not sweep
+ * @param usesPerSecond how fast <em>this</em> weapon may be used, zero if
+ *                  unstated. Cadence belongs to the item, not to her: a sword
+ *                  swings at 1.6 a second and an axe at 0.9, so pricing every
+ *                  blade at the cadence of whichever one she happens to be
+ *                  holding values an axe as a fast sword and a sword as a slow
+ *                  one. Damage per hit and hits per second are separate facts
+ *                  and the trade between them is most of what picks a weapon.
+ * @param shots      how many more times it can be used before it runs dry,
+ *                  {@link #UNLIMITED} for melee. Ten arrows against a hundred
+ *                  and twenty blocks of zombie is not a ranged answer, it is a
+ *                  delay with a melee fight at the end of it, and the choice
+ *                  cannot see that without knowing the count.
+ * @param durability what fraction of its life is left, one when unstated. A
+ *                  weapon two hits from breaking is worth less than the same
+ *                  weapon fresh, and something that breaks mid-fight leaves her
+ *                  empty-handed in the middle of it.
  */
 public record WeaponCandidate(
         WeaponKind kind,
         int slot,
         double power,
-        boolean ammoReady
+        boolean ammoReady,
+        double reach,
+        double arcDamage,
+        double usesPerSecond,
+        double durability,
+        int shots
 ) {
+    /** Stands for "as many as she needs": melee, or an unmeasured magazine. */
+    public static final int UNLIMITED = Integer.MAX_VALUE;
+
+    /** What this weapon could still deliver in total, before it runs dry. */
+    public double deliverableDamage() {
+        return shots == UNLIMITED
+                ? Double.POSITIVE_INFINITY
+                : shots * damagePerHit();
+    }
+
+    /**
+     * A candidate measured only as far as its reach.
+     *
+     * <p>Arc, cadence and condition come out unstated, and every one of them
+     * then falls back on whatever the caller assumed. Only for callers that
+     * genuinely cannot answer — the scanner always can.
+     */
+    public WeaponCandidate(
+            WeaponKind kind,
+            int slot,
+            double power,
+            boolean ammoReady,
+            double reach
+    ) {
+        this(kind, slot, power, ammoReady, reach, 0.0D, 0.0D, 1.0D, UNLIMITED);
+    }
+
     /** Slot value for the weapon she is already holding. */
     public static final int MAIN_HAND = -1;
+
+    /**
+     * A candidate whose reach nobody measured.
+     *
+     * <p>Only for callers that genuinely do not know — the scanner always
+     * does. Zero rather than a guess, so a missing measurement shows up as
+     * "she closes to melee" instead of silently inventing a range.
+     */
+    public WeaponCandidate(
+            WeaponKind kind,
+            int slot,
+            double power,
+            boolean ammoReady
+    ) {
+        this(kind, slot, power, ammoReady, 0.0D);
+    }
 
     /**
      * Damage a weapon rated {@code 1.0} lands in one hit.

@@ -10,7 +10,8 @@ import com.laixia.maidintelligence.feature.behavior.domain.forecast.CompanionAct
 import com.laixia.maidintelligence.feature.orchestration.api.insight.MaidInsight;
 import com.laixia.maidintelligence.feature.behavior.tlm.MaidCommandSeatBridge;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.ThreatProfile;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ThreatProfile;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
 import com.laixia.maidintelligence.feature.perception.tlm.TlmAffordancePerceptionService;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.feature.status.domain.DefaultHungerPolicy;
@@ -41,6 +42,9 @@ public final class TlmMaidFactReader {
      */
     private static final double HOSTILE_TRIGGER_RANGE_SQR =
             PerceptionRange.SQUARED;
+
+    /** 与战斗共用一次扫描：触发与执行必须看到同一个世界。 */
+    private static final TlmThreatScanner THREATS = new TlmThreatScanner();
 
     private final TlmOwnerFactReader ownerFacts =
             new TlmOwnerFactReader();
@@ -434,21 +438,20 @@ public final class TlmMaidFactReader {
      * turns out not to warrant it. Doing that arithmetic here would run it for
      * every maid on every fact read.
      */
+    /**
+     * How many hostiles are inside her perception, right now.
+     *
+     * <p>Counted from the same sweep the fight itself uses rather than from the
+     * host's visible-entity memory. That memory is refreshed by a sensor on the
+     * vanilla twenty-tick default, so reading it here put a second of blindness
+     * in front of the one decision that cannot afford any: the trigger for
+     * entering combat at all.
+     *
+     * <p>The scanner keeps its own short-interval cache, so asking every
+     * evaluation costs a map lookup rather than a world sweep.
+     */
     private double hostilePressure(EntityMaid maid) {
-        return maid.getBrain()
-                .getMemory(MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES)
-                .map(visible -> {
-                    int count = 0;
-                    for (LivingEntity hostile : visible.findAll(
-                            candidate -> ThreatProfile.isHostileTo(maid, candidate)
-                                    && maid.distanceToSqr(candidate)
-                                    <= HOSTILE_TRIGGER_RANGE_SQR
-                    )) {
-                        count++;
-                    }
-                    return (double) count;
-                })
-                .orElse(0.0D);
+        return THREATS.scan(maid).size();
     }
 
     private static double bool(boolean value) {

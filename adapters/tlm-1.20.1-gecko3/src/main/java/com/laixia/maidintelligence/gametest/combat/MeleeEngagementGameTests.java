@@ -2,11 +2,11 @@ package com.laixia.maidintelligence.gametest.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.MeleeSwing;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.RangedWeaponRecognizer;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.MeleeSwing;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.RangedWeaponRecognizer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmThreatScanner;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmWeaponScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.gametest.framework.GameTest;
@@ -367,6 +367,13 @@ public final class MeleeEngagementGameTests {
                                     maid, List.of(victim)
                             )
                     );
+                    // 这一刀必须由下面这次决策打出来。敌人现在是真实体，她
+                    // 自己的大脑在上面三 tick 里就可能先挥一次——那一刀落在
+                    // 她还没落地的时候，横扫按原版规则跳过，于是主目标掉了血
+                    // 而旁边那只没有，断言时看起来就像横扫坏了。
+                    maid.getBrain().eraseMemory(
+                            MemoryModuleType.ATTACK_COOLING_DOWN
+                    );
                     new TlmCombatAction(
                             new TlmThreatScanner(),
                             new TlmWeaponScanner(RangedWeaponRecognizer.NONE)
@@ -381,7 +388,9 @@ public final class MeleeEngagementGameTests {
                             beside.getHealth() < beside.getMaxHealth(),
                             "The zombie pressed against her target took "
                                     + "nothing, so the sword is still hitting "
-                                    + "one at a time"
+                                    + "one at a time: victim="
+                                    + victim.getHealth() + " beside="
+                                    + beside.getHealth()
                     );
                     helper.assertTrue(
                             bystander.getHealth() == bystander.getMaxHealth(),
@@ -400,6 +409,7 @@ public final class MeleeEngagementGameTests {
     ) {
         Zombie zombie = new Zombie(helper.getLevel());
         zombie.setPos(maid.getX() + offset, maid.getY(), maid.getZ());
+        CompanionScene.placeInert(helper, zombie);
         maid.getBrain().setMemory(
                 MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES,
                 new NearestVisibleLivingEntities(maid, List.of(zombie))

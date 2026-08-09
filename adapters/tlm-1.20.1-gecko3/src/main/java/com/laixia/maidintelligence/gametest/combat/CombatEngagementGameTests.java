@@ -3,25 +3,27 @@ package com.laixia.maidintelligence.gametest.combat;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.EngagementRiskPolicy;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.RiskVerdict;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.CombatReadiness;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.CombatReadiness;
 import com.laixia.maidintelligence.gametest.support.CombatProbe;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.RangedWeaponRecognizer;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.RetreatSpace;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.RangedWeaponRecognizer;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.RetreatSpace;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmThreatScanner;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmWeaponScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import com.laixia.maidintelligence.platform.runtime.AdapterRuntime;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.memory.NearestVisibleLivingEntities;
+import net.minecraft.world.entity.monster.Skeleton;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.item.CrossbowItem;
@@ -37,9 +39,11 @@ import java.util.List;
 /**
  * 端到端：看得见敌人时，自由模式的女仆应当进入交战意图。
  *
- * <p>僵尸创建后不加入世界，改为直接写进她的可见实体记忆。真实僵尸的索敌达
- * 十六格，放进共享测试世界会波及邻座；而这里要验证的是"感知到敌人之后
- * 会发生什么"，敌人怎么进入感知不是本测试的命题。
+ * <p>敌人是真实体，只是被关掉了 AI。以前是创建后不入世界、直接写进她的可见
+ * 实体记忆，那样既省事又不会波及邻座；但威胁扫描已经改为自己扫世界，不再读
+ * 那份记忆——只存在于她脑子里的僵尸，她根本找不到，于是每个战斗场景都悄悄
+ * 变成了"她一个人站在空房间里"。关掉 AI 是为了保住这些夹具原本的前提：从没
+ * 进过世界的僵尸不会寻路、不会挥手、也不会晒太阳。
  */
 @GameTestHolder(ModResources.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -175,10 +179,10 @@ public final class CombatEngagementGameTests {
      * 断言看的是她有没有被派往某处，而不是箭有没有射出：卡住的表现是不动，
      * 可执行的形式也就必须是"她被告知要去哪"。
      *
-     * <p>夹具要先打一枪再挡：{@code NearestVisibleLivingEntities} 把视线判定
-     * 缓存在首次查询，此后同一份记忆对象即使目标已被埋住也照报可见。生产里
-     * 传感器每 tick 重建记忆，但重建之前的那一 tick 正是这个样子——所以战斗
-     * 动作不能只信记忆，必须自己实时复核视线。这条测试测的就是那次复核。
+     * <p>对手是骷髅，不是僵尸。她守的距离已经从八格提到弓自己的射程上限，
+     * 而威胁场只把"三秒内能够到她的"算作一场仗——一只十四格外的僵尸走不到，
+     * 于是根本不成其为战斗。能在这个距离上还击的，只有同样打得到这么远的
+     * 东西，所以这条要验证的场景必须由它来搭。
      */
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void aBlockedShotSendsHerCloser(GameTestHelper helper) {
@@ -190,14 +194,17 @@ public final class CombatEngagementGameTests {
         maid.getAvailableBackpackInv().setStackInSlot(
                 0, new ItemStack(Items.ARROW, 32)
         );
-        Zombie zombie = seeHostile(helper, maid, 10.0D);
+        Skeleton skeleton = EntityType.SKELETON.create(helper.getLevel());
+        helper.assertTrue(skeleton != null, "夹具无法创建骷髅");
+        skeleton.setPos(maid.getX() + 14.0D, maid.getY(), maid.getZ());
+        CompanionScene.placeInert(helper, skeleton);
 
         TlmCombatAction combat = new TlmCombatAction(
                 new TlmThreatScanner(),
                 new TlmWeaponScanner(RangedWeaponRecognizer.NONE)
         );
 
-        // 看得见的时候：十格外用弓，正合期望射程，她站定不动。
+        // 看得见的时候：十四格外用弓，正落在她该守的距离上，她站定不动。
         combat.execute(maid);
         helper.assertFalse(
                 maid.getBrain()
@@ -207,10 +214,12 @@ public final class CombatEngagementGameTests {
                         + "moved while the shot was still clear"
         );
 
-        // 埋进石头里：记忆的视线缓存已固化，但实际已经射不到了。
-        zombie.setPos(zombie.getX(), zombie.getY() - 6.0D, zombie.getZ());
+        // 埋到地平面以下：她还看得见它的位置，但箭已经射不到了。
+        skeleton.setPos(
+                skeleton.getX(), skeleton.getY() - 6.0D, skeleton.getZ()
+        );
         helper.assertFalse(
-                maid.hasLineOfSight(zombie),
+                maid.hasLineOfSight(skeleton),
                 "Fixture failed to block the line of sight"
         );
 
@@ -250,8 +259,16 @@ public final class CombatEngagementGameTests {
         maid.getAvailableBackpackInv().setStackInSlot(
                 2, new ItemStack(Items.IRON_SWORD)
         );
-        // 贴到两格：旧逻辑到这个距离就该换刀了。地板往 -x 还有得退。
-        seeHostile(helper, maid, 2.0D);
+        // 贴到一格二：僵尸的实际触及是 sqrt(1.2² + 0.6) ≈ 1.43 格（本体判定
+        // 攻击是否命中用的就是这个式子），所以两格外它根本够不到她——那不是
+        // "贴脸"，而这条测的正是贴脸。
+        //
+        // 原来写两格也能过，靠的是一个错值：定价对背包里的近战武器用她的
+        // ATTACK_SPEED 属性，而弓不带攻速修饰符，于是那个值是裸基础 4.0，
+        // 铁剑真实只有 1.6。近战输出被高估两倍半，剑于是在够不到的距离上
+        // 也照样赢。攻速改成问武器自己之后，这条按新的（正确的）数字变红，
+        // 夹具也就得摆出它自己声称的那个局面。
+        seeHostile(helper, maid, 1.2D);
 
         new TlmCombatAction(
                 new TlmThreatScanner(),
@@ -452,6 +469,7 @@ public final class CombatEngagementGameTests {
     ) {
         Zombie zombie = new Zombie(helper.getLevel());
         zombie.setPos(maid.getX() + offset, maid.getY(), maid.getZ());
+        CompanionScene.placeInert(helper, zombie);
         keepSeeing(maid, zombie);
         return zombie;
     }

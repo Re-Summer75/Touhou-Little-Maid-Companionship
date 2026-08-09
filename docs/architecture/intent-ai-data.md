@@ -20,7 +20,7 @@
 ```json
 {
   "format_version": 1,
-  "plan": "tlm_companionship:approach_owner",
+  "plan": "tlm_companionship:follow_owner",
   "conditions": [
     {
       "fact": "tlm_companionship:fact/owner_valid",

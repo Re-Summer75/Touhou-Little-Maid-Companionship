@@ -59,7 +59,8 @@ flowchart LR
 - `TlmBehaviorOccupancyClassifier` 每 tick 在 `TlmMaidFactReader` 中只计算一次快照，并编码
   `behavior_occupancy_level` / `behavior_occupancy_reason`；旧 `movement_hard_blocked` 由
   `HARD` 派生以保持兼容。
-- 注视计划 `approach_owner` 使用 `authority=owner_command`：可干净抢占 `SOFT`，续租贯穿
+- 注视计划 `gaze_recall_session` 的 `approach_owner` 动作使用 `authority=owner_command`：
+  可干净抢占 `SOFT`，续租贯穿
   approach 与指挥窗口；失败、取消、quiesce、halt、战斗或超时必须释放 override。
 - 归队、饥饿反馈、零食柜与 Ability 模板默认要求 `IDLE`；未实现软抢占生命周期的能力不得
   越过 `IDLE`。
@@ -163,8 +164,6 @@ BlockJoy 上座兜底（仅 IDLE 娱乐）、Breath/Home/Pickup/偷吃/工作目
   与编排器竞争的第二种意见，而仲裁的设计是让着工作任务的。
 - 惊慌、进食、看向与随机走动保持开启。去掉它们不会让她更自由，只会让她在火里挨饿或在两次
   决策之间僵立。
-- `isBuiltInTask` 必须把本模组的工作项算作可观察；第三方工作项仍不予干预。遗漏会关闭
-  `wander_return`，症状是「设成自由后她游走完不回来」。
 - 家园模式只在她确实位于限制区域之外时才计入行为占用。把模式本身当作 HARD 占用会关闭全部
   陪伴意图，症状是她待在家中饥饿却对脚边的食物无动于衷。
 

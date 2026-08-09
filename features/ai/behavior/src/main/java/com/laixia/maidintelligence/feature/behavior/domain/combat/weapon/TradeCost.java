@@ -120,14 +120,16 @@ public final class TradeCost {
             // expensive, so no amount of sword quality can buy its way back in.
             return Double.POSITIVE_INFINITY;
         }
-        double dps = weapon.damagePerSecond(context.meleeUsesPerSecond());
+        double cadence = swingsPerSecond(weapon, context);
+        double dps = weapon.damagePerSecond(cadence);
         if (dps <= 0.0D) {
             return Double.POSITIVE_INFINITY;
         }
-        double killSeconds = context.targetHealth() / dps;
-        double closeSeconds = approachSeconds(context);
+        double killSeconds =
+                context.targetHealth() / (dps + arcDps(weapon, context));
+        double closeSeconds = approachSeconds(weapon, context);
         return killSeconds * context.incomingDps()
-                + (killSeconds + closeSeconds) * IMPATIENCE_DAMAGE_PER_SECOND;
+                + impatience(context, killSeconds + closeSeconds);
     }
 
     /**
@@ -160,8 +162,121 @@ public final class TradeCost {
         double exposedShare = keepsDistance(context)
                 ? reopenSeconds / cycleSeconds
                 : 1.0D;
-        return killSeconds * exposedShare * context.incomingDps()
-                + killSeconds * IMPATIENCE_DAMAGE_PER_SECOND;
+        // The shortfall scales the whole option, not only its delay. A quiver
+        // that cannot cover the field does not merely postpone the fight, it
+        // buys a worse version of it: the same crowd, closer, and now with
+        // nothing left to shoot. Applied to the delay alone this was a factor
+        // of one and a half against six zombies, which lost to the discount for
+        // already holding the bow.
+        return shortfall(weapon, context) * (
+                killSeconds * exposedShare * context.incomingDps()
+                        + impatience(context, killSeconds)
+        );
+    }
+
+    /**
+     * Damage a second the arc puts into everything that is not the target.
+     *
+     * <p>A sweeping weapon is paid once per body it reaches, so against a crowd
+     * a sword does several times the work its single-target rating admits to.
+     * That was missing entirely: melee was costed on what it does to the one
+     * she aimed at, which makes six zombies pressed together look like six
+     * separate problems instead of the one situation steel is best at.
+     *
+     * <p>Credited towards clearing the target rather than tracked separately,
+     * which is a deliberate simplification and slightly generous — the arc does
+     * not actually kill <em>this</em> one faster. What it does is end the fight
+     * sooner, and the fight ending sooner is what the cost is trying to
+     * express. Stated the honest way round: this is how much faster the
+     * problem in front of her goes away, not how fast one zombie dies.
+     *
+     * <p>Zero for anything that does not sweep, and zero when she is facing one
+     * thing — in both cases the arithmetic is exactly what it was.
+     */
+    /**
+     * What the time an option takes is worth, beyond the damage it eats.
+     *
+     * <p>Charged once per body still on the field. A flat rate says a second
+     * spent in front of six zombies costs what a second in front of one costs,
+     * and it does not: at the end of it all six are still alive and all six are
+     * closer. That flat rate is what put a bow in her hands against a pack —
+     * ten arrows spent two hundred ticks to deliver forty damage, and shooting
+     * priced cheaper only because it took no damage <em>while she was doing
+     * it</em>.
+     *
+     * <p>Counted, not taken from the incoming rate. A successful kite eats none
+     * of that damage and {@link #shootingCost} already discounts it by
+     * exposure, so charging it again here would be double counting — and it
+     * made a single zombie five blocks away enough to talk her out of the bow
+     * she should obviously be using. Against one of anything this is exactly
+     * the old flat rate.
+     */
+    private double impatience(EngagementContext context, double seconds) {
+        double crowd = Math.max(1.0D, context.crowding());
+        return seconds * IMPATIENCE_DAMAGE_PER_SECOND * crowd;
+    }
+
+    /**
+     * How much worse the delay is for a weapon that cannot finish the fight.
+     *
+     * <p>One when the ammunition covers the field, and it grows in proportion
+     * to how little of the field it covers. Ten arrows against six zombies can
+     * deliver perhaps seventy of the hundred and twenty blocks of health in
+     * front of her, so the quiver does not end the fight — it postpones the
+     * melee by ten seconds and arrives there with the same crowd, closer.
+     *
+     * <p>Charged against the delay rather than against the damage on purpose.
+     * Running dry is not dangerous in itself; what it costs is the time, and
+     * time is what the delay term already measures. Applied to the damage it
+     * would double-count exposure the exposure share already handles.
+     *
+     * <p>Melee reports unlimited and is unaffected, which is the whole point:
+     * this is the term that tells a bow from a blade when the fight is bigger
+     * than the quiver.
+     */
+    private double shortfall(WeaponCandidate weapon, EngagementContext context) {
+        double deliverable = weapon.deliverableDamage();
+        double field = context.fieldHealth();
+        if (!Double.isFinite(deliverable) || deliverable <= 0.0D
+                || field <= deliverable) {
+            return 1.0D;
+        }
+        return field / deliverable;
+    }
+
+    private double arcDps(WeaponCandidate weapon, EngagementContext context) {
+        double others = Math.max(0.0D, context.crowding() - 1.0D);
+        if (others <= 0.0D || weapon.arcDamage() <= 0.0D) {
+            return 0.0D;
+        }
+        return weapon.arcDamage() * others * swingsPerSecond(weapon, context);
+    }
+
+    /**
+     * How fast this weapon swings, asked of the weapon.
+     *
+     * <p>Her attack-speed attribute describes the item <em>in her hand</em>,
+     * and a bow applies no modifier to it — so while she held one, every melee
+     * candidate in her pack was priced at her bare 4.0 swings a second against
+     * an iron sword's real 1.6. Melee output was overstated by two and a half
+     * times, and every downstream comparison inherited it.
+     *
+     * <p>The domain suites alongside this one already state 1.6, so the two
+     * halves of the codebase disagreed about the same sword: the arithmetic was
+     * verified against the true rate and fed the inflated one.
+     *
+     * <p>It is also the only way an axe and a sword can be told apart. They
+     * differ almost entirely in this number — 0.9 against 1.6, paid for with
+     * damage — so a cadence taken from anywhere but the item makes one of them
+     * a mispriced copy of the other.
+     */
+    private double swingsPerSecond(
+            WeaponCandidate weapon,
+            EngagementContext context
+    ) {
+        return weapon.usesPerSecond() > 0.0D
+                ? weapon.usesPerSecond()
+                : context.meleeUsesPerSecond();
     }
 
     /**
@@ -237,8 +352,20 @@ public final class TradeCost {
     }
 
     /** Seconds spent walking into her own reach. */
-    private double approachSeconds(EngagementContext context) {
-        double gap = context.distance() - context.targetReach();
+    private double approachSeconds(
+            WeaponCandidate weapon,
+            EngagementContext context
+    ) {
+        // How far she has to walk to be able to swing, which is her own reach
+        // with this weapon — not the target's. Those differ, and the direction
+        // they differ in is the whole reason a long weapon is worth carrying:
+        // it stops her sooner, outside what is swinging back. Reading the
+        // target's reach here priced every blade as though she had to close to
+        // exactly the distance that lets it hit her.
+        double strike = weapon.reach() > 0.0D
+                ? weapon.reach()
+                : context.targetReach();
+        double gap = context.distance() - strike;
         if (gap <= 0.0D) {
             return 0.0D;
         }
