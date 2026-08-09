@@ -80,26 +80,26 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 - 饥饿与工具耐久策略属于纯领域策略，不接受实体、物品或能力对象。
 
 ### ai
+`ai` 一度是"原版 AI 优化"的家：动态活动半径、内置攻击目标预热、可达性缓存、拾取传感器
+替换，以及为它们服务的一整套移动协调（租约、权威矩阵、占用分级、fail-open）。**全部已
+移除。**
 
-- `MaidAiOptimizationApi`：服务端 AI 优化 tuning 与性能、动态范围、战斗反应指标入口；
-  `MaidAiTuning` 将 Forge 配置收敛为不可变稳定值，TLM adapter 不反向读取平台配置。
-- `PathReachabilityCache`：按女仆实例持有的固定容量可达结果缓存，不保存游戏对象或可变路径。
-- `OwnerMotionTracker` 与 `DynamicActivityRadiusPolicy`：以 20 tick 静止、3 tick 移动滞回计算
-  瞬时空闲/工作/战斗半径，统一上限 16——与感知半径一致；她只会走向已经注意到的东西，
-  比感知更宽的活动半径不会带来任何新目标，只会让她离主人更远。只持有内存状态，
-  不修改 TLM NBT 或持久化半径。
-- `CombatReactionPolicy` 与 `CombatThreatKind`：固定“女仆攻击者、主人攻击者、主人目标、
-  最近敌对实体”的排序，规定可见性、范围、扫描节流和候选上限，不涉及伤害或武器行为。
-- `MaidMovementCoordinationApi` 与 `MovementIntentLease`：为 TLM 内置移动写入提供短租约、
-  跨系统权威矩阵（紧急 > 硬承诺 > 主人命令 > 软/被动）和 Brain priority 决胜；
-  `BehaviorOccupancySnapshot` 将原版占用分为 IDLE/SOFT/HARD，注视等 `OWNER_COMMAND`
-  可干净抢占 SOFT。状态不持久化，也不包含 Minecraft 对象。
-- `OwnerFollowPolicy`：走向主人由 `follow_owner` 意图决定，`MaidFollowOwnerTask` 不再写入
-  移动目标，只保留距离兜底。`TELEPORT_DISTANCE` 固定为 24 格，不再由 `restrictRadius`
+移除的理由不是它们没用，而是它们只在本体的工作模式下生效——`isBuiltInTask` 门控——
+于是本模组在自己不负责的模式里改变了她的判断。哪个工作模式、哪个附属、哪个联动模组会
+因此出问题，本模组没有能力担保。删掉之后，自由模式之外的任何模式与未安装本模组时完全
+一致。
+
+协调层还有第二个理由：它存在是为了让本模组的移动写入不被本体的十几个行为抢走。自由模式
+现在一个本体决策行为都不注册，抢占者不存在了，整层随之失去意义——见
+`freedom/FreedomMovement`，两个写入者只需要一条规则（换气优先），不需要一套协议。
+
+剩下的：
+
+- `OwnerFollowPolicy`：落队兜底。`TELEPORT_DISTANCE` 固定 24 格，不由 `restrictRadius`
   推导，因此调整活动半径不会连带改变传送距离。它是唯一允许超过 16 的距离：牵引绳必须
   长于视野，否则一次发生在感知边缘的差事会在半路把她扯回去。溺水救援仍完全交给本体。
-- 性能 API 仍只降低原有判断成本；移动协调不接管 Brain 周期、Activity 或任务列表。
-  未知 Task、ExtraBrain 与自定义目标采用 fail-open，保留第三方写入并临时退出仲裁。
+- `MaidSeatAutonomyBridge`：自由模式下因跟随需要自主下乘，入口统一在 `canLeaveSeatState`
+  上判模式。
 
 ### 感知半径是行为的地基
 
@@ -120,7 +120,7 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 
 - `:features:ai:behavior` 是独立 Gradle 子模块，包边界为 `feature.behavior`，只保留原创
   陪伴行为的稳定事实/刺激/动作词表、传感器时序与刺激门面；它依赖编排模块，但不依赖
-  `:features:ai` 的原版 AI 优化实现。
+  `:features:ai` 的落队兜底与座位自主。
 - `MaidGazeRecallApi<O, M>` 是注视手势提交入口；`GazeGestureTracker` 实现两段式手势
   （注视令女仆回望，再指向附近地面才构成召唤），任何纯时长阈值都无法区分欣赏与召唤，
   这一性质由"注视 600 tick 不得触发"验证钉住。好感度、模式、距离和动作语义不再硬编码
@@ -132,11 +132,42 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
   询的距离因素。零食柜按实际库存计值（空柜为 0），掉落物广告带 TTL 并靠再次观察续期；
   容器同时广告 `open_container`，使"需走到方块"的查询不被地面食物挤占。
 - `FreedomMaidTask`（`tlm_companionship:freedom`）是本模组唯一的 TLM 工作项：
-  `createBrainTasks` 返回空列表，把行为决策完整交给陪伴编排；保留惊慌、进食与随机走动。
-  行为占用分类只在家园模式且身处限制区之外时才计 `HOME_RETURN`，在家不算被占用。
+  `createBrainTasks` 返回空列表，把行为决策完整交给陪伴编排。惊慌与随机走动的开关
+  现已关闭：它们是本体替她做的判断，而自由模式的 brain 由 `FreedomBrain` 重建，压根
+  不注册它们。进食开关保留，因为它在本体那侧门控的是"她能不能进食"这件事本身。
+  `FreedomOccupancy` 回答"有没有别的东西已经扣住她"（睡眠、拴绳、命令坐下、正在用物品、
+  家园模式且在限制区外）——只剩这一半，因为另一半（谁持有她的移动）在自由模式下没有
+  第二个竞争者了。在家不算被占用。
 - `AffordanceAdvertisement`/`AffordanceQuery` 与 `DefaultAffordanceIndex` 提供有 revision、
   TTL、top-K 和每 tick 检查预算的对象中心感知；零食柜、主人和座位由 TLM Provider
   在已加载世界事件上发布，查询绝不加载区块。
+- `domain/combat` 是平台中立的战斗决策：`ThreatSample`/`ThreatField` 把一群敌人聚合成
+  几个数，`EngagementRiskPolicy` 判断打不打，`TargetSelectionPolicy` 判断先打谁，
+  `WeaponSelectionPolicy` 判断用什么打。三者刻意分开——正在输掉的交换里仍可能有
+  恰好必须打断的那一个。
+- `ThreatSample.closingSpeed` 是**实测**的接近速率（adapter 用双方 `getDeltaMovement` 沿连线
+  投影，不读 `MOVEMENT_SPEED` 属性），`secondsToContact()` 由它得出，`ThreatField` 聚合为
+  `soonestContact`。属性说的是"能跑多快"，不是"正在跑多快"——被卡住、涉水或正在走开的
+  东西不该按满速计入。她自己的速度也计入，所以"我边退它边追"能算出净零。
+- 有了接触时间，武器选择才从"它现在打不打得到我"变成"它会不会在我准备好之前赶到"。
+  前者只能在事后翻面，于是她永远慢一个交换：拉弓拉到一半被贴上，那一箭必然作废。
+- 武器选择由 `TradeCost` 定价，单位是"预计挨的伤害"，与 `EngagementRiskPolicy` 同一种
+  货币，因此两个决策不会对同一场战斗持互相矛盾的前提。它**没有偏好顺序也没有阈值**：
+  贴脸拔刀是"挨打间隔短于一次拉弓"的后果，对空用弓是"挥砍够不到"的后果，被围拔刀是
+  "人多则间隔更短"的后果。新增考量应加进 `EngagementContext` 并进入定价，不要在选择处
+  补 if 分支——那正是被替换掉的那套东西。`WeaponCandidate.POWER_SCALE` 定义
+  `power ∈ [0,1]` 的含义，两个 adapter 共用；它曾在两处各写一份，必须同时改否则军械扫描
+  与能力评估会静默分歧。
+- `domain/perception/BearingField` 是**方位的聚合感知**：12 个 30° 扇区，每个记"能走多远"
+  与"最近一只多远"，通畅度取两者的 `min`。它替掉了三份各自为政的近似（后撤候选角、
+  距离倒数加权的人群方向、由搜索失败倒推的"退无可退"），并让同一份数据同时回答
+  "往哪撤""被围了没""是不是墙角"。两条硬性约束：**参与比较的量必须同单位**（第一版
+  拿"格"减"压力"，实测伤害翻倍），**报给上层的退路必须按人封顶而不是只按地形**
+  （地上没东西 ≠ 那块地能用；不封顶时实测 `escape 12.0` 一路后撤白挨三十点）。
+- `domain/combat/CombatBalance` 集中战斗的可调数值，`CombatPolicies.install` 是**唯一**
+  安装入口——三条策略此前各自持一份私有默认值，形式上可注入、事实上写死；分开安装
+  则可能出现"按新距离站位、按旧裕度判断风险"这种谁都没选过的组合。结构性常量
+  （扇区数、探测的格分辨率、优先级 band）**不进**配平：它们不是数值而是模型含义。
 - `AbilityDefinition`、`AbilityGrant` 与 `AbilityActivationRequest` 将授权、短期请求、
   冷却和执行态分离。`AbilityTemplateCompiler` 只把受支持模板展开为既有 Intent/Plan，
   不建立第二套执行器；Grant 通过 TLM TaskData 持久化。
@@ -252,8 +283,11 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 `adapters/tlm-<mc>-gecko<代际>` 负责：
 
 - `EntityMaid`、Brain/TaskData、TLM 事件和扩展点；
-- `ActivityRadiusBridge` 只改写 `getRestrictRadius()` 的瞬时返回值；`CombatReactionBridge`
-  在 Brain tick 前预热内置攻击任务的 `ATTACK_TARGET`，tick 后仅为实际战斗目标登记移动租约；
+- `MaidBrainFreedomIsolationMixin` 是自由模式与本体分道的**唯一**一处：在
+  `MaidBrain.registerBrainGoals` 的 HEAD 上分流，自由模式走 `FreedomBrain` 的保留清单，
+  其它模式立即 return、根本不进本模组的代码。换工作模式会整个重建 brain，所以切换即时
+  且可逆。它用 `require = 1`——描述符一旦对不上就拒绝启动，因为静默失效的形态是"自由
+  模式看起来在工作，实际拿到的是完整的本体 brain"，那是唯一从游戏里看不出来的失败；
 - Gecko、Bedrock、YSM 模型/渲染桥；
 - TLM/Gecko Mixin，且所有目标显式 `remap = false`；
 - advancement 的世界、战斗、成长 criterion 分别实现窄触发端口，不建立全能触发枢纽；
@@ -392,6 +426,17 @@ MixinGradle 对单个 source set 只可靠生成一份 refmap，因此 common �
 .\gradlew.bat --offline verifyVersionMatrix check verifyAll assemble
 ```
 
+战斗另有一类**活场景** GameTest（`gametest/combat/CombatScenarioGameTests`）：真实带 AI 的
+敌人、产线编排器，跑数百 tick 后按聚合量断言。它存在的理由是那几个缺陷没有一个能被单 tick
+决策测试问出来——它们活在跨 tick 的累积和真实地形里。
+
+（它原本还有第三个理由：**存在第二个移动写入者**。自由模式如今一个本体决策行为都不注册，
+那个竞争消失了，连同它暴露的一整类缺陷。）
+
+`CombatTrace` 逐 tick 记录距离、意图、手持、蓄力、移动目标、方位场和退路，成功与失败都
+打印。断言用占比而非瞬时极值——面对真实寻路的怪，极值会稳定地四次里失败一次，测的是
+噪声而不是行为。
+
 意图 AI 另有 `verifyIntentOrchestration` 与 `verifyIntentData` 两个纯 JVM 入口，覆盖
 Utility、确定性选择、承诺/滞回、硬中断、冷却、恢复状态机、Outcome 去重、Claim 代际、
 能力模板、学习边界、确定性竞标、目录代际、格式版本、内置资源编译和无效重载回退。
@@ -406,7 +451,7 @@ GameTest Server 继续验证注视、三秒指挥跟随、载具共乘、座位�
 
 GameTest 类由 Forge 按 `@GameTestHolder` 自动发现，不存在显式注册目录——先前的
 `GameTestCatalog` 正因让人误以为可以借注册控制测试集而被删除。测试按被验证的边界
-分包：`ai`（原版 AI 优化）、`behavior`（陪伴行为与仲裁）、`errand`（差事与归队）、
+分包：`ai`（落队兜底与座位自主）、`behavior`（陪伴行为）、`errand`（差事与归队）、
 `care`（成长、进度与状态反馈）、`interaction`（主人交互与按键指令）、`support`
 （夹具）。分包只服务于导航和目录密度，不参与发现。多元素场景统一通过
 `CompanionScene` 构建（多女仆、无主女仆、椅子、船、掉落物、交战目标），并遵守网格纪律：

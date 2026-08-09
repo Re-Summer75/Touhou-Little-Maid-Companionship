@@ -1,8 +1,12 @@
 package com.laixia.maidintelligence.gametest.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.EngagementRiskPolicy;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.RiskVerdict;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.CombatReadiness;
+import com.laixia.maidintelligence.gametest.support.CombatProbe;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
-import com.laixia.maidintelligence.feature.behavior.tlm.FreedomMaidTask;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.RangedWeaponRecognizer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.RetreatSpace;
@@ -110,22 +114,29 @@ public final class CombatEngagementGameTests {
     }
 
     /**
-     * 带着武器就不该惊慌，否则她会被自己的 Brain 定在原地。
+     * 逃跑归我们，不管她手上有没有东西。
      *
      * <p>{@code MaidPanicTask} 在"受伤或附近有敌人"时激活，并在激活瞬间抹掉
-     * WALK_TARGET 与 LOOK_TARGET。此前 enablePanic 恒为 true：战斗动作每 tick
-     * 写移动目标，惊慌每 tick 删掉它，于是一个拿着剑面对僵尸的女仆什么都不做。
-     * 这条断言把"武器"和"惊慌"钉成互斥。
+     * WALK_TARGET 与 LOOK_TARGET。它曾经恒开：战斗动作每 tick 写移动目标，
+     * 惊慌每 tick 删掉它，一个拿着剑面对僵尸的女仆什么都不做。当时的修法是让
+     * {@code enablePanic} 按背包里有没有武器来答，把两者钉成互斥。
+     *
+     * <p>那仍然是两套系统轮流上场。现在自由模式根本不注册惊慌，逃跑完全由
+     * 战斗意图决定——它只看敌对压力、不看有没有武器，而空手正是
+     * {@code EngagementRiskPolicy} 判 {@code WITHDRAW} 的情形。
+     *
+     * <p>所以断言从"武器与惊慌互斥"改成"惊慌恒关，且空手时风险判定仍然让她
+     * 离开"。后半句才是玩家真正在意的行为，前半句只是当时的实现手段。
      */
     @GameTest(templateNamespace = "minecraft", template = "empty")
-    public static void anArmedMaidDoesNotPanic(GameTestHelper helper) {
+    public static void fleeingIsOursArmedOrNot(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
         FreedomMaidTask task = new FreedomMaidTask();
 
-        helper.assertTrue(
+        helper.assertFalse(
                 task.enablePanic(maid),
-                "An unarmed maid should still flee"
+                "本体的惊慌还开着，它会每 tick 抹掉我们写的移动目标"
         );
 
         maid.getAvailableBackpackInv().setStackInSlot(
@@ -133,18 +144,25 @@ public final class CombatEngagementGameTests {
         );
         helper.assertFalse(
                 task.enablePanic(maid),
-                "An armed maid still panics, so panic will keep erasing the "
-                        + "movement target her fight depends on"
+                "带上武器之后本体惊慌又开了回来"
         );
 
-        // 空弓不是武器，所以不该因为背着它就不逃。
+        // 空手遇敌：判定必须是"离开"，否则拿掉本体惊慌就等于让她站着挨打。
         maid.getAvailableBackpackInv().setStackInSlot(0, ItemStack.EMPTY);
-        maid.getAvailableBackpackInv().setStackInSlot(
-                1, new ItemStack(Items.BOW)
+        Zombie threat = seeHostile(helper, maid, 3.0D);
+        helper.assertTrue(
+                threat.isAlive(),
+                "夹具没有放出敌人，这条断言什么都没验证到"
         );
         helper.assertTrue(
-                task.enablePanic(maid),
-                "A bow with no arrows counted as something to fight with"
+                RiskVerdict.WITHDRAW == EngagementRiskPolicy.instance().assess(
+                        CombatProbe.field(maid, CombatProbe.scan(maid)),
+                        CombatProbe.capability(maid),
+                        CombatReadiness.healthFraction(maid),
+                        true
+                ),
+                "空手面对敌人时判定不是 WITHDRAW；本体惊慌已经拿掉，"
+                        + "这意味着没有任何东西会让她离开"
         );
         helper.succeed();
     }
@@ -180,7 +198,7 @@ public final class CombatEngagementGameTests {
         );
 
         // 看得见的时候：十格外用弓，正合期望射程，她站定不动。
-        combat.execute(maid, 0);
+        combat.execute(maid);
         helper.assertFalse(
                 maid.getBrain()
                         .getMemory(MemoryModuleType.WALK_TARGET)
@@ -196,7 +214,7 @@ public final class CombatEngagementGameTests {
                 "Fixture failed to block the line of sight"
         );
 
-        combat.execute(maid, 1);
+        combat.execute(maid);
         helper.assertTrue(
                 maid.getBrain()
                         .getMemory(MemoryModuleType.WALK_TARGET)
@@ -238,7 +256,7 @@ public final class CombatEngagementGameTests {
         new TlmCombatAction(
                 new TlmThreatScanner(),
                 new TlmWeaponScanner(RangedWeaponRecognizer.NONE)
-        ).execute(maid, 0);
+        ).execute(maid);
 
         helper.assertTrue(
                 maid.getMainHandItem().is(Items.IRON_SWORD),

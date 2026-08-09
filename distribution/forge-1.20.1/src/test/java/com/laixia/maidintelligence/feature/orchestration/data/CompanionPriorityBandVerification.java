@@ -169,7 +169,7 @@ public final class CompanionPriorityBandVerification {
                             + "full-weight lone consideration has collapsed it"
             );
             for (String rival : new String[]{
-                    "post_task_return", "wander_return", "keep_company"
+                    "keep_company"
             }) {
                 double other = score(
                         intents.get(rival),
@@ -205,16 +205,6 @@ public final class CompanionPriorityBandVerification {
                             + " blocks: follow_owner="
                             + String.format("%.3f", score(
                                     intents.get("follow_owner"),
-                                    facts(60.0D, 0.0D, 0.0D, distance)
-                            ))
-                            + " post_task_return="
-                            + String.format("%.3f", score(
-                                    intents.get("post_task_return"),
-                                    facts(60.0D, 0.0D, 0.0D, distance)
-                            ))
-                            + " wander_return="
-                            + String.format("%.3f", score(
-                                    intents.get("wander_return"),
                                     facts(60.0D, 0.0D, 0.0D, distance)
                             ))
                             + " keep_company="
@@ -438,7 +428,7 @@ public final class CompanionPriorityBandVerification {
             intents.put(name, BundledIntentResources.intent(name));
         }
         require(
-                intents.size() >= 15,
+                intents.size() >= 13,
                 "Only found " + intents.size() + " bundled intents"
         );
         return intents;

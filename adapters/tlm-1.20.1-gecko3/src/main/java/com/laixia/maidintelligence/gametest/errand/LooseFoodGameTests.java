@@ -1,6 +1,8 @@
 package com.laixia.maidintelligence.gametest.errand;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
 import com.laixia.maidintelligence.feature.orchestration.domain.ActionResult;
 import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentActions;
@@ -206,6 +208,9 @@ public final class LooseFoodGameTests {
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, x, y, z));
         maid.setTame(true);
+        maid.setTask(
+                TaskManager.findTask(FreedomMaidTask.UID).orElseThrow()
+        );
         maid.setHomeModeEnable(false);
         helper.getLevel().addFreshEntity(maid);
         return maid;

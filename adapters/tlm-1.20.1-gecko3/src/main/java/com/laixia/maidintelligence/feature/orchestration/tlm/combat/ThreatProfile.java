@@ -8,6 +8,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.monster.RangedAttackMob;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Asks a hostile about itself, instead of assuming.
@@ -121,6 +122,46 @@ public final class ThreatProfile {
                 MINIMUM_MELEE_REACH,
                 hostile.getBbWidth() + against.getBbWidth()
         );
+    }
+
+    /**
+     * How fast the gap between the two of them is actually shutting.
+     *
+     * <p>Both bodies count: something walking at her while she backs away at the
+     * same speed is not arriving, and neither entity's movement-speed attribute
+     * can express that. Reading real motion is also what stops a creature slowed
+     * by water, cobwebs, an effect or plain bad pathing from being treated as
+     * though it were sprinting — an attribute says what it could do, not what it
+     * is doing.
+     *
+     * <p>Blocks a second, negative when the gap is opening.
+     */
+    public static double closingSpeed(EntityMaid maid, LivingEntity hostile) {
+        Vec3 gap = maid.position().subtract(hostile.position());
+        if (gap.lengthSqr() < 1.0E-4D) {
+            return 0.0D;
+        }
+        return hostile.getDeltaMovement()
+                .subtract(maid.getDeltaMovement())
+                .dot(gap.normalize()) * 20.0D;
+    }
+
+    /**
+     * Seconds before it could strike her, at the speed it is really moving.
+     *
+     * <p>Infinite when it is not closing, which is the honest answer rather than
+     * a very large number, and keeps every comparison against it well defined.
+     */
+    public static double secondsToContact(
+            EntityMaid maid,
+            LivingEntity hostile
+    ) {
+        double gap = maid.distanceTo(hostile) - reach(hostile, maid);
+        if (gap <= 0.0D) {
+            return 0.0D;
+        }
+        double closing = closingSpeed(maid, hostile);
+        return closing <= 0.0D ? Double.POSITIVE_INFINITY : gap / closing;
     }
 
     /** What one of its hits costs her, from its own attribute. */

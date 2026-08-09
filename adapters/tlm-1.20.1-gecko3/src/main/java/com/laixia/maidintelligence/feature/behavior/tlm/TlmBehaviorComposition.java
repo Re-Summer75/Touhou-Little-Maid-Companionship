@@ -19,7 +19,6 @@ import com.laixia.maidintelligence.feature.orchestration.tlm.TlmCompanionMemoryP
 import com.laixia.maidintelligence.feature.orchestration.tlm.TlmCoordinationClaims;
 import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentActions;
 import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentContext;
-import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentObserver;
 import com.laixia.maidintelligence.feature.orchestration.tlm.shadow.TlmMaidIntentShadowActions;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.feature.status.tlm.MaidMealAccess;
@@ -76,7 +75,6 @@ public record TlmBehaviorComposition(
         Objects.requireNonNull(catalog, "catalog");
         Objects.requireNonNull(abilityCatalog, "abilityCatalog");
 
-        TlmMaidIntentObserver observer = new TlmMaidIntentObserver();
         AtomicReference<MaidIntentApi<EntityMaid>> intentReference =
                 new AtomicReference<>();
         MaidAbilityApi<EntityMaid> abilities =
@@ -110,7 +108,6 @@ public record TlmBehaviorComposition(
         TlmMaidIntentContext context =
                 new TlmMaidIntentContext(
                         status,
-                        observer,
                         snackCabinetMeals,
                         perception
                 );
@@ -154,7 +151,6 @@ public record TlmBehaviorComposition(
         intentReference.set(intents);
         TlmDeployBoatAutonomy boatAutonomy =
                 new TlmDeployBoatAutonomy(abilities);
-        observer.bind(intents);
         MaidGazeRecallApi<Player, EntityMaid> gazeRecall =
                 new TlmMaidGazeRecallService(intents);
         OwnerGazeRecallHandler gazeHandler =
@@ -170,7 +166,6 @@ public record TlmBehaviorComposition(
                 context,
                 new BehaviorTlmModule(
                         intents,
-                        observer,
                         boatAutonomy
                 )
         );

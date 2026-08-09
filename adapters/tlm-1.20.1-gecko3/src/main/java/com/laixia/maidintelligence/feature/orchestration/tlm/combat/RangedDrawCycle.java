@@ -1,7 +1,9 @@
 package com.laixia.maidintelligence.feature.orchestration.tlm.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.behavior.domain.combat.WeaponKind;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponKind;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
@@ -45,6 +47,94 @@ public final class RangedDrawCycle {
     private RangedDrawCycle() {
     }
 
+    /**
+     * Draw, hold, release — the same three steps a player performs.
+     *
+     * <p>Firing straight from {@code performRangedAttack} does launch an arrow,
+     * but it is not shooting: the bow never enters its using state, so it never
+     * bends on screen, and the shot carries a made-up power instead of the one
+     * her draw earned. Both are visible — arrows leaving a slack bow at uniform
+     * speed.
+     *
+     * <p>The draw itself is entity state, so it survives between ticks without
+     * the caller having to remember anything: the bow is either being held or it
+     * is not, and how long for is {@code getTicksUsingItem}.
+     */
+    public static void shoot(
+            EntityMaid maid,
+            LivingEntity victim,
+            TlmWeaponScanner weapons
+    ) {
+        maid.getLookControl().setLookAt(
+                victim.getX(), victim.getEyeY(), victim.getZ()
+        );
+        if (!maid.hasLineOfSight(victim)) {
+            // Nothing to aim at any more; relax rather than hold a full draw.
+            if (maid.isUsingItem()) {
+                maid.stopUsingItem();
+            }
+            return;
+        }
+        if (!maid.isUsingItem()) {
+            maid.setSwingingArms(true);
+            maid.startUsingItem(InteractionHand.MAIN_HAND);
+            return;
+        }
+        release(maid, victim, weapons);
+    }
+
+    /**
+     * Let a completed draw go, and leave an unfinished one alone.
+     *
+     * <p>Called from every path that would otherwise abandon a draw. The rule it
+     * enforces is that a draw only ever moves forward: it advances, or it becomes
+     * an arrow. Nothing discards one except the fight itself ending.
+     *
+     * <p>That rule is not a nicety. A bow reaches full at twenty ticks, so a draw
+     * reset even once every nineteen ticks produces no arrows at all, forever,
+     * while looking exactly like a maid aiming carefully.
+     */
+    public static void releaseOrKeepDraw(
+            EntityMaid maid,
+            LivingEntity victim,
+            TlmWeaponScanner weapons
+    ) {
+        if (!maid.isUsingItem()) {
+            return;
+        }
+        if (victim == null || !maid.hasLineOfSight(victim)) {
+            maid.stopUsingItem();
+            return;
+        }
+        release(maid, victim, weapons);
+    }
+
+    /** Fire if the weapon says it is ready; otherwise keep drawing. */
+    private static void release(
+            EntityMaid maid,
+            LivingEntity victim,
+            TlmWeaponScanner weapons
+    ) {
+        ItemStack weapon = maid.getMainHandItem();
+        if (!readyToRelease(
+                maid,
+                weapon,
+                weapons.classifyFor(weapon),
+                weapons.externalRecognizer()
+        )) {
+            return;
+        }
+        // Power is read before letting go: releasing clears the draw.
+        float power = releasePower(maid, weapon);
+        // releaseUsingItem, not stopUsingItem. Only the former runs the item's
+        // own releaseUsing hook, and for a crossbow that hook *is* the loading
+        // step — stopping instead threw away the draw and left the weapon empty,
+        // so the shot that followed had nothing to fire. A bow does not notice
+        // the difference because the host builds its arrow itself.
+        maid.releaseUsingItem();
+        maid.performRangedAttack(victim, power);
+    }
+
     /** Whether the weapon in her hands has finished whatever it was doing. */
     public static boolean readyToRelease(
             EntityMaid maid,
@@ -71,10 +161,20 @@ public final class RangedDrawCycle {
             return true;
         }
         if (duration < HELD_INDEFINITELY_TICKS) {
-            // The item stated how long it takes; spending that is the whole
-            // answer. Asking it beats recomputing a vanilla crossbow's timing
-            // and applying it to something that is not one.
-            return maid.getUseItemRemainingTicks() <= 0;
+            // One tick early, and that tick is the whole difference.
+            //
+            // Waiting for the counter to reach zero looks right and never
+            // fires: on the tick it reaches zero the host has already called
+            // completeUsingItem, and a crossbow loads in releaseUsing — the
+            // "let go" path — not in finishUsingItem. Measured, the counter ran
+            // 28 → 0 and back to 28 forever, isCharged false the whole time,
+            // every shot spent on an unloaded weapon.
+            //
+            // Vanilla's own bolt is ready three ticks before the duration ends
+            // (charge duration plus the release window), so releasing at one
+            // remaining is inside the window for anything shaped like a
+            // crossbow and still spends the full stated time for anything else.
+            return maid.getUseItemRemainingTicks() <= 1;
         }
         return BowItem.getPowerForTime(drawn) >= 1.0F;
     }

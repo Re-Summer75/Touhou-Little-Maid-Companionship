@@ -14,6 +14,8 @@ package com.laixia.maidintelligence.feature.behavior.domain.combat.threat;
  * @param attackPeriod ticks between its attacks
  * @param health       what remains to be chewed through
  * @param airborne     whether it is out of reach of a swung sword
+ * @param closingSpeed blocks a second it is eating the gap at, negative if it
+ *                     is opening one
  * @param relation     what it is currently doing about her or her owner
  */
 public record ThreatSample(
@@ -23,6 +25,7 @@ public record ThreatSample(
         int attackPeriod,
         double health,
         boolean airborne,
+        double closingSpeed,
         ThreatRelation relation
 ) {
     public ThreatSample {
@@ -45,7 +48,47 @@ public record ThreatSample(
      * becomes a single number.
      */
     public double damagePerSecond() {
-        return strikeDamage * 20.0D / attackPeriod;
+        return strikeDamage * hitsPerSecond();
+    }
+
+    /**
+     * How often it connects, separately from how hard.
+     *
+     * <p>Damage per second cannot answer everything the fight needs to know:
+     * one heavy blow every three seconds and three light ones a second can add
+     * up to the same rate, and they are not the same to a maid drawing a bow.
+     * A draw survives the gap between hits or it does not, and that depends on
+     * the cadence alone.
+     */
+    public double hitsPerSecond() {
+        return 20.0D / attackPeriod;
+    }
+
+    /**
+     * Seconds before it can hit her, at the speed it is actually moving.
+     *
+     * <p>The difference between knowing where something is and knowing where it
+     * is going. "Is it in reach" can only ever be answered after the fact, so a
+     * decision built on it is always one exchange late: she draws a bow at a
+     * zombie six blocks away, and by the time the answer flips to yes the
+     * zombie is already hitting her and the draw is wasted. Asking when it
+     * arrives instead lets her draw the sword before it gets there.
+     *
+     * <p>Measured, not assumed. A creature's movement-speed attribute says what
+     * it could do, not what it is doing — something walking away, stuck on a
+     * fence or wading through water is not arriving on schedule, and the
+     * attribute cannot tell. Infinite when it is not closing at all, which is
+     * the honest answer and keeps every comparison below well defined.
+     */
+    public double secondsToContact() {
+        double gap = distance - reach;
+        if (gap <= 0.0D) {
+            return 0.0D;
+        }
+        if (closingSpeed <= 0.0D) {
+            return Double.POSITIVE_INFINITY;
+        }
+        return gap / closingSpeed;
     }
 
     /**

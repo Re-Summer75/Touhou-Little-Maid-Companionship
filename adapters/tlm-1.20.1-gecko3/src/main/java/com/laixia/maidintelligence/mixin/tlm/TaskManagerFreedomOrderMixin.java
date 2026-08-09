@@ -3,7 +3,7 @@ package com.laixia.maidintelligence.mixin.tlm;
 import com.github.tartaricacid.touhoulittlemaid.api.task.IMaidTask;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
-import com.laixia.maidintelligence.feature.behavior.tlm.FreedomMaidTask;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;

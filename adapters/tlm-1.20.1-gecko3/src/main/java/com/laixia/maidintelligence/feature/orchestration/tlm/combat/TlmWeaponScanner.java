@@ -1,8 +1,8 @@
 package com.laixia.maidintelligence.feature.orchestration.tlm.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.behavior.domain.combat.WeaponCandidate;
-import com.laixia.maidintelligence.feature.behavior.domain.combat.WeaponKind;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponCandidate;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponKind;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -33,15 +33,6 @@ import java.util.Objects;
  * reason to keep her distance.
  */
 public final class TlmWeaponScanner {
-    /**
-     * Divisor turning attack damage into {@code [0,1]}.
-     *
-     * <p>A netherite sword sits near 8 and no vanilla weapon reaches 12, so
-     * this keeps ordinary weapons well inside the range while leaving headroom
-     * for modded ones rather than clipping them all to 1.0.
-     */
-    private static final double MELEE_DAMAGE_SCALE = 12.0D;
-
     // Fixed ratings for vanilla ranged weapons, placed against melee by the
     // damage a competent shot actually lands rather than by the tooltip.
     private static final double BOW_POWER = 0.65D;
@@ -151,9 +142,20 @@ public final class TlmWeaponScanner {
         return meleeDamage(stack) > 0.0D ? WeaponKind.MELEE : null;
     }
 
+    /**
+     * How strong this stack is, on the shared {@code [0,1]} scale.
+     *
+     * <p>Zero for anything she would not fight with, so a caller comparing
+     * candidates never has to ask whether it is a weapon first.
+     */
+    public double powerOf(ItemStack stack) {
+        WeaponKind kind = classify(stack);
+        return kind == null ? 0.0D : power(stack, kind);
+    }
+
     private double power(ItemStack stack, WeaponKind kind) {
         double raw = switch (kind) {
-            case MELEE -> meleeDamage(stack) / MELEE_DAMAGE_SCALE;
+            case MELEE -> meleeDamage(stack) / WeaponCandidate.POWER_SCALE;
             case BOW -> BOW_POWER * projectileBonus(stack);
             case CROSSBOW -> CROSSBOW_POWER * projectileBonus(stack);
             case THROWN -> stack.getItem() instanceof TridentItem
@@ -189,18 +191,26 @@ public final class TlmWeaponScanner {
     }
 
     /**
-     * Whether this exact stack could fire right now.
+     * Whether this exact stack could be fought with right now.
      *
-     * <p>Asked of what is in her hand rather than of what was chosen. The two
-     * are not the same stack: a swap is refused while she is drawing, so a
-     * decision to use one weapon can coexist with another still being held —
-     * and drawing is performed on whatever is held. Without this the bow she
-     * emptied is still drawn, over and over, because the arsenal scan correctly
-     * says a different weapon is the one to use.
+     * <p>Asked of a stack rather than of a {@link WeaponCandidate}, because the
+     * two drift apart: the arsenal is scanned once a tick while her hand can
+     * change under a swap, and a swap is refused mid-draw. So "the weapon the
+     * decision chose" and "the weapon she is holding" are different questions,
+     * and every path that actually swings or shoots has to ask the second one.
+     *
+     * <p>Ammunition is the whole of the difference for ranged weapons and no
+     * part of it for melee, which is why one method answers both: a sword is
+     * usable whenever it is a sword, and a bow only when something can leave it.
      */
+    public boolean isUsable(EntityMaid maid, ItemStack stack) {
+        WeaponKind kind = classify(stack);
+        return kind != null && hasAmmunition(maid, stack, kind);
+    }
+
+    /** The same question, named for the ranged path that reads best that way. */
     public boolean canFire(EntityMaid maid, ItemStack weapon) {
-        WeaponKind kind = classify(weapon);
-        return kind != null && hasAmmunition(maid, weapon, kind);
+        return isUsable(maid, weapon);
     }
 
     private boolean hasAmmunition(

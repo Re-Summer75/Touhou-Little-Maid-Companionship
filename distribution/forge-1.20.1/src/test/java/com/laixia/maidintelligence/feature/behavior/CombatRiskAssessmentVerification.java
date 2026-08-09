@@ -18,8 +18,11 @@ import java.util.List;
  */
 public final class CombatRiskAssessmentVerification {
     private static final EngagementRiskPolicy POLICY =
-            EngagementRiskPolicy.INSTANCE;
+            EngagementRiskPolicy.instance();
     private static final double MELEE_REACH = 3.0D;
+
+    /** 普通怪走向她的速度，约等于僵尸的步行速度。 */
+    private static final double CLOSING_SPEED = 1.0D;
 
     private CombatRiskAssessmentVerification() {
     }
@@ -31,6 +34,8 @@ public final class CombatRiskAssessmentVerification {
         verifiesSameCrowdFlipsWithHerGear();
         verifiesDensityDecidesNotHeadcount();
         verifiesRangedAnswerNeedsThemToBeMelee();
+        verifiesNowhereToGoIsNotSkirmishing();
+        verifiesOneHeavyBlowDemandsMoreRoom();
         verifiesWoundedMaidDeclinesAWinnableTrade();
         verifiesAnOrdinarySwordFightIsWorthTaking();
         verifiesHerOwnOutputIsNotUnderstated();
@@ -91,11 +96,11 @@ public final class CombatRiskAssessmentVerification {
                 "Hostiles closing in were not counted before they arrived"
         );
         require(
-                POLICY.assess(distant, capability, 1.0D) == RiskVerdict.ENGAGE,
+                POLICY.assess(distant, capability, 1.0D, true) == RiskVerdict.ENGAGE,
                 "She declined a single zombie because of three far-off ones"
         );
         require(
-                POLICY.assess(closing, capability, 1.0D) != RiskVerdict.ENGAGE,
+                POLICY.assess(closing, capability, 1.0D, true) != RiskVerdict.ENGAGE,
                 "She committed to a fight three more were about to join"
         );
     }
@@ -110,14 +115,14 @@ public final class CombatRiskAssessmentVerification {
         CombatCapability geared =
                 new CombatCapability(120.0D, 14.0D, 0.0D, MELEE_REACH);
         require(
-                POLICY.assess(crowd, geared, 1.0D) == RiskVerdict.ENGAGE,
+                POLICY.assess(crowd, geared, 1.0D, true) == RiskVerdict.ENGAGE,
                 "A well equipped maid refused a fight she wins comfortably"
         );
 
         CombatCapability flimsy =
                 new CombatCapability(20.0D, 1.5D, 0.0D, MELEE_REACH);
         require(
-                POLICY.assess(crowd, flimsy, 1.0D) != RiskVerdict.ENGAGE,
+                POLICY.assess(crowd, flimsy, 1.0D, true) != RiskVerdict.ENGAGE,
                 "An underequipped maid walked into a fight she loses"
         );
     }
@@ -146,7 +151,7 @@ public final class CombatRiskAssessmentVerification {
                 MELEE_REACH
         );
         require(
-                POLICY.assess(pair, IRON_SWORD, 1.0D) == RiskVerdict.ENGAGE,
+                POLICY.assess(pair, IRON_SWORD, 1.0D, true) == RiskVerdict.ENGAGE,
                 "Two zombies made an iron-sword maid turn and run, which is "
                         + "the retreat-instead-of-swing the players saw"
         );
@@ -171,12 +176,12 @@ public final class CombatRiskAssessmentVerification {
                 MELEE_REACH
         );
         require(
-                POLICY.assess(pair, understated, 1.0D) != RiskVerdict.ENGAGE,
+                POLICY.assess(pair, understated, 1.0D, true) != RiskVerdict.ENGAGE,
                 "The understated maid was still told to engage, so this test "
                         + "cannot tell the two apart"
         );
         require(
-                POLICY.assess(pair, IRON_SWORD, 1.0D) == RiskVerdict.ENGAGE,
+                POLICY.assess(pair, IRON_SWORD, 1.0D, true) == RiskVerdict.ENGAGE,
                 "Rated at her real swing speed she still refused a fight she "
                         + "wins comfortably"
         );
@@ -213,7 +218,7 @@ public final class CombatRiskAssessmentVerification {
                 40.0D, IRON_SWORD.meleeDps(), 0.0D, MELEE_REACH
         );
         require(
-                POLICY.assess(crowd, armoured, 1.0D) != RiskVerdict.ENGAGE,
+                POLICY.assess(crowd, armoured, 1.0D, true) != RiskVerdict.ENGAGE,
                 "In diamond she waded into four zombies at once, which is the "
                         + "stand-and-die the players watched"
         );
@@ -222,7 +227,7 @@ public final class CombatRiskAssessmentVerification {
                 List.of(zombie(1.5D)), MELEE_REACH
         );
         require(
-                POLICY.assess(alone, armoured, 1.0D) == RiskVerdict.ENGAGE,
+                POLICY.assess(alone, armoured, 1.0D, true) == RiskVerdict.ENGAGE,
                 "The same maid refused a single zombie, so this is no longer "
                         + "caution, it is paralysis"
         );
@@ -239,7 +244,7 @@ public final class CombatRiskAssessmentVerification {
         CombatCapability sword =
                 new CombatCapability(20.0D, 6.0D, 0.0D, MELEE_REACH);
         require(
-                POLICY.assess(swarm, sword, 1.0D) != RiskVerdict.ENGAGE,
+                POLICY.assess(swarm, sword, 1.0D, true) != RiskVerdict.ENGAGE,
                 "She waded into six zombies in a plain apron"
         );
     }
@@ -272,11 +277,11 @@ public final class CombatRiskAssessmentVerification {
                 "Packing them together did not raise the converging count"
         );
         require(
-                POLICY.assess(spread, capability, 1.0D) == RiskVerdict.ENGAGE,
+                POLICY.assess(spread, capability, 1.0D, true) == RiskVerdict.ENGAGE,
                 "She refused hostiles that arrive one at a time"
         );
         require(
-                POLICY.assess(packed, capability, 1.0D) != RiskVerdict.ENGAGE,
+                POLICY.assess(packed, capability, 1.0D, true) != RiskVerdict.ENGAGE,
                 "She charged five hostiles that all reach her at once"
         );
     }
@@ -291,7 +296,7 @@ public final class CombatRiskAssessmentVerification {
                 MELEE_REACH
         );
         require(
-                POLICY.assess(melee, archer, 1.0D) == RiskVerdict.SKIRMISH,
+                POLICY.assess(melee, archer, 1.0D, true) == RiskVerdict.SKIRMISH,
                 "She stood and traded instead of backing off and shooting"
         );
 
@@ -300,8 +305,83 @@ public final class CombatRiskAssessmentVerification {
                 MELEE_REACH
         );
         require(
-                POLICY.assess(shooters, archer, 1.0D) == RiskVerdict.WITHDRAW,
+                POLICY.assess(shooters, archer, 1.0D, true) == RiskVerdict.WITHDRAW,
                 "She kept her distance from things that shoot back"
+        );
+    }
+
+    /**
+     * 没有可退的地面时，"保持距离"不是计划，是站着不动的另一种说法。
+     *
+     * <p>同一群敌人、同一套装备，只有身后有没有地这一处不同。玩家看到的是
+     * 她在墙角举着弓一步不挪，被贴脸打死——裁决说的是"拉开打"，而拉开这件事
+     * 在那个位置根本不存在，于是她既不后退也不换近战。
+     */
+    private static void verifiesNowhereToGoIsNotSkirmishing() {
+        CombatCapability archer =
+                new CombatCapability(20.0D, 1.0D, 5.0D, MELEE_REACH);
+        ThreatField melee = ThreatField.of(
+                List.of(zombie(2.0D), zombie(2.0D), zombie(2.0D)),
+                MELEE_REACH
+        );
+        require(
+                POLICY.assess(melee, archer, 1.0D, true) == RiskVerdict.SKIRMISH,
+                "夹具不成立：有地可退时她本该拉开打"
+        );
+        require(
+                POLICY.assess(melee, archer, 1.0D, false)
+                        == RiskVerdict.WITHDRAW,
+                "退无可退时她仍被告知保持距离，那等于原地挨打"
+        );
+    }
+
+    /**
+     * 打得重的敌人要用更大的余量，哪怕期望值算得过来。
+     *
+     * <p>这条以上的全部算术都是期望值，而期望值分不清"慢慢输"和"突然死"。
+     * 每半秒三点和每两秒十三点是同一个 DPS，对二十点血的女仆来说前者是一场
+     * 仗、后者是两次失误就结束。她正是按这个理由被判去和卫道士拉扯，实测里
+     * 只要有一秒寻路不顺就是一具尸体。
+     *
+     * <p>两头都断言：重击者要收紧，普通怪不能被连累——对僵尸畏首畏尾是这套
+     * 策略此前专门修过的毛病。
+     */
+    private static void verifiesOneHeavyBlowDemandsMoreRoom() {
+        // 挑在临界处：这一身装备下，均匀挨打刚好还打得过，于是"单击轻重"是
+        // 两个结论之间唯一的差别。放在压倒性的一边或另一边，两者都会给出同样
+        // 的答案，这条断言就什么也没说。
+        CombatCapability capability =
+                new CombatCapability(20.0D, 4.0D, 0.0D, MELEE_REACH);
+
+        // 每秒十三点，一击去掉她大半条命。
+        ThreatField heavy = ThreatField.of(
+                List.of(new ThreatSample(
+                        2.0D, 13.0D, 2.5D, 20, 20.0D, false, CLOSING_SPEED,
+                        ThreatRelation.UNENGAGED
+                )),
+                MELEE_REACH
+        );
+        // 每四分之一秒三点二五：DPS 完全相同，单击只有她血量的六分之一。
+        ThreatField steady = ThreatField.of(
+                List.of(new ThreatSample(
+                        2.0D, 3.25D, 2.5D, 5, 20.0D, false, CLOSING_SPEED,
+                        ThreatRelation.UNENGAGED
+                )),
+                MELEE_REACH
+        );
+        require(
+                Math.abs(heavy.incomingDps() - steady.incomingDps()) < 0.01D,
+                "夹具不成立：两者的 DPS 必须相同，否则测的是伤害不是单击"
+        );
+        require(
+                POLICY.assess(steady, capability, 1.0D, true)
+                        == RiskVerdict.ENGAGE,
+                "均匀挨打的那一场她都不敢打，那这条测的不是单击轻重"
+        );
+        require(
+                POLICY.assess(heavy, capability, 1.0D, true)
+                        != RiskVerdict.ENGAGE,
+                "同样的 DPS，一击去掉她大半条命，她还是照打不误"
         );
     }
 
@@ -311,11 +391,11 @@ public final class CombatRiskAssessmentVerification {
         CombatCapability capability =
                 new CombatCapability(60.0D, 10.0D, 0.0D, MELEE_REACH);
         require(
-                POLICY.assess(one, capability, 1.0D) == RiskVerdict.ENGAGE,
+                POLICY.assess(one, capability, 1.0D, true) == RiskVerdict.ENGAGE,
                 "A healthy maid declined an easy fight"
         );
         require(
-                POLICY.assess(one, capability, 0.1D) != RiskVerdict.ENGAGE,
+                POLICY.assess(one, capability, 0.1D, true) != RiskVerdict.ENGAGE,
                 "A maid on her last hearts took the same fight"
         );
     }
@@ -325,11 +405,11 @@ public final class CombatRiskAssessmentVerification {
         CombatCapability bare =
                 new CombatCapability(100.0D, 0.0D, 0.0D, MELEE_REACH);
         require(
-                POLICY.assess(one, bare, 1.0D) == RiskVerdict.WITHDRAW,
+                POLICY.assess(one, bare, 1.0D, true) == RiskVerdict.WITHDRAW,
                 "She punched a hostile with nothing in her hands"
         );
         require(
-                POLICY.assess(ThreatField.EMPTY, bare, 1.0D)
+                POLICY.assess(ThreatField.EMPTY, bare, 1.0D, true)
                         == RiskVerdict.STAND_DOWN,
                 "With nothing to fight she was still told to withdraw"
         );
@@ -387,7 +467,7 @@ public final class CombatRiskAssessmentVerification {
             ThreatRelation relation
     ) {
         return new ThreatSample(
-                distance, 4.0D, 2.5D, 20, 20.0D, false, relation
+                distance, 4.0D, 2.5D, 20, 20.0D, false, CLOSING_SPEED, relation
         );
     }
 
@@ -401,7 +481,7 @@ public final class CombatRiskAssessmentVerification {
             ThreatRelation relation
     ) {
         return new ThreatSample(
-                distance, 3.0D, 16.0D, 30, 20.0D, false, relation
+                distance, 3.0D, 16.0D, 30, 20.0D, false, CLOSING_SPEED, relation
         );
     }
 

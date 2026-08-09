@@ -62,29 +62,11 @@ public final class CompanionIntentIds {
             id("fact/work_target_present");
     public static final OrchestrationId USING_ITEM =
             id("fact/using_item");
-    public static final OrchestrationId BUILT_IN_TASK =
-            id("fact/built_in_task");
-    public static final OrchestrationId MOVEMENT_HARD_BLOCKED =
-            id("fact/movement_hard_blocked");
-    public static final OrchestrationId WORK_RELEASE_AGE =
-            id("fact/work_release_age");
-    public static final OrchestrationId MOVEMENT_LEASE_ACTIVE =
-            id("fact/movement_lease_active");
-    public static final OrchestrationId MOVEMENT_LEASE_PRIORITY =
-            id("fact/movement_lease_priority");
-    public static final OrchestrationId MOVEMENT_FAIL_OPEN =
-            id("fact/movement_fail_open");
     public static final OrchestrationId BEHAVIOR_OCCUPANCY_LEVEL =
             id("fact/behavior_occupancy_level");
-    public static final OrchestrationId BEHAVIOR_OCCUPANCY_REASON =
-            id("fact/behavior_occupancy_reason");
 
     public static final OrchestrationId GAZE_RECALL =
             id("signal/gaze_recall");
-    public static final OrchestrationId POST_TASK_RETURN =
-            id("signal/post_task_return");
-    public static final OrchestrationId RANDOM_STROLL_RETURN =
-            id("signal/random_stroll_return");
     public static final OrchestrationId HUNGER_REQUEST =
             id("signal/hunger_request");
 
@@ -149,8 +131,6 @@ public final class CompanionIntentIds {
     public static IntentVocabulary vocabulary() {
         Set<OrchestrationId> signals = Set.of(
                 GAZE_RECALL,
-                POST_TASK_RETURN,
-                RANDOM_STROLL_RETURN,
                 HUNGER_REQUEST
         );
         Set<OrchestrationId> facts = new LinkedHashSet<>(Set.of(
@@ -176,17 +156,8 @@ public final class CompanionIntentIds {
                 PANIC_ACTIVE,
                 WORK_TARGET_PRESENT,
                 USING_ITEM,
-                BUILT_IN_TASK,
-                MOVEMENT_HARD_BLOCKED,
-                WORK_RELEASE_AGE,
-                MOVEMENT_LEASE_ACTIVE,
-                MOVEMENT_LEASE_PRIORITY,
-                MOVEMENT_FAIL_OPEN,
                 BEHAVIOR_OCCUPANCY_LEVEL,
-                BEHAVIOR_OCCUPANCY_REASON,
                 GAZE_RECALL,
-                POST_TASK_RETURN,
-                RANDOM_STROLL_RETURN,
                 HUNGER_REQUEST
         ));
         // Registered from the enum rather than listed again, so a new activity
@@ -249,30 +220,8 @@ public final class CompanionIntentIds {
                                 FactType.BOOLEAN
                         ),
                         Map.entry(USING_ITEM, FactType.BOOLEAN),
-                        Map.entry(BUILT_IN_TASK, FactType.BOOLEAN),
-                        Map.entry(
-                                MOVEMENT_HARD_BLOCKED,
-                                FactType.BOOLEAN
-                        ),
-                        Map.entry(WORK_RELEASE_AGE, FactType.NUMBER),
-                        Map.entry(
-                                MOVEMENT_LEASE_ACTIVE,
-                                FactType.BOOLEAN
-                        ),
-                        Map.entry(
-                                MOVEMENT_LEASE_PRIORITY,
-                                FactType.NUMBER
-                        ),
-                        Map.entry(
-                                MOVEMENT_FAIL_OPEN,
-                                FactType.BOOLEAN
-                        ),
                         Map.entry(
                                 BEHAVIOR_OCCUPANCY_LEVEL,
-                                FactType.NUMBER
-                        ),
-                        Map.entry(
-                                BEHAVIOR_OCCUPANCY_REASON,
                                 FactType.NUMBER
                         ),
                         Map.entry(
@@ -280,11 +229,6 @@ public final class CompanionIntentIds {
                                 FactType.NUMBER
                         ),
                         Map.entry(GAZE_RECALL, FactType.SIGNAL),
-                        Map.entry(POST_TASK_RETURN, FactType.SIGNAL),
-                        Map.entry(
-                                RANDOM_STROLL_RETURN,
-                                FactType.SIGNAL
-                        ),
                         Map.entry(
                                 HUNGER_REQUEST,
                                 FactType.SIGNAL

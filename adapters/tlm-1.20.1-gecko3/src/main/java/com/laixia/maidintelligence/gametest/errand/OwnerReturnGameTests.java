@@ -3,8 +3,8 @@ package com.laixia.maidintelligence.gametest.errand;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskAttack;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
-import com.laixia.maidintelligence.feature.ai.domain.MovementIntentSource;
-import com.laixia.maidintelligence.feature.ai.tlm.MovementCoordinationBridge;
+import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.gametest.support.GameTestPositions;
 import com.laixia.maidintelligence.gametest.support.IntentGameTestRuntime;
@@ -32,118 +32,11 @@ public final class OwnerReturnGameTests {
     private OwnerReturnGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
-    public static void completedWorkReturnsToOwnerOnce(
-            GameTestHelper helper
-    ) {
-        Fixture fixture = fixture(helper);
-        IntentGameTestRuntime.Runtime runtime =
-                IntentGameTestRuntime.create(
-                        status(),
-                        maid -> {
-                        },
-                        IntentGameTestRuntime.postTaskIntent()
-                );
-        long gameTime = helper.getLevel().getGameTime();
-        fixture.maid().getBrain().setMemory(
-                InitEntities.TARGET_POS.get(),
-                new BlockPosTracker(fixture.maid().blockPosition().east(2))
-        );
-        helper.assertFalse(
-                runtime.tick(fixture.maid(), gameTime),
-                "Active work target triggered an early return"
-        );
+    // completedWorkReturnsToOwnerOnce 已删。它验证的是"本体工作目标释放后
+    // 归队"，而 TARGET_POS 由本体工作行为写入，自由模式不再注册它们——触发源
+    // 消失，测试断言的是一段不可达的路径。若将来本模组自己的差事需要"做完
+    // 归队"，那是新的触发源，届时连同实现一起重建。
 
-        fixture.maid().getBrain().eraseMemory(
-                InitEntities.TARGET_POS.get()
-        );
-        helper.assertFalse(
-                runtime.tick(fixture.maid(), gameTime + 1L),
-                "Post-task settle guard was bypassed"
-        );
-        helper.assertTrue(
-                runtime.tick(fixture.maid(), gameTime + 21L),
-                "Released work target did not trigger owner return"
-        );
-        assertWalkTargetOwner(helper, fixture);
-
-        fixture.maid().getBrain().eraseMemory(
-                MemoryModuleType.WALK_TARGET
-        );
-        helper.assertTrue(
-                runtime.tick(fixture.maid(), gameTime + 22L),
-                "Running return plan stopped after its signal was consumed"
-        );
-        assertWalkTargetOwner(helper, fixture);
-
-        fixture.owner().setPos(
-                fixture.maid().getX() + 1.0D,
-                fixture.maid().getY(),
-                fixture.maid().getZ()
-        );
-        helper.assertTrue(
-                runtime.tick(fixture.maid(), gameTime + 23L),
-                "Owner return did not complete after arriving"
-        );
-        helper.assertFalse(
-                runtime.tick(fixture.maid(), gameTime + 24L),
-                "Consumed post-task signal started a second return"
-        );
-        helper.assertTrue(
-                runtime.intents().metrics().activations() == 1L,
-                "Post-task signal activated more than once"
-        );
-        helper.succeed();
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty")
-    public static void randomStrollSignalMayChooseOwner(
-            GameTestHelper helper
-    ) {
-        Fixture fixture = fixture(helper);
-        IntentGameTestRuntime.Runtime runtime =
-                IntentGameTestRuntime.create(
-                        status(),
-                        maid -> {
-                        },
-                        IntentGameTestRuntime.wanderIntent()
-                );
-        long gameTime = helper.getLevel().getGameTime();
-        WalkTarget previous = MovementCoordinationBridge.capture(
-                fixture.maid(),
-                gameTime
-        );
-        BehaviorUtils.setWalkAndLookTargetMemories(
-                fixture.maid(),
-                fixture.maid().blockPosition().east(3),
-                0.3F,
-                0
-        );
-        MovementCoordinationBridge.finishKnownWrite(
-                fixture.maid(),
-                previous,
-                MovementIntentSource.RANDOM_STROLL,
-                true,
-                gameTime
-        );
-        helper.assertFalse(
-                runtime.tick(fixture.maid(), gameTime),
-                "Active random stroll triggered an early owner return"
-        );
-        fixture.maid().getBrain().eraseMemory(
-                MemoryModuleType.WALK_TARGET
-        );
-
-        helper.assertTrue(
-                runtime.tick(
-                        fixture.maid(),
-                        gameTime + 1L
-                ),
-                "Random-stroll edge did not activate owner return"
-        );
-        assertWalkTargetOwner(helper, fixture);
-        helper.succeed();
-    }
 
     private static void assertWalkTargetOwner(
             GameTestHelper helper,
@@ -184,6 +77,9 @@ public final class OwnerReturnGameTests {
         };
         maid.setPos(GameTestPositions.center(helper, 1, 2, 1));
         maid.setTame(true);
+        maid.setTask(
+                TaskManager.findTask(FreedomMaidTask.UID).orElseThrow()
+        );
         maid.setHomeModeEnable(false);
         helper.getLevel().addFreshEntity(maid);
         maid.getBrain().setActiveActivityIfPossible(Activity.WORK);

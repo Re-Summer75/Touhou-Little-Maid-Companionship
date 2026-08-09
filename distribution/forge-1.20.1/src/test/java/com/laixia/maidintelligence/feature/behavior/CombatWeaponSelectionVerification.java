@@ -1,19 +1,44 @@
 package com.laixia.maidintelligence.feature.behavior;
 
 import com.laixia.maidintelligence.feature.behavior.domain.combat.CombatStance;
-import com.laixia.maidintelligence.feature.behavior.domain.combat.WeaponCandidate;
-import com.laixia.maidintelligence.feature.behavior.domain.combat.WeaponKind;
-import com.laixia.maidintelligence.feature.behavior.domain.combat.WeaponSelectionPolicy;
-import com.laixia.maidintelligence.feature.behavior.domain.combat.WeaponStowPolicy;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.EngagementContext;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponCandidate;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponKind;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponSelectionPolicy;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponStowPolicy;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatField;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatRelation;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatSample;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 武器选择与收纳的决策边界。
+ * 武器选择：同一套算术，在不同处境下给出不同答案。
+ *
+ * <p>没有一条断言提到"贴脸距离"或者"优先远程"。这些曾经是写死的规则，现在
+ * 是定价的结果——所以这里能问的问题变了：不再是"她有没有照规则走"，而是
+ * "换一个处境，她会不会自己改主意"。凡是只靠一条阈值就能通过的断言，都说明
+ * 那个处境没有被真正验证到。
  */
 public final class CombatWeaponSelectionVerification {
     private static final WeaponSelectionPolicy POLICY =
-            WeaponSelectionPolicy.INSTANCE;
+            WeaponSelectionPolicy.instance();
+
+    /** 她的挥击频率，铁剑水平。 */
+    private static final double SWINGS = 1.6D;
+
+    /** 她的射击频率，一发约一秒——也就是一次拉弓的时长。 */
+    private static final double SHOTS = 1.0D;
+
+    /** 她自己的近战触及，用于聚合威胁场。 */
+    private static final double HER_REACH = 3.0D;
+
+    /** 普通怪走向她的速度，约等于僵尸的步行速度。 */
+    private static final double CLOSING_SPEED = 1.0D;
+
+    /** 站着不动的敌人：不会到达，因此不构成时间压力。 */
+    private static final double STATIONARY = 0.0D;
 
     private CombatWeaponSelectionVerification() {
     }
@@ -26,15 +51,20 @@ public final class CombatWeaponSelectionVerification {
         verifiesBowOnlyMaidStillFightsUpClose();
         verifiesHeldWeaponResistsSwapping();
         verifiesNothingUsableDisengages();
+        verifiesAFlierIsShotNotSwungAt();
+        verifiesACrowdDrawsSteelAtBowRange();
+        verifiesNoRoomToKiteDrawsSteel();
+        verifiesAnArrivingFoeIsMetWithSteel();
         verifiesStowingWaitsForQuiet();
         System.out.println("Combat weapon selection verification passed.");
     }
 
-    /** 有弓有箭且离得开，就不该走过去拿剑砍。 */
+    /** 有弓有箭且够不着她，就不该走过去拿剑砍。 */
     private static void verifiesRangePreferredWhenNotPressed() {
         CombatStance stance = POLICY.choose(
                 List.of(sword(0.8D), bow(0.5D, true)),
-                10.0D, false);
+                against(zombie(10.0D))
+        );
         require(
                 stance.posture() == CombatStance.Posture.RANGED,
                 "A usable bow at ten blocks was passed over for melee"
@@ -46,16 +76,17 @@ public final class CombatWeaponSelectionVerification {
     }
 
     /**
-     * 被贴脸时弓没有用，哪怕它评分更高。
+     * 被贴脸时弓没有用，哪怕它评分高得多。
      *
-     * <p>这条一度被改成"退得开就继续射"，结果是她几乎不再拔刀：女仆基础
-     * 移速 0.7，僵尸 0.23，"跑不跑得过"对几乎所有怪的答案都是跑得过。
-     * 边退边射是花招，被贴上来就动刀才是玩家要的那个答案。
+     * <p>理由不再是"距离小于四格"，而是拉弓拉不完：僵尸每秒打一下，一次拉弓
+     * 正好一秒，于是她永远在起手、永远被打断。写成算术之后这条规则自己会推广
+     * ——打得慢的东西留得出空隙，打得快的留不出。
      */
     private static void verifiesMeleeTakesOverWhenPressed() {
         CombatStance stance = POLICY.choose(
                 List.of(sword(0.3D), bow(0.9D, true)),
-                1.5D, false);
+                against(zombie(1.5D))
+        );
         require(
                 stance.posture() == CombatStance.Posture.MELEE,
                 "She kept aiming a bow at something already on top of her"
@@ -65,20 +96,20 @@ public final class CombatWeaponSelectionVerification {
     /**
      * 同一个距离不能因为她当前拿什么就换个答案——除非那个答案更稳。
      *
-     * <p>玩家看到的症状是"近处又退又想砍、砍不着"：进近战和出近战用同一个
-     * 阈值，目标在阈值附近晃动时姿态每 tick 翻面，后退那一步刚好把目标挪出
-     * 攻击距离。滞回让她一旦动手就得真正拉开才改主意。
+     * <p>玩家看到的症状是"近处又退又想砍、砍不着"。滞回现在不是一个常数：
+     * 已经在近战里的她要改走远程，得先走回真正能射的距离，而站在远处继续射
+     * 一步都不用走。这个不对称本身就是滞回。
      */
     private static void verifiesStanceDoesNotFlipOnTheThreshold() {
         List<WeaponCandidate> both = List.of(sword(0.8D), bow(0.5D, true));
-        // 阈值之外一点点：还没动手时，这是远程的距离。
-        CombatStance fresh = POLICY.choose(both, 5.0D, false);
+        CombatStance fresh = POLICY.choose(both, against(zombie(5.0D)));
         require(
                 fresh.posture() == CombatStance.Posture.RANGED,
-                "Outside the pressed distance she chose melee anyway"
+                "Standing clear at five blocks she still chose melee"
         );
-        // 同样的距离，但她已经在砍了——不该因为一步之差就收刀举弓。
-        CombatStance committed = POLICY.choose(both, 5.0D, true);
+        CombatStance committed = POLICY.choose(
+                both, committed(zombie(5.0D))
+        );
         require(
                 committed.posture() == CombatStance.Posture.MELEE,
                 "Her stance flipped at the same distance, which is the "
@@ -95,7 +126,8 @@ public final class CombatWeaponSelectionVerification {
     private static void verifiesEmptyBowIsNotAWeapon() {
         CombatStance stance = POLICY.choose(
                 List.of(sword(0.4D), bow(0.9D, false)),
-                12.0D, false);
+                against(zombie(12.0D))
+        );
         require(
                 stance.posture() == CombatStance.Posture.MELEE,
                 "An empty bow was chosen over a sword"
@@ -106,10 +138,15 @@ public final class CombatWeaponSelectionVerification {
         );
     }
 
-    /** 只有弓却被贴脸，仍然要打——糟糕的选择好过没有选择。 */
+    /**
+     * 只有弓却被贴脸，仍然要打——糟糕的选择好过没有选择。
+     *
+     * <p>此时每个选项的定价都是无穷：拉不完弓，也没有别的东西可用。定价不能
+     * 决定的事，兜底来决定，否则她会举着唯一的武器站着不动。
+     */
     private static void verifiesBowOnlyMaidStillFightsUpClose() {
         CombatStance stance =
-                POLICY.choose(List.of(bow(0.6D, true)), 1.0D, false);
+                POLICY.choose(List.of(bow(0.6D, true)), against(zombie(1.0D)));
         require(
                 stance.engaged(),
                 "A cornered archer refused to fight at all"
@@ -129,7 +166,7 @@ public final class CombatWeaponSelectionVerification {
                 WeaponKind.MELEE, 3, 0.55D, false
         );
         CombatStance stance =
-                POLICY.choose(List.of(held, packed), 1.0D, true);
+                POLICY.choose(List.of(held, packed), committed(zombie(1.0D)));
         require(
                 stance.weapon().inHand(),
                 "She swapped weapons for a negligible gain"
@@ -138,8 +175,9 @@ public final class CombatWeaponSelectionVerification {
         WeaponCandidate clearlyBetter = new WeaponCandidate(
                 WeaponKind.MELEE, 3, 0.95D, false
         );
-        CombatStance upgraded =
-                POLICY.choose(List.of(held, clearlyBetter), 1.0D, true);
+        CombatStance upgraded = POLICY.choose(
+                List.of(held, clearlyBetter), committed(zombie(1.0D))
+        );
         require(
                 !upgraded.weapon().inHand(),
                 "She refused a clearly better weapon"
@@ -148,7 +186,7 @@ public final class CombatWeaponSelectionVerification {
 
     private static void verifiesNothingUsableDisengages() {
         CombatStance stance =
-                POLICY.choose(List.of(bow(0.9D, false)), 6.0D, false);
+                POLICY.choose(List.of(bow(0.9D, false)), against(zombie(6.0D)));
         require(
                 !stance.engaged(),
                 "With nothing usable she still tried to fight"
@@ -156,6 +194,116 @@ public final class CombatWeaponSelectionVerification {
         require(
                 stance.weapon() == null,
                 "A disengaging stance named a weapon"
+        );
+    }
+
+    /**
+     * 飞在天上的东西只能射，哪怕剑好得多。
+     *
+     * <p>这条是"死板"最直白的那个后果：旧规则只看距离，于是幻翼俯冲到六格
+     * 她就拔剑，然后对着头顶挥空气。代码里没有一处提到幻翼——挥不到就是挥
+     * 不到，定价成无穷，剩下的自然只有弓。
+     *
+     * <p>两头都要断言：同样的数字落到地面上就该拔剑，否则把"永远选弓"写死
+     * 也能通过。
+     */
+    private static void verifiesAFlierIsShotNotSwungAt() {
+        ThreatSample flier = new ThreatSample(
+                6.0D, 4.0D, 2.0D, 60, 20.0D, true, CLOSING_SPEED, ThreatRelation.UNENGAGED
+        );
+        CombatStance air = POLICY.choose(
+                List.of(sword(0.9D), bow(0.4D, true)), against(flier)
+        );
+        require(
+                air.posture() == CombatStance.Posture.RANGED,
+                "She drew a sword on something out of reach overhead"
+        );
+
+        ThreatSample grounded = new ThreatSample(
+                6.0D, 4.0D, 2.0D, 60, 20.0D, false, CLOSING_SPEED, ThreatRelation.UNENGAGED
+        );
+        CombatStance ground = POLICY.choose(
+                List.of(sword(0.9D), bow(0.4D, true)), against(grounded)
+        );
+        require(
+                ground.posture() == CombatStance.Posture.MELEE,
+                "The same fight on the ground still chose the weaker bow, so "
+                        + "the flier answer was not about being airborne"
+        );
+    }
+
+    /**
+     * 孤身时举弓的那个距离，被围住时该拔刀。
+     *
+     * <p>没有任何一条规则写着"人多就近战"。多出来的两只只是让挨打的间隔
+     * 缩短，而拉弓需要那个间隔——围殴之所以要动刀，是因为在围殴里根本拉不完
+     * 一次弓。同一个距离、同一套武器，只有周围的敌人数量不同。
+     */
+    private static void verifiesACrowdDrawsSteelAtBowRange() {
+        List<WeaponCandidate> both = List.of(sword(0.8D), bow(0.5D, true));
+        require(
+                POLICY.choose(both, against(zombie(5.0D))).posture()
+                        == CombatStance.Posture.RANGED,
+                "Fixture is wrong: alone at five blocks she should shoot"
+        );
+        CombatStance mobbed = POLICY.choose(
+                both,
+                against(zombie(5.0D), zombie(2.0D), zombie(2.0D))
+        );
+        require(
+                mobbed.posture() == CombatStance.Posture.MELEE,
+                "Surrounded, she still tried to work a bow"
+        );
+    }
+
+    /**
+     * 退无可退就别想着拉扯。
+     *
+     * <p>身后是墙的时候，"保持距离"这个选项并不存在，射击就只是拿着更差的
+     * 武器打近战。地形本来就被测量着，只是从来没有送到武器选择这里。
+     */
+    private static void verifiesNoRoomToKiteDrawsSteel() {
+        List<WeaponCandidate> both = List.of(sword(0.8D), bow(0.5D, true));
+        CombatStance cornered = POLICY.choose(
+                both, cornered(zombie(5.0D))
+        );
+        require(
+                cornered.posture() == CombatStance.Posture.MELEE,
+                "With a wall behind her she still planned to keep her distance"
+        );
+    }
+
+    /**
+     * 会赶到的东西要先拔刀，不能等它打到脸上再换。
+     *
+     * <p>这是"预测"落到实处的那一条。同样是六格外的僵尸、同样一套武器，唯一
+     * 的差别是它在不在走过来：站着不动的那只她从容开弓，正在逼近的那只她提前
+     * 拔刀——因为拉一次弓要一秒，而它零点几秒就到，那一箭注定放不完。
+     *
+     * <p>旧判据只问"它现在够不够得着我"，答案翻面的那一刻它已经在打她了，于是
+     * 她永远慢一个交换。距离一样、装备一样而结论相反，正是"她开始预判"的可执行
+     * 形式。
+     */
+    private static void verifiesAnArrivingFoeIsMetWithSteel() {
+        List<WeaponCandidate> both = List.of(sword(0.6D), bow(0.6D, true));
+        ThreatSample idle = new ThreatSample(
+                6.0D, 3.0D, 2.4D, 20, 20.0D, false, STATIONARY,
+                ThreatRelation.UNENGAGED
+        );
+        require(
+                POLICY.choose(both, against(idle)).posture()
+                        == CombatStance.Posture.RANGED,
+                "对着一只站着不动的敌人她都不肯开弓，那这条测的就不是逼近"
+        );
+
+        ThreatSample charging = new ThreatSample(
+                6.0D, 3.0D, 2.4D, 20, 20.0D, false, 6.0D,
+                ThreatRelation.UNENGAGED
+        );
+        require(
+                POLICY.choose(both, against(charging)).posture()
+                        == CombatStance.Posture.MELEE,
+                "有东西正冲过来、一次拉弓根本来不及，她还在举弓"
         );
     }
 
@@ -177,6 +325,49 @@ public final class CombatWeaponSelectionVerification {
         require(
                 !stow.shouldStow(stow.calmTicks() * 10, false, false),
                 "Empty hands were treated as something to put away"
+        );
+    }
+
+    /** 普通僵尸：三点伤害、每秒一下、够到两格半。 */
+    private static ThreatSample zombie(double distance) {
+        return new ThreatSample(
+                distance, 3.0D, 2.4D, 20, 20.0D, false,
+                CLOSING_SPEED, ThreatRelation.UNENGAGED
+        );
+    }
+
+    /** 有地可退、还没动刀时的处境；额外参数是同时在场的其它敌人。 */
+    private static EngagementContext against(
+            ThreatSample target,
+            ThreatSample... others
+    ) {
+        return context(target, true, false, others);
+    }
+
+    /** 已经在近战里的同一处境。 */
+    private static EngagementContext committed(ThreatSample target) {
+        return context(target, true, true);
+    }
+
+    /** 身后无路可退的同一处境。 */
+    private static EngagementContext cornered(ThreatSample target) {
+        return context(target, false, false);
+    }
+
+    private static EngagementContext context(
+            ThreatSample target,
+            boolean canOpenGround,
+            boolean holdingMelee,
+            ThreatSample... others
+    ) {
+        List<ThreatSample> all = new ArrayList<>();
+        all.add(target);
+        for (ThreatSample other : others) {
+            all.add(other);
+        }
+        ThreatField field = ThreatField.of(all, HER_REACH);
+        return EngagementContext.of(
+                target, field, SWINGS, SHOTS, canOpenGround, holdingMelee
         );
     }
 

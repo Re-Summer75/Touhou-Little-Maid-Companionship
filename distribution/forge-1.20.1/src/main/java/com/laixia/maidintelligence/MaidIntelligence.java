@@ -2,11 +2,6 @@ package com.laixia.maidintelligence;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.compat.tlm.TlmAdapterRegistry;
-import com.laixia.maidintelligence.feature.ai.api.MaidAiOptimizationApi;
-import com.laixia.maidintelligence.feature.ai.api.MaidMovementCoordinationApi;
-import com.laixia.maidintelligence.feature.ai.api.MovementCoordinationMode;
-import com.laixia.maidintelligence.feature.ai.application.DefaultMaidAiOptimizationService;
-import com.laixia.maidintelligence.feature.ai.application.DefaultMaidMovementCoordinationService;
 import com.laixia.maidintelligence.feature.ai.command.MaidAiCommands;
 import com.laixia.maidintelligence.feature.ai.forge.AiForgeInstaller;
 import com.laixia.maidintelligence.feature.ai.forge.AiServerConfig;
@@ -150,19 +145,7 @@ public final class MaidIntelligence {
                 MinecraftForge.EVENT_BUS
         );
         DomainEventBus events = new DomainEventBus();
-        MaidAiOptimizationApi aiOptimization =
-                new DefaultMaidAiOptimizationService(
-                        AiServerConfig::tuning
-                );
-        MaidMovementCoordinationApi movementCoordination =
-                new DefaultMaidMovementCoordinationService(
-                        () -> AiServerConfig.isEnabled()
-                                ? AiServerConfig.movementCoordinationMode()
-                                : MovementCoordinationMode.OFF,
-                        AiServerConfig::movementLeaseTicks,
-                        AiServerConfig::pickupCommitmentTicks,
-                        AiServerConfig::movementFailOpenTicks
-                );
+        // AI 优化服务已随本体模式增强一并退役。
 
         TlmMaidStatusService statusService = createStatusService();
         MaidStatusApi<EntityMaid> statusApi = statusService;
@@ -221,11 +204,6 @@ public final class MaidIntelligence {
         var commandAbilities = new TlmEntityAbilityFacade(behaviors.abilities());
         DomainEventWiring.wire(events, progressAdvancementTriggers, levelApi);
         MutableServiceRegistry services = new MutableServiceRegistry()
-                .register(MaidAiOptimizationApi.class, aiOptimization)
-                .register(
-                        MaidMovementCoordinationApi.class,
-                        movementCoordination
-                )
                 .register(
                         MaidGazeRecallApi.class,
                         behaviors.gazeRecall()
@@ -315,8 +293,6 @@ public final class MaidIntelligence {
                 )),
                 new AiForgeInstaller(
                         new MaidAiCommands(
-                                aiOptimization,
-                                movementCoordination,
                                 commandIntents,
                                 commandAbilities,
                                 new TlmEntityLearningFacade(behaviors.learning()),

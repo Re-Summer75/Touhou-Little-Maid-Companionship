@@ -49,7 +49,6 @@ def stableProjects = [
         'shared:assets',
         'features:level',
         'features:status',
-        'features:ai',
         'features:ai:behavior',
         'features:ai:orchestration',
         'features:advancement',

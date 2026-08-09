@@ -1,17 +1,13 @@
 package com.laixia.maidintelligence.feature.ai.tlm;
 
-import com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
-import com.laixia.maidintelligence.feature.ai.domain.OwnerFollowPolicy;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMode;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomOccupancy;
+import com.laixia.maidintelligence.feature.behavior.domain.OwnerFollowPolicy;
 import com.laixia.maidintelligence.feature.behavior.tlm.MaidCommandSeatBridge;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.vehicle.Boat;
-import net.minecraft.world.phys.AABB;
-
-import java.util.List;
 
 /**
  * Lets built-in movement needs release TLM passive seats and ordinary boats.
@@ -19,9 +15,6 @@ import java.util.List;
  */
 @SuppressWarnings("null")
 public final class MaidSeatAutonomyBridge {
-    private static final int COMBAT_SCAN_INTERVAL_TICKS = 5;
-    private static final int COMBAT_CANDIDATE_LIMIT = 64;
-    private static final int VERTICAL_COMBAT_SCAN_RANGE = 6;
 
     private MaidSeatAutonomyBridge() {
     }
@@ -107,107 +100,17 @@ public final class MaidSeatAutonomyBridge {
         );
     }
 
-    public static void leaveSeatForPickup(EntityMaid maid) {
-        if (!canLeaveAutonomousRide(maid, false)
-                || !maid.isPickup()
-                || TlmBehaviorOccupancyClassifier.isSeatedWork(maid)) {
-            return;
-        }
-
-        List<Entity> candidates = maid.getBrain()
-                .getMemory(InitEntities.VISIBLE_PICKUP_ENTITIES.get())
-                .orElse(List.of());
-        for (Entity candidate : candidates) {
-            if (candidate.isAlive()
-                    && !candidate.isInWater()
-                    && maid.isWithinRestriction(candidate.blockPosition())) {
-                maid.stopRiding();
-                return;
-            }
-        }
-    }
-
-    public static void leaveSeatForCombat(EntityMaid maid) {
-        if (!canLeaveAutonomousRide(maid, true)
-                || !ActivityRadiusBridge.isBuiltInCombatTask(maid)) {
-            return;
-        }
-
-        IAttackTask attackTask = (IAttackTask) maid.getTask();
-        LivingEntity current = maid.getBrain()
-                .getMemory(MemoryModuleType.ATTACK_TARGET)
-                .orElse(null);
-        if (validCombatTarget(maid, attackTask, current)) {
-            dismountForCombat(maid, current);
-            return;
-        }
-        if (Math.floorMod(
-                maid.level().getGameTime() + maid.getId(),
-                COMBAT_SCAN_INTERVAL_TICKS
-        ) != 0L) {
-            return;
-        }
-
-        float radius = Math.max(1.0F, maid.getRestrictRadius());
-        AABB bounds = maid.getBoundingBox().inflate(
-                radius,
-                VERTICAL_COMBAT_SCAN_RANGE,
-                radius
-        );
-        LivingEntity nearest = null;
-        double nearestDistanceSquared = Double.POSITIVE_INFINITY;
-        int evaluated = 0;
-        List<LivingEntity> nearby = maid.level().getEntitiesOfClass(
-                LivingEntity.class,
-                bounds,
-                entity -> entity != maid && entity.isAlive()
-        );
-        for (LivingEntity candidate : nearby) {
-            if (evaluated++ >= COMBAT_CANDIDATE_LIMIT) {
-                break;
-            }
-            if (!validCombatTarget(maid, attackTask, candidate)) {
-                continue;
-            }
-            if (!maid.hasLineOfSight(candidate)) {
-                continue;
-            }
-            if (!maid.isWithinRestriction(candidate.blockPosition())) {
-                continue;
-            }
-            double distanceSquared = maid.distanceToSqr(candidate);
-            if (distanceSquared < nearestDistanceSquared) {
-                nearest = candidate;
-                nearestDistanceSquared = distanceSquared;
-            }
-        }
-        if (nearest != null) {
-            dismountForCombat(maid, nearest);
-        }
-    }
-
-    private static boolean canLeaveAutonomousRide(
-            EntityMaid maid,
-            boolean dangerOverride
-    ) {
-        if (!canLeaveSeatState(maid)
-                || (!dangerOverride
-                && MaidCommandSeatBridge.isSeatProtected(maid))) {
-            return false;
-        }
-
-        Entity vehicle = maid.getVehicle();
-        if (vehicle == null) {
-            return false;
-        }
-        return isPassiveSeat(vehicle)
-                || isOrdinaryBoat(vehicle)
-                || (dangerOverride
-                && MaidCommandSeatBridge.isSeatProtected(maid));
-    }
-
+    /**
+     * Every autonomous "get up and go" starts here, so the mode check does too.
+     *
+     * <p>Deciding to leave a chair — to follow, to fetch, to fight — is a
+     * decision, and in the host's own modes the host makes it. A maid sitting
+     * in a boat under a work mode was being made to stand up by us, on reasons
+     * that mode never asked about.
+     */
     private static boolean canLeaveSeatState(EntityMaid maid) {
-        return !maid.level().isClientSide()
+        return FreedomMode.isActive(maid)
+                && !maid.level().isClientSide()
                 && !maid.isMaidInSittingPose()
                 && !maid.isOrderedToSit()
                 && !maid.isSleeping()
@@ -215,32 +118,11 @@ public final class MaidSeatAutonomyBridge {
     }
 
     private static boolean isPassiveSeat(Entity vehicle) {
-        return TlmBehaviorOccupancyClassifier.isPassiveSeat(vehicle);
+        return FreedomOccupancy.isPassiveSeat(vehicle);
     }
 
     private static boolean isOrdinaryBoat(Entity vehicle) {
         return vehicle instanceof Boat;
     }
 
-    private static boolean validCombatTarget(
-            EntityMaid maid,
-            IAttackTask attackTask,
-            LivingEntity target
-    ) {
-        return target != null
-                && target.isAlive()
-                && target.level() == maid.level()
-                && !maid.isAlliedTo(target)
-                && attackTask.canAttack(maid, target);
-    }
-
-    private static void dismountForCombat(
-            EntityMaid maid,
-            LivingEntity target
-    ) {
-        maid.getBrain().setMemory(MemoryModuleType.ATTACK_TARGET, target);
-        maid.getBrain().eraseMemory(MemoryModuleType.PATH);
-        MaidCommandSeatBridge.releaseForDanger(maid);
-        maid.stopRiding();
-    }
 }

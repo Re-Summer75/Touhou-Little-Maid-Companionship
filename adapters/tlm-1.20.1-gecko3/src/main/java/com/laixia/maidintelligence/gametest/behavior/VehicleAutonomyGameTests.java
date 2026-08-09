@@ -3,7 +3,8 @@ package com.laixia.maidintelligence.gametest.behavior;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskAttack;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
-import com.laixia.maidintelligence.feature.ai.tlm.ActivityRadiusBridge;
+import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.ai.tlm.MaidSeatAutonomyBridge;
 import com.laixia.maidintelligence.feature.behavior.tlm.MaidCommandSeatBridge;
 import com.laixia.maidintelligence.feature.orchestration.tlm.TlmCoordinationClaims;
@@ -55,99 +56,6 @@ public final class VehicleAutonomyGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
-    public static void unrelatedVehicleRemainsProtectedForPickup(
-            GameTestHelper helper
-    ) {
-        prepareFloor(helper);
-        Player owner = helper.makeMockPlayer();
-        owner.setPos(position(helper, 2, 1));
-        EntityMaid maid = ordinaryMaid(helper, owner);
-        maid.setPos(position(helper, 2, 2));
-        maid.setPickup(true);
-        Vec3 position = position(helper, 2, 2);
-        Minecart minecart = new Minecart(
-                helper.getLevel(),
-                position.x,
-                position.y,
-                position.z
-        );
-        helper.getLevel().addFreshEntity(minecart);
-        helper.assertTrue(
-                maid.startRiding(minecart),
-                "Maid could not mount the unrelated vehicle fixture"
-        );
-        ItemEntity item = new ItemEntity(
-                helper.getLevel(),
-                position.x + 1.0D,
-                position.y,
-                position.z,
-                Items.COAL.getDefaultInstance()
-        );
-        helper.getLevel().addFreshEntity(item);
-        maid.getBrain().setMemory(
-                InitEntities.VISIBLE_PICKUP_ENTITIES.get(),
-                List.of(item)
-        );
-
-        MaidSeatAutonomyBridge.leaveSeatForPickup(maid);
-        helper.assertTrue(
-                maid.getVehicle() == minecart,
-                "Boat autonomy leaked into an unrelated vehicle"
-        );
-        helper.succeed();
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty")
-    public static void ordinaryBoatReleasesForCombat(
-            GameTestHelper helper
-    ) {
-        TaskAttack attackTask = new TaskAttack();
-        BoatFixture fixture = boatFixture(helper, attackTask, true);
-        fixture.maid().setItemInHand(
-                InteractionHand.MAIN_HAND,
-                Items.DIAMOND_SWORD.getDefaultInstance()
-        );
-        fixture.maid().getBrain().setActiveActivityIfPossible(Activity.WORK);
-        Zombie zombie = new Zombie(helper.getLevel()) {
-            @Override
-            protected boolean shouldDespawnInPeaceful() {
-                return false;
-            }
-        };
-        zombie.setPos(
-                fixture.maid().getX() + 2.0D,
-                fixture.maid().getY(),
-                fixture.maid().getZ()
-        );
-        zombie.setNoAi(true);
-        helper.getLevel().addFreshEntity(zombie);
-        fixture.maid().getBrain().setMemory(
-                MemoryModuleType.ATTACK_TARGET,
-                zombie
-        );
-        helper.assertTrue(
-                attackTask.canAttack(fixture.maid(), zombie)
-                        && ActivityRadiusBridge.isBuiltInCombatTask(
-                        fixture.maid()
-                ),
-                "Boat combat fixture was not a valid threat"
-        );
-
-        MaidSeatAutonomyBridge.leaveSeatForCombat(fixture.maid());
-        helper.assertFalse(
-                fixture.maid().isPassenger(),
-                "Combat danger left the maid trapped in an ordinary boat"
-        );
-        helper.assertTrue(
-                fixture.maid().getBrain()
-                        .getMemory(MemoryModuleType.ATTACK_TARGET)
-                        .filter(zombie::equals)
-                        .isPresent(),
-                "Boat dismount discarded the combat target"
-        );
-        helper.succeed();
-    }
 
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void commandBoatReleasesWhenOwnerLeavesInFollowMode(
@@ -389,6 +297,9 @@ public final class VehicleAutonomyGameTests {
             EntityMaid maid
     ) {
         maid.setTame(true);
+        maid.setTask(
+                TaskManager.findTask(FreedomMaidTask.UID).orElseThrow()
+        );
         maid.setHomeModeEnable(false);
         maid.setOwnerUUID(owner.getUUID());
         helper.getLevel().addFreshEntity(maid);

@@ -6,7 +6,7 @@ import com.laixia.maidintelligence.feature.behavior.domain.combat.SpacingPolicy;
  * 她该站在哪：退多少、贴多近。
  */
 public final class CombatSpacingVerification {
-    private static final SpacingPolicy POLICY = SpacingPolicy.INSTANCE;
+    private static final SpacingPolicy POLICY = SpacingPolicy.instance();
 
     /**
      * 一个典型的近战对峙。

@@ -6,6 +6,7 @@ import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatS
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +55,7 @@ public final class TlmThreatScanner {
                 ThreatProfile.attackPeriod(hostile),
                 hostile.getHealth(),
                 airborne(hostile),
+                ThreatProfile.closingSpeed(maid, hostile),
                 relation(maid, hostile)
         );
     }

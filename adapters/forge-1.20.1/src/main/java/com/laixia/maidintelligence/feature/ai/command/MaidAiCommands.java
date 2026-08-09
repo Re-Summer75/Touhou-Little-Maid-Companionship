@@ -1,9 +1,5 @@
 package com.laixia.maidintelligence.feature.ai.command;
 
-import com.laixia.maidintelligence.feature.ai.api.AiOptimizationSnapshot;
-import com.laixia.maidintelligence.feature.ai.api.MaidAiOptimizationApi;
-import com.laixia.maidintelligence.feature.ai.api.MaidMovementCoordinationApi;
-import com.laixia.maidintelligence.feature.ai.api.MovementCoordinationSnapshot;
 import com.laixia.maidintelligence.feature.behavior.api.MaidAbilityApi;
 import com.laixia.maidintelligence.feature.behavior.api.MaidLearningApi;
 import com.laixia.maidintelligence.feature.behavior.command.MaidLearningCommands;
@@ -32,8 +28,6 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 
 public final class MaidAiCommands {
-    private final MaidAiOptimizationApi optimization;
-    private final MaidMovementCoordinationApi movementCoordination;
     private final MaidIntentApi<Entity> intents;
     private final MaidAbilityApi<Entity> abilities;
     private final Predicate<Entity> maidType;
@@ -41,22 +35,12 @@ public final class MaidAiCommands {
     private final MaidLearningCommands learningCommands;
 
     public MaidAiCommands(
-            MaidAiOptimizationApi optimization,
-            MaidMovementCoordinationApi movementCoordination,
             MaidIntentApi<Entity> intents,
             MaidAbilityApi<Entity> abilities,
             MaidLearningApi<Entity> learning,
             Predicate<Entity> maidType,
             BooleanSupplier diagnosticsEnabled
     ) {
-        this.optimization = Objects.requireNonNull(
-                optimization,
-                "optimization"
-        );
-        this.movementCoordination = Objects.requireNonNull(
-                movementCoordination,
-                "movementCoordination"
-        );
         this.intents = Objects.requireNonNull(intents, "intents");
         this.abilities = Objects.requireNonNull(abilities, "abilities");
         this.maidType = Objects.requireNonNull(maidType, "maidType");
@@ -120,48 +104,6 @@ public final class MaidAiCommands {
     }
 
     private int showStats(CommandContext<CommandSourceStack> context) {
-        AiOptimizationSnapshot snapshot = optimization.snapshot();
-        String hitRate = String.format(
-                Locale.ROOT,
-                "%.1f",
-                snapshot.pathCacheHitRate() * 100.0D
-        );
-        context.getSource().sendSuccess(() -> Component.translatable(
-                commandKey("ai.stats"),
-                snapshot.pathRequests(),
-                snapshot.pathCacheHits(),
-                hitRate,
-                snapshot.pickupCandidates(),
-                snapshot.pickupSelections(),
-                snapshot.brainTickSamples(),
-                nanosToMicros(snapshot.averageBrainTickNanos()),
-                nanosToMicros(snapshot.brainTickMaxNanos())
-        ), false);
-        MovementCoordinationSnapshot movement =
-                movementCoordination.snapshot();
-        context.getSource().sendSuccess(() -> Component.translatable(
-                commandKey("ai.movement.stats"),
-                movementCoordination.mode().name(),
-                movement.claims(),
-                movement.renewals(),
-                movement.retargets(),
-                movement.preemptions(),
-                movement.suppressions(),
-                movement.observedConflicts(),
-                movement.failOpenTransitions()
-        ), false);
-        context.getSource().sendSuccess(() -> Component.translatable(
-                commandKey("ai.adaptive.stats"),
-                snapshot.activityRadiusExpansions(),
-                snapshot.combatScans(),
-                snapshot.combatCandidates(),
-                snapshot.combatCandidateTruncations(),
-                snapshot.combatTargets(),
-                snapshot.maidAttackerTargets(),
-                snapshot.ownerAttackerTargets(),
-                snapshot.ownerTargetTargets(),
-                snapshot.proactiveHostileTargets()
-        ), false);
         IntentMetrics intent = intents.metrics();
         context.getSource().sendSuccess(() -> Component.translatable(
                 commandKey("ai.intent.stats"),
@@ -379,8 +321,6 @@ public final class MaidAiCommands {
     }
 
     private int resetStats(CommandContext<CommandSourceStack> context) {
-        optimization.resetMetrics();
-        movementCoordination.resetMetrics();
         intents.resetMetrics();
         context.getSource().sendSuccess(
                 () -> Component.translatable(commandKey("ai.reset")),

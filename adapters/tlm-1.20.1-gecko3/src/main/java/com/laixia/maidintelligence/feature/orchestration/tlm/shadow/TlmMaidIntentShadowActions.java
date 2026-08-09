@@ -1,9 +1,7 @@
 package com.laixia.maidintelligence.feature.orchestration.tlm.shadow;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.ai.domain.arbitration.BehaviorOccupancyLevel;
-import com.laixia.maidintelligence.feature.ai.domain.arbitration.BehaviorOccupancySnapshot;
-import com.laixia.maidintelligence.feature.ai.tlm.TlmBehaviorOccupancyClassifier;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomOccupancy;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
 import com.laixia.maidintelligence.feature.orchestration.domain.ActionResult;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
@@ -88,18 +86,17 @@ public final class TlmMaidIntentShadowActions
             long gameTime
     ) {
         LivingEntity owner = validOwner(maid);
-        BehaviorOccupancySnapshot occupancy =
-                TlmBehaviorOccupancyClassifier.snapshot(maid, gameTime);
+        boolean claimed = FreedomOccupancy.claimed(maid);
         boolean ownerCommand = ownerCommand(parameters);
         if (owner == null
                 || maid.isHomeModeEnable()
-                || !allowed(occupancy, ownerCommand)) {
+                || !allowed(claimed, ownerCommand)) {
             return ActionResult.FAILED;
         }
         boolean movable = maid.canBrainMoving()
                 || (ownerCommand
-                && occupancy.level() == BehaviorOccupancyLevel.SOFT
-                && TlmBehaviorOccupancyClassifier.isPassiveSeat(
+                && !claimed
+                && FreedomOccupancy.isPassiveSeat(
                 maid.getVehicle()
         ));
         if (!movable) {
@@ -123,14 +120,13 @@ public final class TlmMaidIntentShadowActions
             Map<String, String> parameters,
             long gameTime
     ) {
-        BehaviorOccupancySnapshot occupancy =
-                TlmBehaviorOccupancyClassifier.snapshot(maid, gameTime);
+        boolean claimed = FreedomOccupancy.claimed(maid);
         BlockPos target = snackCabinetMeals
                 .findAvailableMeal(maid, gameTime)
                 .orElse(null);
         if (target == null
                 || !maid.canBrainMoving()
-                || !occupancy.allowsPassiveCompanion()) {
+                || claimed) {
             return ActionResult.FAILED;
         }
         int closeEnough = intParameter(
@@ -156,11 +152,10 @@ public final class TlmMaidIntentShadowActions
             int elapsedTicks
     ) {
         LivingEntity owner = validOwner(maid);
-        BehaviorOccupancySnapshot occupancy =
-                TlmBehaviorOccupancyClassifier.snapshot(maid, gameTime);
+        boolean claimed = FreedomOccupancy.claimed(maid);
         if (owner == null
                 || maid.isHomeModeEnable()
-                || !occupancy.allowsOwnerCommand()) {
+                || claimed) {
             return ActionResult.FAILED;
         }
         int durationTicks = intParameter(
@@ -175,13 +170,9 @@ public final class TlmMaidIntentShadowActions
                 : ActionResult.RUNNING;
     }
 
-    private static boolean allowed(
-            BehaviorOccupancySnapshot occupancy,
-            boolean ownerCommand
-    ) {
-        return ownerCommand
-                ? occupancy.allowsOwnerCommand()
-                : occupancy.allowsPassiveCompanion();
+    /** 被玩家或世界扣住时，任何计划都不该开始。*/
+    private static boolean allowed(boolean claimed, boolean ownerCommand) {
+        return !claimed;
     }
 
     private static boolean ownerCommand(Map<String, String> parameters) {

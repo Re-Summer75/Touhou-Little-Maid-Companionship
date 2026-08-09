@@ -1,8 +1,8 @@
 package com.laixia.maidintelligence.gametest.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.behavior.domain.combat.WeaponCandidate;
-import com.laixia.maidintelligence.feature.behavior.domain.combat.WeaponKind;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponCandidate;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponKind;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.RangedWeaponRecognizer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmWeaponScanner;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;

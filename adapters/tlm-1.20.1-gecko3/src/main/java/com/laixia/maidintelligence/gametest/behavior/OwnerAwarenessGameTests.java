@@ -1,6 +1,8 @@
 package com.laixia.maidintelligence.gametest.behavior;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.behavior.domain.owner.OwnerFacts;
 import com.laixia.maidintelligence.feature.behavior.handler.OwnerGazeRecallHandler;
 import com.laixia.maidintelligence.feature.orchestration.tlm.context.TlmOwnerFactReader;
@@ -290,6 +292,9 @@ public final class OwnerAwarenessGameTests {
         };
         maid.setPos(GameTestPositions.center(helper, x, y, z));
         maid.setTame(true);
+        maid.setTask(
+                TaskManager.findTask(FreedomMaidTask.UID).orElseThrow()
+        );
         maid.setHomeModeEnable(false);
         maid.setOwnerUUID(owner.getUUID());
         helper.getLevel().addFreshEntity(maid);

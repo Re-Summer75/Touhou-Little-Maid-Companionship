@@ -6,6 +6,7 @@
 
 - [女仆行为总索引](maid-behaviors/README.md)
   - [陪伴 AI、移动与座位](maid-behaviors/companion/README.md)
+    - [战斗](maid-behaviors/companion/COMBAT.md)
   - [照料、状态与反馈](maid-behaviors/care/README.md)
   - [主人交互与物品](maid-behaviors/interactions/README.md)
   - [成长、进度与界面](maid-behaviors/progression/README.md)

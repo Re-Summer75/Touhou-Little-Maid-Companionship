@@ -8,7 +8,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
-import net.minecraft.world.item.SwordItem;
+import net.minecraftforge.common.ToolActions;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 
 /**
@@ -84,9 +84,16 @@ public final class MeleeSwing {
      * hitting one target at a time no matter how many were pressed against her —
      * and the enchantment slot for it did nothing at all.
      *
-     * <p>Conditions follow vanilla's: a real sword, feet on the ground, and a
-     * swing that was worth full damage — which here is guaranteed, since this
-     * only runs once the cooldown has expired.
+     * <p>Conditions follow vanilla's: a weapon that sweeps, feet on the ground,
+     * and a swing that was worth full damage — which here is guaranteed, since
+     * this only runs once the cooldown has expired.
+     *
+     * <p>"A weapon that sweeps" is asked of the item rather than of its class.
+     * {@code instanceof SwordItem} is the vanilla test and it answers no for
+     * every modded blade that does not happen to extend that class — which is
+     * most of them, and which is invisible: she swings, it lands, and the arc
+     * silently is not there. The tool action is the question actually being
+     * asked, and any mod that wants its weapon to sweep already declares it.
      *
      * <p>One deliberate departure: vanilla sweeps everything that is not an
      * ally, while this asks {@link ThreatProfile#isHostileTo} of each bystander.
@@ -94,7 +101,7 @@ public final class MeleeSwing {
      * maid doing that is her mod killing her owner's livestock.
      */
     private static void sweep(EntityMaid maid, LivingEntity centre) {
-        if (!(maid.getMainHandItem().getItem() instanceof SwordItem)
+        if (!maid.getMainHandItem().canPerformAction(ToolActions.SWORD_SWEEP)
                 || !maid.onGround()) {
             return;
         }
@@ -197,14 +204,14 @@ public final class MeleeSwing {
         }
         double threatReach = target.sample().reach();
         double clearance =
-                SpacingPolicy.INSTANCE.clearanceBeyond(threatReach);
+                SpacingPolicy.instance().clearanceBeyond(threatReach);
         boolean canStepOut = RetreatSpace.canGiveGround(
                 maid,
                 target.entity(),
                 speed,
                 clearance - target.sample().distance()
         );
-        return SpacingPolicy.INSTANCE.meleeHold(
+        return SpacingPolicy.instance().meleeHold(
                 false, threatReach, canStepOut
         );
     }

@@ -1,7 +1,0 @@
-plugins {
-    id 'tlm.java-library-conventions'
-}
-
-dependencies {
-    api project(':kernel')
-}

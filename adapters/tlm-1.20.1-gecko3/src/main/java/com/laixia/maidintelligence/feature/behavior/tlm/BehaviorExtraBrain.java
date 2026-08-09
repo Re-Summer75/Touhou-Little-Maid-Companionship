@@ -4,7 +4,6 @@ import com.github.tartaricacid.touhoulittlemaid.api.entity.ai.IExtraMaidBrain;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
 import com.laixia.maidintelligence.feature.orchestration.tlm.MaidIntentBehavior;
-import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentObserver;
 import com.mojang.datafixers.util.Pair;
 import net.minecraft.world.entity.ai.behavior.BehaviorControl;
 
@@ -15,21 +14,15 @@ public final class BehaviorExtraBrain implements IExtraMaidBrain {
     private static final int INTENT_PRIORITY = 4;
 
     private final MaidIntentApi<EntityMaid> intents;
-    private final TlmMaidIntentObserver observer;
     private final TlmDeployBoatAutonomy boatAutonomy;
 
     public BehaviorExtraBrain(
             MaidIntentApi<EntityMaid> intents,
-            TlmMaidIntentObserver observer,
             TlmDeployBoatAutonomy boatAutonomy
     ) {
         this.intents = Objects.requireNonNull(
                 intents,
                 "intents"
-        );
-        this.observer = Objects.requireNonNull(
-                observer,
-                "observer"
         );
         this.boatAutonomy = Objects.requireNonNull(
                 boatAutonomy,
@@ -45,7 +38,6 @@ public final class BehaviorExtraBrain implements IExtraMaidBrain {
                         INTENT_PRIORITY,
                         new MaidIntentBehavior(
                                 intents,
-                                observer,
                                 boatAutonomy::tick
                         )
                 )

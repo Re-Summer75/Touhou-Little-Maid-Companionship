@@ -25,22 +25,29 @@ import java.util.Objects;
  * @param converging       how many could strike her where she stands
  * @param nearestDistance  distance to the closest, or infinity when there are none
  * @param incomingDps      expected damage per second, weighted by arrival time
+ * @param incomingHitRate  expected hits per second, weighted the same way
  * @param convergingHealth expected health to remove, weighted by arrival time
  * @param anyAirborne      whether any of them is beyond a swung weapon
  * @param anyOutranging    whether any of them can hurt her from beyond melee
+ * @param soonestContact   seconds until the first of them can strike her
+ * @param heaviestBlow     the largest single hit any of them lands
  */
 public record ThreatField(
         int total,
         int converging,
         double nearestDistance,
         double incomingDps,
+        double incomingHitRate,
         double convergingHealth,
         boolean anyAirborne,
-        boolean anyOutranging
+        boolean anyOutranging,
+        double soonestContact,
+        double heaviestBlow
 ) {
     /** Nothing hostile in sight. */
     public static final ThreatField EMPTY = new ThreatField(
-            0, 0, Double.POSITIVE_INFINITY, 0.0D, 0.0D, false, false
+            0, 0, Double.POSITIVE_INFINITY, 0.0D, 0.0D, 0.0D, false, false,
+            Double.POSITIVE_INFINITY, 0.0D
     );
 
     /**
@@ -96,9 +103,12 @@ public record ThreatField(
         int converging = 0;
         double nearest = Double.POSITIVE_INFINITY;
         double incoming = 0.0D;
+        double hits = 0.0D;
         double health = 0.0D;
         boolean airborne = false;
         boolean outranging = false;
+        double soonest = Double.POSITIVE_INFINITY;
+        double heaviest = 0.0D;
         for (ThreatSample sample : samples) {
             if (sample == null) {
                 continue;
@@ -107,6 +117,16 @@ public record ThreatField(
             nearest = Math.min(nearest, sample.distance());
             airborne |= sample.airborne();
             outranging |= sample.outranges(meleeReach);
+            // The first arrival, not the nearest. Something further away but
+            // sprinting reaches her before something closer and shuffling, and
+            // it is arrival that her hands have to be ready for.
+            soonest = Math.min(soonest, sample.secondsToContact());
+            // The worst single blow, not an average. Averaging is exactly the
+            // blindness being corrected: something hitting for thirteen every
+            // two seconds and something hitting for three every half second
+            // produce the same rate and are not remotely the same risk to a
+            // maid with twenty health.
+            heaviest = Math.max(heaviest, sample.strikeDamage());
             if (sample.threatensNow()) {
                 converging++;
             }
@@ -119,6 +139,7 @@ public record ThreatField(
                     sample.convergenceWeight(horizonSeconds, closingSpeed);
             if (weight > 0.0D) {
                 incoming += sample.damagePerSecond() * weight;
+                hits += sample.hitsPerSecond() * weight;
                 health += sample.health() * weight;
             }
         }
@@ -126,12 +147,27 @@ public record ThreatField(
             return EMPTY;
         }
         return new ThreatField(
-                total, converging, nearest, incoming, health,
-                airborne, outranging
+                total, converging, nearest, incoming, hits, health,
+                airborne, outranging, soonest, heaviest
         );
     }
 
     public boolean isEmpty() {
         return total == 0;
+    }
+
+    /**
+     * How long she gets between incoming blows.
+     *
+     * <p>The gap, not the rate, because that is the form the question takes
+     * wherever it is asked: anything she has to hold — a draw, a wind-up —
+     * either fits in this gap or is thrown away by the next hit. Infinite when
+     * nothing is landing, which keeps a quiet field from reading as a fast one.
+     */
+    public double secondsBetweenHits() {
+        if (incomingHitRate <= 0.0D) {
+            return Double.POSITIVE_INFINITY;
+        }
+        return 1.0D / incomingHitRate;
     }
 }

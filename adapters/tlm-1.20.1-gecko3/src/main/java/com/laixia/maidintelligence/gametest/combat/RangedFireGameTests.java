@@ -1,7 +1,7 @@
 package com.laixia.maidintelligence.gametest.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.behavior.tlm.FreedomMaidTask;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.RangedWeaponRecognizer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
@@ -14,7 +14,10 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.memory.NearestVisibleLivingEntities;
+import net.minecraft.world.entity.monster.Skeleton;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.item.CrossbowItem;
@@ -70,14 +73,14 @@ public final class RangedFireGameTests {
                 new TlmWeaponScanner(RangedWeaponRecognizer.NONE)
         );
 
-        combat.execute(maid, 0);
+        combat.execute(maid);
         helper.assertTrue(
                 maid.isUsingItem(),
                 "She fired without ever drawing the bow"
         );
 
         // 蓄力未满就不该松手。
-        combat.execute(maid, 1);
+        combat.execute(maid);
         helper.assertTrue(
                 maid.isUsingItem(),
                 "She released the string after a single tick"
@@ -85,7 +88,7 @@ public final class RangedFireGameTests {
 
         helper.runAfterDelay(30, () -> {
             for (int tick = 2; tick < 30; tick++) {
-                combat.execute(maid, tick);
+                combat.execute(maid);
             }
             helper.assertTrue(
                     zombie.isAlive(),
@@ -138,13 +141,20 @@ public final class RangedFireGameTests {
             // 而夹具僵尸并不在世界里，记忆于是被清空——那会让她当场收兵，
             // 测出来的就不再是弩的事了。
             keepSeeing(maid, zombie);
-            combat.execute(maid, tick);
+            combat.execute(maid);
             int drawn = maid.getTicksUsingItem();
             // 计时回退，说明这一发松了手，新的一发重新开始。
             everReleased |= drawn < previousDrawn;
-            // 装填是真正失败的那一环：弩上没有弹药，射击就是空放。
-            everLoaded |= CrossbowItem.isCharged(maid.getMainHandItem());
-            longestDraw = Math.max(longestDraw, drawn);
+            // 装填这一环改看"箭有没有真的飞出去"，不看 isCharged。
+            //
+            // 装填与击发发生在同一 tick 的同一次调用里：releaseUsingItem 装上，
+            // 紧接着 performRangedAttack 打出去并把 Charged 标记清掉。所以在
+            // execute 之后采样 isCharged 必然是 false，无论装填成没成功——那条
+            // 断言测的是采样时机，不是弩。
+            everLoaded |= !helper.getLevel().getEntitiesOfClass(
+                    AbstractArrow.class,
+                    maid.getBoundingBox().inflate(16.0D)
+            ).isEmpty();
             previousDrawn = drawn;
             maid.tick();
         }
@@ -156,8 +166,8 @@ public final class RangedFireGameTests {
         );
         helper.assertTrue(
                 everLoaded,
-                "The crossbow was never loaded, so every shot fired nothing "
-                        + "and she went back to cranking it"
+                "六十 tick 里一支箭都没飞出来：弩上不去弹，射击就是空放，"
+                        + "然后她回去继续拉弦"
         );
         helper.succeed();
     }
@@ -242,6 +252,124 @@ public final class RangedFireGameTests {
     }
 
     /**
+     * 蓄力只能前进或变成一支箭，不能被悄悄丢掉。
+     *
+     * <p>玩家报告"蓄力了，对着目标一直射不出去，然后站着被打死"。弓要连续
+     * 二十 tick 才拉满，所以**任何**每隔十九 tick 之内清一次蓄力的路径，产出
+     * 的箭都恰好是零支——而且看起来就是她在瞄准。撤退分支正是这样一条：它
+     * 一进来就把蓄力扔掉，而裁决在目标贴近的过程中本来就会反复翻面。
+     *
+     * <p>因此这条不测"她射中了没有"，测的是那个不变量：走过撤退分支之后，
+     * 要么箭已经出去（蓄力被兑现），要么蓄力还在（可以继续攒）。归零且没有
+     * 箭出去，就是那个永远射不出的死循环。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void aDrawIsSpentNotBinned(GameTestHelper helper) {
+        CompanionScene scene = CompanionScene.room(helper, 5, 3);
+        EntityMaid maid = scene.maid(1, 2, 1);
+        maid.setTask(new FreedomMaidTask());
+        maid.setItemInHand(
+                InteractionHand.MAIN_HAND, new ItemStack(Items.BOW)
+        );
+        maid.getAvailableBackpackInv().setStackInSlot(
+                0, new ItemStack(Items.ARROW, 32)
+        );
+        // 残血 + 对方射得比她远：两者合起来让"拉开距离"不再是答案，裁决
+        // 因此必然落到撤退分支——也就是要验证的那一条。用骷髅而不是靠地形，
+        // 是为了让这条断言与"退不退得开"的判定无关。
+        maid.setHealth(1.0F);
+        Skeleton skeleton = EntityType.SKELETON.create(helper.getLevel());
+        helper.assertTrue(skeleton != null, "夹具无法创建骷髅");
+        skeleton.setPos(maid.getX() + 9.0D, maid.getY(), maid.getZ());
+        keepSeeing(maid, skeleton);
+
+        // 攒一段真实的蓄力：拉弦是实体状态，要靠实体自己 tick 才会推进。
+        maid.startUsingItem(InteractionHand.MAIN_HAND);
+        for (int tick = 0; tick < 8; tick++) {
+            maid.tick();
+        }
+        keepSeeing(maid, skeleton);
+        int drawnBefore = maid.getTicksUsingItem();
+        helper.assertTrue(
+                drawnBefore > 0,
+                "夹具没能让蓄力推进，这条测试就没有验证到任何东西"
+        );
+        int arrowsBefore = arrows(maid);
+
+        new TlmCombatAction(
+                new TlmThreatScanner(),
+                new TlmWeaponScanner(RangedWeaponRecognizer.NONE)
+        ).execute(maid);
+
+        boolean stillDrawing = maid.isUsingItem()
+                && maid.getTicksUsingItem() >= drawnBefore;
+        boolean spent = arrows(maid) < arrowsBefore;
+        helper.assertTrue(
+                stillDrawing || spent,
+                "一次决策把已经攒到 " + drawnBefore
+                        + " tick 的蓄力清零了，也没有射出任何东西；"
+                        + "只要这种情况会周期性发生，她就永远放不出箭"
+        );
+        helper.succeed();
+    }
+
+    /**
+     * 被逼近到射程之内，她得真的往后退。
+     *
+     * <p>玩家报告"远程根本不拉开距离"。近战的后撤有测试钉着，远程这一侧一直
+     * 没有——而两者走的是不同的分支。断言只看"她被派往哪里"：走不走得到是
+     * 导航的事，"她被告知退到更远处"才是这里的命题。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void closedOnAtBowRangeSheGivesGround(
+            GameTestHelper helper
+    ) {
+        // 站在靠 +x 的一侧，威胁也在 +x，于是退路朝 -x，且那边地够多。
+        CompanionScene scene = CompanionScene.room(helper, 11, 5);
+        EntityMaid maid = scene.maid(9, 2, 2);
+        maid.setTask(new FreedomMaidTask());
+        maid.setItemInHand(
+                InteractionHand.MAIN_HAND, new ItemStack(Items.BOW)
+        );
+        maid.getAvailableBackpackInv().setStackInSlot(
+                0, new ItemStack(Items.ARROW, 32)
+        );
+        // 三格：已经进了她想保持的八格，但还没近到该拔刀。
+        Zombie zombie = seeHostile(helper, maid, 1.5D);
+
+        new TlmCombatAction(
+                new TlmThreatScanner(),
+                new TlmWeaponScanner(RangedWeaponRecognizer.NONE)
+        ).execute(maid);
+
+        double here = maid.position().distanceTo(zombie.position());
+        double sentTo = maid.getBrain()
+                .getMemory(MemoryModuleType.WALK_TARGET)
+                .map(target -> target.getTarget().currentPosition()
+                        .distanceTo(zombie.position()))
+                .orElse(-1.0D);
+        helper.assertTrue(
+                sentTo > here,
+                "僵尸进到 " + here + " 格，她被派往距它 " + sentTo
+                        + " 格处——没有拉开距离就是站着挨打"
+        );
+        helper.succeed();
+    }
+
+    /** 她背包里还剩几支箭。 */
+    private static int arrows(EntityMaid maid) {
+        int count = 0;
+        var backpack = maid.getAvailableBackpackInv();
+        for (int slot = 0; slot < backpack.getSlots(); slot++) {
+            ItemStack stack = backpack.getStackInSlot(slot);
+            if (stack.is(Items.ARROW)) {
+                count += stack.getCount();
+            }
+        }
+        return count;
+    }
+
+    /**
      * 敌人只进记忆，不进世界。
      *
      * <p>加入世界的僵尸会自己找目标、自己走动，既污染邻座测试也让断言
@@ -259,10 +387,10 @@ public final class RangedFireGameTests {
     }
 
     /** 把这只敌人（重新）放进她的可见实体记忆。 */
-    private static void keepSeeing(EntityMaid maid, Zombie zombie) {
+    private static void keepSeeing(EntityMaid maid, LivingEntity hostile) {
         maid.getBrain().setMemory(
                 MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES,
-                new NearestVisibleLivingEntities(maid, List.of(zombie))
+                new NearestVisibleLivingEntities(maid, List.of(hostile))
         );
     }
 

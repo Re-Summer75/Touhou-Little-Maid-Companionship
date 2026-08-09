@@ -1,6 +1,8 @@
 package com.laixia.maidintelligence.gametest.behavior;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.behavior.domain.ability.CompanionAbilityIds;
 import com.laixia.maidintelligence.feature.behavior.tlm.TlmOwnerCoordinationGroups;
 import com.laixia.maidintelligence.platform.resource.ModResources;
@@ -84,6 +86,9 @@ public final class OwnerCoordinationGameTests {
             }
         };
         maid.setTame(true);
+        maid.setTask(
+                TaskManager.findTask(FreedomMaidTask.UID).orElseThrow()
+        );
         maid.setHomeModeEnable(false);
         maid.setOwnerUUID(owner.getUUID());
         maid.setPos(

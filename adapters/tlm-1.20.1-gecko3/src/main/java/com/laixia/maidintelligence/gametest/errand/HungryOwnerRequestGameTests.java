@@ -1,6 +1,8 @@
 package com.laixia.maidintelligence.gametest.errand;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.gametest.support.GameTestPositions;
 import com.laixia.maidintelligence.gametest.support.IntentGameTestRuntime;
@@ -132,6 +134,9 @@ public final class HungryOwnerRequestGameTests {
         };
         maid.setPos(GameTestPositions.center(helper, 1, 2, 1));
         maid.setTame(true);
+        maid.setTask(
+                TaskManager.findTask(FreedomMaidTask.UID).orElseThrow()
+        );
         maid.setHomeModeEnable(false);
         helper.getLevel().addFreshEntity(maid);
         return new Fixture(owner, maid);

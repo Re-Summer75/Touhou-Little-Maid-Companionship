@@ -1,14 +1,24 @@
 package com.laixia.maidintelligence.gametest.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.behavior.tlm.FreedomMaidTask;
+import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskAttack;
+import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMode;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.CombatMovement;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.RangedWeaponRecognizer;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.ThreatProfile;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmAlertness;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmThreatScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmWeaponScanner;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.ai.memory.NearestVisibleLivingEntities;
 import net.minecraft.world.entity.ai.memory.WalkTarget;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.Item;
@@ -17,11 +27,16 @@ import net.minecraft.world.item.Items;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
+import java.util.List;
+
 /**
- * 走到打得到的地方，以及打空之后换手。
+ * 走到打得到的地方，以及手里那把究竟是不是该拿的那把。
  *
- * <p>两条都不是战术问题，是"她停在够不着的地方"和"她举着空武器"。既有测试都
- * 漏掉了，因为它们要么只问她选了哪个意图，要么只问伤害有没有落上。
+ * <p>这些都不是战术问题，是"她停在够不着的地方"和"她举着不该举的东西"。既有
+ * 测试都漏掉了，因为它们要么只问她选了哪个意图，要么只问伤害有没有落上。
+ *
+ * <p>换手这一环单独钉住是有理由的：决定和执行是两段代码，决定对了而手是错的，
+ * 从外面看和决定错了一模一样。
  */
 @GameTestHolder(ModResources.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -169,6 +184,225 @@ public final class CombatApproachGameTests {
                     );
                 })
                 .thenSucceed();
+    }
+
+    /**
+     * 决定拿最好的那把，就得真的拿到最好的那把。
+     *
+     * <p>换手曾经只按"种类"去背包里找，而宿主的查找取第一个命中的槽位——于是
+     * 一个"用下界合金剑"的决定可以换来一把石剑。更糟的是同一个判据先测主手：
+     * 手上已经拿着任意一件近战武器，查找就直接短路了，她永远换不掉手里那把。
+     *
+     * <p>断言看的是最终握着什么，而不是策略选了什么：选择本来就没错。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void sheDrawsTheBetterBladeNotTheOneAlreadyHeld(
+            GameTestHelper helper
+    ) {
+        CompanionScene scene = CompanionScene.room(helper, 5, 5);
+        EntityMaid maid = scene.maid(2, 2, 2);
+        maid.setTask(new FreedomMaidTask());
+        maid.setItemInHand(
+                InteractionHand.MAIN_HAND, new ItemStack(Items.STONE_SWORD)
+        );
+        maid.getAvailableBackpackInv().setStackInSlot(
+                0, new ItemStack(Items.DIAMOND_SWORD)
+        );
+        seeHostile(maid, helper, 1.5D);
+
+        combat().execute(maid);
+
+        helper.assertTrue(
+                maid.getMainHandItem().is(Items.DIAMOND_SWORD),
+                "她仍握着 " + maid.getMainHandItem().getItem()
+                        + "；换手按种类匹配，手上随便一把近战就让查找短路了"
+        );
+        helper.succeed();
+    }
+
+    /**
+     * 她不该对一件用不了的武器做出使用它的动作。
+     *
+     * <p>玩家报告的是"没有子弹还在那儿举着弓"。这条不是问她选得对不对，而是
+     * 问执行路径有没有可能与选择脱节——姿态一旦按"策略选了远程"分派，而手里
+     * 那把恰好射不出去，她就会站在射程上永远拉一张空弓。现在分派看的是手里
+     * 这一把本身能不能用，于是这种脱节在结构上不成立。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void sheNeverWorksAWeaponSheCannotFire(
+            GameTestHelper helper
+    ) {
+        CompanionScene scene = CompanionScene.room(helper, 5, 5);
+        EntityMaid maid = scene.maid(2, 2, 2);
+        maid.setTask(new FreedomMaidTask());
+        // 空弓在手，箭一支也没有；背包里有把剑。
+        maid.setItemInHand(
+                InteractionHand.MAIN_HAND, new ItemStack(Items.BOW)
+        );
+        maid.getAvailableBackpackInv().setStackInSlot(
+                0, new ItemStack(Items.IRON_SWORD)
+        );
+        seeHostile(maid, helper, 6.0D);
+
+        combat().execute(maid);
+
+        helper.assertTrue(
+                maid.getMainHandItem().is(Items.IRON_SWORD),
+                "空弓没有被换掉，她手里仍是 "
+                        + maid.getMainHandItem().getItem()
+        );
+        helper.assertFalse(
+                maid.isUsingItem() && !new TlmWeaponScanner(
+                        RangedWeaponRecognizer.NONE
+                ).canFire(maid, maid.getMainHandItem()),
+                "她正在使用一件打不出去的武器"
+        );
+
+        // 连剑也没有：此时正确的答案是不打，而不是继续举着空弓。
+        maid.getAvailableBackpackInv().setStackInSlot(0, ItemStack.EMPTY);
+        maid.setItemInHand(
+                InteractionHand.MAIN_HAND, new ItemStack(Items.BOW)
+        );
+        seeHostile(maid, helper, 6.0D);
+        combat().execute(maid);
+
+        helper.assertFalse(
+                maid.isUsingItem(),
+                "无弹药、无近战，她还是把空弓拉了起来"
+        );
+        helper.succeed();
+    }
+
+    /**
+     * 本体攻击任务在跑的时候，本模组的战斗动作必须让位。
+     *
+     * <p>交战意图刻意不检查工作模式——战斗是最高中断 band，本该能抢占。但那也
+     * 意味着主人把她设成本体攻击任务时，两套系统会同时驱动同一场战斗：各自选
+     * 目标，各自调用 `doHurtTarget`，于是她在那些任务上伤害翻倍。
+     *
+     * <p>断言看的是"她有没有把对方当成攻击目标"：让位的形态是完全不接手，而不
+     * 是接手之后打得温柔一点。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void aBuiltInAttackTaskIsLeftAlone(GameTestHelper helper) {
+        CompanionScene scene = CompanionScene.room(helper, 5, 5);
+        EntityMaid maid = scene.maid(2, 2, 2);
+        maid.getAvailableBackpackInv().setStackInSlot(
+                0, new ItemStack(Items.IRON_SWORD)
+        );
+        seeHostile(maid, helper, 1.5D);
+
+        // 先确认自由模式下她确实会接手，否则这条测试可能因为别的原因而通过。
+        maid.setTask(new FreedomMaidTask());
+        combat().execute(maid);
+        helper.assertTrue(
+                maid.getBrain()
+                        .getMemory(MemoryModuleType.ATTACK_TARGET).isPresent(),
+                "自由模式下她都没有接手战斗，这条测试没有验证到让位"
+        );
+
+        // 换成本体的近战攻击任务：让位现在发生在更早也更彻底的地方。
+        //
+        // 战斗动作里曾有一句"本体攻击任务在跑就收手"，因为那时本模组的意图层
+        // 在所有工作模式下都跑。现在编排器只在自由模式启动，本体模式下这套
+        // 逻辑根本不会被调用——断言那句已删的分支等于断言一段不存在的代码，
+        // 所以改问真正决定这件事的开关。
+        maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);
+        maid.setTask(TaskManager.findTask(TaskAttack.UID).orElseThrow());
+        helper.assertFalse(
+                FreedomMode.isActive(maid),
+                "本体攻击任务下 FreedomMode 仍然认为该由我们接管，"
+                        + "两套一起打会让伤害翻倍"
+        );
+        helper.succeed();
+    }
+
+    /**
+     * 战斗中不该被捡东西拖走。
+     *
+     * <p>玩家报告"战斗下被捡东西影响"。拾取是本体行为，带真实的移动承诺，一旦
+     * 开始就每 tick 和战斗抢她的脚——赢的次数足以让人看到她为了一根掉在地上的
+     * 羽毛走进怪堆。所以从源头拒绝，而不是在仲裁里压过它：压过去也意味着她已经
+     * 起步、转身、再被拉回来。
+     *
+     * <p>三段都要断言：安静时允许（否则可能是把拾取整个关掉了）、逼近时拒绝、
+     * 远处看得见但过不来时仍然允许（否则山谷对面一只骷髅就能停掉全部家务）。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void pickupStandsDownWhenThreatened(GameTestHelper helper) {
+        CompanionScene scene = CompanionScene.room(helper, 5, 5);
+        EntityMaid maid = scene.maid(2, 2, 2);
+        maid.setTask(new FreedomMaidTask());
+
+        helper.assertTrue(
+                TlmAlertness.allowsErrands(maid),
+                "空场时她就被禁止做差事了，那这条测的不是威胁"
+        );
+
+        Zombie onTop = seeHostileEntity(maid, helper, 1.5D);
+        helper.assertFalse(
+                TlmAlertness.allowsErrands(maid),
+                "东西已经贴到脸上，她还被允许走开去捡东西。状态="
+                        + TlmAlertness.of(maid)
+                        + " 敌意判定="
+                        + ThreatProfile.isHostileTo(maid, onTop)
+                        + " 到达时间="
+                        + ThreatProfile.secondsToContact(maid, onTop)
+        );
+
+        // 十六格外、静止不动：看得见，但永远到不了。
+        Zombie idle = new Zombie(helper.getLevel());
+        idle.setPos(maid.getX() + 15.0D, maid.getY(), maid.getZ());
+        idle.setNoAi(true);
+        maid.getBrain().setMemory(
+                MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES,
+                new NearestVisibleLivingEntities(maid, List.of(idle))
+        );
+        helper.assertTrue(
+                TlmAlertness.allowsErrands(maid),
+                "一个过不来的远处敌人就让她停掉了全部差事"
+        );
+        helper.succeed();
+    }
+
+    private static TlmCombatAction combat() {
+        return new TlmCombatAction(
+                new TlmThreatScanner(),
+                new TlmWeaponScanner(RangedWeaponRecognizer.NONE)
+        );
+    }
+
+    /**
+     * 敌人只进记忆，不进世界。
+     *
+     * <p>真实僵尸的索敌达十六格，放进共享测试世界会波及邻座；这里要验证的是
+     * 感知到敌人之后握着什么，敌人怎么进入感知不是本测试的命题。
+     */
+    private static Zombie seeHostileEntity(
+            EntityMaid maid,
+            GameTestHelper helper,
+            double offset
+    ) {
+        Zombie zombie = new Zombie(helper.getLevel());
+        zombie.setPos(maid.getX() + offset, maid.getY(), maid.getZ());
+        maid.getBrain().setMemory(
+                MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES,
+                new NearestVisibleLivingEntities(maid, List.of(zombie))
+        );
+        return zombie;
+    }
+
+    private static void seeHostile(
+            EntityMaid maid,
+            GameTestHelper helper,
+            double offset
+    ) {
+        Zombie zombie = new Zombie(helper.getLevel());
+        zombie.setPos(maid.getX() + offset, maid.getY(), maid.getZ());
+        maid.getBrain().setMemory(
+                MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES,
+                new NearestVisibleLivingEntities(maid, List.of(zombie))
+        );
     }
 
     private static Zombie target(

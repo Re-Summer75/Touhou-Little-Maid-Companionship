@@ -2,9 +2,7 @@ package com.laixia.maidintelligence.feature.orchestration.tlm.context;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
-import com.laixia.maidintelligence.feature.ai.domain.arbitration.BehaviorOccupancyLevel;
-import com.laixia.maidintelligence.feature.ai.domain.arbitration.BehaviorOccupancySnapshot;
-import com.laixia.maidintelligence.feature.ai.tlm.TlmBehaviorOccupancyClassifier;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomOccupancy;
 import com.laixia.maidintelligence.feature.behavior.application.forecast.OwnerActivityTracker;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
 import com.laixia.maidintelligence.feature.behavior.domain.owner.OwnerFacts;
@@ -13,7 +11,6 @@ import com.laixia.maidintelligence.feature.orchestration.api.insight.MaidInsight
 import com.laixia.maidintelligence.feature.behavior.tlm.MaidCommandSeatBridge;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.ThreatProfile;
-import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentObserver;
 import com.laixia.maidintelligence.feature.perception.tlm.TlmAffordancePerceptionService;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.feature.status.domain.DefaultHungerPolicy;
@@ -58,20 +55,17 @@ public final class TlmMaidFactReader {
             FORECAST_LIFT_FACTS = forecastLiftFacts();
 
     private final MaidStatusApi<EntityMaid> status;
-    private final TlmMaidIntentObserver observer;
     private final MaidSnackCabinetMealSource snackCabinetMeals;
     private final TlmAffordancePerceptionService perception;
     private final OwnerActivityTracker activityTracker;
 
     public TlmMaidFactReader(
             MaidStatusApi<EntityMaid> status,
-            TlmMaidIntentObserver observer,
             MaidSnackCabinetMealSource snackCabinetMeals,
             TlmAffordancePerceptionService perception
     ) {
         this(
                 status,
-                observer,
                 snackCabinetMeals,
                 perception,
                 new OwnerActivityTracker()
@@ -80,7 +74,6 @@ public final class TlmMaidFactReader {
 
     public TlmMaidFactReader(
             MaidStatusApi<EntityMaid> status,
-            TlmMaidIntentObserver observer,
             MaidSnackCabinetMealSource snackCabinetMeals,
             TlmAffordancePerceptionService perception,
             OwnerActivityTracker activityTracker
@@ -90,7 +83,6 @@ public final class TlmMaidFactReader {
                 "activityTracker"
         );
         this.status = Objects.requireNonNull(status, "status");
-        this.observer = Objects.requireNonNull(observer, "observer");
         this.snackCabinetMeals = Objects.requireNonNull(
                 snackCabinetMeals,
                 "snackCabinetMeals"
@@ -228,7 +220,7 @@ public final class TlmMaidFactReader {
                 ? Math.sqrt(maid.distanceToSqr(owner))
                 : Double.NaN;
         boolean passiveSeat =
-                TlmBehaviorOccupancyClassifier.isPassiveSeat(
+                FreedomOccupancy.isPassiveSeat(
                         maid.getVehicle()
                 );
         boolean sittingPose = maid.isMaidInSittingPose();
@@ -251,8 +243,7 @@ public final class TlmMaidFactReader {
                 InitEntities.TARGET_POS.get()
         );
         boolean usingItem = maid.isUsingItem();
-        BehaviorOccupancySnapshot occupancy =
-                TlmBehaviorOccupancyClassifier.snapshot(maid, gameTime);
+        boolean claimed = FreedomOccupancy.claimed(maid);
         boolean homeMode = maid.isHomeModeEnable();
         int hunger = status.getState(maid).hunger();
         /*
@@ -293,16 +284,12 @@ public final class TlmMaidFactReader {
                 panicActive,
                 workTargetPresent,
                 usingItem,
-                isBuiltInTask(maid),
-                occupancy.level() == BehaviorOccupancyLevel.HARD,
-                observer.workReleaseAge(maid, gameTime),
-                occupancy.movementSource() != null,
-                occupancy.movementSource() == null
-                        ? -1
-                        : occupancy.movementSource().priority(),
-                occupancy.movementFailOpen(),
-                occupancy.level().code(),
-                occupancy.reason().code(),
+                // 曾经还有七项，全部随协调层和本体工作行为一起删掉了：谁持有
+                // 她的移动、租约优先级、fail-open、占用原因、工作释放时长、
+                // 是不是本体任务、硬移动阻塞。它们在自由模式下都只剩一个恒定
+                // 答案，而一个永远不变的事实不是事实，只是噪声——它会出现在
+                // 词表里、出现在 ai stats 里，让下一个人以为有东西可看。
+                claimed ? 1 : 0,
                 /*
                  * Only whether something edible is lying about, for the same
                  * reason the cabinet fact above says only whether a meal is to
@@ -383,29 +370,8 @@ public final class TlmMaidFactReader {
         if (fact.equals(CompanionIntentIds.USING_ITEM)) {
             return bool(snapshot.usingItem());
         }
-        if (fact.equals(CompanionIntentIds.BUILT_IN_TASK)) {
-            return bool(snapshot.builtInTask());
-        }
-        if (fact.equals(CompanionIntentIds.MOVEMENT_HARD_BLOCKED)) {
-            return bool(snapshot.movementHardBlocked());
-        }
-        if (fact.equals(CompanionIntentIds.WORK_RELEASE_AGE)) {
-            return snapshot.workReleaseAge();
-        }
-        if (fact.equals(CompanionIntentIds.MOVEMENT_LEASE_ACTIVE)) {
-            return bool(snapshot.movementLeaseActive());
-        }
-        if (fact.equals(CompanionIntentIds.MOVEMENT_LEASE_PRIORITY)) {
-            return snapshot.movementLeasePriority();
-        }
-        if (fact.equals(CompanionIntentIds.MOVEMENT_FAIL_OPEN)) {
-            return bool(snapshot.movementFailOpen());
-        }
         if (fact.equals(CompanionIntentIds.BEHAVIOR_OCCUPANCY_LEVEL)) {
             return snapshot.behaviorOccupancyLevel();
-        }
-        if (fact.equals(CompanionIntentIds.BEHAVIOR_OCCUPANCY_REASON)) {
-            return snapshot.behaviorOccupancyReason();
         }
         if (fact.equals(CompanionIntentIds.LOOSE_FOOD_AVAILABLE)) {
             return bool(snapshot.looseFoodAvailable());

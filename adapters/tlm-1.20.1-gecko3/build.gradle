@@ -93,14 +93,32 @@ tasks.register('verifyAdapterLayout') {
             }
         }
 
+        // Every Mixin into the host is a method descriptor that a future host
+        // release can invalidate, so the count is pinned: adding one has to be
+        // a decision somebody made on purpose, not a drift.
+        //
+        // 14, down from 27, and that halving is the point of the whole change.
+        //
+        // Fifteen went out. Most coordinated the host's own behaviours against
+        // ours, which free mode no longer needs because it registers none of
+        // them; the rest were host-mode enhancements (adaptive activity radius,
+        // combat pre-warming, pickup sensor replacement) removed wholesale,
+        // because this mod cannot promise to stay compatible with every work
+        // mode, addon and companion mod that touches them.
+        //
+        // Two came in, and they replace what would otherwise have been a dozen:
+        // MaidBrainFreedomIsolationMixin swaps the whole brain registration for
+        // free mode in one place instead of intercepting each host behaviour's
+        // start conditions, and ExtraMaidBrainAccessor reaches the extension
+        // list that rebuild has to preserve.
         def mixins = fileTree(
                 'src/main/java/com/laixia/maidintelligence/mixin/tlm'
         ) {
             include '**/*.java'
         }.files
-        if (mixins.size() != 27) {
+        if (mixins.size() != 14) {
             throw new GradleException(
-                    "Expected 27 TLM/Gecko Mixins, found ${mixins.size()}."
+                    "Expected 14 TLM/Gecko Mixins, found ${mixins.size()}."
             )
         }
         mixins.each { mixin ->

@@ -133,8 +133,6 @@ public final class IntentDataCodecVerification {
                 "Gaze recall must allow soft occupancy preemption"
         );
         for (String name : List.of(
-                "post_task_return",
-                "wander_return",
                 "snack_cabinet_meal"
         )) {
             require(

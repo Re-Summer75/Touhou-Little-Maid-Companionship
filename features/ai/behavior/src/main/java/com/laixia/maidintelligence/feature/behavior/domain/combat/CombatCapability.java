@@ -36,17 +36,4 @@ public record CombatCapability(
     public boolean armed() {
         return bestDps() > 0.0D;
     }
-
-    /**
-     * Seconds she survives taking {@code incomingDps}.
-     *
-     * <p>Infinite when nothing is hitting her, which is the honest answer and
-     * keeps the ratio below well-defined instead of dividing by zero.
-     */
-    public double survivalSeconds(double incomingDps) {
-        if (incomingDps <= 0.0D) {
-            return Double.POSITIVE_INFINITY;
-        }
-        return effectiveHealth / incomingDps;
-    }
 }

@@ -1,7 +1,8 @@
 package com.laixia.maidintelligence.feature.ai.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.ai.domain.OwnerFollowPolicy;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMode;
+import com.laixia.maidintelligence.feature.behavior.domain.OwnerFollowPolicy;
 import net.minecraft.world.entity.LivingEntity;
 
 /**
@@ -28,6 +29,11 @@ public final class OwnerFollowBridge {
      * @return whether she was teleported
      */
     public static boolean teleportIfStranded(EntityMaid maid) {
+        if (FreedomMode.isHostOwned(maid)) {
+            // The host has its own rule for a maid left behind, and in its own
+            // modes that rule is the one the player is relying on.
+            return false;
+        }
         LivingEntity owner = maid.getOwner();
         if (owner == null
                 || owner.isSpectator()

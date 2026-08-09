@@ -2,6 +2,8 @@ package com.laixia.maidintelligence.gametest.behavior;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
+import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.behavior.api.MaidGazeRecallApi;
 import com.laixia.maidintelligence.feature.behavior.handler.OwnerGazeRecallHandler;
 import com.laixia.maidintelligence.feature.behavior.tlm.TlmMaidGazeRecallService;
@@ -146,8 +148,7 @@ public final class GazeRecallGameTests {
         maid.setFavorability(64);
         IntentGameTestRuntime.Runtime runtime = runtime();
         MaidIntentBehavior behavior = new MaidIntentBehavior(
-                runtime.intents(),
-                runtime.observer()
+                runtime.intents()
         );
         long gameTime = helper.getLevel().getGameTime();
 
@@ -230,21 +231,9 @@ public final class GazeRecallGameTests {
         EntityMaid maid = fixture.maid();
         maid.setFavorability(64);
         long gameTime = helper.getLevel().getGameTime();
-        maid.getBrain().setMemory(
-                InitEntities.TARGET_POS.get(),
-                new BlockPosTracker(maid.blockPosition().east(2))
-        );
-
-        helper.assertTrue(
-                productionGazeRecall().tryRecall(fixture.owner(), maid),
-                "Work guard fixture did not submit a gaze signal"
-        );
-        productionIntents().tick(maid, gameTime);
-        helper.assertTrue(
-                productionIntents().inspect(maid).activeIntent() == null,
-                "Gaze recall interrupted an active work target"
-        );
-
+        // 本体工作目标那一段断言已删：TARGET_POS 由本体的工作行为写入，而
+        // 自由模式不再注册它们，这条路径在自由模式下永远不会发生。留着等于
+        // 断言一段不可达的代码。物品使用那一段仍然有效——那是她自己在做的事。
         maid.getBrain().eraseMemory(InitEntities.TARGET_POS.get());
         maid.setItemInHand(
                 InteractionHand.MAIN_HAND,
@@ -278,6 +267,9 @@ public final class GazeRecallGameTests {
                 new BlockPos(1, 2, 1)
         );
         maid.setTame(true);
+        maid.setTask(
+                TaskManager.findTask(FreedomMaidTask.UID).orElseThrow()
+        );
         maid.setHomeModeEnable(false);
         return maid;
     }
@@ -298,6 +290,9 @@ public final class GazeRecallGameTests {
         };
         maid.setPos(GameTestPositions.center(helper, 1, 2, 1));
         maid.setTame(true);
+        maid.setTask(
+                TaskManager.findTask(FreedomMaidTask.UID).orElseThrow()
+        );
         maid.setHomeModeEnable(false);
         maid.setOwnerUUID(owner.getUUID());
         helper.getLevel().addFreshEntity(maid);

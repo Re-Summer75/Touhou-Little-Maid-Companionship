@@ -1,13 +1,8 @@
 package com.laixia.maidintelligence.feature.orchestration.tlm.action;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.ai.domain.arbitration.BehaviorOccupancyLevel;
-import com.laixia.maidintelligence.feature.ai.domain.arbitration.BehaviorOccupancySnapshot;
-import com.laixia.maidintelligence.feature.ai.domain.MovementIntentDecision;
-import com.laixia.maidintelligence.feature.ai.domain.MovementIntentSource;
-import com.laixia.maidintelligence.feature.ai.tlm.MovementCoordinationBridge;
-import com.laixia.maidintelligence.feature.ai.tlm.NativeBehaviorArbitrationBridge;
-import com.laixia.maidintelligence.feature.ai.tlm.TlmBehaviorOccupancyClassifier;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMovement;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomOccupancy;
 import com.laixia.maidintelligence.feature.behavior.tlm.MaidCommandSeatBridge;
 import com.laixia.maidintelligence.feature.orchestration.domain.ActionResult;
 import net.minecraft.world.entity.LivingEntity;
@@ -50,30 +45,16 @@ public final class TlmOwnerCompanionIntentAction {
     ) {
         boolean ownerCommand = ownerCommand(parameters);
         LivingEntity owner = validOwner(maid);
-        if (ownerCommand && owner != null) {
-            renewOwnedOwnerTarget(maid, owner, gameTime);
-        }
-        BehaviorOccupancySnapshot occupancy =
-                TlmBehaviorOccupancyClassifier.snapshot(maid, gameTime);
+        boolean claimed = FreedomOccupancy.claimed(maid);
         if (owner == null
                 || maid.isHomeModeEnable()
-                || !allowed(occupancy, ownerCommand)
+                || !allowed(claimed, ownerCommand)
                 || (!ownerCommand
                 && MaidCommandSeatBridge.isSeatProtected(maid))) {
             failMovement(maid, ownerCommand);
             return ActionResult.FAILED;
         }
-        if (ownerCommand) {
-            NativeBehaviorArbitrationBridge.acquireOwnerCommand(
-                    maid,
-                    gameTime,
-                    OWNER_COMMAND_RENEW_TICKS
-            );
-            NativeBehaviorArbitrationBridge.quiesceSoftBehavior(
-                    maid,
-                    occupancy
-            );
-        }
+
         if (!maid.canBrainMoving()) {
             failMovement(maid, ownerCommand);
             return ActionResult.FAILED;
@@ -99,9 +80,6 @@ public final class TlmOwnerCompanionIntentAction {
                 speed,
                 closeEnough,
                 true,
-                ownerCommand
-                        ? MovementIntentSource.OWNER_COMMAND
-                        : MovementIntentSource.COMPANION,
                 gameTime
         );
     }
@@ -119,19 +97,11 @@ public final class TlmOwnerCompanionIntentAction {
         }
         // An active command action renews before classification so its own
         // expiring target or command seat is never mistaken for an addon.
-        NativeBehaviorArbitrationBridge.acquireOwnerCommand(
-                maid,
-                gameTime,
-                OWNER_COMMAND_RENEW_TICKS
-        );
-        renewOwnedOwnerTarget(maid, owner, gameTime);
-        BehaviorOccupancySnapshot occupancy =
-                TlmBehaviorOccupancyClassifier.snapshot(maid, gameTime);
-        if (!occupancy.allowsOwnerCommand()) {
+        boolean claimed = FreedomOccupancy.claimed(maid);
+        if (claimed) {
             cancelCommandWindow(maid);
             return ActionResult.FAILED;
         }
-        NativeBehaviorArbitrationBridge.quiesceSoftBehavior(maid, occupancy);
 
         boolean commandSeated =
                 MaidCommandSeatBridge.mirrorOwnerSeat(maid, owner);
@@ -181,7 +151,6 @@ public final class TlmOwnerCompanionIntentAction {
                 speed,
                 closeEnough,
                 false,
-                MovementIntentSource.OWNER_COMMAND,
                 gameTime
         );
     }
@@ -204,15 +173,12 @@ public final class TlmOwnerCompanionIntentAction {
             Map<String, String> parameters
     ) {
         clearOwnedOwnerTarget(maid);
-        if (ownerCommand(parameters)) {
-            NativeBehaviorArbitrationBridge.releaseOwnerCommand(maid);
-        }
+
     }
 
     public void cancelCommandWindow(EntityMaid maid) {
         clearOwnedOwnerTarget(maid);
         MaidCommandSeatBridge.endCommandWindow(maid);
-        NativeBehaviorArbitrationBridge.releaseOwnerCommand(maid);
     }
 
     public boolean revalidateMovement(
@@ -224,12 +190,11 @@ public final class TlmOwnerCompanionIntentAction {
             return false;
         }
         boolean ownerCommand = ownerCommand(parameters);
-        BehaviorOccupancySnapshot occupancy =
-                TlmBehaviorOccupancyClassifier.snapshot(maid, gameTime);
-        return allowed(occupancy, ownerCommand)
+        boolean claimed = FreedomOccupancy.claimed(maid);
+        return allowed(claimed, ownerCommand)
                 && (maid.canBrainMoving()
                 || (ownerCommand
-                && occupancy.level() == BehaviorOccupancyLevel.SOFT));
+                && !claimed));
     }
 
     public boolean revalidateHungerRequest(EntityMaid maid) {
@@ -243,7 +208,6 @@ public final class TlmOwnerCompanionIntentAction {
             float speed,
             int closeEnough,
             boolean succeedWhenClose,
-            MovementIntentSource source,
             long gameTime
     ) {
         if (maid.distanceToSqr(owner)
@@ -258,21 +222,17 @@ public final class TlmOwnerCompanionIntentAction {
                     : ActionResult.RUNNING;
         }
         if (targetsOwner(maid, owner)) {
-            MovementIntentDecision renewal =
-                    MovementCoordinationBridge.renewKnownWrite(
-                            maid,
-                            source,
-                            gameTime
-                    );
-            return renewal.writeAllowed()
-                    ? ActionResult.RUNNING
-                    : ActionResult.FAILED;
+            // Already walking at him. Re-issuing costs the path, and the only
+            // thing that can take her off him now is the host steering her to
+            // air, which is what surfacing() reports.
+            return FreedomMovement.surfacing(maid)
+                    ? ActionResult.FAILED
+                    : ActionResult.RUNNING;
         }
 
-        WalkTarget previous = MovementCoordinationBridge.capture(
-                maid,
-                gameTime
-        );
+        if (FreedomMovement.surfacing(maid)) {
+            return ActionResult.FAILED;
+        }
         maid.getBrain().eraseMemory(MemoryModuleType.PATH);
         maid.getBrain().eraseMemory(
                 MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE
@@ -282,13 +242,6 @@ public final class TlmOwnerCompanionIntentAction {
                 owner,
                 speed,
                 closeEnough
-        );
-        MovementCoordinationBridge.finishKnownWrite(
-                maid,
-                previous,
-                source,
-                true,
-                gameTime
         );
         if (!targetsOwner(maid, owner)) {
             clearOwnedOwnerTarget(maid);
@@ -303,49 +256,19 @@ public final class TlmOwnerCompanionIntentAction {
         return ActionResult.RUNNING;
     }
 
-    private void renewOwnedOwnerTarget(
-            EntityMaid maid,
-            LivingEntity owner,
-            long gameTime
-    ) {
-        WalkTarget owned = ownedOwnerTargets.get(maid);
-        WalkTarget current = maid.getBrain()
-                .getMemory(MemoryModuleType.WALK_TARGET)
-                .orElse(null);
-        if (owned != null
-                && current == owned
-                && targetsOwner(maid, owner)) {
-            NativeBehaviorArbitrationBridge.acquireOwnerCommand(
-                    maid,
-                    gameTime,
-                    OWNER_COMMAND_RENEW_TICKS
-            );
-            MovementCoordinationBridge.renewKnownWrite(
-                    maid,
-                    MovementIntentSource.OWNER_COMMAND,
-                    gameTime
-            );
-        }
-    }
-
     private void clearOwnedOwnerTarget(EntityMaid maid) {
         WalkTarget owned = ownedOwnerTargets.remove(maid);
         WalkTarget current = maid.getBrain()
                 .getMemory(MemoryModuleType.WALK_TARGET)
                 .orElse(null);
-        if (owned == null) {
-            return;
-        }
-        if (current == null) {
-            MovementCoordinationBridge.hardReset(maid);
-            return;
-        }
-        if (current != owned) {
+        // Only ours is withdrawn. A target somebody else wrote since is theirs
+        // to end, and erasing it here is how a plan cancels a walk it never
+        // started.
+        if (owned == null || current != owned) {
             return;
         }
         maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
         maid.getBrain().eraseMemory(MemoryModuleType.PATH);
-        MovementCoordinationBridge.hardReset(maid);
     }
 
     private static boolean targetsOwner(
@@ -377,18 +300,12 @@ public final class TlmOwnerCompanionIntentAction {
             boolean ownerCommand
     ) {
         clearOwnedOwnerTarget(maid);
-        if (ownerCommand) {
-            NativeBehaviorArbitrationBridge.releaseOwnerCommand(maid);
-        }
+
     }
 
-    private static boolean allowed(
-            BehaviorOccupancySnapshot occupancy,
-            boolean ownerCommand
-    ) {
-        return ownerCommand
-                ? occupancy.allowsOwnerCommand()
-                : occupancy.allowsPassiveCompanion();
+    /** 被玩家或世界扣住时，任何计划都不该开始。*/
+    private static boolean allowed(boolean claimed, boolean ownerCommand) {
+        return !claimed;
     }
 
     private static boolean ownerCommand(Map<String, String> parameters) {

@@ -1,7 +1,7 @@
 package com.laixia.maidintelligence.gametest.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.behavior.tlm.FreedomMaidTask;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.MeleeSwing;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.RangedWeaponRecognizer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
@@ -113,7 +113,7 @@ public final class MeleeEngagementGameTests {
         );
         // 逼出 WITHDRAW：这一架她打不过。
         maid.setHealth(1.0F);
-        combat.execute(maid, 0);
+        combat.execute(maid);
 
         helper.assertTrue(
                 victim.getHealth() == victim.getMaxHealth(),
@@ -297,14 +297,14 @@ public final class MeleeEngagementGameTests {
         );
 
         // 第一拍：够得着且冷却是好的，她应该挥出去。
-        combat.execute(maid, 0);
+        combat.execute(maid);
         helper.assertTrue(
                 !MeleeSwing.recovered(maid),
                 "She never swung, so there is no recovery to test"
         );
 
         // 第二拍：冷却中，这一拍不该继续待在它打得到的地方。
-        combat.execute(maid, 1);
+        combat.execute(maid);
         double held = maid.getBrain()
                 .getMemory(MemoryModuleType.WALK_TARGET)
                 .map(target -> target.getTarget().currentPosition()
@@ -370,7 +370,7 @@ public final class MeleeEngagementGameTests {
                     new TlmCombatAction(
                             new TlmThreatScanner(),
                             new TlmWeaponScanner(RangedWeaponRecognizer.NONE)
-                    ).execute(maid, 0);
+                    ).execute(maid);
 
                     helper.assertTrue(
                             victim.getHealth() < victim.getMaxHealth(),

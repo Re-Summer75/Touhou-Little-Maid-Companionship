@@ -2,6 +2,8 @@ package com.laixia.maidintelligence.gametest.support;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.item.EntityChair;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentActions;
 import com.laixia.maidintelligence.feature.perception.tlm.TlmAffordancePerceptionService;
 import com.laixia.maidintelligence.feature.status.tlm.MaidMealAccess;
@@ -93,6 +95,20 @@ public final class CompanionScene {
      * One tamed maid. Home mode is off and follow mode on, matching a maid
      * freshly tamed rather than one already given instructions.
      */
+    /**
+     * A maid in free mode, because that is the only maid this mod has opinions
+     * about.
+     *
+     * <p>The task used to be left at the host's default, and every fixture in
+     * here quietly tested behaviour that now — correctly — only exists in free
+     * mode. Leaving it that way would have meant nineteen tests asserting that
+     * this mod changes work modes it is not supposed to touch.
+     *
+     * <p>Set after she enters the level. {@code setTask} rebuilds the brain and
+     * calls {@code stopAll} on the old one, which touches level state; doing it
+     * to an entity the level has not accepted yet leaves the brain in a state
+     * whose symptoms surface much later and nowhere near here.
+     */
     public EntityMaid maid(int x, int y, int z) {
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
@@ -105,7 +121,23 @@ public final class CompanionScene {
         maid.setHomeModeEnable(false);
         maid.setOwnerUUID(owner.getUUID());
         helper.getLevel().addFreshEntity(maid);
+        maid.setTask(
+                TaskManager.findTask(FreedomMaidTask.UID).orElseThrow()
+        );
         maids.add(maid);
+        return maid;
+    }
+
+    /** The host's own default mode, for checking we left it alone. */
+    public EntityMaid hostModeMaid(int x, int y, int z) {
+        EntityMaid maid = maid(x, y, z);
+        maid.setTask(
+                TaskManager.getTaskIndex().stream()
+                        .filter(task ->
+                                !FreedomMaidTask.UID.equals(task.getUid()))
+                        .findFirst()
+                        .orElseThrow()
+        );
         return maid;
     }
 

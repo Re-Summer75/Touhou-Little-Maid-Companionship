@@ -1,7 +1,7 @@
 package com.laixia.maidintelligence.feature.ai.forge;
 
-import com.laixia.maidintelligence.feature.ai.api.MaidAiTuning;
-import com.laixia.maidintelligence.feature.ai.api.MovementCoordinationMode;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.CombatBalance;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.CombatPolicies;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -17,150 +17,74 @@ public final class AiServerConfig {
             ModResources.configPath("server.toml");
 
     private static final ForgeConfigSpec SPEC;
-    private static final ForgeConfigSpec.BooleanValue ENABLED;
-    private static final ForgeConfigSpec.IntValue REACHABLE_PATH_CACHE_TICKS;
-    private static final ForgeConfigSpec.BooleanValue PROFILING_ENABLED;
-    private static final ForgeConfigSpec.BooleanValue
-            DYNAMIC_ACTIVITY_RADIUS_ENABLED;
-    private static final ForgeConfigSpec.IntValue STATIONARY_CONFIRM_TICKS;
-    private static final ForgeConfigSpec.IntValue MOVING_CONFIRM_TICKS;
-    private static final ForgeConfigSpec.IntValue IDLE_RADIUS_BONUS;
-    private static final ForgeConfigSpec.IntValue WORK_RADIUS_BONUS;
-    private static final ForgeConfigSpec.IntValue COMBAT_RADIUS_BONUS;
-    private static final ForgeConfigSpec.IntValue MAXIMUM_ACTIVITY_RADIUS;
-    private static final ForgeConfigSpec.BooleanValue COMBAT_REACTION_ENABLED;
-    private static final ForgeConfigSpec.IntValue
-            STATIONARY_COMBAT_SCAN_INTERVAL;
-    private static final ForgeConfigSpec.IntValue MOVING_COMBAT_SCAN_INTERVAL;
-    private static final ForgeConfigSpec.IntValue COMBAT_CANDIDATE_LIMIT;
-    private static final ForgeConfigSpec.IntValue RECENT_THREAT_TICKS;
-    private static final ForgeConfigSpec.EnumValue<MovementCoordinationMode>
-            MOVEMENT_COORDINATION_MODE;
-    private static final ForgeConfigSpec.IntValue MOVEMENT_LEASE_TICKS;
-    private static final ForgeConfigSpec.IntValue PICKUP_COMMITMENT_TICKS;
-    private static final ForgeConfigSpec.IntValue MOVEMENT_FAIL_OPEN_TICKS;
+    private static final ForgeConfigSpec.DoubleValue PREFERRED_RANGE;
+    private static final ForgeConfigSpec.DoubleValue RETREAT_OVERSHOOT;
+    private static final ForgeConfigSpec.DoubleValue SAFE_GAP;
+    private static final ForgeConfigSpec.DoubleValue MELEE_SUPPRESSION;
+    private static final ForgeConfigSpec.DoubleValue SAFETY_MARGIN;
+    private static final ForgeConfigSpec.DoubleValue BAIL_OUT_HEALTH;
+    private static final ForgeConfigSpec.DoubleValue SURVIVABLE_BLOW_SHARE;
+    private static final ForgeConfigSpec.DoubleValue BLOW_CAUTION;
 
-    private static volatile MaidAiTuning tuning = MaidAiTuning.defaults();
-    private static volatile MovementCoordinationMode movementCoordinationMode =
-            MovementCoordinationMode.CONSERVATIVE;
-    private static volatile int movementLeaseTicks = 12;
-    private static volatile int pickupCommitmentTicks = 40;
-    private static volatile int movementFailOpenTicks = 40;
     private static boolean registered;
 
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
         builder.push("ai");
-        ENABLED = builder
-                .comment("Whether behavior-preserving maid AI optimizations are enabled.")
-                .define("enabled", true);
-        REACHABLE_PATH_CACHE_TICKS = builder
+
+        // How a fight is judged, as opposed to how it is fought. The decisions
+        // stay in code; what counts as "too close" or "too risky" is a dial,
+        // and dials belong to whoever runs the server.
+        builder.push("combat_balance");
+        PREFERRED_RANGE = builder
                 .comment(
-                        "Ticks to reuse successful reachability checks. "
-                                + "Failures are never cached."
+                        "Blocks she tries to hold while shooting: outside a "
+                                + "charge, inside aim drift."
                 )
-                .defineInRange("reachable_path_cache_ticks", 20, 0, 100);
-        PROFILING_ENABLED = builder
+                .defineInRange("preferred_range", 8.0D, 2.0D, 32.0D);
+        RETREAT_OVERSHOOT = builder
                 .comment(
-                        "Collect per-maid AI-step timing. Disabled by default "
-                                + "to avoid diagnostic overhead."
+                        "Extra blocks taken beyond the range being held, so a "
+                                + "retreat buys seconds rather than one tick."
                 )
-                .define("profiling", false);
-        builder.push("activity_radius");
-        DYNAMIC_ACTIVITY_RADIUS_ENABLED = builder
+                .defineInRange("retreat_overshoot", 3.0D, 0.5D, 16.0D);
+        SAFE_GAP = builder
                 .comment(
-                        "Expand the transient activity radius while the owner "
-                                + "remains stationary. The persisted TLM "
-                                + "radius is never modified."
+                        "Clearance beyond a target's reach while her swing is "
+                                + "recovering."
                 )
-                .define("enabled", true);
-        STATIONARY_CONFIRM_TICKS = builder
-                .comment("Stationary ticks required before radius expansion.")
-                .defineInRange("stationary_confirm_ticks", 20, 1, 200);
-        MOVING_CONFIRM_TICKS = builder
-                .comment("Moving ticks required to restore the base radius.")
-                .defineInRange("moving_confirm_ticks", 3, 1, 40);
-        IDLE_RADIUS_BONUS = builder
-                .comment("Extra blocks for built-in idle activity.")
-                .defineInRange("idle_bonus", 4, 0, 32);
-        WORK_RADIUS_BONUS = builder
-                .comment("Extra blocks for built-in work activity.")
-                .defineInRange("work_bonus", 8, 0, 32);
-        COMBAT_RADIUS_BONUS = builder
-                .comment("Extra blocks for built-in combat activity.")
-                .defineInRange("combat_bonus", 12, 0, 32);
-        MAXIMUM_ACTIVITY_RADIUS = builder
+                .defineInRange("safe_gap", 1.0D, 0.25D, 8.0D);
+        MELEE_SUPPRESSION = builder
                 .comment(
-                        "Hard cap for every transient expanded radius.",
-                        "Matches perception (16): she only ever goes to things "
-                                + "she has noticed, so a radius wider than "
-                                + "perception buys nothing and only sends her "
-                                + "wandering further from her owner.",
-                        "The teleport leash sits beyond this at 24 so an "
-                                + "errand at the edge of perception is not cut "
-                                + "short."
+                        "Share of one melee attacker's output that her own "
+                                + "knockback is assumed to deny."
                 )
-                .defineInRange("maximum_radius", 16, 3, 64);
+                .defineInRange("melee_suppression", 0.8D, 0.0D, 1.0D);
+        SAFETY_MARGIN = builder
+                .comment(
+                        "How much faster than her own death she must finish "
+                                + "before committing. Above 1; higher is shyer."
+                )
+                .defineInRange("safety_margin", 1.2D, 1.0D, 4.0D);
+        BAIL_OUT_HEALTH = builder
+                .comment(
+                        "Health fraction under which she stops accepting even "
+                                + "a winning trade."
+                )
+                .defineInRange("bail_out_health", 0.3D, 0.05D, 1.0D);
+        SURVIVABLE_BLOW_SHARE = builder
+                .comment(
+                        "Share of her health a single blow may take before it "
+                                + "raises the margin she demands."
+                )
+                .defineInRange("survivable_blow_share", 0.25D, 0.05D, 1.0D);
+        BLOW_CAUTION = builder
+                .comment(
+                        "How sharply that margin climbs once one blow is a "
+                                + "serious share of her."
+                )
+                .defineInRange("blow_caution", 2.0D, 0.0D, 8.0D);
         builder.pop();
-        builder.push("combat_reaction");
-        COMBAT_REACTION_ENABLED = builder
-                .comment(
-                        "Seed TLM's existing combat Brain memory from recent "
-                                + "threats and bounded proactive scans."
-                )
-                .define("enabled", true);
-        STATIONARY_COMBAT_SCAN_INTERVAL = builder
-                .comment(
-                        "Ticks between proactive scans while the owner is "
-                                + "stationary."
-                )
-                .defineInRange("stationary_scan_interval", 10, 2, 40);
-        MOVING_COMBAT_SCAN_INTERVAL = builder
-                .comment(
-                        "Ticks between proactive scans while the owner moves."
-                )
-                .defineInRange("moving_scan_interval", 20, 2, 80);
-        COMBAT_CANDIDATE_LIMIT = builder
-                .comment("Maximum entities evaluated by one proactive scan.")
-                .defineInRange("candidate_limit", 64, 8, 256);
-        RECENT_THREAT_TICKS = builder
-                .comment(
-                        "Maximum age of owner/maid combat memories used for "
-                                + "immediate reaction."
-                )
-                .defineInRange("recent_threat_ticks", 200, 20, 600);
-        builder.pop();
-        MOVEMENT_COORDINATION_MODE = builder
-                .comment(
-                        "Movement intent coordination: OFF restores TLM "
-                                + "behavior, OBSERVE only records conflicts, "
-                                + "and CONSERVATIVE stabilizes known built-in "
-                                + "movement writers."
-                )
-                .defineEnum(
-                        "movement_coordination_mode",
-                        MovementCoordinationMode.CONSERVATIVE
-                );
-        MOVEMENT_LEASE_TICKS = builder
-                .comment(
-                        "Maximum ticks that a known movement target is "
-                                + "protected from lower-priority built-in "
-                                + "writers."
-                )
-                .defineInRange("movement_lease_ticks", 12, 1, 100);
-        PICKUP_COMMITMENT_TICKS = builder
-                .comment(
-                        "Ticks that an active item pickup may defer normal "
-                                + "owner following. Emergency teleport and "
-                                + "invalid item targets still release it."
-                )
-                .defineInRange("pickup_commitment_ticks", 40, 1, 100);
-        MOVEMENT_FAIL_OPEN_TICKS = builder
-                .comment(
-                        "Ticks to suspend coordination after an unknown "
-                                + "behavior replaces a managed target."
-                )
-                .defineInRange("movement_fail_open_ticks", 40, 1, 200);
         builder.pop();
         SPEC = builder.build();
     }
@@ -182,67 +106,29 @@ public final class AiServerConfig {
         );
     }
 
-    public static boolean isEnabled() {
-        return tuning.performance().enabled();
-    }
 
-    public static int reachablePathCacheTicks() {
-        return tuning.performance().reachablePathCacheTicks();
-    }
 
-    public static boolean isProfilingEnabled() {
-        return tuning.performance().profilingEnabled();
-    }
 
-    public static MaidAiTuning tuning() {
-        return tuning;
-    }
 
-    public static MovementCoordinationMode movementCoordinationMode() {
-        return movementCoordinationMode;
-    }
 
-    public static int movementLeaseTicks() {
-        return movementLeaseTicks;
-    }
 
-    public static int pickupCommitmentTicks() {
-        return pickupCommitmentTicks;
-    }
 
-    public static int movementFailOpenTicks() {
-        return movementFailOpenTicks;
-    }
 
     private static void onConfigEvent(ModConfigEvent event) {
         if (event.getConfig().getSpec() == SPEC) {
-            tuning = new MaidAiTuning(
-                    new MaidAiTuning.Performance(
-                            ENABLED.get(),
-                            REACHABLE_PATH_CACHE_TICKS.get(),
-                            PROFILING_ENABLED.get()
-                    ),
-                    new MaidAiTuning.ActivityRadius(
-                            DYNAMIC_ACTIVITY_RADIUS_ENABLED.get(),
-                            STATIONARY_CONFIRM_TICKS.get(),
-                            MOVING_CONFIRM_TICKS.get(),
-                            IDLE_RADIUS_BONUS.get(),
-                            WORK_RADIUS_BONUS.get(),
-                            COMBAT_RADIUS_BONUS.get(),
-                            MAXIMUM_ACTIVITY_RADIUS.get()
-                    ),
-                    new MaidAiTuning.CombatReaction(
-                            COMBAT_REACTION_ENABLED.get(),
-                            STATIONARY_COMBAT_SCAN_INTERVAL.get(),
-                            MOVING_COMBAT_SCAN_INTERVAL.get(),
-                            COMBAT_CANDIDATE_LIMIT.get(),
-                            RECENT_THREAT_TICKS.get()
-                    )
-            );
-            movementCoordinationMode = MOVEMENT_COORDINATION_MODE.get();
-            movementLeaseTicks = MOVEMENT_LEASE_TICKS.get();
-            pickupCommitmentTicks = PICKUP_COMMITMENT_TICKS.get();
-            movementFailOpenTicks = MOVEMENT_FAIL_OPEN_TICKS.get();
+            // Installed through one entry point so a balance can never be half
+            // applied: a maid holding the old preferred range while judging
+            // risk by the new margins is a combination nobody chose.
+            CombatPolicies.install(new CombatBalance(
+                    PREFERRED_RANGE.get(),
+                    RETREAT_OVERSHOOT.get(),
+                    SAFE_GAP.get(),
+                    MELEE_SUPPRESSION.get(),
+                    SAFETY_MARGIN.get(),
+                    BAIL_OUT_HEALTH.get(),
+                    SURVIVABLE_BLOW_SHARE.get(),
+                    BLOW_CAUTION.get()
+            ));
         }
     }
 }

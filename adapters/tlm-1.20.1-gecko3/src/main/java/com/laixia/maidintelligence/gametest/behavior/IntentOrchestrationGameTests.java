@@ -1,8 +1,8 @@
 package com.laixia.maidintelligence.gametest.behavior;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.ai.domain.MovementIntentSource;
-import com.laixia.maidintelligence.feature.ai.tlm.MovementCoordinationBridge;
+import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.gametest.support.GameTestPositions;
@@ -47,6 +47,15 @@ public final class IntentOrchestrationGameTests {
         runtime.tick(fixture.maid(), gameTime);
         assertTargetsOwner(helper, fixture);
 
+        // 断言的是"取消时收回自己写的移动"，不再是"战斗把召回挤下去"。
+        //
+        // 原先的抢占靠移动协调：战斗以更高权威续租，召回的续租被拒，动作返回
+        // FAILED，编排器于是取消它。协调层随本体行为一起删掉了——自由模式里
+        // 没有别的写入者可抢——中断改由意图优先级完成，而那需要战斗意图也在
+        // 场，这个 runtime 只注册了召回。
+        //
+        // 留下的这一半才是本模组自己的责任，也是真正会出错的那一半：一个动作
+        // 被取消却留着移动目标，她就会继续走向一个没人再负责的地方。
         Zombie zombie = helper.spawn(
                 EntityType.ZOMBIE,
                 new BlockPos(3, 2, 2)
@@ -56,12 +65,12 @@ public final class IntentOrchestrationGameTests {
                 MemoryModuleType.ATTACK_TARGET,
                 zombie
         );
-        runtime.tick(fixture.maid(), gameTime + 1L);
+        runtime.intents().forget(fixture.maid());
         helper.assertTrue(
                 fixture.maid().getBrain()
                         .getMemory(MemoryModuleType.WALK_TARGET)
                         .isEmpty(),
-                "Combat did not cancel owned companion movement"
+                "取消之后她还留着自己写的移动目标，会继续走向没人负责的地方"
         );
         helper.succeed();
     }
@@ -107,54 +116,6 @@ public final class IntentOrchestrationGameTests {
                         .getMemory(MemoryModuleType.WALK_TARGET)
                         .orElse(null) == replacement,
                 "Intent cancellation erased a replacement owner target"
-        );
-        helper.succeed();
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty")
-    public static void pickupLeaseBlocksCompanionIntent(
-            GameTestHelper helper
-    ) {
-        Fixture fixture = fixture(helper, 1, 5);
-        IntentGameTestRuntime.Runtime runtime = gazeRuntime();
-        long gameTime = helper.getLevel().getGameTime();
-        BlockPos pickupTarget = fixture.maid().blockPosition().east(2);
-        WalkTarget previous = MovementCoordinationBridge.capture(
-                fixture.maid(),
-                gameTime
-        );
-        BehaviorUtils.setWalkAndLookTargetMemories(
-                fixture.maid(),
-                pickupTarget,
-                0.5F,
-                0
-        );
-        MovementCoordinationBridge.finishKnownWrite(
-                fixture.maid(),
-                previous,
-                MovementIntentSource.PICKUP,
-                true,
-                gameTime
-        );
-        runtime.intents().signal(
-                fixture.maid(),
-                CompanionIntentIds.GAZE_RECALL,
-                gameTime,
-                20
-        );
-
-        helper.assertFalse(
-                runtime.tick(fixture.maid(), gameTime),
-                "Companion intent preempted a pickup lease"
-        );
-        helper.assertTrue(
-                fixture.maid().getBrain()
-                        .getMemory(MemoryModuleType.WALK_TARGET)
-                        .map(WalkTarget::getTarget)
-                        .map(target -> target.currentBlockPosition()
-                                .equals(pickupTarget))
-                        .orElse(false),
-                "Blocked companion intent replaced the pickup target"
         );
         helper.succeed();
     }
@@ -215,6 +176,9 @@ public final class IntentOrchestrationGameTests {
         };
         maid.setPos(GameTestPositions.center(helper, maidX, 2, 1));
         maid.setTame(true);
+        maid.setTask(
+                TaskManager.findTask(FreedomMaidTask.UID).orElseThrow()
+        );
         maid.setHomeModeEnable(false);
         maid.setFavorability(64);
         helper.getLevel().addFreshEntity(maid);

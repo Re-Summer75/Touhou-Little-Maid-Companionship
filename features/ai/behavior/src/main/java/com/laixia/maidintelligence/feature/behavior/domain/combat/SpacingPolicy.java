@@ -18,27 +18,20 @@ package com.laixia.maidintelligence.feature.behavior.domain.combat;
  */
 public final class SpacingPolicy {
     /**
-     * Extra ground taken beyond the range being held.
+     * The one in force.
      *
-     * <p>Without it a retreat ends the moment it becomes unnecessary, which is
-     * also the moment the target's next step makes it necessary again. Retaking
-     * a few blocks at once buys several seconds of shooting instead of one tick
-     * of relief.
+     * <p>Extra ground beyond the range being held matters because a retreat
+     * that ends the moment it becomes unnecessary ends at the moment the
+     * target's next step makes it necessary again; retaking a few blocks at
+     * once buys seconds of shooting instead of a tick of relief. The clearance
+     * beyond a target's reach has to be wide enough that stepping out is a real
+     * step — half a block reads as clearance on paper and is swallowed by the
+     * tolerance that decides whether to move at all, so she would compute a
+     * standoff and then never take it. Both are stated in
+     * {@link CombatBalance}.
      */
-    private static final double DEFAULT_RETREAT_OVERSHOOT = 3.0D;
-
-    /**
-     * Clearance she wants beyond a target's reach while she cannot swing.
-     *
-     * <p>Wide enough that stepping out is a real step. Half a block reads as
-     * clearance on paper and is swallowed by the tolerance that decides whether
-     * to move at all, so she would compute a standoff and then never take it.
-     */
-    private static final double DEFAULT_SAFE_GAP = 1.0D;
-
-    public static final SpacingPolicy INSTANCE = new SpacingPolicy(
-            DEFAULT_RETREAT_OVERSHOOT, DEFAULT_SAFE_GAP
-    );
+    private static volatile SpacingPolicy instance =
+            of(CombatBalance.defaults());
 
     private final double retreatOvershoot;
     private final double safeGap;
@@ -46,6 +39,28 @@ public final class SpacingPolicy {
     public SpacingPolicy(double retreatOvershoot, double safeGap) {
         this.retreatOvershoot = retreatOvershoot;
         this.safeGap = safeGap;
+    }
+
+    /** Build one from the stated balance. */
+    public static SpacingPolicy of(CombatBalance balance) {
+        return new SpacingPolicy(
+                balance.retreatOvershoot(), balance.safeGap()
+        );
+    }
+
+    /** The policy every caller should be asking. */
+    public static SpacingPolicy instance() {
+        return instance;
+    }
+
+    /**
+     * Adopt a new balance.
+     *
+     * <p>Prefer {@link CombatPolicies#install}: a balance applied to one policy
+     * and not the others is a combination nobody chose.
+     */
+    public static void install(CombatBalance balance) {
+        instance = of(balance);
     }
 
     /**
@@ -108,7 +123,16 @@ public final class SpacingPolicy {
         return threatReach + safeGap;
     }
 
-    /** How far outside a reach she wants to stand while recovering. */
+    /** The overshoot this policy applies, so callers need not restate it. */
+    public double retreatOvershoot() {
+        return retreatOvershoot;
+    }
+
+    /** The clearance this policy keeps, so callers need not restate it. */
+    public double safeGap() {
+        return safeGap;
+    }
+
     public double clearanceBeyond(double threatReach) {
         return threatReach + safeGap;
     }

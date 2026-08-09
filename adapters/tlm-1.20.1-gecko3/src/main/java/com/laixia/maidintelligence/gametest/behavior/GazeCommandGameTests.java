@@ -5,6 +5,9 @@ import com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.task.MaidFollowO
 import com.github.tartaricacid.touhoulittlemaid.entity.item.EntityChair;
 import com.github.tartaricacid.touhoulittlemaid.entity.item.EntitySit;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
+import com.laixia.maidintelligence.feature.ai.tlm.OwnerFollowBridge;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.ai.tlm.MaidSeatAutonomyBridge;
 import com.laixia.maidintelligence.feature.behavior.api.MaidGazeRecallApi;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
@@ -163,14 +166,13 @@ public final class GazeCommandGameTests {
                 fixture.owner()
         );
 
-        helper.assertTrue(
-                followTask().tryStart(
-                        helper.getLevel(),
-                        fixture.maid(),
-                        helper.getLevel().getGameTime()
-                ),
-                "TLM owner-follow task did not start"
-        );
+        // 走本模组自己的落队处理，不再借本体的跟随行为。
+        //
+        // 这一步曾经是 followTask().tryStart(...)，因为传送挂在本体跟随行为的
+        // Mixin 上。自由模式不再注册那个行为，传送也就改由每 tick 的骑乘处理器
+        // 接管——测试跟着换到真正会跑的那条路径上。
+        MaidSeatAutonomyBridge.leaveSeatForFollow(fixture.maid());
+        OwnerFollowBridge.teleportIfStranded(fixture.maid());
         helper.assertFalse(
                 fixture.maid().isPassenger()
                         || MaidCommandSeatBridge.isSeatProtected(
@@ -421,6 +423,9 @@ public final class GazeCommandGameTests {
         };
         maid.setPos(position(helper, 1, 1));
         maid.setTame(true);
+        maid.setTask(
+                TaskManager.findTask(FreedomMaidTask.UID).orElseThrow()
+        );
         maid.setHomeModeEnable(false);
         maid.setOwnerUUID(owner.getUUID());
         helper.getLevel().addFreshEntity(maid);

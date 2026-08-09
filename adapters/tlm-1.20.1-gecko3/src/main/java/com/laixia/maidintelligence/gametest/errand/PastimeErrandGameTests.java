@@ -1,13 +1,13 @@
 package com.laixia.maidintelligence.gametest.errand;
 
-import com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.task.MaidJoyTask;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.init.InitBlocks;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
-import com.laixia.maidintelligence.feature.behavior.tlm.FreedomMaidTask;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.orchestration.domain.ActionResult;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
+import net.minecraft.world.entity.schedule.Activity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -115,24 +115,44 @@ public final class PastimeErrandGameTests {
             GameTestHelper helper
     ) {
         CompanionScene scene = CompanionScene.room(helper, 8, 2);
-        EntityMaid working = scene.maid(1, 2, 1);
+        // 一个留在本体模式，一个自由模式：这条断言的全部意义在于两边不同。
+        EntityMaid working = scene.hostModeMaid(1, 2, 1);
         EntityMaid free = scene.maid(2, 2, 1);
         placeBookshelf(scene, helper, 6, 2, 1);
-        free.setTask(new FreedomMaidTask());
 
         helper.assertTrue(
                 FreedomMaidTask.UID.equals(free.getTask().getUid()),
                 "The freedom task did not take effect"
         );
+
+        // 判据问"这个行为在不在她的 brain 里"，不是"直接构造一个能不能跑起来"。
+        //
+        // 让位曾经靠拦截行为的启动条件，所以直接 tryStart 一个实例正好测到那段
+        // 拦截。现在自由模式压根不注册本体的活动，拦截连同它一起删了——手工
+        // new 出来的 MaidJoyTask 当然照跑，它只是个普通对象，与她的 brain 无关。
+        // 那样的断言测的是测试自己造的东西。
         helper.assertFalse(
-                startNativePastime(helper, free),
-                "The native pastime behaviour still decided for a free maid"
+                hostPastimeAvailable(free),
+                "自由模式的 brain 里还挂着本体的娱乐活动，"
+                        + "它会在编排器被问到之前就把她带走"
         );
         helper.assertTrue(
-                startNativePastime(helper, working),
-                "The native pastime behaviour stopped working for other tasks"
+                hostPastimeAvailable(working),
+                "本体模式下娱乐活动也没了——我们把不该碰的模式改了"
         );
         helper.succeed();
+    }
+
+    /**
+     * 本体的娱乐行为在不在她的 brain 里。
+     *
+     * <p>{@code MaidJoyTask} 注册在 IDLE 与 WORK 两个活动里，而没注册过的活动
+     * 是激活不了的——{@code setActiveActivityIfPossible} 对空活动无效。只用
+     * Brain 的公开 API，不必通到私有字段，也不会因为本体增删某条行为而失败。
+     */
+    private static boolean hostPastimeAvailable(EntityMaid maid) {
+        maid.getBrain().setActiveActivityIfPossible(Activity.WORK);
+        return maid.getBrain().isActive(Activity.WORK);
     }
 
     /**
@@ -140,25 +160,6 @@ public final class PastimeErrandGameTests {
      * passes and only reports started once she is beside the block, so the
      * whole check-rate window is stepped through rather than sampled once.
      */
-    private static boolean startNativePastime(
-            GameTestHelper helper,
-            EntityMaid maid
-    ) {
-        MaidJoyTask task = new MaidJoyTask(0.6F, 2);
-        for (int attempt = 0; attempt < 40; attempt++) {
-            if (task.tryStart(
-                    helper.getLevel(),
-                    maid,
-                    helper.getLevel().getGameTime() + attempt
-            )) {
-                return true;
-            }
-            if (maid.getBrain().hasMemoryValue(MemoryModuleType.WALK_TARGET)) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     private static BlockPos placeBookshelf(
             CompanionScene scene,

@@ -1,6 +1,6 @@
 package com.laixia.maidintelligence.feature.behavior;
 
-import com.laixia.maidintelligence.feature.ai.domain.OwnerFollowPolicy;
+import com.laixia.maidintelligence.feature.behavior.domain.OwnerFollowPolicy;
 import com.laixia.maidintelligence.feature.behavior.domain.GazeRecallPolicy;
 import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
 

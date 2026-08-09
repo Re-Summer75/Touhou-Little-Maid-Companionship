@@ -60,16 +60,28 @@ public final class EngagementRiskPolicy {
      */
     private static final double DEFAULT_BAIL_OUT_HEALTH = 0.3D;
 
-    public static final EngagementRiskPolicy INSTANCE =
-            new EngagementRiskPolicy(
-                    DEFAULT_SAFETY_MARGIN,
-                    DEFAULT_BAIL_OUT_HEALTH,
-                    DEFAULT_MELEE_SUPPRESSION
-            );
+    /**
+     * The one in force.
+     *
+     * <p>Two of its numbers describe a single blow rather than a rate. The
+     * share of her health a blow may take before it changes the sum is a
+     * quarter — ordinary hostiles sit well under it, a zombie takes about a
+     * seventh, so the base margin keeps deciding those fights unchanged, which
+     * matters because being too shy of zombies is a failure this policy was
+     * explicitly corrected for once already. How sharply the demanded margin
+     * then climbs is set so that something removing two thirds of her health
+     * per hit roughly doubles the safety she wants: enough to turn "the numbers
+     * say I win" into "not with those numbers" for a vindicator, without
+     * touching anything ordinary. Both are stated in {@link CombatBalance}.
+     */
+    private static volatile EngagementRiskPolicy instance =
+            of(CombatBalance.defaults());
 
     private final double safetyMargin;
     private final double bailOutHealthFraction;
     private final double meleeSuppression;
+    private final double survivableBlowShare;
+    private final double blowCaution;
 
     public EngagementRiskPolicy(
             double safetyMargin,
@@ -83,22 +95,70 @@ public final class EngagementRiskPolicy {
             double bailOutHealthFraction,
             double meleeSuppression
     ) {
+        this(
+                safetyMargin,
+                bailOutHealthFraction,
+                meleeSuppression,
+                CombatBalance.defaults().survivableBlowShare(),
+                CombatBalance.defaults().blowCaution()
+        );
+    }
+
+    public EngagementRiskPolicy(
+            double safetyMargin,
+            double bailOutHealthFraction,
+            double meleeSuppression,
+            double survivableBlowShare,
+            double blowCaution
+    ) {
         this.safetyMargin = safetyMargin;
         this.bailOutHealthFraction = bailOutHealthFraction;
         this.meleeSuppression = meleeSuppression;
+        this.survivableBlowShare = survivableBlowShare;
+        this.blowCaution = blowCaution;
+    }
+
+    /** Build one from the stated balance. */
+    public static EngagementRiskPolicy of(CombatBalance balance) {
+        return new EngagementRiskPolicy(
+                balance.safetyMargin(),
+                balance.bailOutHealth(),
+                balance.meleeSuppression(),
+                balance.survivableBlowShare(),
+                balance.blowCaution()
+        );
+    }
+
+    /** The policy every caller should be asking. */
+    public static EngagementRiskPolicy instance() {
+        return instance;
+    }
+
+    /**
+     * Adopt a new balance.
+     *
+     * <p>Prefer {@link CombatPolicies#install}: a balance applied to one policy
+     * and not the others is a combination nobody chose.
+     */
+    public static void install(CombatBalance balance) {
+        instance = of(balance);
     }
 
     /**
      * Judge the situation.
      *
-     * @param field         the crowd, already aggregated
-     * @param capability    what she can bring
+     * @param field          the crowd, already aggregated
+     * @param capability     what she can bring
      * @param healthFraction her current health over her maximum, in {@code [0,1]}
+     * @param canOpenGround  whether she has the room and the legs to give ground;
+     *                       without it "keep your distance" is not a plan, it is
+     *                       a description of standing still
      */
     public RiskVerdict assess(
             ThreatField field,
             CombatCapability capability,
-            double healthFraction
+            double healthFraction,
+            boolean canOpenGround
     ) {
         Objects.requireNonNull(field, "field");
         Objects.requireNonNull(capability, "capability");
@@ -126,8 +186,8 @@ public final class EngagementRiskPolicy {
         double sustained = suppressed(field, capability)
                 * attritionShare(field.converging());
         double cost = clearSeconds * sustained;
-        boolean outTrades =
-                cost * safetyMargin <= capability.effectiveHealth();
+        boolean outTrades = cost * marginAgainst(field, capability)
+                <= capability.effectiveHealth();
         boolean hurt = healthFraction < bailOutHealthFraction;
 
         if (outTrades && !hurt) {
@@ -135,10 +195,16 @@ public final class EngagementRiskPolicy {
         }
 
         // Losing the straight trade. Distance is only an answer if she can use
-        // it: something must be shootable, and they must not be able to shoot
-        // back from where she would stand.
-        boolean canKeepDistance =
-                capability.rangedDps() > 0.0D && !field.anyOutranging();
+        // it, and that takes three things, not two: something to shoot with,
+        // nothing that shoots back from where she would stand, and somewhere to
+        // stand. The third was missing, and its absence is fatal rather than
+        // merely suboptimal — a maid pinned against a wall was told to skirmish,
+        // held her ground because there was none to give, and was eaten where
+        // she stood. "Keep your distance" with no distance available is just a
+        // long way of saying "stay here".
+        boolean canKeepDistance = capability.rangedDps() > 0.0D
+                && !field.anyOutranging()
+                && canOpenGround;
         return canKeepDistance ? RiskVerdict.SKIRMISH : RiskVerdict.WITHDRAW;
     }
 
@@ -160,6 +226,35 @@ public final class EngagementRiskPolicy {
      * the entire fight would have her flee from things she beats comfortably;
      * charging her one attacker's worth is what let her die in a mob.
      */
+    /**
+     * How much better than break-even she needs, given how hard they hit.
+     *
+     * <p>Everything above this line is an expected value, and an expected value
+     * cannot see the difference between losing slowly and dying suddenly. Three
+     * damage every half second and thirteen every two seconds are the same rate;
+     * against twenty health the first is a fight and the second is two mistakes
+     * from over. She was being told to skirmish with vindicators on exactly that
+     * reasoning, and the measured outcome was a dead maid on the runs where the
+     * pathing went badly for a second.
+     *
+     * <p>So the margin widens with the share of her health one blow removes.
+     * Below a quarter it does not move at all — ordinary hostiles are what the
+     * base margin was tuned against, and making her flinch at zombies is the
+     * failure this policy already went out of its way to avoid.
+     */
+    private double marginAgainst(
+            ThreatField field,
+            CombatCapability capability
+    ) {
+        if (capability.effectiveHealth() <= 0.0D) {
+            return safetyMargin;
+        }
+        double blowShare =
+                field.heaviestBlow() / capability.effectiveHealth();
+        double excess = Math.max(0.0D, blowShare - survivableBlowShare);
+        return safetyMargin + excess * blowCaution;
+    }
+
     private double attritionShare(int converging) {
         if (converging <= 1) {
             return 1.0D;

@@ -13,7 +13,6 @@ import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
 import com.laixia.maidintelligence.feature.orchestration.domain.PlanDefinition;
 import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentActions;
 import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentContext;
-import com.laixia.maidintelligence.feature.orchestration.tlm.TlmMaidIntentObserver;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 
 import java.util.LinkedHashMap;
@@ -24,9 +23,6 @@ import java.util.function.Consumer;
 public final class IntentGameTestRuntime {
     private static final OrchestrationId GAZE_INTENT = id("test/gaze");
     private static final OrchestrationId HUNGER_INTENT = id("test/hunger");
-    private static final OrchestrationId POST_TASK_INTENT =
-            id("test/post_task");
-    private static final OrchestrationId WANDER_INTENT = id("test/wander");
     private static final OrchestrationId APPROACH_PLAN = id("test/approach");
     private static final OrchestrationId REQUEST_PLAN = id("test/request");
 
@@ -45,18 +41,16 @@ public final class IntentGameTestRuntime {
                 List.of(approachPlan(), requestPlan()),
                 CompanionIntentIds.vocabulary()
         ));
-        TlmMaidIntentObserver observer = new TlmMaidIntentObserver();
         MaidIntentApi<EntityMaid> orchestrator =
                 new DefaultMaidIntentOrchestrator<>(
                         catalog,
-                        new TlmMaidIntentContext(status, observer),
+                        new TlmMaidIntentContext(status),
                         new TlmMaidIntentActions(requestAction),
                         EntityMaid::getId,
                         () -> true,
                         () -> 1
                 );
-        observer.bind(orchestrator);
-        return new Runtime(orchestrator, observer);
+        return new Runtime(orchestrator);
     }
 
     public static IntentDefinition gazeIntent() {
@@ -92,50 +86,7 @@ public final class IntentGameTestRuntime {
         );
     }
 
-    public static IntentDefinition postTaskIntent() {
-        return intent(
-                POST_TASK_INTENT,
-                APPROACH_PLAN,
-                List.of(
-                        condition(
-                                CompanionIntentIds.POST_TASK_RETURN,
-                                FactComparison.GREATER_OR_EQUAL,
-                                1.0D
-                        ),
-                        condition(
-                                CompanionIntentIds.WORK_RELEASE_AGE,
-                                FactComparison.GREATER_OR_EQUAL,
-                                20.0D
-                        ),
-                        condition(
-                                CompanionIntentIds.BUILT_IN_TASK,
-                                FactComparison.EQUAL,
-                                1.0D
-                        )
-                ),
-                30
-        );
-    }
 
-    public static IntentDefinition wanderIntent() {
-        return intent(
-                WANDER_INTENT,
-                APPROACH_PLAN,
-                List.of(
-                        condition(
-                                CompanionIntentIds.RANDOM_STROLL_RETURN,
-                                FactComparison.GREATER_OR_EQUAL,
-                                1.0D
-                        ),
-                        condition(
-                                CompanionIntentIds.BUILT_IN_TASK,
-                                FactComparison.EQUAL,
-                                1.0D
-                        )
-                ),
-                20
-        );
-    }
 
     private static IntentDefinition intent(
             OrchestrationId id,
@@ -239,12 +190,8 @@ public final class IntentGameTestRuntime {
         return new OrchestrationId("tlm_companionship", path);
     }
 
-    public record Runtime(
-            MaidIntentApi<EntityMaid> intents,
-            TlmMaidIntentObserver observer
-    ) {
+    public record Runtime(MaidIntentApi<EntityMaid> intents) {
         public boolean tick(EntityMaid maid, long gameTime) {
-            observer.observe(maid, gameTime);
             return intents.tick(maid, gameTime);
         }
     }

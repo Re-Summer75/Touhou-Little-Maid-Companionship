@@ -1,8 +1,7 @@
 package com.laixia.maidintelligence.feature.orchestration.tlm.errand;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.laixia.maidintelligence.feature.ai.domain.MovementIntentSource;
-import com.laixia.maidintelligence.feature.ai.tlm.MovementCoordinationBridge;
+import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMovement;
 import com.laixia.maidintelligence.feature.behavior.tlm.MaidCommandSeatBridge;
 import com.laixia.maidintelligence.feature.orchestration.api.CoordinationClaimService;
 import com.laixia.maidintelligence.feature.orchestration.domain.ActionResult;
@@ -155,26 +154,14 @@ public final class ApproachAndCommitAction {
             return ActionResult.RUNNING;
         }
         clearMovement(maid, held);
-        WalkTarget previous = MovementCoordinationBridge.capture(maid);
-        maid.getBrain().eraseMemory(MemoryModuleType.PATH);
-        maid.getBrain().eraseMemory(
-                MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE
-        );
         PositionTracker tracker = target.tracker();
         WalkTarget written = new WalkTarget(tracker, speed, closeEnough);
         maid.getBrain().setMemory(MemoryModuleType.LOOK_TARGET, tracker);
-        maid.getBrain().setMemory(MemoryModuleType.WALK_TARGET, written);
-        MovementCoordinationBridge.finishKnownWrite(
-                maid,
-                previous,
-                MovementIntentSource.COMPANION,
-                true
-        );
-        // Something with a stronger claim on her movement may have refused the
-        // write; taking that as success would leave her standing still.
-        if (maid.getBrain()
-                .getMemory(MemoryModuleType.WALK_TARGET)
-                .orElse(null) != written) {
+        // Refused only while the host is walking her to air. Taking a refusal
+        // as success would leave her standing still with a plan that believes
+        // it is under way; the check used to guard against a whole arbiter and
+        // now guards against the one writer that still outranks us.
+        if (!FreedomMovement.write(maid, written)) {
             cancel(maid);
             return ActionResult.FAILED;
         }
@@ -293,7 +280,6 @@ public final class ApproachAndCommitAction {
                 .getMemory(MemoryModuleType.WALK_TARGET)
                 .orElse(null);
         if (current == null) {
-            MovementCoordinationBridge.hardReset(maid);
             return;
         }
         if (held.walkTarget() == null || current != held.walkTarget()) {
@@ -301,7 +287,6 @@ public final class ApproachAndCommitAction {
         }
         maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
         maid.getBrain().eraseMemory(MemoryModuleType.PATH);
-        MovementCoordinationBridge.hardReset(maid);
     }
 
     private record Progress(

@@ -111,7 +111,7 @@ public final class TlmMaidIntentActions
             int elapsedTicks
     ) {
         if (action.equals(CompanionIntentIds.ENGAGE_THREAT)) {
-            return combatAction.execute(maid, elapsedTicks);
+            return combatAction.execute(maid);
         }
         if (action.equals(CompanionIntentIds.APPROACH_OWNER)) {
             return ownerAction.approach(maid, parameters, gameTime);

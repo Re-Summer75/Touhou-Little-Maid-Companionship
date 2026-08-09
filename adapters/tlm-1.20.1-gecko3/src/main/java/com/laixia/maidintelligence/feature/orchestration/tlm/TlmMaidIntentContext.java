@@ -16,13 +16,9 @@ public final class TlmMaidIntentContext
         implements IntentContextPort<EntityMaid> {
     private final TlmMaidFactReader facts;
 
-    public TlmMaidIntentContext(
-            MaidStatusApi<EntityMaid> status,
-            TlmMaidIntentObserver observer
-    ) {
+    public TlmMaidIntentContext(MaidStatusApi<EntityMaid> status) {
         this(
                 status,
-                observer,
                 new MaidSnackCabinetMealSource(new MaidMealAccess()),
                 new TlmAffordancePerceptionService()
         );
@@ -30,12 +26,10 @@ public final class TlmMaidIntentContext
 
     public TlmMaidIntentContext(
             MaidStatusApi<EntityMaid> status,
-            TlmMaidIntentObserver observer,
             MaidSnackCabinetMealSource snackCabinetMeals
     ) {
         this(
                 status,
-                observer,
                 snackCabinetMeals,
                 new TlmAffordancePerceptionService()
         );
@@ -43,13 +37,11 @@ public final class TlmMaidIntentContext
 
     public TlmMaidIntentContext(
             MaidStatusApi<EntityMaid> status,
-            TlmMaidIntentObserver observer,
             MaidSnackCabinetMealSource snackCabinetMeals,
             TlmAffordancePerceptionService perception
     ) {
         facts = new TlmMaidFactReader(
                 status,
-                observer,
                 snackCabinetMeals,
                 perception
         );

@@ -1,5 +1,7 @@
 package com.laixia.maidintelligence.feature.behavior.domain.combat;
 
+import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponCandidate;
+
 import java.util.Objects;
 
 /**
