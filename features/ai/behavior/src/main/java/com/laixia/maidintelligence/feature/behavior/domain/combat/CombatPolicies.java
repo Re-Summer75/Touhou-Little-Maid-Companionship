@@ -1,5 +1,6 @@
 package com.laixia.maidintelligence.feature.behavior.domain.combat;
 
+import com.laixia.maidintelligence.feature.behavior.domain.combat.sustenance.EatingPolicy;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponSelectionPolicy;
 
 /**
@@ -28,6 +29,7 @@ public final class CombatPolicies {
         SpacingPolicy.install(balance);
         WeaponSelectionPolicy.install(balance);
         EngagementRiskPolicy.install(balance);
+        EatingPolicy.install(balance);
         active = balance;
     }
 

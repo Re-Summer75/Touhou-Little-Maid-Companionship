@@ -7,6 +7,7 @@ import com.laixia.maidintelligence.feature.orchestration.domain.ActionResult;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
 import com.laixia.maidintelligence.feature.orchestration.port.IntentActionPort;
 import com.laixia.maidintelligence.feature.orchestration.tlm.action.TlmOwnerCompanionIntentAction;
+import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.feature.status.tlm.MaidMealAccess;
 import com.laixia.maidintelligence.feature.status.tlm.MaidSnackCabinetMealSource;
 
@@ -15,6 +16,7 @@ import java.util.function.Consumer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.RangedWeaponRecognizer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.sustenance.EatFromPackAction;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.ApproachAndCommitAction;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.LooseFoodErrand;
@@ -39,6 +41,7 @@ public final class TlmMaidIntentActions
     private final ApproachAndCommitAction keepCompanyAction;
     private final TlmDeployBoatIntentAction deployBoatAction;
     private final TlmCombatAction combatAction;
+    private final EatFromPackAction eatFromPackAction;
 
     public TlmMaidIntentActions(
             Consumer<EntityMaid> hungerRequestAction
@@ -62,6 +65,22 @@ public final class TlmMaidIntentActions
             MaidSnackCabinetMealSource snackCabinetMeals,
             MaidAbilityApi<EntityMaid> abilities
     ) {
+        this(hungerRequestAction, snackCabinetMeals, abilities, null);
+    }
+
+    /**
+     * The wiring production uses, hunger included.
+     *
+     * <p>Only the fight needs it, and only for one of its four eating rules —
+     * the one that spends a quiet moment on a mouthful. Scenarios that build
+     * this without a status read her as full and exercise the other three.
+     */
+    public TlmMaidIntentActions(
+            Consumer<EntityMaid> hungerRequestAction,
+            MaidSnackCabinetMealSource snackCabinetMeals,
+            MaidAbilityApi<EntityMaid> abilities,
+            MaidStatusApi<EntityMaid> status
+    ) {
         ownerAction = new TlmOwnerCompanionIntentAction(
                 hungerRequestAction
         );
@@ -69,8 +88,10 @@ public final class TlmMaidIntentActions
         // known. A gun mod supplies one and needs nothing else changed.
         combatAction = new TlmCombatAction(
                 new TlmThreatScanner(),
-                new TlmWeaponScanner(RangedWeaponRecognizer.NONE)
+                new TlmWeaponScanner(RangedWeaponRecognizer.NONE),
+                status
         );
+        eatFromPackAction = new EatFromPackAction(status);
         snackCabinetAction = new ApproachAndCommitAction(
                 new CabinetMealErrand(snackCabinetMeals)
         );
@@ -124,6 +145,9 @@ public final class TlmMaidIntentActions
                     parameters,
                     gameTime
             );
+        }
+        if (action.equals(CompanionIntentIds.EAT_FROM_PACK)) {
+            return eatFromPackAction.execute(maid);
         }
         if (action.equals(CompanionIntentIds.PICK_UP_LOOSE_FOOD)) {
             return looseFoodAction.execute(maid, parameters, gameTime);
@@ -189,6 +213,8 @@ public final class TlmMaidIntentActions
                 CompanionIntentIds.FETCH_SNACK_CABINET_MEAL
         )) {
             snackCabinetAction.cancel(maid);
+        } else if (action.equals(CompanionIntentIds.EAT_FROM_PACK)) {
+            eatFromPackAction.cancel(maid);
         } else if (action.equals(CompanionIntentIds.PICK_UP_LOOSE_FOOD)) {
             looseFoodAction.cancel(maid);
         } else if (action.equals(CompanionIntentIds.FOLLOW_OWNER_ANCHOR)) {

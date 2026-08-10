@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.feature.behavior;
 
 import com.laixia.maidintelligence.feature.behavior.domain.combat.CombatStance;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.EngagementContext;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.TradeCost;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponCandidate;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponKind;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponSelectionPolicy;
@@ -24,6 +25,10 @@ import java.util.List;
 public final class CombatWeaponSelectionVerification {
     private static final WeaponSelectionPolicy POLICY =
             WeaponSelectionPolicy.instance();
+
+    /** 与策略同一套定价，用于直接比较两个处境下同一把武器的代价。 */
+    private static final TradeCost COST =
+            new TradeCost(WeaponSelectionPolicy.instance().preferredRange());
 
     /** 她的挥击频率，铁剑水平。 */
     private static final double SWINGS = 1.6D;
@@ -221,11 +226,11 @@ public final class CombatWeaponSelectionVerification {
      * 也能通过。
      */
     private static void verifiesAFlierIsShotNotSwungAt() {
-        // 两格半，不是六格。距离要选在近战赢得有余量的地方，这条断言才只关于
+        // 贴身，不是六格。距离要选在近战赢得有余量的地方，这条断言才只关于
         // "飞着"这一个变量——六格上弓是对的（箭管够、对方三秒才打一下），
         // 于是"落地就拔剑"考的其实是距离，飞不飞根本没参与。
         ThreatSample flier = new ThreatSample(
-                2.5D, 4.0D, 2.0D, 60, 20.0D, true, CLOSING_SPEED, ThreatRelation.UNENGAGED
+                1.5D, 4.0D, 2.0D, 60, 20.0D, true, CLOSING_SPEED, ThreatRelation.UNENGAGED
         );
         CombatStance air = POLICY.choose(
                 List.of(sword(IRON_SWORD), bow(true)), against(flier)
@@ -236,7 +241,7 @@ public final class CombatWeaponSelectionVerification {
         );
 
         ThreatSample grounded = new ThreatSample(
-                2.5D, 4.0D, 2.0D, 60, 20.0D, false, CLOSING_SPEED, ThreatRelation.UNENGAGED
+                1.5D, 4.0D, 2.0D, 60, 20.0D, false, CLOSING_SPEED, ThreatRelation.UNENGAGED
         );
         CombatStance ground = POLICY.choose(
                 List.of(sword(IRON_SWORD), bow(true)), against(grounded)
@@ -255,10 +260,23 @@ public final class CombatWeaponSelectionVerification {
      * 武器打近战。地形本来就被测量着，只是从来没有送到武器选择这里。
      */
     private static void verifiesNoRoomToKiteDrawsSteel() {
+        // 先断言机制，再断言翻转点。机制是稳的：一堵墙让同一张弓在同一个距离上
+        // 贵三倍以上——她射出的每一箭都不再有走位替她挡着。翻转点是窄的，只在
+        // 两格半上还能改写答案，因为再远一点时对方反正要走过来，站着射它本来
+        // 就比迎上去更好。
+        //
+        // 只断言翻转点的话，这条会在任何一次定价调整里因为落在分界另一侧而变红，
+        // 而那时候坏掉的其实什么都不是。
+        double open = COST.of(bow(true), against(zombie(5.0D)));
+        double walled = COST.of(bow(true), cornered(zombie(5.0D)));
+        require(
+                walled > open * 2.0D,
+                "身后是墙并没有让射击变贵多少：开阔 " + round(open)
+                        + "，贴墙 " + round(walled)
+                        + "；走位替她挡下的那部分伤害没有被算进去"
+        );
+
         List<WeaponCandidate> both = List.of(sword(IRON_SWORD), bow(true));
-        // 两头都断言，同一个距离，只差身后有没有墙。少了开阔那一头，"永远近战"
-        // 也能通过；而距离要挑在墙真的能翻盘的地方——远到对方两秒才走到时，
-        // 站着射本来就不叫拉扯，墙拦不住的东西也就证明不了什么。
         require(
                 POLICY.choose(both, against(zombie(4.0D))).posture()
                         == CombatStance.Posture.RANGED,
@@ -271,6 +289,10 @@ public final class CombatWeaponSelectionVerification {
                 cornered.posture() == CombatStance.Posture.MELEE,
                 "With a wall behind her she still planned to keep her distance"
         );
+    }
+
+    private static String round(double value) {
+        return String.format("%.2f", value);
     }
 
     /**

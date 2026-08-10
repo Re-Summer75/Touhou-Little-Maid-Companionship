@@ -35,6 +35,7 @@ record MaidFactSnapshot(
             boolean usingItem,
             int behaviorOccupancyLevel,
             boolean looseFoodAvailable,
+            boolean packMealAvailable,
             double homeDistance,
             OwnerFacts owner
 ) {

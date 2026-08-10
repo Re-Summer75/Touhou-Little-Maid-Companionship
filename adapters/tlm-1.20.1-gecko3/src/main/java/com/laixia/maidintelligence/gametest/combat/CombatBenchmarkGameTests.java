@@ -197,6 +197,18 @@ public final class CombatBenchmarkGameTests {
         maid.getAvailableBackpackInv().setStackInSlot(
                 3, new ItemStack(Items.ARROW, ARROWS)
         );
+        // 一块面包和一个金苹果。两样都是食物，而它们在这一局里做的是完全不同的
+        // 两件事：面包只管饱，战斗里买不到任何东西；金苹果用一秒半换八点伤害吸收
+        // 和四点回血，是唯一可能改写"这一仗打不打得过"的那一口。
+        //
+        // 两样都给，是因为"她会不会吃"和"她会不会吃对"是两个问题。只给金苹果的话，
+        // 一个见食物就啃的实现也能通过。
+        maid.getAvailableBackpackInv().setStackInSlot(
+                4, new ItemStack(Items.BREAD, 2)
+        );
+        maid.getAvailableBackpackInv().setStackInSlot(
+                5, new ItemStack(Items.GOLDEN_APPLE)
+        );
 
         Zombie[] pack = new Zombie[PACK_SIZE];
         for (int slot = 0; slot < PACK_SIZE; slot++) {
@@ -350,17 +362,36 @@ public final class CombatBenchmarkGameTests {
                 trace.farthestReached(),
                 Math.round(trace.shareWithinReach() * 100), fallen
         );
+        // 吃掉了什么，单独一行。"她挨了多少"说不出她是靠什么撑住的，而金苹果
+        // 花掉与否恰恰是这一局最该被看见的决定之一。
+        System.out.printf(
+                "  LARDER bread=%d golden=%d%n",
+                count(maid, Items.BREAD), count(maid, Items.GOLDEN_APPLE)
+        );
     }
 
     private static int arrowsLeft(EntityMaid maid) {
-        int arrows = 0;
+        return count(maid, Items.ARROW);
+    }
+
+    /**
+     * How many of this she still has — pack and hand both.
+     *
+     * <p>Her hand counts because eating puts the food there: a mouthful still
+     * being chewed is not in the pack and is not gone either, and counting only
+     * the pack would report it as eaten a second and a half early.
+     */
+    private static int count(EntityMaid maid, net.minecraft.world.item.Item item) {
+        int found = maid.getMainHandItem().is(item)
+                ? maid.getMainHandItem().getCount()
+                : 0;
         IItemHandler backpack = maid.getAvailableBackpackInv();
         for (int slot = 0; slot < backpack.getSlots(); slot++) {
             ItemStack stack = backpack.getStackInSlot(slot);
-            if (stack.is(Items.ARROW)) {
-                arrows += stack.getCount();
+            if (stack.is(item)) {
+                found += stack.getCount();
             }
         }
-        return arrows;
+        return found;
     }
 }

@@ -77,10 +77,23 @@ public final class CombatReadiness {
         );
     }
 
-    /** How much raw damage she can absorb, armour folded in. */
+    /**
+     * How much raw damage she can absorb, armour and absorption folded in.
+     *
+     * <p>Absorption belongs here and was missing. It is damage she gets to
+     * take, which is the entire meaning of this number, and it lives on a
+     * separate field from her health so reading only the health field silently
+     * left it out. The visible cost was a maid who ate a golden apple, gained
+     * eight points of it, saw a situation identical to the one before the
+     * mouthful, and ate the next apple — down the whole stack.
+     *
+     * <p>Not multiplied by armour, unlike her health: absorption is consumed
+     * before armour applies, so scaling it would count the plating twice.
+     */
     public static double effectiveHealth(EntityMaid maid) {
         return maid.getHealth()
-                * (1.0D + maid.getArmorValue() / ARMOUR_FOR_DOUBLE_HEALTH);
+                * (1.0D + maid.getArmorValue() / ARMOUR_FOR_DOUBLE_HEALTH)
+                + maid.getAbsorptionAmount();
     }
 
     /** How badly hurt she is, as a fraction of full. */

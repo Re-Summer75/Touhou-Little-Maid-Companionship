@@ -33,6 +33,15 @@ public final class CompanionIntentIds {
     public static final OrchestrationId SNACK_CABINET_MEAL_AVAILABLE =
             id("fact/snack_cabinet_meal_available");
     /**
+     * She is carrying something worth eating.
+     *
+     * <p>Distinct from the two above, which are about food out in the world.
+     * This one is about the pack she already has on her, and it is the only
+     * one of the three that costs her no walking at all.
+     */
+    public static final OrchestrationId PACK_MEAL_AVAILABLE =
+            id("fact/pack_meal_available");
+    /**
      * How many hostiles can reach her where she stands.
      *
      * <p>A count rather than a flag, and of what converges rather than of what
@@ -96,6 +105,9 @@ public final class CompanionIntentIds {
             id("action/companion_command_window");
     public static final OrchestrationId REQUEST_HUNGER_ATTENTION =
             id("action/request_hunger_attention");
+    /** Eat something she is already carrying, standing where she is. */
+    public static final OrchestrationId EAT_FROM_PACK =
+            id("action/eat_from_pack");
     public static final OrchestrationId DEPLOY_BOAT =
             id("action/deploy_boat");
     /** Fight what is threatening her or her owner, choosing her own weapon. */
@@ -140,6 +152,7 @@ public final class CompanionIntentIds {
                 HUNGER,
                 SNACK_CABINET_MEAL_AVAILABLE,
                 LOOSE_FOOD_AVAILABLE,
+                PACK_MEAL_AVAILABLE,
                 HOME_DISTANCE,
                 FOLLOW_MODE,
                 HOME_MODE,
@@ -175,6 +188,7 @@ public final class CompanionIntentIds {
                         APPROACH_OWNER,
                         FETCH_SNACK_CABINET_MEAL,
                         PICK_UP_LOOSE_FOOD,
+                        EAT_FROM_PACK,
                         FOLLOW_OWNER_ANCHOR,
                         RETURN_HOME_ANCHOR,
                         REST_ON_SEAT,
@@ -197,6 +211,10 @@ public final class CompanionIntentIds {
                         ),
                         Map.entry(
                                 LOOSE_FOOD_AVAILABLE,
+                                FactType.BOOLEAN
+                        ),
+                        Map.entry(
+                                PACK_MEAL_AVAILABLE,
                                 FactType.BOOLEAN
                         ),
                         Map.entry(HOME_DISTANCE, FactType.NUMBER),
@@ -365,6 +383,12 @@ public final class CompanionIntentIds {
                                 ActionSchema.withoutParameters(
                                         REQUEST_HUNGER_ATTENTION
                                 )
+                        ),
+                        // Nothing to configure: she eats where she stands, and
+                        // which mouthful is a decision rather than a parameter.
+                        Map.entry(
+                                EAT_FROM_PACK,
+                                ActionSchema.withoutParameters(EAT_FROM_PACK)
                         ),
                         Map.entry(
                                 DEPLOY_BOAT,

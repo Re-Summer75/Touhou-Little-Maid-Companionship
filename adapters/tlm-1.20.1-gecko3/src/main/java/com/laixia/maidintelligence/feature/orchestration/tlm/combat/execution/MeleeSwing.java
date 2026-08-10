@@ -260,20 +260,39 @@ public final class MeleeSwing {
      * rest this answers true again and she goes in. Six-on-one becomes six
      * one-on-ones, which is the only shape of this fight she can win unhurt.
      *
-     * <p>Counting rather than timing, deliberately. Whether each of them has
-     * spent its blow was tried first and measured worse: it relaxes the
-     * condition instead of tightening it, so she closes on a momentary lull and
-     * arrives after it has passed.
+     * <p>Counting rather than timing whether each has spent its blow: that was
+     * tried first and measured worse, because it relaxes the condition instead
+     * of tightening it, so she closes on a momentary lull and arrives after it
+     * has passed.
+     *
+     * <p>But counting only who is <em>already</em> within a step made the whole
+     * tactic a matter of luck. She broke contact after being sandwiched rather
+     * than before, so "six-on-one becomes six one-on-ones" only happened when
+     * the pack strung itself out on its own — and against something as fast as
+     * a vindicator it often did not. Measured against two of them she died in
+     * five runs out of six, and the one she won she won without taking a single
+     * point of damage: the good line existed and she was reaching it by
+     * accident.
+     *
+     * <p>So the second one counts from the moment it is one exchange away. An
+     * exchange is her own swing recovery — the time it costs her to land a blow
+     * and be somewhere else — because that is exactly the window a hostile
+     * arriving inside would close on her while she is committed. Stepping off
+     * one recovery early is what turns the separation from something she waits
+     * for into something she makes.
      */
     private static boolean facingOneAtATime(
+            EntityMaid maid,
             java.util.List<ScannedThreat> pack
     ) {
+        double exchange = recoveryTicks(maid) / TICKS_PER_SECOND;
         int able = 0;
         for (ScannedThreat threat : pack) {
             double clearance = SpacingPolicy.instance()
                     .clearanceBeyond(threat.sample().reach());
-            if (threat.sample().distance() <= clearance
-                    && ++able > TOLERATED_ATTACKERS) {
+            boolean here = threat.sample().distance() <= clearance;
+            boolean arriving = threat.sample().secondsToContact() <= exchange;
+            if ((here || arriving) && ++able > TOLERATED_ATTACKERS) {
                 return false;
             }
         }
@@ -297,7 +316,7 @@ public final class MeleeSwing {
                 clearance - target.sample().distance()
         ) && RetreatSpace.escapeReach(maid, crowd, clearance)
                 >= STEP_OUT_GROUND;
-        if (!facingOneAtATime(pack)) {
+        if (!facingOneAtATime(maid, pack)) {
             // Already in more than one pair of arms. Refusing to close is not
             // enough here — she is past that — so ask for a distance that
             // actually breaks contact instead of the single block a melee hold

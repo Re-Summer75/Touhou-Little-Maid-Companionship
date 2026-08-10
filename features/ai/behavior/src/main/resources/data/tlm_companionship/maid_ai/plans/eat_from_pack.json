@@ -1,0 +1,16 @@
+{
+  "format_version": 2,
+  "initial_state": "eat",
+  "resume_policy": "restart_step",
+  "maximum_suspend_ticks": 100,
+  "states": {
+    "eat": {
+      "action": "tlm_companionship:action/eat_from_pack",
+      "parameters": {},
+      "timeout_ticks": 60,
+      "on_success": "$success",
+      "on_failure": "$failure",
+      "on_cancel": "$failure"
+    }
+  }
+}

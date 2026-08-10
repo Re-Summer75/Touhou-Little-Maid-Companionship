@@ -1,7 +1,6 @@
 package com.laixia.maidintelligence.feature.orchestration.tlm.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.github.tartaricacid.touhoulittlemaid.util.TaskEquipUtil;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.CombatCapability;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.CombatStance;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.EngagementContext;
@@ -15,7 +14,11 @@ import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponK
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponSelectionPolicy;
 import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
 import com.laixia.maidintelligence.feature.orchestration.domain.ActionResult;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.sustenance.CombatAppetite;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.sustenance.MaidEating;
+import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.WeaponSwap;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.CombatMovement;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.MeleeSwing;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.RangedDrawCycle;
@@ -90,22 +93,41 @@ public final class TlmCombatAction {
     /** Clearance a break-off needs to begin; it is re-decided every tick. */
     private static final double FLEE_FIRST_STEP = 3.0D;
 
-    /**
-     * Slack when matching a chosen weapon back to a stack in her pack.
-     *
-     * <p>Power is derived from the item, so the same sword scores the same
-     * twice; the tolerance only absorbs floating point, not genuine difference.
-     * Two different weapons that rate identically are interchangeable by the
-     * only measure the choice used, so either satisfying it is correct.
-     */
-    private static final double POWER_MATCH_SLACK = 1.0E-6D;
-
     private final TlmThreatScanner threats;
     private final TlmWeaponScanner weapons;
+    private final CombatAppetite appetite;
+    private final WeaponSwap swap;
 
-    public TlmCombatAction(TlmThreatScanner threats, TlmWeaponScanner weapons) {
+    /**
+     * A fight that can also feed her.
+     *
+     * <p>Hunger arrives as a collaborator rather than being read off the entity
+     * because this mod keeps its own hunger, and it is the one the food errands
+     * already act on. Two hunger numbers would drift, and the first sign of it
+     * would be a maid who walks to a snack cabinet while believing she is full.
+     */
+    public TlmCombatAction(
+            TlmThreatScanner threats,
+            TlmWeaponScanner weapons,
+            MaidStatusApi<EntityMaid> status
+    ) {
         this.threats = Objects.requireNonNull(threats, "threats");
         this.weapons = Objects.requireNonNull(weapons, "weapons");
+        this.appetite = new CombatAppetite(status);
+        this.swap = new WeaponSwap(this.weapons);
+    }
+
+    /**
+     * The same fight, for callers with no status to hand.
+     *
+     * <p>Only the scenarios that drive this class directly. Hunger reads as
+     * full, which costs exactly one of the four eating rules — the one that
+     * spends a lull on a mouthful. Being about to die, needing a mouthful to
+     * win, and refusing to spend stores on a fight already won are all about
+     * the fight and go on working.
+     */
+    public TlmCombatAction(TlmThreatScanner threats, TlmWeaponScanner weapons) {
+        this(threats, weapons, null);
     }
 
     /**
@@ -140,10 +162,20 @@ public final class TlmCombatAction {
         // right thing to hold", and the two must not disagree about it.
         List<Vec3> crowd = CombatSurvey.crowdOf(scanned);
         boolean canOpenGround = canOpenGround(maid, target, crowd);
+        double healthFraction = CombatReadiness.healthFraction(maid);
+        // Asked before the verdict, because eating is a thing she does *about*
+        // the fight rather than instead of it: a mouthful taken while backing
+        // off is the best moment in the whole engagement, and one taken before
+        // closing is what makes an unwinnable fight winnable. Her feet go on
+        // doing whatever the verdict says either way — only her hands are busy.
+        appetite.consider(
+                maid, field, capability, healthFraction, canOpenGround
+        );
+
         RiskVerdict verdict = EngagementRiskPolicy.instance().assess(
                 field,
                 capability,
-                CombatReadiness.healthFraction(maid),
+                healthFraction,
                 canOpenGround
         );
 
@@ -253,11 +285,18 @@ public final class TlmCombatAction {
         if (!stance.engaged()) {
             return withdraw(maid, target, crowd);
         }
-        equip(
-                maid,
-                stance.weapon(),
-                weapons.isUsable(maid, maid.getMainHandItem())
-        );
+        // Her hands are the one resource eating and fighting both want. While
+        // she is mid-mouthful the weapon stays in the pack: swapping it back
+        // would cancel the food, spend the seconds and buy nothing, which is
+        // the worst of the three possible outcomes.
+        boolean chewing = MaidEating.chewing(maid);
+        if (!chewing) {
+            swap.equip(
+                    maid,
+                    stance.weapon(),
+                    weapons.isUsable(maid, maid.getMainHandItem())
+            );
+        }
 
         // Re-read rather than trust the choice. Everything below acts on the
         // actual item, so a swap that has not landed yet can cost her a tick
@@ -265,8 +304,8 @@ public final class TlmCombatAction {
         // cannot use.
         ItemStack held = maid.getMainHandItem();
         WeaponKind heldKind = weapons.classifyFor(held);
-        boolean canStrike =
-                heldKind != null && weapons.isUsable(maid, held);
+        boolean canStrike = !chewing
+                && heldKind != null && weapons.isUsable(maid, held);
 
         // Telling the host who she is fighting keeps its own animations,
         // bauble hooks and target validity in step with this decision.
@@ -427,82 +466,6 @@ public final class TlmCombatAction {
         }
         return ActionResult.RUNNING;
     }
-
-    /**
-     * Put the chosen weapon in her hand.
-     *
-     * <p>The predicate has to describe the weapon well enough that no worse
-     * stack satisfies it. Matching on kind alone — which is all this used to
-     * ask — meant the host's search took the first melee item in the pack, so a
-     * decision to draw the netherite sword could equip a wooden hoe, and an
-     * unusable weapon already in her hand short-circuited the search entirely
-     * because an empty bow is still, by kind, a bow.
-     */
-    private void equip(
-            EntityMaid maid,
-            WeaponCandidate weapon,
-            boolean heldUsable
-    ) {
-        if (weapon == null || weapon.inHand()) {
-            return;
-        }
-        if (maid.isUsingItem()) {
-            // A draw in progress is the only progress a ranged weapon ever
-            // makes, so a usable one finishes its shot before anything is
-            // swapped. This is the rule tool replacement already follows, and
-            // combat was the one place missing it.
-            //
-            // Deferring the swap instead — let go now, swap next tick — reads
-            // as the careful option and is the bug players reported as "she
-            // charges and never fires": letting go clears the use state, the
-            // shooting step further down the same tick sees no draw in
-            // progress and starts a fresh one, and the next tick lets go of
-            // that one too. She winds up once a tick forever, never reaches
-            // the release, and stands at bow range being eaten while she does
-            // it. Two steps that were each reasonable alone.
-            if (heldUsable) {
-                return;
-            }
-            // Nothing to protect: whatever is in her hand cannot be used, so
-            // the draw was never going to produce a shot. Dropping it here
-            // rather than returning is what lets the swap land on this tick
-            // instead of never.
-            maid.stopUsingItem();
-        }
-        TaskEquipUtil.tryEquipFromBackpack(
-                maid, stack -> matches(maid, stack, weapon)
-        );
-    }
-
-    /**
-     * Whether this stack is the weapon that was chosen.
-     *
-     * <p>That one, not "that one or anything stronger of its kind". The looser
-     * form reads as harmless — a better weapon is better — and it is what locked
-     * her into an axe. The host's search consults her main hand first and stops
-     * if it already satisfies the predicate; an axe rates higher than a sword,
-     * so an axe in her hand satisfied every request for a sword and the search
-     * never reached the pack. The ratchet only turns one way: holding the sword
-     * she would swap to the axe, holding the axe she would never swap back, and
-     * from outside that is a maid who owns two weapons and uses one.
-     *
-     * <p>Which is the wrong question anyway. Damage is not the ordering the
-     * choice was made on — the whole point of pricing is that the heavier weapon
-     * is sometimes the worse one, because it does not sweep, or swings too
-     * slowly to fit between two incoming blows. Having the swap re-decide on
-     * power throws that away at the last step.
-     */
-    private boolean matches(
-            EntityMaid maid,
-            ItemStack stack,
-            WeaponCandidate weapon
-    ) {
-        return weapons.classifyFor(stack) == weapon.kind()
-                && weapons.isUsable(maid, stack)
-                && Math.abs(weapons.powerOf(stack) - weapon.power())
-                        <= POWER_MATCH_SLACK;
-    }
-
     private ActionResult finish(EntityMaid maid) {
         cancel(maid);
         return ActionResult.SUCCEEDED;

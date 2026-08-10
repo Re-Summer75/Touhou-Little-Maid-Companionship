@@ -14,6 +14,8 @@ import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.T
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
 import com.laixia.maidintelligence.feature.perception.tlm.TlmAffordancePerceptionService;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.sustenance.FoodValue;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.sustenance.TlmFoodScanner;
 import com.laixia.maidintelligence.feature.status.domain.DefaultHungerPolicy;
 import com.laixia.maidintelligence.feature.status.tlm.MaidSnackCabinetMealSource;
 import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
@@ -57,6 +59,9 @@ public final class TlmMaidFactReader {
             FORECAST_FACTS = forecastFacts();
     private static final Map<OrchestrationId, CompanionActivity>
             FORECAST_LIFT_FACTS = forecastLiftFacts();
+
+    /** Shared with the fight, so both agree on what counts as food. */
+    private static final TlmFoodScanner PACK = new TlmFoodScanner();
 
     private final MaidStatusApi<EntityMaid> status;
     private final MaidSnackCabinetMealSource snackCabinetMeals;
@@ -303,9 +308,29 @@ public final class TlmMaidFactReader {
                  * its own, and the intent tests them itself.
                  */
                 !perception.queryLooseFood(maid, 1, gameTime).isEmpty(),
+                // 她身上有没有能吃的。与上面两条不同的是，这一条不需要她走
+                // 任何一步——所以它也是唯一一条在被围住时仍然可用的。
+                hasPackMeal(maid),
                 homeDistance(maid),
                 ownerFacts.read(owner, gameTime)
         );
+    }
+
+    /**
+     * Whether anything in her pack is worth eating.
+     *
+     * <p>Asked of the same scanner the fight uses, so "she has food" means the
+     * same thing to the intent that makes her stop and eat and to the rule that
+     * makes her eat mid-battle. Nourishing rather than merely edible: a golden
+     * apple with the hunger bar full is not a reason to stand still.
+     */
+    private static boolean hasPackMeal(EntityMaid maid) {
+        for (FoodValue food : PACK.scan(maid)) {
+            if (food.nourishing()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static double value(
@@ -376,6 +401,9 @@ public final class TlmMaidFactReader {
         }
         if (fact.equals(CompanionIntentIds.BEHAVIOR_OCCUPANCY_LEVEL)) {
             return snapshot.behaviorOccupancyLevel();
+        }
+        if (fact.equals(CompanionIntentIds.PACK_MEAL_AVAILABLE)) {
+            return bool(snapshot.packMealAvailable());
         }
         if (fact.equals(CompanionIntentIds.LOOSE_FOOD_AVAILABLE)) {
             return bool(snapshot.looseFoodAvailable());

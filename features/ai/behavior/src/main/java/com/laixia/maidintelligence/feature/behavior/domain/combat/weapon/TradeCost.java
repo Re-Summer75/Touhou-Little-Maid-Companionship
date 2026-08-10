@@ -53,7 +53,7 @@ public final class TradeCost {
      * second says a fight dragged five seconds longer is worth about one extra
      * hit — enough to break ties, too small to override being hurt.
      */
-    private static final double IMPATIENCE_DAMAGE_PER_SECOND = 1.0D;
+    public static final double IMPATIENCE_DAMAGE_PER_SECOND = 1.0D;
 
     /**
      * The share of a cost she keeps for already holding the weapon.
@@ -180,6 +180,10 @@ public final class TradeCost {
     ) {
         double rate = context.rangedUsesPerSecond()
                 * completedDrawShare(context);
+        // Kept as a factor rather than folded away so the one real
+        // interruption stays visible: she cannot draw and swing in the same
+        // tick, so a decision that flips mid-draw throws it away. What is *not*
+        // an interruption is being hit — see below.
         double dps = weapon.damagePerSecond(rate);
         if (dps <= 0.0D) {
             return Double.POSITIVE_INFINITY;
@@ -329,38 +333,55 @@ public final class TradeCost {
     /**
      * The fraction of her draws that survive to become a shot.
      *
-     * <p>Being hit throws the draw away. If blows land more often than she can
-     * finish one, the bow in her hands is scenery — and that, rather than any
-     * threshold, is why something standing on her has to be answered with
-     * steel. A slow heavy hitter leaves room between blows and she can shoot it
-     * point blank; a fast one does not and she cannot.
+     * <p>This used to say that being hit throws the draw away, and to charge
+     * the bow accordingly — down to nothing when blows landed faster than she
+     * could finish one. Nothing in this mod or in the game does that. Every
+     * place a draw is abandoned is one of ours abandoning it on purpose: a
+     * weapon swap, a mouthful, the fight ending. Damage does not touch it.
+     *
+     * <p>Left in place because the veto it produced was not harmless. Four
+     * crossbowmen fire often enough between them that the gap between incoming
+     * bolts is a quarter of a second, so the share came out zero, so her bow
+     * priced at infinity, so she walked at them with a sword across their whole
+     * killing ground — measured at ten arrows unfired in eleven runs out of
+     * twelve, and not one of the four ever killed.
+     *
+     * <p>What was true about it is already priced elsewhere and better: being
+     * unable to hold distance is what makes shooting expensive, and {@link
+     * #shootingCost} charges the whole engagement's damage for it through the
+     * exposure share. That is a cost rather than an impossibility, which is the
+     * honest shape — a bow at arm's length is a bad weapon, not a missing one.
      */
     private double completedDrawShare(EngagementContext context) {
         double draw = context.drawSeconds();
         if (draw <= 0.0D) {
-            // Nothing to interrupt. A weapon that fires the instant it is
-            // pointed is not troubled by being in a brawl.
+            // A weapon that fires the instant it is pointed spends no time
+            // being anything other than ready.
             return 1.0D;
         }
-        if (!context.underAttack()) {
-            // Not being hit yet — but "yet" is the whole question. Something
-            // arriving in half a second ruins a draw that takes a second just
-            // as surely as something already swinging, and waiting for it to
-            // land before admitting that is how she ends up caught mid-draw
-            // every single time. The first shot still goes off, so this is a
-            // partial penalty rather than a veto: enough that a sword wins when
-            // one arrow is all she would get.
-            double until = context.secondsToContact();
-            if (!Double.isFinite(until) || until >= draw * 2.0D) {
-                return 1.0D;
-            }
-            return Math.max(0.25D, until / (draw * 2.0D));
-        }
-        double gap = context.secondsBetweenHits();
-        if (!Double.isFinite(gap)) {
+        if (!mustCloseToHurtHer(context)) {
+            // Nothing to anticipate: it reaches further than any distance she
+            // would hold, so there is no moment at which it "arrives" and no
+            // moment at which drawing stops being the right idea. A crossbowman
+            // is as much in contact at fifteen blocks as at eight.
+            //
+            // This gate is the whole difference between the rule and the veto
+            // it replaced. Asked the other way round — whether anything can hit
+            // her at all — four pillagers priced her bow at infinity and she
+            // walked into their killing ground with a sword, ten arrows unfired
+            // in eleven runs out of twelve.
             return 1.0D;
         }
-        return Math.max(0.0D, 1.0D - draw / gap);
+        // Something that has to close on her, and is about to. The shot still
+        // goes off — nothing interrupts a draw — but it is the last one before
+        // this becomes a melee, and a bow she has to put away again was worth
+        // one arrow. A partial penalty rather than a veto, which is what makes
+        // a sword win when one arrow is all she would get.
+        double until = context.secondsToContact();
+        if (!Double.isFinite(until) || until >= draw * 2.0D) {
+            return 1.0D;
+        }
+        return Math.max(0.25D, until / (draw * 2.0D));
     }
 
     /**
@@ -371,8 +392,23 @@ public final class TradeCost {
      * to mean backing away.
      */
     private boolean keepsDistance(EngagementContext context) {
-        return context.canOpenGround()
-                && context.targetReach() + SpacingPolicy.instance().safeGap() < preferredRange;
+        return context.canOpenGround() && mustCloseToHurtHer(context);
+    }
+
+    /**
+     * Whether it has to come to her before it can do anything.
+     *
+     * <p>Half of {@link #keepsDistance}, and the half that is about the target
+     * rather than about the ground she is standing on. The two were one
+     * predicate and had to be split: being cornered is a reason shooting is
+     * expensive, and it is not a reason to stop expecting the thing to arrive.
+     * Conflated, a wall behind her made drawing a bow look <em>better</em>,
+     * because losing the room to retreat also switched off the anticipation
+     * that would have had her draw steel.
+     */
+    private boolean mustCloseToHurtHer(EngagementContext context) {
+        return context.targetReach() + SpacingPolicy.instance().safeGap()
+                < preferredRange;
     }
 
     /**

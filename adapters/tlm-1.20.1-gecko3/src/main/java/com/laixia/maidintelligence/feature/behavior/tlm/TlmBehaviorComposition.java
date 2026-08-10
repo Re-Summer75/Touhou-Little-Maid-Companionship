@@ -115,7 +115,8 @@ public record TlmBehaviorComposition(
                 new TlmMaidIntentActions(
                         hungerRequestAction,
                         snackCabinetMeals,
-                        abilities
+                        abilities,
+                        status
                 );
         MaidIntentApi<EntityMaid> live =
                 new DefaultMaidIntentOrchestrator<>(
