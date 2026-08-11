@@ -8,6 +8,7 @@ import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -16,14 +17,15 @@ public final class AdvancementForgeInstaller
         implements ForgeFeatureInstaller {
     private final Consumer<IEventBus> menuRegistrar;
     private final Object lifecycleHandler;
-    private final Object bridgeHandler;
+    /** 桥接器是一组而不是一个：判定按「挂钩点的形状」分类，不是按主题分类。 */
+    private final List<Object> bridgeHandlers;
     private final Supplier<? extends Consumer<ForgeLifecycle>> clientInstaller;
     private boolean installed;
 
     public AdvancementForgeInstaller(
             Consumer<IEventBus> menuRegistrar,
             Object lifecycleHandler,
-            Object bridgeHandler,
+            List<Object> bridgeHandlers,
             Supplier<? extends Consumer<ForgeLifecycle>> clientInstaller
     ) {
         this.menuRegistrar = Objects.requireNonNull(
@@ -34,10 +36,10 @@ public final class AdvancementForgeInstaller
                 lifecycleHandler,
                 "lifecycleHandler"
         );
-        this.bridgeHandler = Objects.requireNonNull(
-                bridgeHandler,
-                "bridgeHandler"
-        );
+        this.bridgeHandlers = List.copyOf(Objects.requireNonNull(
+                bridgeHandlers,
+                "bridgeHandlers"
+        ));
         this.clientInstaller = Objects.requireNonNull(
                 clientInstaller,
                 "clientInstaller"
@@ -53,7 +55,7 @@ public final class AdvancementForgeInstaller
         menuRegistrar.accept(lifecycle.modEventBus());
         lifecycle.modEventBus().addListener(this::onCommonSetup);
         lifecycle.gameEventBus().register(lifecycleHandler);
-        lifecycle.gameEventBus().register(bridgeHandler);
+        bridgeHandlers.forEach(lifecycle.gameEventBus()::register);
         DistExecutor.unsafeRunWhenOn(
                 Dist.CLIENT,
                 () -> () -> clientInstaller.get().accept(lifecycle)

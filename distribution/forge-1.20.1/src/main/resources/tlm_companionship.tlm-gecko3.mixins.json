@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_17",
   "mixins": [
     "EntityMaidPlaceBlockMixin",
+    "EntityMaidSleepMixin",
     "MaidFeedAnimalTaskMixin",
     "TaskManagerFreedomOrderMixin",
     "ai.EntitySitCommandSeatLockMixin",

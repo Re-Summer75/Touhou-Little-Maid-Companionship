@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.mixin.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.task.MaidFeedAnimalTask;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.advancement.bridge.MaidFeatAdvancementTriggers;
 import com.laixia.maidintelligence.feature.advancement.port.MaidCourtshipMemory;
 import com.laixia.maidintelligence.platform.runtime.AdapterRuntime;
 import net.minecraft.server.level.ServerLevel;
@@ -39,9 +40,15 @@ public abstract class MaidFeedAnimalTaskMixin {
             long gameTime,
             CallbackInfo callback
     ) {
-        if (feedEntity != null) {
-            AdapterRuntime.require(MaidCourtshipMemory.class)
-                    .rememberCourtedAnimal(maid, feedEntity.getId());
+        if (feedEntity == null) {
+            return;
         }
+        AdapterRuntime.require(MaidCourtshipMemory.class)
+                .rememberCourtedAnimal(maid, feedEntity.getId());
+        // 同一动作也是 player_interacted_with_entity：原版从
+        // Player#interactOn 发出，而她走的是宿主自己的喂食任务，那一句判定
+        // 便永远轮不到她——可这件事她实实在在做了。
+        AdapterRuntime.require(MaidFeatAdvancementTriggers.class)
+                .interactedWith(maid, maid.getMainHandItem(), feedEntity);
     }
 }

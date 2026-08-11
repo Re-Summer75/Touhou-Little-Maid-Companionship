@@ -5,6 +5,7 @@ import com.laixia.maidintelligence.feature.advancement.bridge.MaidCombatAdvancem
 import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -22,6 +23,34 @@ public final class MaidVanillaCombatCriteria
 
     private void fire(EntityMaid maid, Consumer<MaidMirrorPlayer> action) {
         manager.fire(maid, action);
+    }
+
+    @Override
+    public void shotCrossbow(EntityMaid maid, ItemStack crossbow) {
+        // Through manager.fire like every other trigger here, which is the
+        // only safe way to touch the mirror: it owns the binding, the state
+        // sync, the recursion cap and the exception boundary. The 0.0.3 crash
+        // chain came from reaching the mirror outside that path.
+        fire(maid, mirror ->
+                CriteriaTriggers.SHOT_CROSSBOW.trigger(mirror, crossbow));
+    }
+
+    @Override
+    public void killedByCrossbow(
+            EntityMaid maid,
+            java.util.Collection<Entity> victims
+    ) {
+        if (victims.isEmpty()) {
+            return;
+        }
+        fire(maid, mirror ->
+                CriteriaTriggers.KILLED_BY_CROSSBOW.trigger(mirror, victims));
+    }
+
+    @Override
+    public void usedTotem(EntityMaid maid, ItemStack totem) {
+        fire(maid, mirror ->
+                CriteriaTriggers.USED_TOTEM.trigger(mirror, totem));
     }
 
     @Override

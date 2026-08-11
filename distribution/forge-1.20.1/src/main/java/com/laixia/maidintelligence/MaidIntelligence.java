@@ -11,6 +11,7 @@ import com.laixia.maidintelligence.feature.advancement.application.DefaultMaidSt
 import com.laixia.maidintelligence.feature.advancement.bridge.HoneySlideHandler;
 import com.laixia.maidintelligence.feature.advancement.bridge.MaidAdvancementAccess;
 import com.laixia.maidintelligence.feature.advancement.bridge.MaidCombatAdvancementTriggers;
+import com.laixia.maidintelligence.feature.advancement.bridge.MaidFeatAdvancementTriggers;
 import com.laixia.maidintelligence.feature.advancement.bridge.MaidProgressAdvancementTriggers;
 import com.laixia.maidintelligence.feature.advancement.bridge.MaidWorldAdvancementTriggers;
 import com.laixia.maidintelligence.feature.advancement.client.AdvancementClientSetup;
@@ -18,6 +19,7 @@ import com.laixia.maidintelligence.feature.advancement.client.TlmAdvancementClie
 import com.laixia.maidintelligence.feature.advancement.event.MaidAdvancementExperienceRewardedEvent;
 import com.laixia.maidintelligence.feature.advancement.forge.AdvancementForgeInstaller;
 import com.laixia.maidintelligence.feature.advancement.handler.MaidAdvancementBridgeHandlers;
+import com.laixia.maidintelligence.feature.advancement.handler.MaidFeatBridgeHandlers;
 import com.laixia.maidintelligence.feature.advancement.handler.MaidAdvancementLifecycleHandlers;
 import com.laixia.maidintelligence.feature.advancement.menu.AdvancementMenuFactory;
 import com.laixia.maidintelligence.feature.advancement.menu.AdvancementMenus;
@@ -30,6 +32,7 @@ import com.laixia.maidintelligence.feature.advancement.server.MaidAdvancementMan
 import com.laixia.maidintelligence.feature.advancement.server.MaidBridgeMemory;
 import com.laixia.maidintelligence.feature.advancement.server.MaidProgressCriteria;
 import com.laixia.maidintelligence.feature.advancement.server.MaidVanillaCombatCriteria;
+import com.laixia.maidintelligence.feature.advancement.server.MaidVanillaFeatCriteria;
 import com.laixia.maidintelligence.feature.advancement.server.MaidVanillaWorldCriteria;
 import com.laixia.maidintelligence.feature.advancement.tlm.AdvancementTlmModule;
 import com.laixia.maidintelligence.feature.advancement.tlm.MaidStatisticsData;
@@ -179,6 +182,8 @@ public final class MaidIntelligence {
                 new MaidVanillaWorldCriteria(advancementManager);
         MaidCombatAdvancementTriggers combatAdvancementTriggers =
                 new MaidVanillaCombatCriteria(advancementManager);
+        MaidFeatAdvancementTriggers featAdvancementTriggers =
+                new MaidVanillaFeatCriteria(advancementManager);
         MaidProgressAdvancementTriggers progressAdvancementTriggers =
                 new MaidProgressCriteria(advancementManager, statistics);
         TlmAdvancementRequestResolver advancementRequests =
@@ -246,6 +251,10 @@ public final class MaidIntelligence {
                                 advancementRequests::resolveSnapshot,
                                 MaidAdvancementContainer::create
                         )
+                )
+                .register(
+                        MaidFeatAdvancementTriggers.class,
+                        featAdvancementTriggers
                 )
                 .register(
                         HoneySlideHandler.class,
@@ -337,12 +346,18 @@ public final class MaidIntelligence {
                                 advancementManager,
                                 bridgeMemory
                         ),
-                        new MaidAdvancementBridgeHandlers(
-                                bridgeMemory,
-                                worldAdvancementTriggers,
-                                combatAdvancementTriggers,
-                                progressAdvancementTriggers,
-                                maid -> levelApi.getProgress(maid).level()
+                        List.of(
+                                new MaidAdvancementBridgeHandlers(
+                                        bridgeMemory,
+                                        worldAdvancementTriggers,
+                                        combatAdvancementTriggers,
+                                        progressAdvancementTriggers,
+                                        maid -> levelApi.getProgress(maid).level()
+                                ),
+                                new MaidFeatBridgeHandlers(
+                                        bridgeMemory,
+                                        featAdvancementTriggers
+                                )
                         ),
                         () -> new AdvancementClientSetup(
                                 TlmAdvancementClientRuntime.createGuiHandler(),

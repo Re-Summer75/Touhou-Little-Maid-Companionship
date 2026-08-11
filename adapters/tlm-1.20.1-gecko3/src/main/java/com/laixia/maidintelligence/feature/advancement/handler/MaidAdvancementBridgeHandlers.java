@@ -22,8 +22,10 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.ExperienceOrb;
+import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.inventory.CraftingContainer;
+import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeType;
@@ -38,6 +40,7 @@ import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingEntityUseItemEvent;
 import net.minecraftforge.event.entity.living.LivingFallEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
+import net.minecraftforge.event.entity.living.LivingUseTotemEvent;
 import net.minecraftforge.event.entity.living.MobEffectEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
@@ -231,6 +234,44 @@ public final class MaidAdvancementBridgeHandlers {
                     event.getEntity(),
                     source
             );
+            reportCrossbowKill(attacker, event.getEntity(), source);
+        }
+    }
+
+    /**
+     * {@code killed_by_crossbow}：这一发弩矢又打死了一个。
+     *
+     * <p>「是不是弩打的」问箭自己，不问她手上拿着什么——箭在飞的途中她完全可能
+     * 已经换回了剑，而这一箭仍然是弩射出去的。名单为空表示这一发不存在。
+     */
+    private void reportCrossbowKill(
+            EntityMaid attacker,
+            Entity victim,
+            DamageSource source
+    ) {
+        if (!(source.getDirectEntity() instanceof AbstractArrow arrow)
+                || !arrow.shotFromCrossbow()) {
+            return;
+        }
+        combatTriggers.killedByCrossbow(
+                attacker,
+                memory.recordCrossbowKill(attacker.getUUID(), victim)
+        );
+    }
+
+    /**
+     * {@code used_totem}：图腾把她拉了回来。
+     *
+     * <p>原版的复活本来就写在 {@code LivingEntity} 上——她握着图腾本来就会复活，
+     * 血量、效果、粒子一样不少，只有那句判定被 {@code instanceof ServerPlayer}
+     * 挡住。补的不是新能力，是一份她早就挣到的战绩。取消了就不记。
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public void onUseTotem(LivingUseTotemEvent event) {
+        if (event.getEntity() instanceof EntityMaid maid
+                && !maid.level().isClientSide()
+                && !event.isCanceled()) {
+            combatTriggers.usedTotem(maid, event.getTotem());
         }
     }
 
@@ -259,6 +300,30 @@ public final class MaidAdvancementBridgeHandlers {
     public void onItemUseFinish(LivingEntityUseItemEvent.Finish event) {
         if (event.getEntity() instanceof EntityMaid maid) {
             worldTriggers.consumedItem(maid, event.getItem());
+        }
+    }
+
+    /**
+     * {@code shot_crossbow}：她放开弩的那一刻。
+     *
+     * <p>挂 {@code Stop} 而不是 {@code Finish}：弩不是吃完的东西，它是被"松手"
+     * 松出去的。而 {@code Stop} 只由 {@link net.minecraft.world.entity.LivingEntity
+     * #releaseUsingItem()} 发出，{@code stopUsingItem()} 不发——前者正是本模组
+     * 射击路径里紧挨着 {@code performRangedAttack} 的那一行，后者是进食为了腾手
+     * 丢弃蓄力时走的路。所以这个判定精确等于"她真的射出去了一发"，既不会被吃东西
+     * 误触，也不会被中断的蓄力误触。
+     *
+     * <p>射弩是女仆确实会做的事，由本模组自己的远程代码驱动，所以它属于**能力
+     * 缺口**而不是设计文档第 4 节说的那类"她物理上做不到、自然停在未完成"。
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public void onItemUseStop(LivingEntityUseItemEvent.Stop event) {
+        if (event.getEntity() instanceof EntityMaid maid
+                && !maid.level().isClientSide()
+                && event.getItem().getItem() instanceof CrossbowItem) {
+            combatTriggers.shotCrossbow(maid, event.getItem());
+            // 一发弩的击杀从这里开始归组，见 killed_by_crossbow。
+            memory.beginCrossbowShot(maid);
         }
     }
 

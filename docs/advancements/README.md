@@ -87,6 +87,22 @@ flowchart LR
 | `player_hurt_entity` / `entity_hurt_player` | `LivingHurtEvent`（记减伤前伤害）+ `LivingDamageEvent` |
 | `effects_changed` | `MobEffectEvent.Added/Remove/Expired`，外加指纹对账 |
 | `consume_item` | `LivingEntityUseItemEvent.Finish`、`MaidAfterEatEvent` |
+| `shot_crossbow` | `LivingEntityUseItemEvent.Stop`，且手上是弩 |
+| `killed_by_crossbow` | `LivingDeathEvent`，且直接伤害源是 `shotFromCrossbow` 的箭；按「一发」归组 |
+| `used_totem` | `LivingUseTotemEvent`（Forge 发在原版判定正中间） |
+| `levitation` | `MaidTickEvent`，效果出现时记起点、消失时结算整段位移 |
+| `lightning_strike` | `EntityStruckByLightningEvent` |
+| `channeled_lightning` | `ProjectileImpactEvent` 命中实体 + 投掷时记下的引雷标记 |
+| `target_hit` | `ProjectileImpactEvent` 命中标靶方块，信号强度按原版算法还原 |
+| `kill_mob_near_sculk_catalyst` | `LivingDeathEvent` + 死亡点周围搜幽匿催发体 |
+| `started_riding` | `EntityMountEvent` |
+| `ride_entity_in_lava` | `MaidTickEvent`，骑乘中且坐骑在岩浆里；与浮空同为 `DistanceTrigger` |
+| `slept_in_bed` | mixin `EntityMaid#startSleeping`（她不走 `Player#startSleeping`） |
+| `player_interacted_with_entity` | mixin `MaidFeedAnimalTask`，与 `bred_animals` 同一处 |
+
+后六条挂在 `handler/MaidFeatBridgeHandlers`，与 `MaidAdvancementBridgeHandlers` 分开，
+分法不是按主题而是**按挂钩点的形状**：那一组的共同点是「原版对任何实体都执行、
+只在最后一步把非玩家挡掉」。
 | `using_item` | `LivingEntityUseItemEvent.Tick`，每 5 tick 一次 |
 | `changed_dimension` / `nether_travel` | `EntityTravelToDimensionEvent`，进下界的位置记在 `MaidBridgeMemory` |
 | `fishing_rod_hooked` | `MaidFishedEvent` |
@@ -110,9 +126,72 @@ flowchart LR
 | `MaidFeedAnimalTaskMixin` | TLM 调 `setInLove(null)`，原版不会把繁殖记到任何人名下 |
 | `HoneyBlockSlideMixin` | 下滑的判定条件全在方块里，原版只在最后一步把非玩家挡掉 |
 
-**没有桥接的**：睡床、附魔、酿造、图腾、信标、引雷、骑猪灵下岩浆、村民交易等等。
+**没有桥接的**：附魔、酿造、图腾、信标、村民交易、召唤铁傀儡/凋灵、骑猪灵下岩浆等等。
 这些是女仆物理上做不到的事（TLM 也没有交易任务），会像「一个从不睡觉的玩家」那样自然停在未完成，
 是行为决定的，不是能力缺口。
+
+### 4.2 缺口盘点：判定标准是「有没有挂钩点」
+
+原版 111 条进度一共需要 48 种判定，现在接了 **32** 种。**凡是有挂钩点的都接上了。**
+
+**判据不是「她今天做不做」，而是「有没有一个真实的挂钩点」。**这一条是被踩出来的：
+`used_totem` 一度被划进「她做不到」，而实际上不死图腾的复活整段写在 `LivingEntity` 上，
+她握着图腾本来就会被拉回来，只有记账那一行被 `instanceof ServerPlayer` 挡住，
+Forge 还正好在那儿发了 `LivingUseTotemEvent`。**「她的行为」是错的筛子，
+「机制对非玩家生不生效」才是对的。**
+
+按对的筛子重过一遍，能力缺口这一类已全部接上：
+
+| 判定 | 机制对她生效的证据 |
+| --- | --- |
+| `shot_crossbow` / `killed_by_crossbow` | 本模组远程代码真的在放弩 |
+| `used_totem` | 复活写在 `LivingEntity` 上 |
+| `levitation` | 潜影贝弹射对她本来就生效 |
+| `lightning_strike` | 雷本来就会劈到她 |
+| `channeled_lightning` | 三叉戟分支已实现，引雷召雷不看投掷者是谁 |
+| `target_hit` | 标靶的信号判定全在方块里 |
+| `kill_mob_near_sculk_catalyst` | 催发体不在乎谁杀的 |
+| `started_riding` / `ride_entity_in_lava` | `Entity.startRiding` 与骑乘本来就通用 |
+| `slept_in_bed` | 她真的睡觉，只是走宿主的 `EntityMaid#startSleeping` |
+| `player_interacted_with_entity` | 她真的喂动物，只是走宿主的喂食任务 |
+
+**剩下 16 条没有挂钩点**——它们的原版机制**本身**就要一个 `Player` 对象，不是「最后一步
+挡了非玩家」，接了永远不会触发：`enchanted_item`、`brewed_potion`、`construct_beacon`、
+`villager_trade`、`cured_zombie_villager`、`summoned_entity`、`hero_of_the_village`、
+`filled_bucket`、`tame_animal`、`player_generates_container_loot`、
+`thrown_item_picked_up_by_player`、`thrown_item_picked_up_by_entity`、
+`allay_drop_item_on_block`、`avoid_vibration`、`bee_nest_destroyed`、
+`impossible`（这条对玩家也永不触发）。
+
+### 4.2.1 怎么在没有反混淆源码的情况下核准一个判定的签名
+
+`ride_entity_in_lava` 一度被当成「核不准，先空着」。其实编译器自己知道，只要问对问题：
+
+```java
+String reveal = CriteriaTriggers.RIDE_ENTITY_IN_LAVA_TRIGGER;   // 故意类型错误
+// 错误: 不兼容的类型: DistanceTrigger 无法转换为 String
+```
+
+**一句话就把字段真实类型问出来了**——它是 `DistanceTrigger`，和 `levitation`、
+`fall_from_height` 同族，签名是 `trigger(ServerPlayer, Vec3 起点)`，而不是最初推测的
+`(player, vehicle, x, y, z)`。同样地，把几种候选重载写成连续几行编译一次，
+**不报错的那一行就是对的**。参数个数猜错时用后者，类型不确定时用前者。
+
+`killed_by_crossbow` 要单独说：原版语义是**一发弩矢打死了几个**（`arbalistic` 要一发五杀），
+所以不能简单挂 `LivingDeathEvent`，得给每次射击一个身份、把这一发的击杀攒起来。
+
+### 4.3 加判定时必须守的那条线（0.0.3 的教训）
+
+0.0.3 修的崩溃全部来自**在 `MaidAdvancementManager#fire` 之外碰镜像**：效果同步走了会发布
+Forge `MobEffectEvent` 的接口，星月遗物经 PlayerFlagData/L2Library 向离线镜像同步玩家标记，
+整条链就崩了；镜像也一度没有连接对象，第三方模组误发包直接 NPE。
+
+所以新增任何判定时：
+
+- **一律走 `manager.fire(maid, mirror -> ...)`**，那里面有绑定、状态同步、递归上限和异常边界。
+- **不要替镜像发布任何 Forge 事件**，也不要假设它在世界里、在玩家列表里、有正常连接。
+- 事件要挂在**真女仆**身上（像 `shot_crossbow` 挂的是真女仆的 `LivingEntityUseItemEvent.Stop`），
+  而不是镜像身上。
 
 `MaidBridgeMemory` 存桥接需要的瞬时状态（各类指纹、进下界的位置、撮合过的动物），
 这些都不入档，女仆卸载或服务器停止时丢掉。
