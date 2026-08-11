@@ -279,6 +279,7 @@ public final class CombatMovement {
         // walk target is not what carries her, so a chase that is "already
         // issued" is precisely the one nothing is acting on. See AirControl.
         AirControl.steer(maid, victim.position(), closeEnough);
+        StepAhead.leapEarly(maid);
         if (alreadyChasing(maid, victim, closeEnough)) {
             return;
         }
@@ -298,6 +299,7 @@ public final class CombatMovement {
             float speed
     ) {
         AirControl.steer(maid, destination, closeEnough);
+        StepAhead.leapEarly(maid);
         if (tracking(maid, destination, DESTINATION_SLACK)) {
             return;
         }

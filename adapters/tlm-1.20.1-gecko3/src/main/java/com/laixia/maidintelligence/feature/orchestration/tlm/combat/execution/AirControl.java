@@ -60,6 +60,23 @@ public final class AirControl {
     }
 
     /**
+     * 上一格要赔进去多少格的领先。
+     *
+     * <p>推出来的，不是拍的：一次跳跃十一 tick，那十一 tick 里她只能靠空中转向挪
+     * {@link #driftOver} 那么远（约 0.99 格），而平地上追她的东西同样十一 tick 走
+     * 的是走路速度乘十一（约 2.2 格）。差额就是这一格的代价。
+     *
+     * <p>还没算撞停那一下——原版要她贴着方块面才发出跳跃，而碰撞会把水平速度清零。
+     * 所以这个数是**下限**。
+     */
+    public static double climbCost() {
+        int airborne = JumpStrike.landsAt();
+        return Math.max(
+                0.0D, STEERING_PACE * airborne - driftOver(airborne)
+        );
+    }
+
+    /**
      * 一次滞空里，光靠空中转向她能横向挪多远。
      *
      * <p>就是把上面那两个常数积起来：每 tick 先加 {@link #AIR_ACCELERATION}、位移、

@@ -5,6 +5,7 @@ import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.gametest.support.BenchmarkSwitch;
 import com.laixia.maidintelligence.gametest.support.CombatTrace;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
+import com.laixia.maidintelligence.gametest.support.TerrainTally;
 import com.laixia.maidintelligence.gametest.support.WeaponLedger;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.core.BlockPos;
@@ -17,6 +18,7 @@ import net.minecraft.world.entity.monster.Vindicator;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 import net.minecraftforge.items.IItemHandler;
@@ -65,6 +67,9 @@ public final class CombatRaidBenchmarkGameTests {
     private static final int START_X = 17;
     private static final int START_Z = 7;
 
+    /** 围墙高度：拦住掉出去，但不封成屋子。 */
+    private static final int FENCE_HEIGHT = 4;
+
     /** 与 CompanionScene 的抬升一致，好把顶砌在她那一层。 */
     private static final int LIFT = 12;
 
@@ -105,6 +110,7 @@ public final class CombatRaidBenchmarkGameTests {
         }
         CompanionScene scene = CompanionScene.room(helper, ARENA_X, ARENA_Z);
         unevenGround(helper);
+        fenceIn(helper);
         roofOver(helper);
         scene.ownerAt(START_X, 2, START_Z);
         EntityMaid maid = scene.maid(START_X, 2, START_Z);
@@ -170,11 +176,14 @@ public final class CombatRaidBenchmarkGameTests {
         double[] swordGap = {0.0D};
         int[] swordGapTicks = {0};
         int[] swordNear = {0};
+        // 地形四列。现有读数全是平面的，而这一局的地板已经不是平的了。
+        TerrainTally terrain = new TerrainTally(maid);
 
         helper.startSequence()
                 .thenExecuteFor(BUDGET_TICKS, () -> {
                     long tick = helper.getLevel().getGameTime() - start;
                     if (maid.isAlive()) {
+                        terrain.sample(maid, nearestOf(maid, band));
                         boolean drawing = maid.isUsingItem()
                                 && maid.getUseItem()
                                         .getFoodProperties(maid) == null;
@@ -239,7 +248,8 @@ public final class CombatRaidBenchmarkGameTests {
                     }
                     report(
                             index, maid, band, killedAt, lowestHealth[0],
-                            peakAbsorption[0], trace, ledger, fellAt[0]
+                            peakAbsorption[0], trace, ledger, fellAt[0],
+                            terrain
                     );
                     System.out.printf(
                             "RAID trial=%d BOW draws=%d fired=%d full=%dt%n",
@@ -289,6 +299,33 @@ public final class CombatRaidBenchmarkGameTests {
      * <p>不用随机：同一副地形每局都一样，读数才有可比性。地形本身该不该更难，
      * 是另一件事，改的时候整条基准的历史读数一起作废——所以这里写死。
      */
+    /**
+     * 围墙。
+     *
+     * <p>竞技场抬高十二格而四周是空的，铺平时她没理由走到边上，地形一加就有了：
+     * 实测一局量到她与最近敌人差 **10.26 格**、寻路连续 **550 tick** 报走不到——
+     * 她被推出边缘掉了下去，剩下的读数全部作废。
+     *
+     * <p>不与顶同高：墙只是拦住掉出去，不该顺带变成一间封闭的屋子，那会把"退无
+     * 可退"变成这一局的常态而不是地形的结果。
+     */
+    private static void fenceIn(GameTestHelper helper) {
+        for (int y = 1; y <= FENCE_HEIGHT; y++) {
+            for (int x = 0; x <= ARENA_X; x++) {
+                helper.setBlock(new BlockPos(x, LIFT + y, 0), Blocks.STONE);
+                helper.setBlock(
+                        new BlockPos(x, LIFT + y, ARENA_Z), Blocks.STONE
+                );
+            }
+            for (int z = 0; z <= ARENA_Z; z++) {
+                helper.setBlock(new BlockPos(0, LIFT + y, z), Blocks.STONE);
+                helper.setBlock(
+                        new BlockPos(ARENA_X, LIFT + y, z), Blocks.STONE
+                );
+            }
+        }
+    }
+
     private static void unevenGround(GameTestHelper helper) {
         // 台阶：横贯她与敌人之间，逼每一次接近都跨一次高度。
         for (int x = 8; x <= 13; x++) {
@@ -369,7 +406,8 @@ public final class CombatRaidBenchmarkGameTests {
             float peakAbsorption,
             CombatTrace trace,
             WeaponLedger ledger,
-            long fellAt
+            long fellAt,
+            TerrainTally terrain
     ) {
         int killed = 0;
         double dealt = 0.0D;
@@ -396,6 +434,9 @@ public final class CombatRaidBenchmarkGameTests {
                 100.0D * trace.shareWithinReach(), fellAt, fallen
         );
         System.out.printf("RAID trial=%d %s%n", index, ledger.line());
+        System.out.printf(
+                "RAID trial=%d TERRAIN %s%n", index, terrain.line()
+        );
     }
 
     private static int count(EntityMaid maid, net.minecraft.world.item.Item item) {

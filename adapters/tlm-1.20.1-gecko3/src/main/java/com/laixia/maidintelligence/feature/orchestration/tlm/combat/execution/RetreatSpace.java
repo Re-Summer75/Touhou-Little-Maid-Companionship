@@ -283,6 +283,7 @@ public final class RetreatSpace {
         // every step against her starting height would let her climb one stair
         // and then decide the second one is a wall.
         int height = 0;
+        int climbed = 0;
         for (double walked = 1.0D; walked <= asked; walked += 1.0D) {
             BlockPos ahead = BlockPos.containing(
                     from.add(direction.scale(walked))
@@ -291,10 +292,18 @@ public final class RetreatSpace {
             if (landing == null) {
                 break;
             }
-            height += landing.getY() - ahead.getY();
+            int rise = landing.getY() - ahead.getY();
+            if (rise > 0) {
+                climbed += rise;
+            }
+            height += rise;
             reached = walked;
         }
-        return Math.min(reached, leash);
+        // 爬升要收费。这个循环一直在数高度差，却只当成"过不过得去"，于是带坎的
+        // 退路和平路报出同样的余地。**一条要爬一格的撤退不是撤退**——净距离是负
+        // 的（AirControl.climbCost 约 1.23 格）。收费之后平路自然胜出。
+        double taxed = reached - climbed * AirControl.climbCost();
+        return Math.min(Math.max(0.0D, taxed), leash);
     }
 
     /**
