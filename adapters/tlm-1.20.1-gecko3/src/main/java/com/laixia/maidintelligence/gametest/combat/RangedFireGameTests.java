@@ -8,6 +8,7 @@ import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.Rang
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.RangedDrawCycle;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import com.laixia.maidintelligence.platform.runtime.AdapterRuntime;
@@ -444,6 +445,50 @@ public final class RangedFireGameTests {
                 MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES,
                 new NearestVisibleLivingEntities(maid, List.of(hostile))
         );
+    }
+
+    /**
+     * 拉着弩转身撤退，不能把服务器带走。
+     *
+     * <p>玩家实机崩过一次：{@code shootCrossbowProjectile} 的 {@code target is
+     * null}。宿主的弩不认传进来的 victim，回头读 {@code getTarget()}，而撤退
+     * 分支从不设它。弓察觉不到——它用的就是传进来的那个。
+     */
+    @GameTest(
+            templateNamespace = "minecraft",
+            template = "empty",
+            timeoutTicks = 200
+    )
+    public static void aCrossbowSurvivesBreakingOffMidDraw(
+            GameTestHelper helper
+    ) {
+        CompanionScene scene = CompanionScene.room(helper, 3, 2);
+        EntityMaid maid = scene.maid(1, 2, 1);
+        maid.setTask(new FreedomMaidTask());
+        maid.setItemInHand(
+                InteractionHand.MAIN_HAND, new ItemStack(Items.CROSSBOW)
+        );
+        maid.getAvailableBackpackInv().setStackInSlot(
+                0, new ItemStack(Items.ARROW, 32)
+        );
+        Zombie zombie = seeHostile(helper, maid, 10.0D);
+        var weapons = new TlmWeaponScanner(RangedWeaponRecognizer.NONE);
+
+        // 直接打那一行，不指望编排器自己走进这个状态：第一版放了只近处的无 AI
+        // 僵尸，稳赢的仗永远 ENGAGE、到不了 withdraw，开关兜底都是绿的。
+        for (int tick = 0; tick < 60; tick++) {
+            keepSeeing(maid, zombie);
+            // 「手里一把拉着的弩，而目标记忆是空的」——撤退分支的原样。
+            maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);
+            RangedDrawCycle.releaseOrKeepDraw(maid, zombie, weapons);
+            maid.tick();
+        }
+
+        helper.assertTrue(
+                maid.isAlive(),
+                "她没能活着走完这一段——弩在目标记忆为空时开火崩掉了。"
+        );
+        helper.succeed();
     }
 
     @SuppressWarnings("unchecked")

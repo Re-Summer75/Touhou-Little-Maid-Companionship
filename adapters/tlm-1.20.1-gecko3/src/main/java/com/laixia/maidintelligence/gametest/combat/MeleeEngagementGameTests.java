@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.gametest.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.JumpStrike;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.MeleeSwing;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.RangedWeaponRecognizer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
@@ -416,4 +417,5 @@ public final class MeleeEngagementGameTests {
         );
         return zombie;
     }
+
 }

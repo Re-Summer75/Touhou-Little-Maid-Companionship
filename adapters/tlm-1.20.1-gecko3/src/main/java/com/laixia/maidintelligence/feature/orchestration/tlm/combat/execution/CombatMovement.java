@@ -194,7 +194,13 @@ public final class CombatMovement {
                                 distance,
                                 ranged ? SpacingPolicy.instance().retreatOvershoot() : 0.0D
                         ),
-                        speed
+                        speed,
+                        // Melee steps off to fight the next one alone, so the
+                        // direction that matters is the one that leaves the
+                        // second nearest behind. Shooting wants the opposite —
+                        // away from everybody — because there is no next one to
+                        // turn and face.
+                        !ranged
                 );
             } else {
                 // Nowhere to give. Hold what she has rather than walk anywhere:
@@ -269,6 +275,10 @@ public final class CombatMovement {
             int closeEnough,
             float speed
     ) {
+        // Before the de-duplication, not after: while she is off the ground the
+        // walk target is not what carries her, so a chase that is "already
+        // issued" is precisely the one nothing is acting on. See AirControl.
+        AirControl.steer(maid, victim.position(), closeEnough);
         if (alreadyChasing(maid, victim, closeEnough)) {
             return;
         }
@@ -287,6 +297,7 @@ public final class CombatMovement {
             int closeEnough,
             float speed
     ) {
+        AirControl.steer(maid, destination, closeEnough);
         if (tracking(maid, destination, DESTINATION_SLACK)) {
             return;
         }
@@ -305,6 +316,29 @@ public final class CombatMovement {
             double distance,
             float speed
     ) {
+        giveGround(maid, crowd, distance, speed, false);
+    }
+
+    /**
+     * The same, with a say in what the step is <em>for</em>.
+     *
+     * <p>Two retreats that look identical from outside want opposite
+     * directions. Breaking off a lost fight wants distance from everyone;
+     * stepping off between blows wants the second nearest left behind, because
+     * she is about to turn round and fight the first one. Choosing the same
+     * bearing for both is what left "six-on-one becomes six one-on-ones" to
+     * whatever order the pack happened to path in.
+     *
+     *  isolate whether this step is meant to separate them rather than
+     *                to escape them
+     */
+    public static void giveGround(
+            EntityMaid maid,
+            java.util.List<Vec3> crowd,
+            double distance,
+            float speed,
+            boolean isolate
+    ) {
         // A retreat already under way and still improving is left alone.
         //
         // Every write erases the PATH memory, so a destination that moves is a
@@ -322,7 +356,16 @@ public final class CombatMovement {
         // The best line available, which is straight back whenever that works
         // and the nearest open angle when it does not. Walking into a wall and
         // calling it a retreat is the same as not retreating.
-        Vec3 escape = RetreatSpace.escapeTo(maid, crowd, distance);
+        Vec3 escape = isolate
+                ? IsolationStep.toward(maid, crowd, distance)
+                : null;
+        if (escape == null) {
+            // Either she is not separating anybody, or no bearing offered a
+            // useful gap. Falling back rather than standing still: a worse
+            // direction is still a direction, and the ordinary retreat is the
+            // one that has always been there.
+            escape = RetreatSpace.escapeTo(maid, crowd, distance);
+        }
         if (escape == null) {
             // Nothing to write — and emphatically not a reason to erase what she
             // already has. Clearing here is an active instruction to stand

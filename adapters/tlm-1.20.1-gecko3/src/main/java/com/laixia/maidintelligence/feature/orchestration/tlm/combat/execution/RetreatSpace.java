@@ -270,7 +270,7 @@ public final class RetreatSpace {
      * runs out of leash is simply a direction with less room, and the survey
      * picks around it the same way it picks around a wall.
      */
-    private static double reachAlong(
+    static double reachAlong(
             EntityMaid maid,
             Vec3 from,
             Vec3 direction,

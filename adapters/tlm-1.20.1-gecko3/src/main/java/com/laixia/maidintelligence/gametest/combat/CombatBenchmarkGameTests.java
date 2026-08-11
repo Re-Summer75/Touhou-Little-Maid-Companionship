@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.gametest.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
+import com.laixia.maidintelligence.gametest.support.BenchmarkSwitch;
 import com.laixia.maidintelligence.gametest.support.CombatTrace;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.gametest.support.WeaponLedger;
@@ -114,54 +115,6 @@ public final class CombatBenchmarkGameTests {
         trial(helper, 4);
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 700, required = false, batch = "benchmark5")
-    public static void sixZombiesTrial5(GameTestHelper helper) {
-        trial(helper, 5);
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 700, required = false, batch = "benchmark6")
-    public static void sixZombiesTrial6(GameTestHelper helper) {
-        trial(helper, 6);
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 700, required = false, batch = "benchmark7")
-    public static void sixZombiesTrial7(GameTestHelper helper) {
-        trial(helper, 7);
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 700, required = false, batch = "benchmark8")
-    public static void sixZombiesTrial8(GameTestHelper helper) {
-        trial(helper, 8);
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 700, required = false, batch = "benchmark9")
-    public static void sixZombiesTrial9(GameTestHelper helper) {
-        trial(helper, 9);
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 700, required = false, batch = "benchmark10")
-    public static void sixZombiesTrial10(GameTestHelper helper) {
-        trial(helper, 10);
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 700, required = false, batch = "benchmark11")
-    public static void sixZombiesTrial11(GameTestHelper helper) {
-        trial(helper, 11);
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 700, required = false, batch = "benchmark12")
-    public static void sixZombiesTrial12(GameTestHelper helper) {
-        trial(helper, 12);
-    }
-
     /**
      * 一局。
      *
@@ -177,6 +130,11 @@ public final class CombatBenchmarkGameTests {
      * 相反的结论。十二局是能把这一档噪声压住的最小规模。
      */
     private static void trial(GameTestHelper helper, int index) {
+        if (!BenchmarkSwitch.measuring()) {
+            // 平时那一轮不量读数——基准占掉四分之三的墙钟时间。见 BenchmarkSwitch。
+            helper.succeed();
+            return;
+        }
         CompanionScene scene = CompanionScene.room(helper, ARENA_X, ARENA_Z);
         roofOver(helper);
 

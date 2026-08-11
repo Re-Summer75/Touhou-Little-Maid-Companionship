@@ -20,6 +20,7 @@ import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.WeaponSwap;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.CombatMovement;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.JumpStrike;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.MeleeSwing;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.RangedDrawCycle;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.RetreatSpace;
@@ -92,6 +93,7 @@ public final class TlmCombatAction {
 
     /** Clearance a break-off needs to begin; it is re-decided every tick. */
     private static final double FLEE_FIRST_STEP = 3.0D;
+
 
     private final TlmThreatScanner threats;
     private final TlmWeaponScanner weapons;
@@ -352,6 +354,20 @@ public final class TlmCombatAction {
         CombatMovement.keepRange(
                 maid, target, pressing, crowd, desired, shooting, MOVE_SPEED
         );
+        // 两个离地的理由，都不是脚走得到的。高处那个是竖直方向够不着，走路只
+        // 收得回水平那一段；另一个是节奏——冷却剩下的 tick 数正好够她升上去再
+        // 落下来时，这一刀就是暴击。顺序如此：先问够不够得着，再问疼不疼。放在
+        // 走位之后，因为跳只值得在她已经站到最近处时才跳。
+        // 两个离地的理由，都不是脚走得到的：够不着的高处是竖直方向的问题，走路只
+        // 收得回水平那一段；冷却剩下的 tick 数正好够她升起再落下时，这一刀就是暴击。
+        // 起跳之后还要有人推她——腾空期间 keepRange 要求的是保持退让间距，而落刀的
+        // 几何指望的是她朝目标收进去，两者不接上，这一跳就永远差最后一截。
+        if (!shooting && (
+                JumpStrike.worthLeavingTheGround(maid, target.entity())
+                        || JumpStrike.worthCrittingNow(maid, target, pack))) {
+            JumpStrike.leap(maid);
+        }
+        JumpStrike.rideTheLeap(maid, target.entity());
         if (canStrike) {
             strike(maid, target, shooting);
         }
@@ -417,8 +433,6 @@ public final class TlmCombatAction {
             ScannedThreat target,
             List<Vec3> crowd
     ) {
-        maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);
-        maid.setTarget(null);
         // Spend the draw rather than bin it. A bow needs twenty unbroken ticks
         // to reach full, and this path used to throw whatever had accumulated
         // straight away — so a verdict that flickered between fighting and
@@ -427,9 +441,19 @@ public final class TlmCombatAction {
         // sees is a maid holding a bow at full stretch that never once looses
         // an arrow. Firing on the way out costs nothing: the shot is already
         // paid for, and it is the last free hit she will get.
+        //
+        // Before the target is let go, and that ordering is load-bearing. A bow
+        // shoots at whoever is handed to it, so it did not care; the host's
+        // crossbow path goes through {@code CrossbowAttackMob}, which re-reads
+        // {@code getTarget()} out of the entity rather than taking the victim
+        // it was given. Firing after the clear therefore handed it a null and
+        // took the server down with it — a crash for the exact case this line
+        // exists to serve, breaking off while a shot is still in her hands.
         RangedDrawCycle.releaseOrKeepDraw(
                 maid, target.entity(), weapons
         );
+        maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);
+        maid.setTarget(null);
         // One question, asked once, of the same crowd and the same distance the
         // escape will actually use.
         //

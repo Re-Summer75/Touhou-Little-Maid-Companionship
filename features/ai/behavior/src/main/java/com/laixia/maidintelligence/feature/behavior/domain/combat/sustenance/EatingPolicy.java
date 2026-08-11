@@ -104,17 +104,137 @@ public final class EatingPolicy {
         if (larder.isEmpty()) {
             return null;
         }
+        // Her own state first, hunger last. The order used to be the other way
+        // round and it is most of why she was late: a free moment went to the
+        // cheapest thing that filled her stomach, so the window that should
+        // have bought the apple bought bread, and the apple was still in the
+        // pack when the axe arrived.
+        if (desperate(healthFraction)) {
+            return bestNetGain(larder, field);
+        }
+        FoodValue topUp = whileNothingCanReachHer(larder, field, capability);
+        if (topUp != null) {
+            return topUp;
+        }
         FoodValue free = duringALull(larder, field, hungerFraction);
         if (free != null) {
             return free;
-        }
-        if (healthFraction < bailOutHealthFraction) {
-            return bestNetGain(larder, field);
         }
         return whatTurnsTheFight(
                 larder, field, capability, healthFraction, canOpenGround
         );
     }
+
+    /**
+     * Putting it on while there is still time to put it on.
+     *
+     * <p>The rule the other three left a hole where. Being about to die is
+     * caught by {@code desperate}, being hungry by the lull, and a fight a
+     * mouthful would win by {@code whatTurnsTheFight} — and none of those covers
+     * the ordinary case of walking into something worse than she is currently
+     * wearing. So a maid whose absorption had run out, who was not hungry, and
+     * whose fight no single apple could rescue had no rule that could reach into
+     * her own pack. She fought it bare and ate afterwards, if at all.
+     *
+     * <p>That last one is the sharpest of the three, because it fails backwards:
+     * {@code whatTurnsTheFight} spends food only when the food makes the fight
+     * winnable, so the harder the fight, the less likely she is to prepare for
+     * it. Against four vindicators nothing in her pack moves the verdict, and
+     * she was measured going in with ten golden apples and dying with eight.
+     *
+     * <p>Asked of her own state, which is what makes it fire again when a buff
+     * wears off: the scanner prices an effect she is already carrying at zero,
+     * so while absorption is up nothing here looks worth eating, and the moment
+     * it lapses the same apple is worth its full four points again.
+     *
+     * <p>Cheapest that helps, not best. Reaching for the most protective thing
+     * every time is what made an earlier version of this eat five golden apples
+     * in a single fight — and her hands are the only thing in a fight that deals
+     * damage, so a mouthful she did not need is a swing she did not take.
+     */
+    private FoodValue whileNothingCanReachHer(
+            Collection<FoodValue> larder,
+            ThreatField field,
+            CombatCapability capability
+    ) {
+        if (field.isEmpty() || capability.bestDps() <= 0.0D) {
+            return null;
+        }
+        double clearSeconds =
+                field.convergingHealth() / capability.bestDps();
+        if (clearSeconds * field.incomingDps()
+                <= capability.effectiveHealth()) {
+            // She can already pay for what is in front of her.
+            return null;
+        }
+        FoodValue cheapest = null;
+        for (FoodValue food : larder) {
+            if (field.soonestContact() <= food.secondsToEat()
+                    || netGain(food, field) <= 0.0D) {
+                continue;
+            }
+            if (cheapest == null
+                    || food.effectiveHealthGain()
+                            < cheapest.effectiveHealthGain()) {
+                cheapest = food;
+            }
+        }
+        return cheapest;
+    }
+
+    /**
+     * About to die, measured the way the risk policy measures it.
+     *
+     * <p>A share of her maximum, which is the right shape for attrition: many
+     * small hits walk her down through this line and it catches her on the way.
+     */
+    private boolean desperate(double healthFraction) {
+        return healthFraction < bailOutHealthFraction;
+    }
+
+    // "About to die" was also tried the way the thing in front of her measures
+    // it — effective health at or under the heaviest blow in the field, rather
+    // than a share of her maximum. The reasoning survives the experiment: three
+    // tenths of twenty is six, a vindicator's axe takes thirteen, so against a
+    // heavy hitter the share is not a threshold but a band she steps over, and
+    // she was measured dying with eight of ten golden apples still in her pack.
+    //
+    // It still measured worse, and not marginally: over twenty-four trials her
+    // damage dealt fell from about fifty-five to forty, kills from 1.4 to 0.8,
+    // and the share of the fight spent inside someone's reach rose. The rule
+    // fires precisely when she cannot afford it. Being one blow from death and
+    // being able to stand still for thirty-two ticks are the same situation
+    // described twice, and the mouthful does not outrun the axe that defined
+    // it — she ate, was hit anyway, and had spent a second and a half not
+    // moving to buy four points of absorption against thirteen.
+    //
+    // Which leaves the apples genuinely hard to spend, and that is the real
+    // finding rather than a failed patch: the moment they would save her is the
+    // moment she has no time to eat one. Anything that wants to spend them has
+    // to do it earlier, when nothing is in reach — which is the lull rule,
+    // already here — or find a way to make the window cost less.
+
+    // A fourth rule was tried here and removed: buffing up in a lull because
+    // the fight ahead costs more than she is carrying, rather than because she
+    // is hungry. It is the one shape of "spend the apples" that the two failed
+    // attempts below and above point at — the window is only cheap when nothing
+    // is standing in it, and the two hundred ticks she spends shooting are
+    // exactly that.
+    //
+    // It measured worse than not eating at all: damage dealt fell from about
+    // fifty-five to fifty, and the reason is visible in where her hands went.
+    // Her time holding a sword collapsed from a hundred and fifty ticks to
+    // forty-seven, and her swings with it from 2.5 to 1.5, because a maid who
+    // is chewing is a maid holding an apple — the fight leaves the weapon in
+    // the pack while she eats, correctly, and she ate five and a half of them.
+    //
+    // So all three approaches to the larder have now failed, and they failed
+    // for one reason rather than three: an apple costs thirty-two ticks of her
+    // hands, and her hands are the only thing in this fight that deals damage.
+    // Four points of absorption do not buy back thirty-two ticks of not
+    // shooting. The apples are not a health pool she is failing to spend —
+    // against something that kills her in two blows, they are not worth their
+    // window, and the maid declining to eat them was right.
 
     /**
      * The mouthful she can take for nothing.

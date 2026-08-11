@@ -48,7 +48,7 @@ public final class CombatEatingVerification {
         verifiesALullIsSpentOnTheCheapestThing();
         verifiesAWinnableFightCostsHerNothing();
         verifiesAnUnwinnableFightBuysTheCheapestThatTurnsIt();
-        verifiesAHopelessFightIsNotWorthTheStores();
+        verifiesSheArmsHerselfEvenForAFightSheCannotWin();
         verifiesDyingSheReachesForTheMostItCanBuy();
         verifiesSheDoesNotEatWhileBeingBeaten();
         verifiesABuffAlreadyOnHerIsNotBoughtTwice();
@@ -128,19 +128,29 @@ public final class CombatEatingVerification {
     }
 
     /**
-     * 吃了也打不过，就一样不该吃——那只是晚一点输。
+     * 打不赢的仗照样要穿上——**这一条是反过来的，原来钉的是相反的行为**。
      *
-     * <p>与上一条的差别是敌人更多、更近，同样净赚为正。差别只在吃完之后裁决
-     * **仍然**不是 ENGAGE，于是这一口买不到任何东西。
+     * <p>原来的说法是"吃了也打不过就别吃，那只是晚一点输"，判据是吃完之后裁决
+     * 仍然不是 ENGAGE。它把"赢不了"和"这口买不到东西"当成了一回事，而这套模型里
+     * 根本不是：裁决还有 WITHDRAW 和 SKIRMISH，那是**她不赢但要活着走出来**的仗，
+     * 而伤害吸收买的正是那个。实机暴露的现象就是这条规则造成的——
+     * 打不过的敌人她一口不吃，等到补的时候已经晚了。
+     *
+     * <p>所以判据从"这口能不能让她赢"改成"她身上的够不够扛住要来的"。仗越难
+     * 越该穿，而不是越难越不穿。
+     *
+     * <p>省着点花靠的是另外三样，不是靠不吃：已经生效的效果被扫描器记为零收益
+     * （不会叠着吃），空档期要求没人够得着（不会在挨打时嚼），以及挑**最便宜**
+     * 够用的那个而不是最厚的。
      */
-    private static void verifiesAHopelessFightIsNotWorthTheStores() {
+    private static void verifiesSheArmsHerselfEvenForAFightSheCannotWin() {
         require(
                 POLICY.choose(
                         List.of(GOLDEN_APPLE), swarm(6, 5.0D),
                         new CombatCapability(8.0D, 11.2D, 0.0D, HER_REACH),
                         1.0D, 1.0D, true
-                ) == null,
-                "一场吃了也翻不了的仗，她把金苹果花掉了"
+                ) != null,
+                "一场她赢不了的仗，她连状态都不上——活着退出来也是要本钱的"
         );
     }
 

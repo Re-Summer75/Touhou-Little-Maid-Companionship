@@ -43,6 +43,22 @@ public final class TargetSelectionPolicy {
      * fixated on wounded ones behind the front and took damage from the one at
      * her elbow. Concentrating damage has to come from somewhere that does not
      * also steer her — it is not this decision's to make.
+     *
+     * <p>And the third attempt found that "somewhere" does not exist in the
+     * shot either, which is where the sentence above was pointing. Aiming the
+     * bow at the most wounded while her feet went on answering to the nearest
+     * looks free — an arrow does its own travelling, and from ten blocks they
+     * are all equally in front of her. It is not free, because aiming is not
+     * only aiming: the draw turns her head every tick, over the top of the
+     * facing her movement just set, so the shots went to something far enough
+     * away that mob accuracy threw most of them, while whatever was closest
+     * walked in unwatched. Measured over twenty-four trials against an
+     * otherwise identical maid, her arrow damage halved, 28.5 to 13.6, and the
+     * share of the fight spent inside someone's reach went from a third to
+     * two fifths.
+     *
+     * <p>Three attempts, three different mechanisms, one shape: every place
+     * that can choose a different victim also points some part of her at it.
      */
     public ThreatSample select(Collection<ThreatSample> samples) {
         Objects.requireNonNull(samples, "samples");

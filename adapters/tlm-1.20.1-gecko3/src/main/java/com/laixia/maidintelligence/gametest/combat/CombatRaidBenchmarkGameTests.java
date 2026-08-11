@@ -2,14 +2,17 @@ package com.laixia.maidintelligence.gametest.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
+import com.laixia.maidintelligence.gametest.support.BenchmarkSwitch;
 import com.laixia.maidintelligence.gametest.support.CombatTrace;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
+import com.laixia.maidintelligence.gametest.support.WeaponLedger;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.monster.Vindicator;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -42,23 +45,18 @@ import java.util.Arrays;
 @PrefixGameTestTemplate(false)
 @SuppressWarnings("null")
 public final class CombatRaidBenchmarkGameTests {
-    /**
-     * 这一局放几个。
-     *
-     * <p>暂时按局分成两档：前六局三个、后六局两个。目的是把"她打不过"和"这一局
-     * 本来就不可能"分开——四个时十二局全灭，而那个读数无法区分战术不行和强度
-     * 超限。一次运行同时问两个强度，比连跑两轮便宜一半。
-     */
-    private static int packSize(int index) {
-        return index <= 6 ? 3 : 2;
-    }
+    /** 四个卫道士、五格起手、三十五秒。 */
+    private static final int PACK_SIZE = 4;
 
     private static final int BUDGET_TICKS = 700;
     private static final double PACK_DISTANCE = 5.0D;
 
-    /** 十支箭，五个金苹果。 */
-    private static final int ARROWS = 10;
-    private static final int APPLES = 5;
+    /** 十五支箭，十个金苹果。 */
+    private static final int ARROWS = 15;
+    private static final int APPLES = 10;
+
+    /** 原版弓满蓄力的 tick 数——只用来判"她在满蓄力上空等了多久"。 */
+    private static final int FULL_DRAW_TICKS = 20;
 
     /** 竞技场，与僵尸局同一副尺寸——共用世界里铺多大就真的铺多大。 */
     private static final int ARENA_X = 23;
@@ -97,69 +95,28 @@ public final class CombatRaidBenchmarkGameTests {
         trial(helper, 4);
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 1100, required = false, batch = "raid5")
-    public static void fourVindicatorsTrial5(GameTestHelper helper) {
-        trial(helper, 5);
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 1100, required = false, batch = "raid6")
-    public static void fourVindicatorsTrial6(GameTestHelper helper) {
-        trial(helper, 6);
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 1100, required = false, batch = "raid7")
-    public static void fourVindicatorsTrial7(GameTestHelper helper) {
-        trial(helper, 7);
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 1100, required = false, batch = "raid8")
-    public static void fourVindicatorsTrial8(GameTestHelper helper) {
-        trial(helper, 8);
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 1100, required = false, batch = "raid9")
-    public static void fourVindicatorsTrial9(GameTestHelper helper) {
-        trial(helper, 9);
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 1100, required = false, batch = "raid10")
-    public static void fourVindicatorsTrial10(GameTestHelper helper) {
-        trial(helper, 10);
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 1100, required = false, batch = "raid11")
-    public static void fourVindicatorsTrial11(GameTestHelper helper) {
-        trial(helper, 11);
-    }
-
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 1100, required = false, batch = "raid12")
-    public static void fourVindicatorsTrial12(GameTestHelper helper) {
-        trial(helper, 12);
-    }
 
     /** 一局，独占一个批次——四个带斧的真怪不能和邻座共处。 */
     private static void trial(GameTestHelper helper, int index) {
+        if (!BenchmarkSwitch.measuring()) {
+            // 平时那一轮不量读数——基准占掉四分之三的墙钟时间。见 BenchmarkSwitch。
+            helper.succeed();
+            return;
+        }
         CompanionScene scene = CompanionScene.room(helper, ARENA_X, ARENA_Z);
+        unevenGround(helper);
         roofOver(helper);
         scene.ownerAt(START_X, 2, START_Z);
         EntityMaid maid = scene.maid(START_X, 2, START_Z);
         maid.setTask(new FreedomMaidTask());
         var pack = maid.getAvailableBackpackInv();
-        pack.setStackInSlot(0, new ItemStack(Items.IRON_SWORD));
+        pack.setStackInSlot(0, new ItemStack(Items.DIAMOND_SWORD));
         pack.setStackInSlot(1, new ItemStack(Items.BOW));
         pack.setStackInSlot(2, new ItemStack(Items.ARROW, ARROWS));
         pack.setStackInSlot(3, new ItemStack(Items.GOLDEN_APPLE, APPLES));
 
-        Vindicator[] band = new Vindicator[packSize(index)];
-        for (int slot = 0; slot < packSize(index); slot++) {
+        Vindicator[] band = new Vindicator[PACK_SIZE];
+        for (int slot = 0; slot < PACK_SIZE; slot++) {
             double angle = Math.toRadians(-45.0D + slot * 30.0D);
             Vindicator vindicator = EntityType.VINDICATOR.create(helper.getLevel());
             if (vindicator == null) {
@@ -184,22 +141,88 @@ public final class CombatRaidBenchmarkGameTests {
         }
 
         CombatTrace trace = new CombatTrace("raid trial " + index);
+        WeaponLedger ledger = new WeaponLedger(band);
         long start = helper.getLevel().getGameTime();
-        long[] killedAt = new long[packSize(index)];
+        long[] killedAt = new long[PACK_SIZE];
         Arrays.fill(killedAt, -1L);
         float[] lowestHealth = {maid.getMaxHealth()};
         boolean[] died = {false};
+        // 她死在第几 tick。均值里"打了 3 点伤害就死了"和"打了 80 点才倒下"长得
+        // 一模一样，而前者说明她一开局就送、后者说明她差一点就赢。
+        long[] fellAt = {-1L};
         // 吃下去的东西有没有真的生效。苹果耗尽而伤害吸收从未出现过，和苹果耗尽
         // 但确实扛下了几十点，是两件完全不同的事，而"剩几个苹果"对两者一视同仁。
         float[] peakAbsorption = {0.0F};
+        // 弓到底是没被拉，还是拉了没射出去，还是射出去没打中。这三件事在"每局
+        // 箭伤 26 点"里长得一模一样，而它们要改的地方完全不同。所以直接数：
+        // 起手几次、真的少了几支箭、满蓄力空等了多少 tick。
+        // 只在她活着的时候数——尸体掉包会让箭数一次性归零。
+        int[] drawsBegun = {0};
+        int[] arrowsSpent = {0};
+        int[] ticksAtFullDraw = {0};
+        boolean[] wasDrawing = {false};
+        int[] arrowsLeft = {ARROWS};
+        // 剑那边同一个问题：持剑 150 tick 只挥 2.5 下，而钻石剑每 0.63 秒一下。
+        // 漏在哪一层要分开数——够不着、还在冷却、还是够得着也不冷却却没挥。
+        int[] swordTicks = {0};
+        int[] swordInRange = {0};
+        int[] swordReadyInRange = {0};
+        double[] swordGap = {0.0D};
+        int[] swordGapTicks = {0};
+        int[] swordNear = {0};
 
         helper.startSequence()
                 .thenExecuteFor(BUDGET_TICKS, () -> {
                     long tick = helper.getLevel().getGameTime() - start;
-                    for (int slot = 0; slot < packSize(index); slot++) {
+                    if (maid.isAlive()) {
+                        boolean drawing = maid.isUsingItem()
+                                && maid.getUseItem()
+                                        .getFoodProperties(maid) == null;
+                        if (drawing && !wasDrawing[0]) {
+                            drawsBegun[0]++;
+                        }
+                        if (drawing && maid.getTicksUsingItem()
+                                >= FULL_DRAW_TICKS) {
+                            ticksAtFullDraw[0]++;
+                        }
+                        wasDrawing[0] = drawing;
+                        int quiver = count(maid, Items.ARROW);
+                        if (quiver < arrowsLeft[0]) {
+                            arrowsSpent[0] += arrowsLeft[0] - quiver;
+                        }
+                        arrowsLeft[0] = quiver;
+                        if (maid.getMainHandItem().is(Items.DIAMOND_SWORD)) {
+                            swordTicks[0]++;
+                            Vindicator near = nearestOf(maid, band);
+                            if (near.isAlive()) {
+                                // 她持剑时到底站在多远。被要求站 1.8 却没站住，
+                                // 和老老实实站在 4 格外，是两个完全不同的毛病，
+                                // 而"够得着只有 12%"对两者一视同仁。
+                                swordGap[0] += maid.distanceTo(near);
+                                swordGapTicks[0]++;
+                                if (maid.distanceTo(near) <= 2.5D) {
+                                    swordNear[0]++;
+                                }
+                            }
+                            boolean reachable = near.isAlive()
+                                    && maid.distanceToSqr(near)
+                                            <= maid.getMeleeAttackRangeSqr(near);
+                            if (reachable) {
+                                swordInRange[0]++;
+                                if (!maid.getBrain().hasMemoryValue(
+                                        MemoryModuleType.ATTACK_COOLING_DOWN)) {
+                                    swordReadyInRange[0]++;
+                                }
+                            }
+                        }
+                    }
+                    for (int slot = 0; slot < PACK_SIZE; slot++) {
                         if (killedAt[slot] < 0 && !band[slot].isAlive()) {
                             killedAt[slot] = tick;
                         }
+                    }
+                    if (fellAt[0] < 0 && !maid.isAlive()) {
+                        fellAt[0] = tick;
                     }
                     died[0] |= !maid.isAlive();
                     lowestHealth[0] =
@@ -207,6 +230,7 @@ public final class CombatRaidBenchmarkGameTests {
                     peakAbsorption[0] = Math.max(
                             peakAbsorption[0], maid.getAbsorptionAmount()
                     );
+                    ledger.record(maid);
                     trace.sample(tick, maid, nearestOf(maid, band));
                 })
                 .thenExecute(() -> {
@@ -215,7 +239,21 @@ public final class CombatRaidBenchmarkGameTests {
                     }
                     report(
                             index, maid, band, killedAt, lowestHealth[0],
-                            peakAbsorption[0], trace
+                            peakAbsorption[0], trace, ledger, fellAt[0]
+                    );
+                    System.out.printf(
+                            "RAID trial=%d BOW draws=%d fired=%d full=%dt%n",
+                            index, drawsBegun[0], arrowsSpent[0],
+                            ticksAtFullDraw[0]
+                    );
+                    System.out.printf(
+                            "RAID trial=%d SWORD held=%dt inRange=%dt "
+                                    + "readyInRange=%dt gap=%.2f near=%dt%n",
+                            index, swordTicks[0], swordInRange[0],
+                            swordReadyInRange[0],
+                            swordGapTicks[0] == 0 ? -1.0D
+                                    : swordGap[0] / swordGapTicks[0],
+                            swordNear[0]
                     );
 
                     helper.assertFalse(
@@ -233,15 +271,64 @@ public final class CombatRaidBenchmarkGameTests {
     }
 
     /**
+     * 把平地改成有高低的地形。
+     *
+     * <p>实机表现：**她大多数是败在高低地形上的**，而这条基准一直铺的是一块绝对平的
+     * 石板。平地上"退一步"和"绕开"永远成立，高低地形上不成立——台阶要跳、坎要
+     * 绕、坑里退不出去，而她的触及是球形，站在低处时对方等于凭空多出半格触及。
+     * 一块永远不会出现这些的地板，量到的就永远是另一场仗。
+     *
+     * <p>四样东西，各自考一件事，位置写死好让每一局都一样：
+     * <ul>
+     *   <li><b>台阶</b>（一格高的长条）——她能不能走上去、上去之后还退不退得回来；
+     *   <li><b>高台</b>（两格高）——一格能上、两格要跳，正好卡在寻路的分界上；
+     *   <li><b>沟</b>（挖深一格）——掉进去容易，退出去要爬，是"退无可退"的真实版本；
+     *   <li><b>孤柱</b>——挡视线也挡路，逼她真的绕。
+     * </ul>
+     *
+     * <p>不用随机：同一副地形每局都一样，读数才有可比性。地形本身该不该更难，
+     * 是另一件事，改的时候整条基准的历史读数一起作废——所以这里写死。
+     */
+    private static void unevenGround(GameTestHelper helper) {
+        // 台阶：横贯她与敌人之间，逼每一次接近都跨一次高度。
+        for (int x = 8; x <= 13; x++) {
+            for (int z = 2; z <= ARENA_Z - 2; z++) {
+                helper.setBlock(new BlockPos(x, LIFT + 1, z), Blocks.STONE);
+            }
+        }
+        // 高台：一格上不去，得跳。
+        for (int x = 3; x <= 6; x++) {
+            for (int z = 3; z <= 7; z++) {
+                helper.setBlock(new BlockPos(x, LIFT + 1, z), Blocks.STONE);
+                helper.setBlock(new BlockPos(x, LIFT + 2, z), Blocks.STONE);
+            }
+        }
+        // 沟：她起手那一侧，退进去就要爬出来。
+        for (int x = 18; x <= 21; x++) {
+            for (int z = 9; z <= 12; z++) {
+                helper.setBlock(new BlockPos(x, LIFT, z), Blocks.AIR);
+                helper.setBlock(new BlockPos(x, LIFT - 1, z), Blocks.STONE);
+            }
+        }
+        // 两根柱子：挡视线也挡路。
+        for (int y = 1; y <= 3; y++) {
+            helper.setBlock(new BlockPos(15, LIFT + y, 4), Blocks.STONE);
+            helper.setBlock(new BlockPos(15, LIFT + y, 11), Blocks.STONE);
+        }
+    }
+
+    /**
      * 一个顶，没有墙。
      *
      * <p>与僵尸局同样的理由：墙会挡住邻座夹具的视线，而顶不会——邻座的女仆和它
      * 们的目标站在同一层，头顶五格外的石头挡不住任何平视。
+     *
+     * <p>顶抬到八格：地形最高处已经吃掉两格，再留一次跳跃的余量。
      */
     private static void roofOver(GameTestHelper helper) {
         for (int x = 0; x <= ARENA_X; x++) {
             for (int z = 0; z <= ARENA_Z; z++) {
-                helper.setBlock(new BlockPos(x, LIFT + 5, z), Blocks.STONE);
+                helper.setBlock(new BlockPos(x, LIFT + 8, z), Blocks.STONE);
             }
         }
     }
@@ -280,7 +367,9 @@ public final class CombatRaidBenchmarkGameTests {
             long[] killedAt,
             float lowestHealth,
             float peakAbsorption,
-            CombatTrace trace
+            CombatTrace trace,
+            WeaponLedger ledger,
+            long fellAt
     ) {
         int killed = 0;
         double dealt = 0.0D;
@@ -298,13 +387,15 @@ public final class CombatRaidBenchmarkGameTests {
         System.out.printf(
                 "RAID trial=%d band=%d alive=%s kills=%d/%d hurt=%.1f low=%.1f "
                         + "dealt=%.1f arrows=%d apples=%d shield=%.1f closest=%.1f "
-                        + "farthest=%.1f fellAt=[%s]%n",
+                        + "farthest=%.1f inReach=%.0f%% diedAt=%d fellAt=[%s]%n",
                 index, band.length, maid.isAlive() ? "y" : "NO", killed, band.length,
                 trace.damageTaken(), lowestHealth, dealt,
                 count(maid, Items.ARROW), count(maid, Items.GOLDEN_APPLE),
                 peakAbsorption,
-                trace.closestApproach(), trace.farthestReached(), fallen
+                trace.closestApproach(), trace.farthestReached(),
+                100.0D * trace.shareWithinReach(), fellAt, fallen
         );
+        System.out.printf("RAID trial=%d %s%n", index, ledger.line());
     }
 
     private static int count(EntityMaid maid, net.minecraft.world.item.Item item) {

@@ -2,6 +2,8 @@ package com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.SpacingPolicy;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.sustenance.MaidEating;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.CombatReadiness;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ScannedThreat;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ThreatProfile;
 import net.minecraft.sounds.SoundEvents;
@@ -54,12 +56,9 @@ public final class MeleeSwing {
      * inside their arms — measured at a fifth to a half of the whole fight, for
      * nine to twenty-eight damage a run.
      *
-     * <p>Refusing to close without an exit does not make her passive. She backs
-     * off instead, and a pack that follows strings out because it paths at
-     * uneven speeds; the moment the leader is clear of the rest there is room
-     * behind her again and she goes in. Turning six-on-one into six one-on-ones
-     * is the tactic, and it falls out of this one condition rather than being
-     * scripted.
+     * <p>Refusing to close without an exit does not make her passive — see
+     * {@link ExchangeAffordability}, where backing off is what strings a pack
+     * out into the one-on-ones she can win.
      */
     private static final double STEP_OUT_GROUND = 1.0D;
 
@@ -87,9 +86,6 @@ public final class MeleeSwing {
      */
     private static final double THEIR_REACH_MARGIN = 0.25D;
 
-    /** How many pairs of arms she will stand inside before breaking out. */
-    private static final int TOLERATED_ATTACKERS = 1;
-
     private MeleeSwing() {
     }
 
@@ -110,18 +106,35 @@ public final class MeleeSwing {
         if (!recovered(maid)) {
             return false;
         }
+        // 还在往上走就再等一两 tick。上升段挥刀是两头落空：vanilla 的暴击要
+        // fallDistance > 0，横扫要两只脚落地,而上升段两个都不成立。等到开始下落
+        // 花掉的是一两 tick 本来就在等的冷却,换回来的是整整一半伤害。
+        //
+        // 这一条不在 JumpStrike 里而在这里,是因为它管的不是"要不要跳",是"这一刀
+        // 什么时候落"。之前只写了前一半,于是她永远先挥后跳,跳劈从来没有对上节奏。
+        // 重力保证这个等待有尽头,所以不需要计数。
+        if (JumpStrike.climbing(maid)) {
+            return false;
+        }
         if (maid.distanceToSqr(victim)
                 > maid.getMeleeAttackRangeSqr(victim)) {
             return false;
         }
         maid.swing(InteractionHand.MAIN_HAND);
-        maid.doHurtTarget(victim);
+        // Falling onto it pays extra, exactly as it does for a player — see
+        // JumpStrike for why that had to be rebuilt rather than inherited.
+        if (CriticalBlow.falling(maid)) {
+            CriticalBlow.strike(maid, victim, () -> maid.doHurtTarget(victim));
+        } else {
+            maid.doHurtTarget(victim);
+        }
         sweep(maid, victim);
         maid.getBrain().setMemoryWithExpiry(
                 MemoryModuleType.ATTACK_COOLING_DOWN,
                 true,
                 recoveryTicks(maid)
         );
+        JumpStrike.noteSwing(maid);
         return true;
     }
 
@@ -244,60 +257,6 @@ public final class MeleeSwing {
      * better of two bad options, since backing off would cost her the swing
      * and spare it nothing.
      */
-    /**
-     * Whether at most one of them could touch her where she is standing.
-     *
-     * <p>This is the whole tactic against a crowd, stated as one condition.
-     * Her reach and a zombie's are both about 1.4 blocks — the same formula
-     * decides both — so she has no range advantage to exploit and no timing
-     * window she can walk into and out of before six independent cooldowns
-     * come up. Against one attacker hit-and-run works and is already tested;
-     * against six simultaneously it cannot, at any spacing.
-     *
-     * <p>So she refuses to be in more than one pair of arms at a time. Backing
-     * off instead is not passivity: a pack that follows strings out, because
-     * they path at uneven speeds, and the moment the leader is clear of the
-     * rest this answers true again and she goes in. Six-on-one becomes six
-     * one-on-ones, which is the only shape of this fight she can win unhurt.
-     *
-     * <p>Counting rather than timing whether each has spent its blow: that was
-     * tried first and measured worse, because it relaxes the condition instead
-     * of tightening it, so she closes on a momentary lull and arrives after it
-     * has passed.
-     *
-     * <p>But counting only who is <em>already</em> within a step made the whole
-     * tactic a matter of luck. She broke contact after being sandwiched rather
-     * than before, so "six-on-one becomes six one-on-ones" only happened when
-     * the pack strung itself out on its own — and against something as fast as
-     * a vindicator it often did not. Measured against two of them she died in
-     * five runs out of six, and the one she won she won without taking a single
-     * point of damage: the good line existed and she was reaching it by
-     * accident.
-     *
-     * <p>So the second one counts from the moment it is one exchange away. An
-     * exchange is her own swing recovery — the time it costs her to land a blow
-     * and be somewhere else — because that is exactly the window a hostile
-     * arriving inside would close on her while she is committed. Stepping off
-     * one recovery early is what turns the separation from something she waits
-     * for into something she makes.
-     */
-    private static boolean facingOneAtATime(
-            EntityMaid maid,
-            java.util.List<ScannedThreat> pack
-    ) {
-        double exchange = recoveryTicks(maid) / TICKS_PER_SECOND;
-        int able = 0;
-        for (ScannedThreat threat : pack) {
-            double clearance = SpacingPolicy.instance()
-                    .clearanceBeyond(threat.sample().reach());
-            boolean here = threat.sample().distance() <= clearance;
-            boolean arriving = threat.sample().secondsToContact() <= exchange;
-            if ((here || arriving) && ++able > TOLERATED_ATTACKERS) {
-                return false;
-            }
-        }
-        return true;
-    }
 
     public static double holdDistance(
             EntityMaid maid,
@@ -309,6 +268,17 @@ public final class MeleeSwing {
         double threatReach = target.sample().reach();
         double clearance =
                 SpacingPolicy.instance().clearanceBeyond(threatReach);
+        if (MaidEating.chewing(maid)) {
+            // 手里是食物，武器在包里——这一刀本来就挥不出来。而下面每一条分支都
+            // 建立在"她随时可能挥"之上：冷却是空的，于是 strikeWindow 让她站到
+            // 触及边缘，甚至直接返回 0（走进去）。于是嚼东西这三十二 tick 里她
+            // 走进对方的攻击范围，白挨一到两下，什么也换不回来。
+            //
+            // 嚼完自然会回到下面那些分支。这段时间要的只有一件事：别站在能被打
+            // 到的地方。要的间距和"打不过就脱离"那一条同一个数——它本来就是
+            // 「她现在还不了手」时该站的距离。
+            return clearance + SpacingPolicy.instance().retreatOvershoot();
+        }
         boolean canStepOut = RetreatSpace.canGiveGround(
                 maid,
                 target.entity(),
@@ -316,12 +286,29 @@ public final class MeleeSwing {
                 clearance - target.sample().distance()
         ) && RetreatSpace.escapeReach(maid, crowd, clearance)
                 >= STEP_OUT_GROUND;
-        if (!facingOneAtATime(maid, pack)) {
+        if (!ExchangeAffordability.canAfford(maid, pack, speed)) {
             // Already in more than one pair of arms. Refusing to close is not
             // enough here — she is past that — so ask for a distance that
             // actually breaks contact instead of the single block a melee hold
             // shuffles. Standing in the huddle taking turns is where every
             // point of damage in this fight comes from.
+            //
+            // Gating this on {@code canStepOut} was tried, on the reasoning
+            // that asking for ground she cannot reach leaves her neither away
+            // nor swinging. It changed nothing measurable, and the reason is
+            // worth keeping: she can nearly always step out. Against four
+            // vindicators her time inside her own reach sat at twelve per cent
+            // with the gate and twelve per cent without it, because she is not
+            // failing to break contact — she is succeeding, every tick, exactly
+            // as instructed.
+            //
+            // So the twelve per cent is this line working, not this line
+            // failing. With four attackers the condition above is true almost
+            // always, and "never let more than one reach you" and "swing at
+            // something" are then the same tick asking for opposite feet. That
+            // is a statement about what she is, and changing it belongs to
+            // whoever decides that, not to a bug fix — see the identical note
+            // on the withdrawal path.
             return clearance + SpacingPolicy.instance().retreatOvershoot();
         }
         if (recovered(maid)) {
@@ -335,6 +322,26 @@ public final class MeleeSwing {
                 return 0.0D;
             }
         }
+        // And only while it is ready. Holding the window through the recovery
+        // as well is the obvious next thought — she is measurably outside her
+        // own reach for ninety per cent of the time she carries a sword, mean
+        // distance 3.23 against a reach of two, and every cycle spends most of
+        // a cooldown walking out and back. Tried, and it did exactly what it
+        // was meant to: her share of ticks inside her own reach went from a
+        // tenth to better than a quarter.
+        //
+        // It also doubled the share of the fight spent inside theirs, 25% to
+        // 48%, and cost half her sword damage — 31.6 to 17.8, with fewer blows
+        // landed rather than more. The window is a comparison between two
+        // reaches at one instant, and the gap is what covers the thing that
+        // comparison leaves out: they move. Her own reach beats a vindicator's
+        // by about a third of a block, which is a real advantage on the tick
+        // she swings and no advantage at all across the second she cannot, when
+        // a single step of theirs spends it and she has nothing to answer with.
+        //
+        // So the gap during recovery is not idle distance. It is the interval
+        // she is buying back precisely because she cannot punish anyone for
+        // closing it.
         return SpacingPolicy.instance().meleeHold(
                 false, threatReach, canStepOut
         );

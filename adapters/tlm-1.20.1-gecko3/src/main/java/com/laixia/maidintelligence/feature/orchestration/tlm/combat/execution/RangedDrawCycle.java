@@ -6,6 +6,7 @@ import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.Rang
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
@@ -134,6 +135,28 @@ public final class RangedDrawCycle {
         // so the shot that followed had nothing to fire. A bow does not notice
         // the difference because the host builds its arrow itself.
         maid.releaseUsingItem();
+        // The host's crossbow route ignores the victim it is handed and reads
+        // the maid's own target back off the entity instead, so firing with no
+        // target set dereferences null and takes the server down. It crashed
+        // in play the moment she broke off mid-draw with a crossbow, which is
+        // precisely when the target has been let go.
+        //
+        // And the target has to be planted where the host looks for it:
+        // {@code EntityMaid#getTarget} does not read the vanilla field at all,
+        // it reads {@code ATTACK_TARGET} out of the brain. A {@code setTarget}
+        // here is a no-op as far as the crossbow is concerned — that was the
+        // first attempt at this fix, and it fixed nothing.
+        //
+        // Guarded here rather than at the call sites because callers cannot be
+        // expected to know that firing has a precondition on state they were
+        // right to clear. Withdrawing sets no target at all — only the fighting
+        // branch does — so every tick she spends breaking off with a drawn
+        // crossbow is a tick this would otherwise crash on.
+        if (maid.getTarget() == null) {
+            maid.getBrain().setMemory(
+                    MemoryModuleType.ATTACK_TARGET, victim
+            );
+        }
         maid.performRangedAttack(victim, power);
     }
 

@@ -1,9 +1,14 @@
 package com.laixia.maidintelligence.gametest.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatRelation;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatSample;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.MeleeSwing;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.RangedWeaponRecognizer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ScannedThreat;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ThreatProfile;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.sustenance.MaidEating;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
@@ -85,6 +90,68 @@ public final class CombatSustenanceGameTests {
     }
 
     /**
+     * 嚼东西的这段时间里，她不许站进对方的攻击范围。
+     *
+     * <p>手里是食物、武器在包里，这一刀本来就挥不出来。可决定站位的那几条分支全
+     * 建立在"她随时可能挥"之上：冷却是空的，于是 strikeWindow 让她站到触及边缘，
+     * 甚至直接返回 0（走进去）。于是那三十二 tick 她走进对方的攻击范围，白挨一到
+     * 两下，什么也换不回来——实机暴露的就是这个。
+     *
+     * <p>断言比的是**她要的距离**而不是最终落点：走没走到位受寻路、击退、拥挤影响，
+     * 而这条规则管的只是"她想站哪儿"。基线用同一副处境下不嚼东西时的距离，所以
+     * 断言不会把某个具体数字写死。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void chewingSheKeepsOutOfReach(GameTestHelper helper) {
+        CompanionScene scene = CompanionScene.room(helper, 7, 7);
+        EntityMaid maid = scene.maid(2, 2, 2);
+        maid.setItemInHand(
+                InteractionHand.MAIN_HAND, new ItemStack(Items.IRON_SWORD)
+        );
+        Zombie zombie = seeHostile(maid, helper, 2.0D);
+        ScannedThreat threat = new ScannedThreat(zombie, new ThreatSample(
+                maid.distanceTo(zombie),
+                ThreatProfile.strikeDamage(zombie),
+                ThreatProfile.reach(zombie, maid),
+                ThreatProfile.attackPeriod(zombie),
+                zombie.getHealth(),
+                false,
+                0.0D,
+                ThreatRelation.ATTACKING_MAID
+        ));
+        double fighting = MeleeSwing.holdDistance(
+                maid, threat, List.of(), List.of(threat), 0.6F
+        );
+
+        maid.setItemInHand(
+                InteractionHand.MAIN_HAND, new ItemStack(Items.GOLDEN_APPLE)
+        );
+        maid.startUsingItem(InteractionHand.MAIN_HAND);
+        helper.assertTrue(
+                MaidEating.chewing(maid),
+                "夹具没把她放进进食状态，这一条就没在考它"
+        );
+        double chewing = MeleeSwing.holdDistance(
+                maid, threat, List.of(), List.of(threat), 0.6F
+        );
+
+        helper.assertTrue(
+                chewing > threat.sample().reach(),
+                "她在嚼东西，却要站到 " + String.format("%.2f", chewing)
+                        + "——对方触及 "
+                        + String.format("%.2f", threat.sample().reach())
+                        + "，这是走进去白挨"
+        );
+        helper.assertTrue(
+                chewing > fighting,
+                "嚼东西时要的距离（" + String.format("%.2f", chewing)
+                        + "）没有比打得动时（" + String.format("%.2f", fighting)
+                        + "）更远，那这条规则等于没生效"
+        );
+        helper.succeed();
+    }
+
+    /**
      * 剑没有被丢掉——它去了苹果原来的位置。
      *
      * <p>吃完之后她还得接着打。手上那把如果在进食时被丢在地上，这个功能就是拿
@@ -124,7 +191,7 @@ public final class CombatSustenanceGameTests {
         helper.succeed();
     }
 
-    private static void seeHostile(
+    private static Zombie seeHostile(
             EntityMaid maid,
             GameTestHelper helper,
             double offset
@@ -136,5 +203,6 @@ public final class CombatSustenanceGameTests {
                 MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES,
                 new NearestVisibleLivingEntities(maid, List.of(zombie))
         );
+        return zombie;
     }
 }
