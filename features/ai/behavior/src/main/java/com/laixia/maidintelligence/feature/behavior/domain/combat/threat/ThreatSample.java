@@ -16,6 +16,10 @@ package com.laixia.maidintelligence.feature.behavior.domain.combat.threat;
  * @param airborne     whether it is out of reach of a swung sword
  * @param closingSpeed blocks a second it is eating the gap at, negative if it
  *                     is opening one
+ * @param wardDistance 它离她所守之处（跟随时是主人，家园模式是锚点）有多远。
+ *                     正无穷表示她没有要守的东西。**只用于排序**：先打谁在
+ *                     关系相同时按这个数取小，因为"更靠近主人的那一只"正是
+ *                     她存在的理由，而"更靠近她自己的那一只"只是更方便
  * @param relation     what it is currently doing about her or her owner
  */
 public record ThreatSample(
@@ -26,8 +30,29 @@ public record ThreatSample(
         double health,
         boolean airborne,
         double closingSpeed,
-        ThreatRelation relation
+        ThreatRelation relation,
+        double wardDistance
 ) {
+    /**
+     * 没有要守之处的同一只。
+     *
+     * <p>保留八参形式，既有判据全部是在"只有她自己一个感知中心"的前提下量出来
+     * 的，正无穷正是那个前提。
+     */
+    public ThreatSample(
+            double distance,
+            double strikeDamage,
+            double reach,
+            int attackPeriod,
+            double health,
+            boolean airborne,
+            double closingSpeed,
+            ThreatRelation relation
+    ) {
+        this(distance, strikeDamage, reach, attackPeriod, health, airborne,
+                closingSpeed, relation, Double.POSITIVE_INFINITY);
+    }
+
     public ThreatSample {
         if (distance < 0.0D || strikeDamage < 0.0D || reach < 0.0D
                 || health < 0.0D || attackPeriod <= 0) {

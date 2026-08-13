@@ -2,6 +2,8 @@ package com.laixia.maidintelligence.feature.orchestration.tlm.combat.sustenance;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.sustenance.FoodValue;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.food.FoodProperties;
@@ -81,6 +83,45 @@ public final class TlmFoodScanner {
         return larder;
     }
 
+    /**
+     * 一个"碍事但不掉血"的效果每秒记多少账。
+     *
+     * <p>半点。它不是一个物理量，是一个排序用的价钱：够让带副作用的那一口输给
+     * 任何一口干净的食物，仅此而已。
+     */
+    private static final double NUISANCE_DAMAGE_PER_SECOND = 0.5D;
+
+    /**
+     * 所有"碍事但不掉血"的效果加起来最多记多少。
+     *
+     * <p>两颗心。缓慢、虚弱、失明、饥饿都不会真的把她打死，所以它们的账必须
+     * 封顶——不封顶的话，腐肉那三十秒饥饿按每秒半点要记十五点，比她一半的命
+     * 还多，于是"有点碍事"在定价里比"真的中毒"更可怕。上限只保证一件事：
+     * 它们排在干净食物后面，但永远排在真会掉血的东西前面。
+     */
+    private static final double NUISANCE_DAMAGE_CEILING = 4.0D;
+
+    /**
+     * 一个有害效果按预计伤害折算成多少。
+     *
+     * <p>毒与凋零按原版自己的节奏掉血：毒每 25/(等级) tick 一点，凋零每 40/(等级)
+     * 一点，都是原版 {@code MobEffect.applyEffectTick} 里的数，不是这里估的。
+     * 其余有害效果不直接掉血，按时长记一笔小账并封顶——它表达的是"这一口不
+     * 值得"，而不是"这一口会要她的命"。
+     */
+    private static double harmOf(MobEffect effect, double seconds, int level) {
+        if (effect == MobEffects.POISON) {
+            return seconds * TICKS_PER_SECOND / (25.0D / level);
+        }
+        if (effect == MobEffects.WITHER) {
+            return seconds * TICKS_PER_SECOND / (40.0D / level);
+        }
+        return Math.min(
+                seconds * NUISANCE_DAMAGE_PER_SECOND * level,
+                NUISANCE_DAMAGE_CEILING
+        );
+    }
+
     /** What this stack is worth, or {@code null} if it is not food. */
     public FoodValue valueOf(EntityMaid maid, ItemStack stack, int slot) {
         if (stack.isEmpty()) {
@@ -92,6 +133,7 @@ public final class TlmFoodScanner {
         }
         double health = 0.0D;
         double absorption = 0.0D;
+        double harm = 0.0D;
         for (var chance : food.getEffects()) {
             MobEffectInstance effect = chance.getFirst();
             if (effect == null) {
@@ -132,6 +174,19 @@ public final class TlmFoodScanner {
                         : odds * level * 2.0D * HEALTH_PER_HEART;
             } else if (effect.getEffect() == MobEffects.HEAL) {
                 health += odds * level * 2.0D * HEALTH_PER_HEART;
+            } else if (effect.getEffect().getCategory()
+                    == MobEffectCategory.HARMFUL) {
+                // 有害效果此前一律估价为零，于是毒马铃薯、河豚、腐肉在她眼里
+                // 和面包一样免费——玩家报的"她不知道吃了有什么减益"就是这个。
+                //
+                // 掉血的两种按它们自己的节奏折算成伤害；其余（缓慢、虚弱、失明、
+                // 饥饿）不直接掉血，但没有一样是她在打架时想要的，按时长记一笔
+                // 小账，足够让它输给任何一口干净的食物，又不至于把"只剩这个能
+                // 吃"变成宁可饿死。
+                //
+                // 判据问的是效果自己的分类，不是一张名单：模组的新负面效果
+                // 不需要这里认识它。
+                harm += odds * harmOf(effect.getEffect(), seconds, level);
             }
         }
         return new FoodValue(
@@ -145,6 +200,7 @@ public final class TlmFoodScanner {
                         0.0D, maid.getMaxHealth() - maid.getHealth()
                 )),
                 absorption,
+                harm,
                 eatingSeconds(stack)
         );
     }

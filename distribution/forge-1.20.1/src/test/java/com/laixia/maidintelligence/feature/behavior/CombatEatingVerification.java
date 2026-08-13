@@ -40,6 +40,16 @@ public final class CombatEatingVerification {
     private static final FoodValue ENCHANTED_APPLE =
             new FoodValue(2, 20.0D, 16.0D, 32.0D, EATING_SECONDS);
 
+    /**
+     * 毒马铃薯：能填饱，但要她付血。
+     *
+     * <p>六成概率中五秒的毒，按原版每 25 tick 掉一点折算，约两点四。它在这里
+     * 代表的不是这一件物品，是**一整类**东西——腐肉、河豚，以及任何一个模组
+     * 给食物挂上负面效果的做法。
+     */
+    private static final FoodValue POISONOUS_POTATO =
+            new FoodValue(5, 10.0D, 0.0D, 0.0D, 2.4D, EATING_SECONDS);
+
     private CombatEatingVerification() {
     }
 
@@ -54,6 +64,8 @@ public final class CombatEatingVerification {
         verifiesABuffAlreadyOnHerIsNotBoughtTwice();
         verifiesBackingAwayMakesTheWindowAffordable();
         verifiesASlowMealIsAWorseRiskThanAQuickOne();
+        verifiesTheCheapestThingIsNeverTheOneThatHurtsHer();
+        verifiesNothingIsBetterThanAMouthfulOfPoison();
         System.out.println("Combat eating verification passed.");
     }
 
@@ -277,6 +289,45 @@ public final class CombatEatingVerification {
         );
     }
 
+    /**
+     * "最便宜的那口"不能是会扣她血的那口。
+     *
+     * <p>空档期挑的是**最不值钱**的东西，判据是收益最小。副作用一旦能把收益压
+     * 到零以下，这条排序就自己反过来指向毒马铃薯——不是排序错了，是"便宜"在
+     * 有害食物出现之后不再等于"损失最小"。
+     *
+     * <p>玩家报的"她不知道吃了有什么减益"落地之后，第一个受害的就是这条规则：
+     * 在此之前所有食物的收益都非负，这个洞根本不存在。
+     */
+    private static void verifiesTheCheapestThingIsNeverTheOneThatHurtsHer() {
+        FoodValue chosen = POLICY.choose(
+                List.of(POISONOUS_POTATO, BREAD),
+                quiet(), healthy(), 1.0D, 0.4D, true
+        );
+        require(
+                chosen == BREAD,
+                "空档期她挑了 " + name(chosen)
+                        + "；挑最便宜的不等于挑最伤她的"
+        );
+    }
+
+    /**
+     * 只剩有毒的那一口时，答案是不吃。
+     *
+     * <p>为十点饱食度换两点四的血是笔亏本买卖，空场也一样——这条规则在没有
+     * 敌人时同样是唯一会开火的那条。它不会把她饿死：宿主自己的进食按
+     * {@code isEdible()} 认食物，腐肉毒薯照吃，那条路没有被动过。
+     */
+    private static void verifiesNothingIsBetterThanAMouthfulOfPoison() {
+        require(
+                POLICY.choose(
+                        List.of(POISONOUS_POTATO), quiet(), healthy(),
+                        1.0D, 0.4D, true
+                ) == null,
+                "包里只剩毒马铃薯，她就着空档把它吃了"
+        );
+    }
+
     /** 四下无人：没有敌人，所以什么都到不了。 */
     private static ThreatField quiet() {
         return ThreatField.EMPTY;
@@ -320,6 +371,9 @@ public final class CombatEatingVerification {
         }
         if (food == BREAD) {
             return "面包";
+        }
+        if (food == POISONOUS_POTATO) {
+            return "毒马铃薯";
         }
         return food == GOLDEN_APPLE ? "金苹果" : "附魔金苹果";
     }

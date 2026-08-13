@@ -11,6 +11,7 @@
     "ai.EntitySitCommandSeatLockMixin",
     "ai.ExtraMaidBrainAccessor",
     "ai.MaidBrainFreedomIsolationMixin",
+    "ai.MaidMoveControlGuardFacingMixin",
     "status.MaidPickupInventoryFeedbackMixin"
   ],
   "client": [

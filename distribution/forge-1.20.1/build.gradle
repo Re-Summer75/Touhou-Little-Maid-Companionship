@@ -298,11 +298,19 @@ tasks.register('verifyMixinLayout') {
             ],
             (tlmMixinConfig)                              : [
                     'EntityMaidPlaceBlockMixin',
+                    // 登记漏了，而这道闸的计数因此在干净的 HEAD 上就对不上
+                    // （清单 14 / 描述符 15），红了却不指向任何东西。补登记，
+                    // 不是新增。
+                    'EntityMaidSleepMixin',
                     'MaidFeedAnimalTaskMixin',
                     'TaskManagerFreedomOrderMixin',
                     'ai.EntitySitCommandSeatLockMixin',
                     'ai.ExtraMaidBrainAccessor',
                     'ai.MaidBrainFreedomIsolationMixin',
+                    // 举盾后退时倒着走。原版只挡正面来的伤害，而宿主的
+                    // MaidMoveControl 每 tick 把身体扭向行进方向、且跑在
+                    // brain 之后——没有第二个地方能压过它。
+                    'ai.MaidMoveControlGuardFacingMixin',
                     'status.MaidPickupInventoryFeedbackMixin',
                     'CustomPackPhysicsMetadataMixin',
                     'EntityMaidClientRandomHealingMixin',

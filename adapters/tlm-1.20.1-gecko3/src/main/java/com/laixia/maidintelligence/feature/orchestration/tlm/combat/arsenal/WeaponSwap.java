@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.util.TaskEquipUtil;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponCandidate;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.guard.ShieldGuard;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.Objects;
@@ -51,7 +52,18 @@ public final class WeaponSwap {
         if (weapon == null || weapon.inHand()) {
             return;
         }
-        if (maid.isUsingItem()) {
+        // A raised shield is not a draw. Both answer {@code isUsingItem}, and
+        // conflating them wedges her: the guard goes up on one tick, and from
+        // the next tick on this method sees "she is using something usable" and
+        // returns before ever reaching the swap. Measured in the vindicator
+        // benchmark as a stance that had already flipped to MELEE while her hand
+        // still held the bow, for the rest of the fight — she chose right and
+        // could not act on it.
+        //
+        // Asked of the off hand rather than of a flag, the same way
+        // {@code Engagement.strike} asks it. There is no third thing that
+        // occupies the use slot without being one of these two.
+        if (maid.isUsingItem() && !ShieldGuard.raised(maid)) {
             // A draw in progress is the only progress a ranged weapon ever
             // makes, so a usable one finishes its shot before anything is
             // swapped. This is the rule tool replacement already follows, and

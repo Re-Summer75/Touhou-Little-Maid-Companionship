@@ -6,7 +6,10 @@ import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponK
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.RangedWeaponRecognizer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.guard.ShieldLedger;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
+import net.minecraft.world.entity.item.ItemEntity;
+import com.laixia.maidintelligence.feature.perception.tlm.TlmAffordancePerceptionService;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.gametest.framework.GameTest;
@@ -177,6 +180,94 @@ public final class CombatArsenalGameTests {
         helper.succeed();
     }
 
+    /**
+     * 包里的盾也要能拿出来，而且拿出来就得举。
+     *
+     * <p>两件事一条测试，因为它们在同一个 tick 上：{@code ShieldGuard} 先把盾
+     * 装上副手，再决定举不举。分开写会出现"装上了但没举"却两条都绿的情况。
+     *
+     * <p>为什么必须是"从包里"而不是"预先放在副手"：本体覆写了
+     * {@code completeUsingItem}，它无条件调用 {@code backCurrentHandItemStack}，
+     * 而那个方法会把副手里的东西整个塞回背包。于是她战斗中吃下的第一口食物就
+     * 会静默卸掉自己的盾。实测：一颗苹果三十二 tick，随后两百六十八 tick 的
+     * {@code offhand=empty}。装备这一步就是那条修复，不是便利功能。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void aShieldInThePackReachesHerOffHand(
+            GameTestHelper helper
+    ) {
+        CompanionScene scene = CompanionScene.room(helper, 6, 6);
+        EntityMaid maid = scene.maid(3, 2, 3);
+        maid.setItemInHand(
+                InteractionHand.MAIN_HAND, new ItemStack(Items.IRON_SWORD)
+        );
+        give(maid, 0, new ItemStack(Items.SHIELD));
+        ShieldLedger.reset(maid);
+
+        Zombie zombie = new Zombie(helper.getLevel());
+        zombie.setPos(maid.getX() + 1.5D, maid.getY(), maid.getZ());
+        Zombie inert = CompanionScene.placeInert(helper, zombie);
+        maid.getBrain().setMemory(
+                MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES,
+                new NearestVisibleLivingEntities(maid, List.of(inert))
+        );
+
+        new TlmCombatAction(
+                new TlmThreatScanner(), SCANNER
+        ).execute(maid);
+
+        helper.assertTrue(
+                maid.getOffhandItem().is(Items.SHIELD),
+                "包里有盾、手边有敌人，她的副手仍然是 "
+                        + maid.getOffhandItem().getItem()
+        );
+        helper.assertTrue(
+                ShieldLedger.raised(maid) > 0,
+                "盾装上了却没举起来——装备与举盾是同一 tick 的两步，"
+                        + "只做前一半等于没有防御"
+        );
+        helper.succeed();
+    }
+
+    /**
+     * 副手本来就有东西时不许抢。
+     *
+     * <p>玩家往副手里放什么是他自己的决定。这道门是 {@code equipFromPack} 唯一
+     * 的前置条件，而它同时也保证我们不会和本体争夺同一个槽位——本体自己也会往
+     * 副手写（雪球任务、隐藏槽恢复），两边都无条件写就会每 tick 互相覆盖。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void anOccupiedOffHandIsLeftAlone(GameTestHelper helper) {
+        CompanionScene scene = CompanionScene.room(helper, 6, 6);
+        EntityMaid maid = scene.maid(3, 2, 3);
+        maid.setItemInHand(
+                InteractionHand.MAIN_HAND, new ItemStack(Items.IRON_SWORD)
+        );
+        maid.setItemInHand(
+                InteractionHand.OFF_HAND, new ItemStack(Items.TORCH)
+        );
+        give(maid, 0, new ItemStack(Items.SHIELD));
+
+        Zombie zombie = new Zombie(helper.getLevel());
+        zombie.setPos(maid.getX() + 1.5D, maid.getY(), maid.getZ());
+        Zombie inert = CompanionScene.placeInert(helper, zombie);
+        maid.getBrain().setMemory(
+                MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES,
+                new NearestVisibleLivingEntities(maid, List.of(inert))
+        );
+
+        new TlmCombatAction(
+                new TlmThreatScanner(), SCANNER
+        ).execute(maid);
+
+        helper.assertTrue(
+                maid.getOffhandItem().is(Items.TORCH),
+                "她把玩家放进副手的东西换掉了，现在拿着 "
+                        + maid.getOffhandItem().getItem()
+        );
+        helper.succeed();
+    }
+
     private static void give(EntityMaid maid, int slot, ItemStack stack) {
         maid.getAvailableBackpackInv().setStackInSlot(slot, stack);
     }
@@ -191,5 +282,58 @@ public final class CombatArsenalGameTests {
             }
         }
         return null;
+    }
+
+    /**
+     * 空着手挨追时，她去捡地上那把剑。
+     *
+     * <p>玩家报告：武器打没了、怪在后面追，她只会一直跑，脚边躺着剑也不捡。
+     * 空手在风险裁决里是直接判撤离的，所以那条路上她永远不会重新武装。
+     *
+     * <p>断言看**走路目标**而不是"她有没有捡到"：捡起来那一下归宿主，寻路耗时
+     * 归引擎，等它们会在慢机器上随机失败。这一条只问她有没有被派过去。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void unarmedSheGoesForTheBladeOnTheGround(
+            GameTestHelper helper
+    ) {
+        CompanionScene scene = CompanionScene.room(helper, 12, 8);
+        EntityMaid maid = scene.maid(2, 2, 4);
+        // 什么都不给她：手是空的，包是空的。
+
+        ItemEntity blade = new ItemEntity(
+                helper.getLevel(),
+                maid.getX() + 5.0D, maid.getY(), maid.getZ(),
+                new ItemStack(Items.IRON_SWORD)
+        );
+        blade.setPickUpDelay(0);
+        helper.getLevel().addFreshEntity(blade);
+
+        Zombie chaser = new Zombie(helper.getLevel());
+        chaser.setPos(maid.getX() - 3.0D, maid.getY(), maid.getZ());
+        Zombie inert = CompanionScene.placeInert(helper, chaser);
+        maid.getBrain().setMemory(
+                MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES,
+                new NearestVisibleLivingEntities(maid, List.of(inert))
+        );
+
+        TlmAffordancePerceptionService perception =
+                new TlmAffordancePerceptionService();
+        perception.observeMaid(maid, helper.getLevel().getGameTime());
+
+        new TlmCombatAction(
+                new TlmThreatScanner(), SCANNER, null, perception
+        ).execute(maid);
+
+        var walk = maid.getBrain().getMemory(MemoryModuleType.WALK_TARGET);
+        helper.assertTrue(walk.isPresent(), "空手挨追，她哪儿也没去");
+        double toBlade = walk.get().getTarget().currentPosition()
+                .distanceTo(blade.position());
+        helper.assertTrue(
+                toBlade < 1.5D,
+                "她被派去的地方离那把剑还有 " + toBlade + " 格——"
+                        + "空手时地上的武器没有进入她的选择"
+        );
+        helper.succeed();
     }
 }

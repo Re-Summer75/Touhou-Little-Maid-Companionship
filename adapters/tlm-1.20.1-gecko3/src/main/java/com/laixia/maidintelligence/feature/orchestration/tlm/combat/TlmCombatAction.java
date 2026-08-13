@@ -2,35 +2,33 @@ package com.laixia.maidintelligence.feature.orchestration.tlm.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.CombatCapability;
-import com.laixia.maidintelligence.feature.behavior.domain.combat.CombatStance;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.sustenance.MaidEating;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponKind;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.EngagementContext;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.CombatStance;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.EngagementRiskPolicy;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.RiskVerdict;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.TargetSelectionPolicy;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatField;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatSample;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponCandidate;
-import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponKind;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponSelectionPolicy;
 import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
 import com.laixia.maidintelligence.feature.orchestration.domain.ActionResult;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.sustenance.CombatAppetite;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.sustenance.MaidEating;
-import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
+import net.minecraft.world.entity.item.ItemEntity;
+import com.laixia.maidintelligence.feature.perception.tlm.TlmAffordancePerceptionService;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.GroundWeapon;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.WeaponSwap;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.CombatMovement;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.JumpStrike;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.MeleeSwing;
-import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.RangedDrawCycle;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.RetreatSpace;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.CombatReadiness;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.CombatSurvey;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ScannedThreat;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
-import net.minecraft.world.entity.LivingEntity;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.sustenance.CombatAppetite;
+import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
@@ -45,12 +43,11 @@ import java.util.Objects;
  * arrive, and the cost of re-deciding is three comparisons over a handful of
  * entities.
  *
- * <p>What she does is decided from the weapon in her hand rather than from the
- * weapon the policy picked. The two are not always the same: a swap is deferred
- * while she is drawing, a pack can be full, an item can vanish between the scan
- * and now. Dispatching on the choice instead of on the hand is what produced
- * the maid standing at bow range working an empty bow — the decision was right
- * and the hand was wrong, and nothing checked.
+ * <p>What is left here is the lifecycle and the verdict: scan, pick a target,
+ * price the fight, and route. What she does once the verdict is in belongs to
+ * {@link Engagement} and {@link Withdrawal} — they were methods on this class
+ * until it reached the source-layout ceiling, which is where the repository asks
+ * for a split before the next responsibility arrives rather than after.
  *
  * <p>This writes {@code WALK_TARGET} directly rather than going through the
  * errand skeleton. An errand walks somewhere and commits; a fight has no
@@ -59,26 +56,16 @@ import java.util.Objects;
  * protection, hard states and fail-open behave identically.
  */
 public final class TlmCombatAction {
-
-    /**
-     * Distance inside which a lost line of sight means solid cover, not range.
-     *
-     * <p>Roughly arm's length. Anything further and walking closer is worth
-     * trying; this close, whatever is between them is a wall, and continuing to
-     * approach only presses her into it.
-     */
-    private static final double BLOCKED_GIVE_UP_DISTANCE = 3.0D;
-
     /**
      * How fast she moves in a fight — the same as everywhere else.
      *
-     * <p>Every plan in this mod walks her at 0.5–0.6, so a fight running on
-     * its own faster number made her visibly superhuman the moment one began.
+     * <p>Every plan in this mod walks her at 0.5–0.6, so a fight running on its
+     * own faster number made her visibly superhuman the moment one began.
      * Backing away was faster still, on the reasoning that a retreat has to
      * outrun what chases it; but a maid who reverses faster than a player can
-     * sprint is not a tactic, it is a bug that happens to work. Whether she
-     * can retreat at all is now settled by comparing speeds rather than by
-     * quietly handing her extra ones.
+     * sprint is not a tactic, it is a bug that happens to work. Whether she can
+     * retreat at all is now settled by comparing speeds rather than by quietly
+     * handing her extra ones.
      */
     public static final float MOVE_SPEED = 0.6F;
 
@@ -91,14 +78,14 @@ public final class TlmCombatAction {
      */
     public static final double WITHDRAW_DISTANCE = PerceptionRange.BLOCKS;
 
-    /** Clearance a break-off needs to begin; it is re-decided every tick. */
-    private static final double FLEE_FIRST_STEP = 3.0D;
-
-
     private final TlmThreatScanner threats;
     private final TlmWeaponScanner weapons;
     private final CombatAppetite appetite;
+    /** 掉落物广告索引，用来在她空手时找地上的武器；没有则退化成从前。 */
+    private final TlmAffordancePerceptionService perception;
     private final WeaponSwap swap;
+    private final Engagement engagement;
+    private final Withdrawal withdrawal;
 
     /**
      * A fight that can also feed her.
@@ -113,10 +100,23 @@ public final class TlmCombatAction {
             TlmWeaponScanner weapons,
             MaidStatusApi<EntityMaid> status
     ) {
+        this(threats, weapons, status, null);
+    }
+
+    /** 同一场仗，外加一份掉落物广告索引。 */
+    public TlmCombatAction(
+            TlmThreatScanner threats,
+            TlmWeaponScanner weapons,
+            MaidStatusApi<EntityMaid> status,
+            TlmAffordancePerceptionService perception
+    ) {
+        this.perception = perception;
         this.threats = Objects.requireNonNull(threats, "threats");
         this.weapons = Objects.requireNonNull(weapons, "weapons");
         this.appetite = new CombatAppetite(status);
         this.swap = new WeaponSwap(this.weapons);
+        this.engagement = new Engagement(this.weapons);
+        this.withdrawal = new Withdrawal(this.weapons);
     }
 
     /**
@@ -125,8 +125,8 @@ public final class TlmCombatAction {
      * <p>Only the scenarios that drive this class directly. Hunger reads as
      * full, which costs exactly one of the four eating rules — the one that
      * spends a lull on a mouthful. Being about to die, needing a mouthful to
-     * win, and refusing to spend stores on a fight already won are all about
-     * the fight and go on working.
+     * win, and refusing to spend stores on a fight already won are all about the
+     * fight and go on working.
      */
     public TlmCombatAction(TlmThreatScanner threats, TlmWeaponScanner weapons) {
         this(threats, weapons, null);
@@ -137,11 +137,11 @@ public final class TlmCombatAction {
      *
      * <p>This used to stand down when the maid was on one of the host's own
      * attack tasks, because the intent that runs it did not test work mode and
-     * both systems would otherwise drive the same fight — two target choices
-     * and {@code doHurtTarget} called once by each. That check is gone with the
-     * condition that made it necessary: the orchestrator now starts only in
-     * free mode, so the task here is always this mod's own and the host has no
-     * attack behaviour registered to collide with.
+     * both systems would otherwise drive the same fight — two target choices and
+     * {@code doHurtTarget} called once by each. That check is gone with the
+     * condition that made it necessary: the orchestrator now starts only in free
+     * mode, so the task here is always this mod's own and the host has no attack
+     * behaviour registered to collide with.
      */
     public ActionResult execute(EntityMaid maid) {
         List<ScannedThreat> scanned = threats.scan(maid);
@@ -150,20 +150,20 @@ public final class TlmCombatAction {
         }
         List<ThreatSample> samples = TlmThreatScanner.samplesOf(scanned);
         List<WeaponCandidate> arsenal = weapons.scan(maid);
-        CombatCapability capability = CombatReadiness.of(maid, arsenal);
+        CombatCapability capability =
+                CombatReadiness.of(maid, arsenal, scanned);
 
         ThreatSample chosen = TargetSelectionPolicy.INSTANCE.select(samples);
         ScannedThreat target = CombatSurvey.locate(scanned, chosen);
         if (target == null) {
             return finish(maid);
         }
-        ThreatField field =
-                ThreatField.of(samples, capability.meleeReach());
+        ThreatField field = ThreatField.of(samples, capability.meleeReach());
         // Answered once and handed to both decisions. Whether she can give
         // ground settles "is keeping my distance a plan" and "is a bow the
         // right thing to hold", and the two must not disagree about it.
         List<Vec3> crowd = CombatSurvey.crowdOf(scanned);
-        boolean canOpenGround = canOpenGround(maid, target, crowd);
+        boolean canOpenGround = canOpenGround(maid, target, crowd, field);
         double healthFraction = CombatReadiness.healthFraction(maid);
         // Asked before the verdict, because eating is a thing she does *about*
         // the fight rather than instead of it: a mouthful taken while backing
@@ -174,36 +174,125 @@ public final class TlmCombatAction {
                 maid, field, capability, healthFraction, canOpenGround
         );
 
+        // 空着手挨追时，去捡地上那件能打的。
+        //
+        // 玩家报告的处境：武器打没了，怪在后面追，她只会一直跑——脚边躺着一把
+        // 剑也不去捡。而"空手"在风险裁决里是直接判撤离的，所以那条路上她永远
+        // 不会重新武装起来。
+        //
+        // 不为此另扫一遍世界：掉落物本来就在广告索引里，此前只登记了"能不能
+        // 吃"，现在同一条广告也登记"能不能打"。登记一次、各取所需。
+        //
+        // 只改脚步，不改裁决：她仍然被判为打不过（她确实打不过，手里什么都没
+        // 有），只是撤退的方向变成"那把剑在的地方"。捡起来之后武器扫描下一
+        // tick 就看得到它，裁决自己会翻面。
+        if (!capability.armed()) {
+            ItemEntity weapon = GroundWeapon.nearestFor(maid, perception);
+            if (weapon != null) {
+                // 走到它身上，让宿主自己的拾取把它收进去——捡起来这件事归
+                // 本体，我们只负责把她带过去。
+                CombatMovement.walkTo(
+                        maid, weapon.position(), 0, MOVE_SPEED
+                );
+                return ActionResult.RUNNING;
+            }
+        }
+
         RiskVerdict verdict = EngagementRiskPolicy.instance().assess(
-                field,
-                capability,
-                healthFraction,
-                canOpenGround
+                field, capability, healthFraction, canOpenGround
         );
+
+        // What to hold is decided here, above the verdict, because it does not
+        // depend on the verdict. Leaving is still done with something in her
+        // hands: a parting blow is knockback, and knockback is the distance the
+        // retreat is trying to buy.
+        //
+        // It used to live inside the engaged branch only, and that is the whole
+        // of why she fought vindicators bare-handed. A mouthful moves her weapon
+        // into the pack and leaves the emptied stack in her hand; if the very
+        // next verdict is WITHDRAW — which it is, in the fight she is losing —
+        // nothing ever put the weapon back. Measured: main hand empty for 520 of
+        // 700 ticks, one swing in the whole fight, and the damage log shows
+        // `empty[dealt=1.0]`, which is a bare fist.
+        CombatStance stance = WeaponSelectionPolicy.instance().choose(
+                arsenal, situation(maid, target, field, canOpenGround, capability)
+        );
+        // Her hands are the one resource eating and fighting both want. While
+        // she is mid-mouthful the weapon stays in the pack: swapping it back
+        // would cancel the food, spend the seconds and buy nothing.
+        if (!MaidEating.chewing(maid) && stance.engaged()) {
+            swap.equip(
+                    maid,
+                    stance.weapon(),
+                    weapons.isUsable(maid, maid.getMainHandItem())
+            );
+        }
 
         return switch (verdict) {
             case STAND_DOWN -> finish(maid);
-            case WITHDRAW -> withdraw(maid, target, crowd);
-            case ENGAGE, SKIRMISH -> fight(
-                    maid, target, CombatSurvey.nearest(scanned), scanned, field, arsenal,
-                    canOpenGround, crowd
+            case WITHDRAW -> {
+                withdrawal.run(maid, target, crowd, field);
+                yield ActionResult.RUNNING;
+            }
+            case ENGAGE, SKIRMISH -> engage(
+                    maid, target, scanned, field, stance, canOpenGround, crowd
             );
         };
     }
 
     /**
-     * The distance this stance asks her to hold, with a floor.
+     * The fight as the weapon choice needs to see it.
      *
-     * <p>A stance that reports nothing (an unmeasured weapon, or a posture
-     * chosen before the weapon was known) falls back to the configured
-     * ceiling rather than to zero — zero reads as "close in", which is the
-     * opposite of what a ranged posture wants.
+     * <p>Assembled here because only the adapter can answer half of it: whether
+     * there is ground behind her, how fast she swings, how far the thing in
+     * front of her reaches. The policy receives numbers and returns a stance,
+     * and never learns what a zombie is.
      */
-    private static double standoff(CombatStance stance) {
-        double declared = stance.preferredRange();
-        return declared > 0.0D
-                ? declared
-                : WeaponSelectionPolicy.instance().preferredRange();
+    private EngagementContext situation(
+            EntityMaid maid,
+            ScannedThreat target,
+            ThreatField field,
+            boolean canOpenGround,
+            CombatCapability capability
+    ) {
+        return EngagementContext.of(
+                target.sample(),
+                field,
+                CombatReadiness.swingsPerSecond(maid),
+                CombatReadiness.SHOTS_PER_SECOND,
+                canOpenGround,
+                weapons.classifyFor(maid.getMainHandItem()) == WeaponKind.MELEE,
+                capability.guardedShare()
+        );
+    }
+
+    private ActionResult engage(
+            EntityMaid maid,
+            ScannedThreat target,
+            List<ScannedThreat> scanned,
+            ThreatField field,
+            CombatStance stance,
+            boolean canOpenGround,
+            List<Vec3> crowd
+    ) {
+        Engagement.Outcome outcome = engagement.run(
+                maid,
+                target,
+                CombatSurvey.nearest(scanned),
+                scanned,
+                field,
+                stance,
+                canOpenGround,
+                crowd
+        );
+        return switch (outcome) {
+            case RUNNING -> ActionResult.RUNNING;
+            case FINISH -> finish(maid);
+            case WITHDRAW -> {
+                withdrawal.run(maid, target, crowd, field);
+                yield ActionResult.RUNNING;
+            }
+        };
     }
 
     /**
@@ -216,8 +305,35 @@ public final class TlmCombatAction {
     private boolean canOpenGround(
             EntityMaid maid,
             ScannedThreat target,
-            List<Vec3> crowd
+            List<Vec3> crowd,
+            ThreatField field
     ) {
+        // Measured arrival, before anything about the ground.
+        //
+        // The terrain half of this question was always honest; the speed half
+        // was not. It compared MOVEMENT_SPEED attributes with a fifteen percent
+        // margin, and against a vindicator that comes out at 0.42 against
+        // 0.4025 — she is judged able to kite by four percent, on paper. The
+        // coordinates say otherwise: they close from five blocks to one over
+        // the fight and kill her against the far wall.
+        //
+        // This file's own weapon pricing settled the same argument long ago —
+        // "the attribute says how fast it *can* run, not how fast it *is*
+        // running" — and then this predicate went on reading the attribute. So
+        // ask the measurement instead: {@code soonestContact} comes from the
+        // relative closing speed of both bodies, so a pursuer that is actually
+        // gaining reports a finite arrival however fast either of them is on
+        // paper, and one that is genuinely being left behind reports infinity.
+        //
+        // One draw is the unit because that is the smallest thing standing off
+        // has to buy. If the first of them arrives before she can complete a
+        // single shot, "keep your distance" is not a plan she can execute — it
+        // is a description of walking backwards until a wall stops her.
+        double untilContact = field.soonestContact();
+        if (Double.isFinite(untilContact)
+                && untilContact < 1.0D / CombatReadiness.SHOTS_PER_SECOND) {
+            return false;
+        }
         // Asked of the crowd, because the retreat is taken from the crowd. This
         // was left on the single target when giving ground became crowd-aware,
         // and the two then answered different questions: measured, "can I keep
@@ -262,7 +378,8 @@ public final class TlmCombatAction {
      * <p>A draw is different, and it is the reason this exists at all. Nothing
      * in the world clears a use state; only letting go does. So an archer whose
      * fight ended between one tick and the next stayed at full draw for the rest
-     * of her life, aiming at nothing.
+     * of her life, aiming at nothing. A raised shield is let go here for the
+     * same reason and by the same call.
      */
     public void releaseHands(EntityMaid maid) {
         if (maid.isUsingItem()) {
@@ -271,225 +388,6 @@ public final class TlmCombatAction {
         maid.setSwingingArms(false);
     }
 
-    private ActionResult fight(
-            EntityMaid maid,
-            ScannedThreat target,
-            ScannedThreat pressing,
-            List<ScannedThreat> pack,
-            ThreatField field,
-            List<WeaponCandidate> arsenal,
-            boolean canOpenGround,
-            List<Vec3> crowd
-    ) {
-        CombatStance stance = WeaponSelectionPolicy.instance().choose(
-                arsenal, situation(maid, target, field, canOpenGround)
-        );
-        if (!stance.engaged()) {
-            return withdraw(maid, target, crowd);
-        }
-        // Her hands are the one resource eating and fighting both want. While
-        // she is mid-mouthful the weapon stays in the pack: swapping it back
-        // would cancel the food, spend the seconds and buy nothing, which is
-        // the worst of the three possible outcomes.
-        boolean chewing = MaidEating.chewing(maid);
-        if (!chewing) {
-            swap.equip(
-                    maid,
-                    stance.weapon(),
-                    weapons.isUsable(maid, maid.getMainHandItem())
-            );
-        }
-
-        // Re-read rather than trust the choice. Everything below acts on the
-        // actual item, so a swap that has not landed yet can cost her a tick
-        // but can never put her through the motions of using something she
-        // cannot use.
-        ItemStack held = maid.getMainHandItem();
-        WeaponKind heldKind = weapons.classifyFor(held);
-        boolean canStrike = !chewing
-                && heldKind != null && weapons.isUsable(maid, held);
-
-        // Telling the host who she is fighting keeps its own animations,
-        // bauble hooks and target validity in step with this decision.
-        maid.setTarget(target.entity());
-        maid.getBrain().setMemory(
-                MemoryModuleType.ATTACK_TARGET, target.entity()
-        );
-        CombatMovement.face(maid, target.entity());
-
-        // Where to stand follows the intent, so she keeps walking sensibly
-        // through the tick a swap takes; what to do with her hands follows the
-        // hand, so she never works a weapon that cannot be used.
-        boolean shooting = canStrike
-                ? heldKind.isRanged()
-                : stance.posture() == CombatStance.Posture.RANGED;
-        boolean canSee = maid.hasLineOfSight(target.entity());
-        double distance = target.sample().distance();
-
-        if (!canSee && distance <= BLOCKED_GIVE_UP_DISTANCE) {
-            // Standing on top of it and still unable to see it means something
-            // solid is in between. Closing further will not help, and holding
-            // position here is the freeze this used to produce.
-            return finish(maid);
-        }
-
-        // Blocked, she closes regardless: that usually restores the line of
-        // sight, and failing that puts her close enough for melee next tick.
-        //
-        // The stance carries the distance, not the policy: it was chosen for
-        // this weapon and already capped, so a bow holds fifteen where a
-        // crossbow holds eight. Reading the global ceiling here instead is what
-        // made every ranged weapon fight at the same range.
-        //
-        // Spacing answers to whoever is nearest, never to the one she picked.
-        // The two are the same object most of the time and differ exactly when
-        // target choice stops being "the closest" — which is the whole point of
-        // finishing a hurt one. Judged off the quarry, she would call six
-        // blocks comfortable while a second zombie stood at her elbow.
-        double desired = shooting
-                ? (canSee ? standoff(stance) : 0.0D)
-                : MeleeSwing.holdDistance(
-                        maid, pressing, crowd, pack, MOVE_SPEED
-                );
-        CombatMovement.keepRange(
-                maid, target, pressing, crowd, desired, shooting, MOVE_SPEED
-        );
-        // 两个离地的理由，都不是脚走得到的。高处那个是竖直方向够不着，走路只
-        // 收得回水平那一段；另一个是节奏——冷却剩下的 tick 数正好够她升上去再
-        // 落下来时，这一刀就是暴击。顺序如此：先问够不够得着，再问疼不疼。放在
-        // 走位之后，因为跳只值得在她已经站到最近处时才跳。
-        // 两个离地的理由，都不是脚走得到的：够不着的高处是竖直方向的问题，走路只
-        // 收得回水平那一段；冷却剩下的 tick 数正好够她升起再落下时，这一刀就是暴击。
-        // 起跳之后还要有人推她——腾空期间 keepRange 要求的是保持退让间距，而落刀的
-        // 几何指望的是她朝目标收进去，两者不接上，这一跳就永远差最后一截。
-        if (!shooting && (
-                JumpStrike.worthLeavingTheGround(maid, target.entity())
-                        || JumpStrike.worthCrittingNow(maid, target, pack))) {
-            JumpStrike.leap(maid);
-        }
-        JumpStrike.rideTheLeap(maid, target.entity());
-        if (canStrike) {
-            strike(maid, target, shooting);
-        }
-        return ActionResult.RUNNING;
-    }
-
-    /**
-     * The fight as the weapon choice needs to see it.
-     *
-     * <p>Assembled here because only the adapter can answer half of it: whether
-     * there is ground behind her, how fast she swings, how far the thing in
-     * front of her reaches. The policy receives numbers and returns a stance,
-     * and never learns what a zombie is.
-     */
-    private EngagementContext situation(
-            EntityMaid maid,
-            ScannedThreat target,
-            ThreatField field,
-            boolean canOpenGround
-    ) {
-        return EngagementContext.of(
-                target.sample(),
-                field,
-                CombatReadiness.swingsPerSecond(maid),
-                CombatReadiness.SHOTS_PER_SECOND,
-                canOpenGround,
-                weapons.classifyFor(maid.getMainHandItem()) == WeaponKind.MELEE
-        );
-    }
-
-    private void strike(EntityMaid maid, ScannedThreat target, boolean ranged) {
-        LivingEntity victim = target.entity();
-        if (ranged) {
-            RangedDrawCycle.shoot(maid, victim, weapons);
-            return;
-        }
-        if (maid.isUsingItem()) {
-            // Switched to melee mid-draw; let go of the bow first.
-            maid.stopUsingItem();
-        }
-        MeleeSwing.swingIfReady(maid, victim);
-    }
-
-    /**
-     * Break off — but hit it on the way out when it is standing close enough.
-     *
-     * <p>Whether to hit on the way out is not a free choice. A landed blow does
-     * knock the target back, and where she is trapped that knockback is the
-     * only room she will get. But where she can simply leave, stopping to
-     * trade is how a lost fight gets fought anyway: something is nearly always
-     * within reach when she is losing, so "swing if you can, else retreat"
-     * resolves to "never retreat".
-     *
-     * <p>Away from her owner where there is a choice, since what is beating her
-     * follows and leading it to the person she is guarding turns a lost fight
-     * into a lost owner. Not at any price, though: past twenty-four blocks the
-     * backstop teleports her to his feet, and it brings the pursuit with her.
-     * Breaking off toward him deliberately is better than being delivered to
-     * him involuntarily, so the leash caps this direction like any other.
-     */
-    private ActionResult withdraw(
-            EntityMaid maid,
-            ScannedThreat target,
-            List<Vec3> crowd
-    ) {
-        // Spend the draw rather than bin it. A bow needs twenty unbroken ticks
-        // to reach full, and this path used to throw whatever had accumulated
-        // straight away — so a verdict that flickered between fighting and
-        // leaving, which it does whenever a target hovers near the edge of the
-        // arithmetic, reset the draw before it could ever finish. What a player
-        // sees is a maid holding a bow at full stretch that never once looses
-        // an arrow. Firing on the way out costs nothing: the shot is already
-        // paid for, and it is the last free hit she will get.
-        //
-        // Before the target is let go, and that ordering is load-bearing. A bow
-        // shoots at whoever is handed to it, so it did not care; the host's
-        // crossbow path goes through {@code CrossbowAttackMob}, which re-reads
-        // {@code getTarget()} out of the entity rather than taking the victim
-        // it was given. Firing after the clear therefore handed it a null and
-        // took the server down with it — a crash for the exact case this line
-        // exists to serve, breaking off while a shot is still in her hands.
-        RangedDrawCycle.releaseOrKeepDraw(
-                maid, target.entity(), weapons
-        );
-        maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);
-        maid.setTarget(null);
-        // One question, asked once, of the same crowd and the same distance the
-        // escape will actually use.
-        //
-        // This was two: "is there room for a step" against the single target,
-        // then a twelve-block crowd-aware search for somewhere to go. They
-        // disagreed constantly — the first said yes, the second found nothing,
-        // and the nothing-branch erased her movement. Eleven measured ticks of
-        // deciding to withdraw, being able to withdraw, and standing perfectly
-        // still while they walked in. Two checks that can disagree about the
-        // same fact will, and the disagreement always surfaces as her doing
-        // nothing.
-        Vec3 escape = RetreatSpace.escapeTo(
-                maid, crowd, WITHDRAW_DISTANCE
-        );
-        boolean roomToLeave = escape != null
-                && RetreatSpace.outpaces(maid, target.entity(), MOVE_SPEED);
-        if (roomToLeave) {
-            CombatMovement.giveGround(
-                    maid, crowd, WITHDRAW_DISTANCE, MOVE_SPEED
-            );
-        } else {
-            // Cornered. Now the blow is worth taking: knockback is the only
-            // room she is going to get.
-            //
-            // Measured against vindicators — which move about as fast as she
-            // retreats — this reads badly: she flees correctly, is run down
-            // anyway, and never strikes back across two hundred ticks. Also
-            // striking while leaving looks like the obvious answer and is not
-            // mine to take: `losingSheLeavesUnlessPinned` pins the either/or
-            // deliberately, and removing it makes that test fail by design.
-            // Whether a maid who cannot outrun her pursuer should turn and
-            // fight is a change in what she is, not a bug fix.
-            MeleeSwing.swingIfReady(maid, target.entity());
-        }
-        return ActionResult.RUNNING;
-    }
     private ActionResult finish(EntityMaid maid) {
         cancel(maid);
         return ActionResult.SUCCEEDED;

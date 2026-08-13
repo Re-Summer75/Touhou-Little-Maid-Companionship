@@ -27,6 +27,11 @@ package com.laixia.maidintelligence.feature.behavior.domain.combat.sustenance;
  *                        Kept apart from health because it does not heal her:
  *                        it is a shield that expires, worth exactly as much as
  *                        the fight can spend against it and no more
+ * @param harmSuffered    她因为吃它而预计要承受的伤害，非负。毒、凋零这类
+ *                        随时间掉血的按时长与等级折算；其余有害效果按"这一口
+ *                        不值得"记一笔小账。**这一项此前根本无法表达**——记录
+ *                        强制所有分量非负，于是"吃了有坏处"在模型里不存在，
+ *                        毒马铃薯和面包一样免费
  * @param secondsToEat    how long her hands are busy, which is the entire cost
  */
 public record FoodValue(
@@ -34,11 +39,25 @@ public record FoodValue(
         double hungerPoints,
         double healthRestored,
         double damageAbsorbed,
+        double harmSuffered,
         double secondsToEat
 ) {
+    /** 没有副作用的同一口，保留旧构造形式。 */
+    public FoodValue(
+            int slot,
+            double hungerPoints,
+            double healthRestored,
+            double damageAbsorbed,
+            double secondsToEat
+    ) {
+        this(slot, hungerPoints, healthRestored, damageAbsorbed, 0.0D,
+                secondsToEat);
+    }
+
     public FoodValue {
         if (slot < 0 || hungerPoints < 0.0D || healthRestored < 0.0D
-                || damageAbsorbed < 0.0D || secondsToEat < 0.0D) {
+                || damageAbsorbed < 0.0D || harmSuffered < 0.0D
+                || secondsToEat < 0.0D) {
             throw new IllegalArgumentException(
                     "Food value must be non-negative with a real slot"
             );
@@ -54,7 +73,7 @@ public record FoodValue(
      * separately because only one of them survives the fight ending.
      */
     public double effectiveHealthGain() {
-        return healthRestored + damageAbsorbed;
+        return healthRestored + damageAbsorbed - harmSuffered;
     }
 
     /** Whether it does anything for hunger at all. */

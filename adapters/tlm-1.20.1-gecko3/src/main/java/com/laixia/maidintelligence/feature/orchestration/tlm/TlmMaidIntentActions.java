@@ -89,7 +89,10 @@ public final class TlmMaidIntentActions
         combatAction = new TlmCombatAction(
                 new TlmThreatScanner(),
                 new TlmWeaponScanner(RangedWeaponRecognizer.NONE),
-                status
+                status,
+                // 与找地上食物的是同一份索引：掉落物登记一次，谁需要什么自己
+                // 去问。空手挨追时她据此找地上的武器。
+                snackCabinetMeals.perception()
         );
         eatFromPackAction = new EatFromPackAction(status);
         snackCabinetAction = new ApproachAndCommitAction(

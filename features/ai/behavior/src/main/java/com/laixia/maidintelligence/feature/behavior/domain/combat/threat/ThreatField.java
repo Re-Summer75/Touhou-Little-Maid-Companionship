@@ -52,6 +52,10 @@ import java.util.Objects;
  * @param anyOutranging    whether any of them can hurt her from beyond melee
  * @param soonestContact   seconds until the first of them can strike her
  * @param heaviestBlow     the largest single hit any of them lands
+ * @param threateningWard  多少只正在打她所守之人、或已经站到所守之处旁边。
+ *                         **它不是一个威胁量，是一个"这笔账该按谁的命算"的开关**：
+ *                         上面每一个数都在回答"她活不活得下来"，而当怪已经贴到
+ *                         主人身上时，那根本不是要保的东西
  */
 public record ThreatField(
         int total,
@@ -66,12 +70,13 @@ public record ThreatField(
         boolean anyAirborne,
         boolean anyOutranging,
         double soonestContact,
-        double heaviestBlow
+        double heaviestBlow,
+        int threateningWard
 ) {
     /** Nothing hostile in sight. */
     public static final ThreatField EMPTY = new ThreatField(
             0, 0, 0, 0.0D, Double.POSITIVE_INFINITY, 0.0D, 0.0D, 0.0D, 0.0D,
-            false, false, Double.POSITIVE_INFINITY, 0.0D
+            false, false, Double.POSITIVE_INFINITY, 0.0D, 0
     );
 
     /**
@@ -136,6 +141,7 @@ public record ThreatField(
         double soonest = Double.POSITIVE_INFINITY;
         double heaviest = 0.0D;
         double crowd = 0.0D;
+        int onWard = 0;
         for (ThreatSample sample : samples) {
             if (sample == null) {
                 continue;
@@ -169,6 +175,12 @@ public record ThreatField(
             // sixteen blocks, which in a shared world meant the neighbours.
             if (sample.relation() != ThreatRelation.UNENGAGED) {
                 standing += sample.health();
+            }
+            // 已经在打她所守之人，或者已经站到所守之处旁边（还没动手，但下一下
+            // 就是）。两者都意味着"她跑掉"救不了任何东西。
+            if (sample.relation() == ThreatRelation.ATTACKING_OWNER
+                    || sample.relation() == ThreatRelation.NEAR_WARD) {
+                onWard++;
             }
             if (sample.threatensNow()) {
                 converging++;
@@ -205,7 +217,8 @@ public record ThreatField(
         }
         return new ThreatField(
                 total, converging, pressing, crowd, nearest, incoming, hits,
-                health, standing, airborne, outranging, soonest, heaviest
+                health, standing, airborne, outranging, soonest, heaviest,
+                onWard
         );
     }
 

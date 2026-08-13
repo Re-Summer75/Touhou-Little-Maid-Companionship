@@ -47,6 +47,13 @@ import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatS
  * @param meleeUsesPerSecond  her swings a second
  * @param rangedUsesPerSecond her shots a second, the reciprocal of a draw
  * @param holdingMelee        whether she is already committed to swinging
+ * @param guardedShare        the share of incoming blows a raised shield denies,
+ *                            already discounted for what would disable it. Only
+ *                            melee can collect it: the off hand holds either a
+ *                            shield or a drawn bow, never both, so this is the
+ *                            term that makes steel cheaper than range for a maid
+ *                            who is carrying a guard — and makes it exactly as
+ *                            expensive as before for one who is not
  */
 public record EngagementContext(
         double distance,
@@ -63,13 +70,19 @@ public record EngagementContext(
         boolean canOpenGround,
         double meleeUsesPerSecond,
         double rangedUsesPerSecond,
-        boolean holdingMelee
+        boolean holdingMelee,
+        double guardedShare
 ) {
     public EngagementContext {
         if (targetHealth < 0.0D || meleeUsesPerSecond < 0.0D
                 || rangedUsesPerSecond < 0.0D) {
             throw new IllegalArgumentException(
                     "Engagement context must be non-negative"
+            );
+        }
+        if (guardedShare < 0.0D || guardedShare > 1.0D) {
+            throw new IllegalArgumentException(
+                    "Guarded share must be a share in [0, 1], was " + guardedShare
             );
         }
     }
@@ -89,6 +102,26 @@ public record EngagementContext(
             double rangedUsesPerSecond,
             boolean canOpenGround,
             boolean holdingMelee
+    ) {
+        return of(
+                target, field, meleeUsesPerSecond, rangedUsesPerSecond,
+                canOpenGround, holdingMelee, 0.0D
+        );
+    }
+
+    /**
+     * The same fight, for a maid carrying a guard.
+     *
+     * @param guardedShare the share of blows a raised shield would deny here
+     */
+    public static EngagementContext of(
+            ThreatSample target,
+            ThreatField field,
+            double meleeUsesPerSecond,
+            double rangedUsesPerSecond,
+            boolean canOpenGround,
+            boolean holdingMelee,
+            double guardedShare
     ) {
         return new EngagementContext(
                 target.distance(),
@@ -117,7 +150,8 @@ public record EngagementContext(
                 canOpenGround,
                 meleeUsesPerSecond,
                 rangedUsesPerSecond,
-                holdingMelee
+                holdingMelee,
+                guardedShare
         );
     }
 

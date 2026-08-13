@@ -6,6 +6,7 @@ import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatS
 import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -99,9 +100,21 @@ public final class TlmThreatScanner {
 
     private List<ScannedThreat> sweep(EntityMaid maid) {
         double reach = PerceptionRange.BLOCKS;
+        // 两个中心：她自己，以及她守的那个点（跟随时是主人，家园模式是锚点）。
+        // 体积取两个球的并集，所以扫描盒要先把两个中心都包进去再外扩。
+        //
+        // 视线仍以**她**为准，没有跟着放宽。那一条是有代价换来的：不要求视线时
+        // 她会把墙那边的一群算进这一场仗的定价，表现为对着空气后撤、或者穿过
+        // 身边三只去够一只根本够不到的。守的点扩大的是"她会注意到什么"，不是
+        // "她能打到什么"。
+        Vec3 ward = WardPoint.of(maid);
+        AABB scanBox = maid.getBoundingBox();
+        if (ward != null) {
+            scanBox = scanBox.minmax(new AABB(ward, ward));
+        }
         List<LivingEntity> nearby = maid.level().getEntitiesOfClass(
                 LivingEntity.class,
-                maid.getBoundingBox().inflate(reach, VERTICAL_REACH, reach),
+                scanBox.inflate(reach, VERTICAL_REACH, reach),
                 candidate -> candidate != maid
                         && candidate.isAlive()
                         && ThreatProfile.isHostileTo(maid, candidate)
@@ -111,7 +124,12 @@ public final class TlmThreatScanner {
         );
         List<ScannedThreat> threats = new ArrayList<>(nearby.size());
         for (LivingEntity hostile : nearby) {
-            if (maid.distanceToSqr(hostile) <= PerceptionRange.SQUARED) {
+            boolean nearHer =
+                    maid.distanceToSqr(hostile) <= PerceptionRange.SQUARED;
+            boolean nearWard = ward != null
+                    && ward.distanceToSqr(hostile.position())
+                            <= PerceptionRange.SQUARED;
+            if (nearHer || nearWard) {
                 threats.add(new ScannedThreat(hostile, sample(maid, hostile)));
             }
         }
@@ -154,7 +172,8 @@ public final class TlmThreatScanner {
                 hostile.getHealth(),
                 airborne(hostile),
                 ThreatProfile.closingSpeed(maid, hostile),
-                relation(maid, hostile)
+                relation(maid, hostile),
+                WardPoint.distance(WardPoint.of(maid), hostile)
         );
     }
 
@@ -171,6 +190,17 @@ public final class TlmThreatScanner {
                 hostile instanceof Mob mob ? mob.getTarget() : null;
         if (owner != null && itsTarget == owner) {
             return ThreatRelation.ATTACKING_OWNER;
+        }
+        // 还没动手，但已经站到她所守之处旁边——即将发生的那一下。
+        // 判据用它自己的触及加一步，不是一个写死的格数：一只卫道士和一只
+        // 幻翼"够得着"的含义本来就不同。
+        if (itsTarget == null) {
+            Vec3 ward = WardPoint.of(maid);
+            double toWard = WardPoint.distance(ward, hostile);
+            if (Double.isFinite(toWard)
+                    && toWard <= ThreatProfile.reach(hostile, maid) + 1.0D) {
+                return ThreatRelation.NEAR_WARD;
+            }
         }
         if (itsTarget == maid) {
             return ThreatRelation.ATTACKING_MAID;

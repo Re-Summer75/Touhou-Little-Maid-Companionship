@@ -1,6 +1,8 @@
 package com.laixia.maidintelligence.feature.perception.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.RangedWeaponRecognizer;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
 import com.github.tartaricacid.touhoulittlemaid.tileentity.TileEntitySnackCabinet;
 import com.laixia.maidintelligence.feature.behavior.application.perception.DefaultAffordanceIndex;
 import com.laixia.maidintelligence.feature.behavior.domain.perception.AffordanceCandidate;
@@ -60,7 +62,9 @@ public final class TlmAffordancePerceptionService {
     private final TlmSeatAffordanceProvider seats =
             new TlmSeatAffordanceProvider();
     private final TlmItemEntityAffordanceProvider items =
-            new TlmItemEntityAffordanceProvider();
+            new TlmItemEntityAffordanceProvider(
+                    new TlmWeaponScanner(RangedWeaponRecognizer.NONE)
+            );
     private final TlmOwnerAffordanceProvider owners =
             new TlmOwnerAffordanceProvider();
 
@@ -263,8 +267,48 @@ public final class TlmAffordancePerceptionService {
      * behind a door she has to open, this one for food she could walk over and
      * pick up — including whatever the owner just threw at her.
      */
+    /**
+     * 地上够得着的武器，最好的排在前面。
+     *
+     * <p>与 {@link #queryLooseFood} 逐字同形，只换了要的那件商品——这正是把
+     * 掉落物做成广告的意义：登记一次，谁需要什么自己去问，而不是为每一种需求
+     * 各扫一遍世界。
+     */
+    public List<ItemEntity> queryGroundWeapons(
+            EntityMaid maid,
+            int topK,
+            long gameTime
+    ) {
+        return queryLooseItems(
+                maid,
+                CompanionAffordanceIds.TAKE_WEAPON,
+                CompanionAffordanceIds.ARMAMENT,
+                topK,
+                gameTime
+        );
+    }
+
     public List<ItemEntity> queryLooseFood(
             EntityMaid maid,
+            int topK,
+            long gameTime
+    ) {
+        if (!(maid.level() instanceof ServerLevel level)) {
+            return List.of();
+        }
+        return queryLooseItems(
+                maid,
+                CompanionAffordanceIds.TAKE_FOOD,
+                CompanionAffordanceIds.HUNGER_RELIEF,
+                topK,
+                gameTime
+        );
+    }
+
+    private List<ItemEntity> queryLooseItems(
+            EntityMaid maid,
+            com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId offer,
+            com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId commodity,
             int topK,
             long gameTime
     ) {
@@ -274,8 +318,8 @@ public final class TlmAffordancePerceptionService {
         List<ItemEntity> result = new ArrayList<>();
         for (AffordanceCandidate candidate : queryAffordances(
                 maid,
-                java.util.Set.of(CompanionAffordanceIds.TAKE_FOOD),
-                CompanionAffordanceIds.HUNGER_RELIEF,
+                java.util.Set.of(offer),
+                commodity,
                 PERCEPTION_RANGE,
                 topK,
                 gameTime

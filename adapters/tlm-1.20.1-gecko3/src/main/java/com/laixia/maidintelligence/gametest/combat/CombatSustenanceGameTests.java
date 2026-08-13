@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.gametest.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.sustenance.FoodValue;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatRelation;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatSample;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
@@ -11,6 +12,7 @@ import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.S
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ThreatProfile;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.sustenance.MaidEating;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.sustenance.TlmFoodScanner;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.gametest.framework.GameTest;
@@ -187,6 +189,53 @@ public final class CombatSustenanceGameTests {
                 "为了吃一口，她的剑不在包里了——现在是 "
                         + maid.getAvailableBackpackInv().getStackInSlot(0)
                                 .getItem()
+        );
+        helper.succeed();
+    }
+
+    /**
+     * 有副作用的那一口，价钱里要看得见那笔账。
+     *
+     * <p>玩家报的是"她似乎不知道吃了有什么增益或减益"。要不要吃归 {@code
+     * CombatEatingVerification}，但那边的 {@code FoodValue} 是手写的——**"原版/模组
+     * 真的这么描述这件物品吗"只有这一层答得了**：食用效果挂在 {@code
+     * FoodProperties.getEffects()} 上，带概率、带时长、带等级，而此前扫描器只认
+     * 回血、吸收、瞬间治疗三种，别的一律记零。
+     *
+     * <p>毒马铃薯是原版物品，所以这条不需要装一个模组：任何一个"给食物挂负面
+     * 效果"的模组走的是同一个 API。三条断言分别钉住三件不同的事——它仍然算食物
+     * （不是被藏起来了）、它的价值是负的、以及它排在干净食物后面。缺了第一条，
+     * 一个"把有害食物直接当成不可食用"的实现也能通过，而那会让她饿死在一包腐肉
+     * 边上。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void sheKnowsTheMouthfulThatCostsHer(GameTestHelper helper) {
+        CompanionScene scene = CompanionScene.room(helper, 3, 3);
+        EntityMaid maid = scene.maid(1, 2, 1);
+        TlmFoodScanner larder = new TlmFoodScanner();
+
+        FoodValue poison = larder.valueOf(
+                maid, new ItemStack(Items.POISONOUS_POTATO), 0
+        );
+        FoodValue clean = larder.valueOf(maid, new ItemStack(Items.BREAD), 1);
+
+        helper.assertTrue(
+                poison != null && poison.nourishing(),
+                "毒马铃薯根本没被当成食物——把有害的藏起来不是认识它，"
+                        + "那会让她守着一包腐肉饿死"
+        );
+        helper.assertTrue(
+                poison.effectiveHealthGain() < 0.0D,
+                "毒马铃薯的净收益是 " + poison.effectiveHealthGain()
+                        + "；那五秒的毒没有进价钱"
+        );
+        helper.assertTrue(
+                clean != null
+                        && poison.effectiveHealthGain()
+                                < clean.effectiveHealthGain(),
+                "毒马铃薯排在面包前面：毒 " + poison.effectiveHealthGain()
+                        + " vs 面包 " + (clean == null
+                                ? "不是食物" : clean.effectiveHealthGain())
         );
         helper.succeed();
     }

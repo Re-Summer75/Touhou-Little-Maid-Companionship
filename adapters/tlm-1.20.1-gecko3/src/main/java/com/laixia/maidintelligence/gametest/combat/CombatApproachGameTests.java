@@ -161,11 +161,14 @@ public final class CombatApproachGameTests {
         maid.getAvailableBackpackInv().setStackInSlot(
                 1, new ItemStack(Items.IRON_SWORD)
         );
+        // 六格外已在地板之外，而"不动"的靶子照样会往下掉：房间抬高十二格、
+        // 威胁扫描只往下够六格，它在第二十一 tick 前后就掉出她的感知，而弩要
+        // 二十七 tick 才装填得完。本条曾偶发地红，就是这两个数在赛跑。
+        scene.floorAt(1, 8);
         Zombie zombie = new Zombie(helper.getLevel());
         zombie.setPos(maid.getX(), maid.getY(), maid.getZ() + 6.0D);
         // 只当靶子：会动的僵尸会自己走位，断言就不再只关于换手了。
-        zombie.setNoAi(true);
-        helper.getLevel().addFreshEntity(zombie);
+        CompanionScene.placeInert(helper, zombie);
 
         // 每一次换手记一行。她最后手里拿着什么是结果，而"她是在几格上改的主意"
         // 才是原因——两者差着整条决定链，只看结果的话，"从没选过远程"和"选了

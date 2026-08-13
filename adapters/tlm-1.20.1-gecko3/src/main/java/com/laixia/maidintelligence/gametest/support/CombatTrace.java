@@ -317,11 +317,29 @@ public final class CombatTrace {
     }
 
 
+    /**
+     * 两只手，一列。
+     *
+     * <p>只印主手会让整类缺陷隐形：副手举着盾会让 {@code isUsingItem} 为真，
+     * 而换手、进食、拉弓全都以那个谓词为门。实测中"姿态已经改判近战、手里
+     * 还是弓"持续到她死，就是这么来的——而只看主手那一列时，它看起来像是
+     * 选择错了，不像是换手被卡住。
+     *
+     * <p>格式 {@code 主手+副手}，副手为空时省略，好让既有读数保持原样。
+     */
     private static String itemOf(EntityMaid maid) {
-        if (maid.getMainHandItem().isEmpty()) {
-            return "empty";
+        String main = maid.getMainHandItem().isEmpty()
+                ? "empty"
+                : maid.getMainHandItem().getItem().toString();
+        if (maid.getOffhandItem().isEmpty()) {
+            return main;
         }
-        return maid.getMainHandItem().getItem().toString();
+        String off = maid.getOffhandItem().getItem().toString();
+        return main + "+" + off
+                + (maid.isUsingItem()
+                        && maid.getUsedItemHand()
+                                == net.minecraft.world.InteractionHand.OFF_HAND
+                        ? "^" : "");
     }
 
     private static String fixed(double value) {

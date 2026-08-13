@@ -74,10 +74,22 @@ public final class TargetSelectionPolicy {
         return chosen;
     }
 
+    /**
+     * 关系先行，同档取近。
+     *
+     * <p>"离她守的东西近"也在关系那一层表达——{@link ThreatRelation#NEAR_WARD}。
+     * 它必须是一个**档**而不是一个连续量：按 ward 距离严格排序试过一次，实测把
+     * 僵尸局从每局五六杀打成零到一杀。那个量每 tick 都在微动，目标于是不停翻面，
+     * 而上面记的三次失败讲的正是"任何一次改选都会把她的脚或头一起转过去"——
+     * 这是第四次，机制完全相同，只是这次换的量是距离而不是血量。
+     */
     private boolean preferred(ThreatSample candidate, ThreatSample incumbent) {
         if (candidate.relation() != incumbent.relation()) {
             return candidate.relation().outranks(incumbent.relation());
         }
+        // 同档内仍然取近，而"离她守的东西近"已经在关系那一层表达完了。
+        // 这里不再看 wardDistance：连续量参与比较正是上一版把僵尸局打成零杀的
+        // 原因，见 ThreatRelation.NEAR_WARD 的注释。
         return candidate.distance() < incumbent.distance();
     }
 }

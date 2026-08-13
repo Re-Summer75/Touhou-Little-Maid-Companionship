@@ -2,7 +2,6 @@ package com.laixia.maidintelligence.gametest.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
-import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.RangedWeaponRecognizer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
@@ -11,7 +10,6 @@ import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmW
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.RangedDrawCycle;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
-import com.laixia.maidintelligence.platform.runtime.AdapterRuntime;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.InteractionHand;
@@ -22,7 +20,6 @@ import net.minecraft.world.entity.ai.memory.NearestVisibleLivingEntities;
 import net.minecraft.world.entity.monster.Skeleton;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.projectile.AbstractArrow;
-import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraftforge.gametest.GameTestHolder;
@@ -186,7 +183,6 @@ public final class RangedFireGameTests {
         boolean everReleased = false;
         boolean everLoaded = false;
         int previousDrawn = 0;
-        int longestDraw = 0;
         for (int tick = 0; tick < 60; tick++) {
             // 每 tick 重新喂一次：下面的 maid.tick() 会让传感器重扫世界，
             // 而夹具僵尸并不在世界里，记忆于是被清空——那会让她当场收兵，
@@ -212,7 +208,7 @@ public final class RangedFireGameTests {
 
         helper.assertTrue(
                 everReleased,
-                "She cranked the crossbow for " + longestDraw
+                "She cranked the crossbow for " + previousDrawn
                         + " ticks straight without ever releasing it"
         );
         helper.assertTrue(
@@ -254,24 +250,35 @@ public final class RangedFireGameTests {
                 0, new ItemStack(Items.ARROW, 64)
         );
 
+        // 六格外在地板之外，"不动"的靶子照样会掉（缘由见 placeInert）。
+        scene.floorAt(1, 8);
         Zombie zombie = new Zombie(helper.getLevel());
         zombie.setPos(maid.getX(), maid.getY(), maid.getZ() + 6.0D);
-        // 只当靶子：会动的僵尸会自己走位，断言就不再只关于弩了。
-        zombie.setNoAi(true);
-        helper.getLevel().addFreshEntity(zombie);
+        CompanionScene.placeInert(helper, zombie);
 
         StringBuilder trace = new StringBuilder();
+        // 除手部状态外还记"她打的是谁（用实体 id，邻座夹具的僵尸也叫僵尸）、两只
+        // 手里各是什么"，只记变化。这条曾偶发地红，而只有手部状态的轨迹分不开三
+        // 种坏法——被邻座的怪引走、换装吃掉蓄力、别的东西替她松手——画出来一模
+        // 一样。不记 isCharged：装填与击发在同一次调用里完成，采样必然是 false。
+        String[] seen = {""};
         helper.startSequence()
                 .thenExecuteFor(200, () -> {
                     // 只观察，不驱动：编排器在生产里每 tick 自己跑一次，测试
                     // 再手动推一次就成了每 tick 两次，射击节奏会跟真实环境
                     // 对不上——这条测试的全部价值就在于走真实路径。
-                    if (trace.length() < 600) {
-                        trace.append(maid.isUsingItem() ? 'U' : '.')
-                                .append(maid.getTicksUsingItem())
-                                .append(CrossbowItem.isCharged(
-                                        maid.getMainHandItem()) ? "C " : " ");
+                    if (trace.length() >= 1200) {
+                        return;
                     }
+                    LivingEntity victim = maid.getTarget();
+                    String now = (victim == null ? "-" : "#" + victim.getId())
+                            + "|" + maid.getMainHandItem().getItem()
+                            + "/" + maid.getOffhandItem().getItem();
+                    if (!now.equals(seen[0])) {
+                        trace.append('[').append(seen[0] = now).append(']');
+                    }
+                    trace.append(maid.isUsingItem() ? 'U' : '.')
+                            .append(maid.getTicksUsingItem()).append(' ');
                 })
                 .thenExecute(() -> {
                     // 命中后箭会消失，所以"世界里还有箭"会漏判已经打中的那些。
@@ -489,12 +496,5 @@ public final class RangedFireGameTests {
                 "她没能活着走完这一段——弩在目标记忆为空时开火崩掉了。"
         );
         helper.succeed();
-    }
-
-    @SuppressWarnings("unchecked")
-    private static MaidIntentApi<EntityMaid> productionIntents() {
-        return (MaidIntentApi<EntityMaid>) AdapterRuntime.require(
-                MaidIntentApi.class
-        );
     }
 }

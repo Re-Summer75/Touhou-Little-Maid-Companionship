@@ -170,6 +170,26 @@ public final class EngagementRiskPolicy {
             return RiskVerdict.WITHDRAW;
         }
 
+        // 有东西已经在打她所守之人，或者已经站到了所守之处旁边。
+        //
+        // 到这里为止的每一个数都在回答同一个问题——**她**活不活得下来。安全裕度、
+        // 三成血的撤离线、"退得开才算保持距离"，全是为保住她自己写的，而它们在
+        // 这一刻问错了对象：怪已经贴到主人脸上，她跑掉能保住的只有她自己，而这
+        // 套代码在别处早就写明了取舍——"主人排在她自己前面：她可以修，主人不能
+        // 复活"。
+        //
+        // 玩家报告的正是这个缺口：判定打不过就一直跑，怪都贴到主人身上了还在跑，
+        // 而且从不试一下。所以这里不是把裕度调松，是**换一个被最大化的量**：
+        // 只要她还拿得动东西，就打。会不会死不参与这个判断——那本来就是"赴死
+        // 尝试"的字面含义。
+        //
+        // 门开得很窄，这是它敢这么绝对的原因：`ATTACKING_OWNER` 要求那东西真的
+        // 把主人设成了目标，`NEAR_WARD` 要求它没有目标却已经站在所守之处一步
+        // 之内。冲着她自己来的怪一个都不满足，所以她平时的进退取舍分毫未动。
+        if (field.threateningWard() > 0) {
+            return RiskVerdict.ENGAGE;
+        }
+
         // Nothing arriving inside the planning window used to answer
         // STAND_DOWN here, on the reasoning that there is no exchange to price.
         // The reasoning is right and the verdict was wrong: STAND_DOWN means
@@ -197,7 +217,13 @@ public final class EngagementRiskPolicy {
         double clearSeconds =
                 field.convergingHealth() / capability.bestDps();
         double sustained = suppressed(field, capability)
-                * attritionShare(field.converging());
+                * attritionShare(field.converging())
+                // A guard denies blows outright rather than softening them, so
+                // it belongs here as a share of the rate and not as armour. The
+                // share already excludes what an axe would take away, so a
+                // vindicator pack prices exactly as it did before she picked up
+                // a shield — which is the answer, not a limitation.
+                * (1.0D - capability.guardedShare());
         double cost = clearSeconds * sustained;
         boolean outTrades = cost * marginAgainst(field, capability)
                 <= capability.effectiveHealth();

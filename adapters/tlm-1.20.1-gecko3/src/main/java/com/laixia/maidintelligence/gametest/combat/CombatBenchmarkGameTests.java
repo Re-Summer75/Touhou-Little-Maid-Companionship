@@ -4,13 +4,16 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.gametest.support.BenchmarkSwitch;
 import com.laixia.maidintelligence.gametest.support.CombatTrace;
+import com.laixia.maidintelligence.gametest.support.ShieldBlockProbe;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.guard.ShieldLedger;
 import com.laixia.maidintelligence.gametest.support.WeaponLedger;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -167,6 +170,13 @@ public final class CombatBenchmarkGameTests {
         maid.getAvailableBackpackInv().setStackInSlot(
                 5, new ItemStack(Items.GOLDEN_APPLE)
         );
+        // 一面盾。这一局是它最该发光的地方：僵尸没有斧头，破不掉盾，而格挡在
+        // 1.20.1 里是**整下抵消**而不是减伤——所以"零伤害"这条判据第一次有了
+        // 能达成的路径。代价也在这一局最真实：盾和拉弓共用 useItem 那一个槽，
+        // 举着盾就射不出箭，而她只有六支箭、清不完六只僵尸。
+        maid.setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
+        ShieldLedger.reset(maid);
+        ShieldBlockProbe.install();
 
         Zombie[] pack = new Zombie[PACK_SIZE];
         for (int slot = 0; slot < PACK_SIZE; slot++) {
@@ -221,6 +231,7 @@ public final class CombatBenchmarkGameTests {
                     }
                     report(index, maid, pack, killedAt, lowestHealth[0], trace);
                     System.out.println("  " + ledger.line());
+                    System.out.println("BENCH trial=" + index + " " + ShieldLedger.summary(maid));
 
                     int standing = alive(pack);
                     helper.assertTrue(

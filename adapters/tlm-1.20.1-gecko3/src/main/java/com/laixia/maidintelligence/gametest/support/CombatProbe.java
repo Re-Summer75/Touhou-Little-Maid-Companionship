@@ -229,7 +229,15 @@ public final class CombatProbe {
                 WeaponSelectionPolicy.instance().preferredRange()
                         - maid.distanceTo(foe)
         );
-        return RetreatSpace.canGiveGround(maid, foe, COMBAT_SPEED, wanted);
+        // 与生产同一个判据。此前这里只问地形与属性速度，而生产已经改问实测
+        // 到达时间——两处不一致时，trace 打出来的 canOpen/verdict/stance 就
+        // 不是她真正在做的决定，而这三列正是用来判因果的。
+        if (!RetreatSpace.canGiveGround(maid, foe, COMBAT_SPEED, wanted)) {
+            return false;
+        }
+        double untilContact = field(maid, scan(maid)).soonestContact();
+        return !Double.isFinite(untilContact)
+                || untilContact >= 1.0D / CombatReadiness.SHOTS_PER_SECOND;
     }
 
     /**

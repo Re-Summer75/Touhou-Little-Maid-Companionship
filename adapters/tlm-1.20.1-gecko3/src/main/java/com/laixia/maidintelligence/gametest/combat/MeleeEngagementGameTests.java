@@ -89,14 +89,24 @@ public final class MeleeEngagementGameTests {
     }
 
     /**
-     * 判定打不过，就是要走——除非退无可退。
+     * 判定打不过，她要走——而且是**边走边打**，不是二选一。
      *
-     * <p>这里一度是"够得着就先打一下，打不到才退"，理由是命中带来的击退也能
-     * 拉开距离。可她被判定输掉的时候，身边几乎总有够得着的东西，于是撤退这一
-     * 支永远轮不到执行，"打不过"落地成了站着对砍到死。
+     * <p>这条判据翻过两次，两次都是因为让一个决定取消了另一个：
      *
-     * <p>只有真的动不了时那一下才有意义：击退是她能挣到的唯一空间。两个方向
-     * 都要断言，否则把判据写死成任何一边都能过。
+     * <ol>
+     *   <li>最早是"够得着就先打一下，打不到才退"。她被判定输掉时身边几乎总有
+     *       够得着的东西，于是撤退那一支永远轮不到，"打不过"落地成站着对砍到死。</li>
+     *   <li>于是改成"退无可退才打"。这一版的问题在卫道士局量得很清楚：她流畅地
+     *       后撤、照样被追上（对方移速 0.35 对她 0.6，追击加成抹平了差距），
+     *       两百 tick 一刀未还。</li>
+     * </ol>
+     *
+     * <p>现在两件事在同一 tick 都做：给地是无条件的，挥刀是**加上去**的，只在
+     * 目标已经在触及之内、且冷却本来就好了的时候——那一下不花掉她任何本来要用的
+     * 东西，换回来的击退就是距离，而距离正是撤退想要的东西。
+     *
+     * <p>所以断言的重点从"她有没有打"改成**"她有没有仍然在走"**：那才是前两版
+     * 各自失守的地方。
      */
     @GameTest(templateNamespace = "minecraft", template = "empty")
     public static void losingSheLeavesUnlessPinned(GameTestHelper helper) {
@@ -116,16 +126,14 @@ public final class MeleeEngagementGameTests {
         maid.setHealth(1.0F);
         combat.execute(maid);
 
-        helper.assertTrue(
-                victim.getHealth() == victim.getMaxHealth(),
-                "With room behind her she stopped to trade blows instead of "
-                        + "breaking off, which is how a lost fight gets fought"
-        );
+        // 这一条是载重的：身后有地方退，她就必须真的在退。前两版分别在这里和
+        // 它的反面失守，而"她打了没有"两边都能自圆其说。
         helper.assertTrue(
                 maid.getBrain()
                         .getMemory(MemoryModuleType.WALK_TARGET)
                         .isPresent(),
-                "She neither swung nor went anywhere"
+                "判定打不过、身后又有地方，她却没有往任何地方走——"
+                        + "撤退被那一刀取消了"
         );
         helper.succeed();
     }

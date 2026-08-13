@@ -263,6 +263,18 @@ public final class EatingPolicy {
                     || field.soonestContact() <= food.secondsToEat()) {
                 continue;
             }
+            // 会扣她血的那一口不算"便宜"，它是负的。这条规则挑的是最不值钱
+            // 的东西，而一旦副作用能把价值压到零以下，"最不值钱"就直接指向
+            // 毒马铃薯——排序没错，是"便宜"这个词在有害食物出现之后不再等于
+            // "损失最小"。
+            //
+            // 这条规则在空场（`EatFromPackAction`）下也是唯一会开火的一条，
+            // 所以这一句同时意味着：包里只剩有毒的东西时，本模组不去吃它。
+            // 那种处境交给宿主自己的进食去管——它按 `isEdible()` 认食物，腐肉
+            // 之类照吃不误，饿不死；而"有更好的却挑了毒的"只有这里挡得住。
+            if (food.effectiveHealthGain() < 0.0D) {
+                continue;
+            }
             // Least restorative first: a lull is the wrong moment to spend the
             // apple, and hunger does not care which item filled it.
             if (cheapest == null
@@ -329,11 +341,16 @@ public final class EatingPolicy {
             if (gain <= 0.0D) {
                 continue;
             }
+            // 逐项照抄，包括盾牌那一项。这里问的是"多了这口饭之后答案变不变"，
+            // 唯一该动的就是有效生命；用短构造会把她举着的盾静默归零，于是
+            // 喂饱的她反而比空腹的她更弱，而这条规则正是靠比较两者来决定要不
+            // 要吃——被比较的两边必须只差那一口饭。
             CombatCapability fed = new CombatCapability(
                     capability.effectiveHealth() + gain,
                     capability.meleeDps(),
                     capability.rangedDps(),
-                    capability.meleeReach()
+                    capability.meleeReach(),
+                    capability.guardedShare()
             );
             if (risk.assess(field, fed, healthFraction, canOpenGround)
                     != RiskVerdict.ENGAGE) {

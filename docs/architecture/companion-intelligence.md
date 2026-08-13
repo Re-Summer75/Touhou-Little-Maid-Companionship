@@ -221,6 +221,18 @@ BlockJoy 上座兜底（仅 IDLE 娱乐）、Breath/Home/Pickup/偷吃/工作目
   tick，于是 `SpacingPolicy` 的 overshoot 从来没被真正走到，拉扯退化成一次性抽动。
 - `EngagementRiskPolicy` 判 `SKIRMISH` 必须同时满足"有远程输出、对方够不到、**且退得开**"。
   缺第三项时"保持距离"没有可保持的距离，等价于站着挨打。
+- **盾是承伤侧的折扣，不是护甲，也不是一件武器**。格挡整下抹掉伤害，所以
+  `guardedShare` 乘的是 `sustained`（`EngagementRiskPolicy`）与近战的 `incomingDps`
+  （`TradeCost.swingingCost`），而 `armed()` 不看它——满格挡的空手女仆仍然不接仗。
+- **只有近战能兑现它**。副手一次只有一个 `useItem` 槽：举盾与拉弓、进食互斥，所以
+  远程定价一分不能动。改动了就等于宣称她能一边举盾一边放箭，而游戏里做不到。
+- `guardedShare` 由 `CombatReadiness` 从**能挡的方向**（按此刻够得到她的数量摊薄）
+  与**会不会被打掉**（扣掉 `canDisableShield` 那部分伤害份额）两项算出，没有配平常量。
+  斧类武器让它归零，因此卫道士局的定价与她没有盾时完全一致——那是答案不是缺陷。
+- **副手不是稳定存放处**。本体覆写的 `completeUsingItem` 无条件调用
+  `backCurrentHandItemStack`，会把副手内容整个塞回背包——她战斗中吃一口东西就卸掉
+  自己的盾。`ShieldGuard.equipFromPack` 每 tick 复查并重新装备；任何将来要用副手的
+  功能都必须照做，且必须保留"副手非空就不动"这道门，否则会与本体争抢同一个槽位。
 
 ### Recoverable Plan
 

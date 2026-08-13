@@ -218,12 +218,40 @@ public final class CompanionScene {
      * swung and never burned; switching its AI on as a side effect of making it
      * findable would trade one fiction for a noisier one, and the assertions
      * here are about what <em>she</em> does.
+     *
+     * <p><b>Inert is not weightless, and it must not become weightless.</b>
+     * {@code setNoAi} stops it deciding to move; it does not stop it falling,
+     * and a target placed past the edge of the floor drops out of her
+     * perception in about twenty-one ticks — these rooms are lifted twelve
+     * blocks and the threat sweep only reaches six down. Turning gravity off
+     * here looks like the obvious repair and is measurably worse: {@code
+     * TlmThreatScanner.airborne} reads {@code isNoGravity()} as "this one is in
+     * the air", so it would relabel <em>every</em> dummy in the suite airborne
+     * and move the threat pricing under all of them. Measured: two unrelated
+     * arsenal tests went red, six runs out of six.
+     *
+     * <p>So the target keeps its weight and gets something to stand on instead
+     * — see {@link #floorAt}.
      */
     public static <T extends Mob> T placeInert(GameTestHelper helper, T hostile) {
         hostile.setNoAi(true);
         hostile.setPersistenceRequired();
         helper.getLevel().addFreshEntity(hostile);
         return hostile;
+    }
+
+    /**
+     * One more block of floor, for a target standing past the room's edge.
+     *
+     * <p>Scenes that need distance put the target further away than the room is
+     * wide, and a target over nothing falls. Widening the whole room would push
+     * this scene's blocks further into its neighbours' plots — these rooms are
+     * already built out of an {@code empty} template — so what gets placed is
+     * the one block the dummy is standing on.
+     */
+    public CompanionScene floorAt(int x, int z) {
+        helper.setBlock(new BlockPos(x, lift, z), Blocks.STONE);
+        return this;
     }
 
     /**

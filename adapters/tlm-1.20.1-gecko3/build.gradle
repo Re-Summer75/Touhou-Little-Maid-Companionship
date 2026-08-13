@@ -111,14 +111,25 @@ tasks.register('verifyAdapterLayout') {
         // free mode in one place instead of intercepting each host behaviour's
         // start conditions, and ExtraMaidBrainAccessor reaches the extension
         // list that rebuild has to preserve.
+        //
+        // 16 现在，而这个数字之前是错的：清单写 14，仓库里实际有 15 个
+        // ——某次新增没有同步这里，于是这道闸在干净的 HEAD 上就是红的，
+        // 而"红"不再传递任何信息。修正时把两笔分开记，免得一次改动把
+        // 另一笔悄悄吞掉：
+        //   +1 已存在的漂移（清单 14 → 实际 15，来源未知，先如实登记）
+        //   +1 ai.MaidMoveControlGuardFacingMixin（本次，见下）
+        //
+        // 新增的那一个买到的是"举盾后退时倒着走"。原版只挡正面来的伤害，
+        // 而宿主的 MaidMoveControl 每 tick 把身体扭向行进方向、且跑在 brain
+        // 之后——没有第二个地方能压过它。玩家能转身格挡，这一处注入让她也能。
         def mixins = fileTree(
                 'src/main/java/com/laixia/maidintelligence/mixin/tlm'
         ) {
             include '**/*.java'
         }.files
-        if (mixins.size() != 14) {
+        if (mixins.size() != 16) {
             throw new GradleException(
-                    "Expected 14 TLM/Gecko Mixins, found ${mixins.size()}."
+                    "Expected 16 TLM/Gecko Mixins, found ${mixins.size()}."
             )
         }
         mixins.each { mixin ->

@@ -4,6 +4,20 @@
 
 这些是**客户端也能看到的事实**，也就是"她身上有哪些东西可以直接读，不需要我们自己推断"。写新的事实（fact）之前先看这里有没有现成的。
 
+> ⚠️ **副手不是稳定存放处。** `EntityMaid` 覆写了 `completeUsingItem`，其中无条件调用
+> `backCurrentHandItemStack()`——那个方法把副手里的东西整个塞进背包（塞不下就丢地上），
+> 再把 `hideInv[0]` 放回副手。它服务的是本体"临时换手吃饭"协议
+> （`memoryHandItemStack` 存、用完还），但**不检查这一次使用是否走了那套协议**。
+> 于是任何完成的物品使用都会顺手卸掉她的副手：实测战斗中吃一颗金苹果（32 tick），
+> 随后副手空了两百多 tick。需要副手的功能必须每 tick 复查并重新装备，
+> 见 `ShieldGuard.equipFromPack`。
+>
+> 盾牌相关的本体机制：`canUseShield()`（副手能 `SHIELD_BLOCK` 且不在冷却）、
+> `isBlocking()` **覆写掉了原版的五 tick 预热**（举起即生效）、`blockUsingShield()`
+> 实现斧破盾（100 tick 冷却）、`passiveUseShieldTick` 是中弹射物后的自动举盾。
+> 主动举盾的 `MaidUseShieldTask` **不在自由模式的 brain 保留清单里**，
+> 所以自由模式下的举盾由本模组自己负责。
+
 ## 身份与外观
 
 | 字段 | 类型 | 说明 |

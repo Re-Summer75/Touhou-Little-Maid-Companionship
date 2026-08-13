@@ -4,7 +4,9 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.gametest.support.BenchmarkSwitch;
 import com.laixia.maidintelligence.gametest.support.CombatTrace;
+import com.laixia.maidintelligence.gametest.support.ShieldBlockProbe;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.guard.ShieldLedger;
 import com.laixia.maidintelligence.gametest.support.TerrainTally;
 import com.laixia.maidintelligence.gametest.support.WeaponLedger;
 import com.laixia.maidintelligence.platform.resource.ModResources;
@@ -120,6 +122,12 @@ public final class CombatRaidBenchmarkGameTests {
         pack.setStackInSlot(1, new ItemStack(Items.BOW));
         pack.setStackInSlot(2, new ItemStack(Items.ARROW, ARROWS));
         pack.setStackInSlot(3, new ItemStack(Items.GOLDEN_APPLE, APPLES));
+        // 同一面盾，另一端的答案。卫道士拿的是铁斧，命中盾牌就把它敲掉一百
+        // tick——所以这一局问的不是"盾好不好用"，是**她认不认得出这面盾在这里
+        // 不值得举**。定价里那条"扣掉能破盾的那部分伤害"就是为这一局写的。
+        maid.setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
+        ShieldLedger.reset(maid);
+        ShieldBlockProbe.install();
 
         Vindicator[] band = new Vindicator[PACK_SIZE];
         for (int slot = 0; slot < PACK_SIZE; slot++) {
@@ -182,6 +190,29 @@ public final class CombatRaidBenchmarkGameTests {
         helper.startSequence()
                 .thenExecuteFor(BUDGET_TICKS, () -> {
                     long tick = helper.getLevel().getGameTime() - start;
+                    // 坐标轨迹。判据读数说不清"她为什么打不过"——站在沟里、
+                    // 卡在台阶下、被围在墙角、还是四个都没走过来，这四种在
+                    // hurt/dealt 上长得一模一样。只有第一局打，其余四局的
+                    // 逐 tick 坐标会把日志淹掉。
+                    if (tick % 20 == 0) {
+                        StringBuilder line = new StringBuilder();
+                        line.append(String.format(
+                                "POS#%d t=%3d maid=(%.1f,%.1f,%.1f) ground=%s hp=%.1f",
+                                index, tick, maid.getX(), maid.getY(), maid.getZ(),
+                                maid.onGround() ? "y" : "N", maid.getHealth()
+                        ));
+                        for (int slot = 0; slot < band.length; slot++) {
+                            Vindicator foe = band[slot];
+                            line.append(String.format(
+                                    " | v%d=%s(%.1f,%.1f,%.1f) d=%.1f",
+                                    slot,
+                                    foe.isAlive() ? "" : "DEAD",
+                                    foe.getX(), foe.getY(), foe.getZ(),
+                                    foe.distanceTo(maid)
+                            ));
+                        }
+                        System.out.println(line);
+                    }
                     if (maid.isAlive()) {
                         terrain.sample(maid, nearestOf(maid, band));
                         boolean drawing = maid.isUsingItem()
@@ -434,6 +465,9 @@ public final class CombatRaidBenchmarkGameTests {
                 100.0D * trace.shareWithinReach(), fellAt, fallen
         );
         System.out.printf("RAID trial=%d %s%n", index, ledger.line());
+        System.out.printf(
+                "RAID trial=%d GUARD %s%n", index, ShieldLedger.summary(maid)
+        );
         System.out.printf(
                 "RAID trial=%d TERRAIN %s%n", index, terrain.line()
         );

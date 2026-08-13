@@ -138,8 +138,17 @@ public final class TradeCost {
         double killSeconds =
                 context.targetHealth() / (dps + arcDps(weapon, context));
         double closeSeconds = approachSeconds(weapon, context);
+        // The guard is collected here and nowhere else, because the off hand
+        // holds one thing at a time: a raised shield and a drawn bow are the
+        // same slot. So carrying a shield does not make her safer in general —
+        // it makes *steel* cheaper, and it is the arithmetic rather than a rule
+        // that then walks her into reach against a zombie and leaves her at
+        // range against a skeleton she could never block anyway.
+        //
+        // Zero for a maid without one, which is every decision this file was
+        // written and measured against.
         return (killSeconds + exposedApproach(context, closeSeconds))
-                * context.incomingDps()
+                * context.incomingDps() * (1.0D - context.guardedShare())
                 + impatience(context, killSeconds + closeSeconds);
     }
 

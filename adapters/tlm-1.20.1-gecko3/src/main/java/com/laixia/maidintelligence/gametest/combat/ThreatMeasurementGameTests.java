@@ -7,6 +7,8 @@ import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.T
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
+
+import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -151,4 +153,37 @@ public final class ThreatMeasurementGameTests {
 
     /** 与 {@link CompanionScene} 的抬升保持一致,好把墙砌在她那一层。 */
     private static final int LIFT = 12;
+
+    /**
+     * 主人身边的敌人算数，哪怕她自己离得够远。
+     *
+     * <p>感知此前只有她一个中心，于是主人走开十几格之后，围着主人的那一圈就
+     * 落在她的球外——她"看不见"正在打她主人的东西，而那正是她在场的理由。
+     *
+     * <p>断言用"扫到没扫到"，不用"她去没去"：去不去是交战判据的事，这一条只
+     * 问感知的形状对不对。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void aHostileByTheOwnerIsSeenFromBeyondHerOwnReach(
+            GameTestHelper helper
+    ) {
+        CompanionScene scene = CompanionScene.room(helper, 40, 6);
+        // 主人站远处；她留在原地。两人相距超过她自己的感知半径。
+        scene.ownerAt(34, 2, 3);
+        EntityMaid maid = scene.maid(2, 2, 3);
+
+        Zombie byTheOwner = new Zombie(helper.getLevel());
+        byTheOwner.setPos(
+                maid.getX() + 30.0D, maid.getY(), maid.getZ()
+        );
+        CompanionScene.placeInert(helper, byTheOwner);
+
+        List<ScannedThreat> seen = new TlmThreatScanner().scan(maid);
+        helper.assertTrue(
+                seen.stream().anyMatch(t -> t.entity() == byTheOwner),
+                "站在主人身边的敌人没有进入她的感知——"
+                        + "她守的那个点没有算作第二个中心"
+        );
+        helper.succeed();
+    }
 }
