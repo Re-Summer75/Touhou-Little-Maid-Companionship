@@ -10,11 +10,13 @@ import java.util.function.Consumer;
 public final class AiForgeInstaller implements ForgeFeatureInstaller {
     private final Consumer<RegisterCommandsEvent> commandHandler;
     private final Object maidTickHandler;
+    private final Object threatMemoryHandler;
     private boolean installed;
 
     public AiForgeInstaller(
             Consumer<RegisterCommandsEvent> commandHandler,
-            Object maidTickHandler
+            Object maidTickHandler,
+            Object threatMemoryHandler
     ) {
         this.commandHandler = Objects.requireNonNull(
                 commandHandler,
@@ -23,6 +25,10 @@ public final class AiForgeInstaller implements ForgeFeatureInstaller {
         this.maidTickHandler = Objects.requireNonNull(
                 maidTickHandler,
                 "maidTickHandler"
+        );
+        this.threatMemoryHandler = Objects.requireNonNull(
+                threatMemoryHandler,
+                "threatMemoryHandler"
         );
     }
 
@@ -35,5 +41,6 @@ public final class AiForgeInstaller implements ForgeFeatureInstaller {
         AiServerConfig.register(lifecycle.modEventBus());
         lifecycle.gameEventBus().addListener(commandHandler);
         lifecycle.gameEventBus().register(maidTickHandler);
+        lifecycle.gameEventBus().register(threatMemoryHandler);
     }
 }

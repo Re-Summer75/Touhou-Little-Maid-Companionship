@@ -120,6 +120,27 @@ public final class ThreatProfile {
      * can position against.
      */
     public static double reach(LivingEntity hostile, EntityMaid against) {
+        // 声明的部分逐个体去问，学到的那一截按物种补。
+        //
+        // 两者必须分开：一只如实声明了更长距离的个体（换了武器、上了效果）本来就
+        // 会从下面那个方法里得到正确的数，而学习补的是**世界拒绝说出口**的那一截
+        // ——模组怪物把攻击距离硬写在自己的 Goal 里、从不覆写那个方法时，从外面
+        // 读到的永远是它的碰撞箱宽度，她于是站在自以为够不着的位置上挨打。
+        return declaredReach(hostile, against)
+                + ThreatReachLedger.surplusFor(
+                        hostile, against.level().getGameTime()
+                );
+    }
+
+    /**
+     * 它自己声明的够到距离。
+     *
+     * <p>学习那一层的底数：记的是"比这个数多够多远"，而不是一个绝对值。所以这里
+     * 必须是**不含**学习成分的那一个，否则每挨一下都会在上一次的结果上再加一次。
+     */
+    public static double declaredReach(
+            LivingEntity hostile, EntityMaid against
+    ) {
         if (hostile instanceof RangedAttackMob) {
             return Math.min(
                     PerceptionRange.BLOCKS, followRange(hostile)

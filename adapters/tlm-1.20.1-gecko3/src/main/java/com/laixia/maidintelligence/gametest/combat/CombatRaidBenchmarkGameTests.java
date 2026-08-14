@@ -4,6 +4,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.gametest.support.BenchmarkSwitch;
 import com.laixia.maidintelligence.gametest.support.CombatTrace;
+import com.laixia.maidintelligence.gametest.support.RaidTimeline;
 import com.laixia.maidintelligence.gametest.support.ShieldBlockProbe;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.guard.ShieldLedger;
@@ -53,6 +54,9 @@ public final class CombatRaidBenchmarkGameTests {
     private static final int PACK_SIZE = 4;
 
     private static final int BUDGET_TICKS = 700;
+
+    /** 时间线的采样间隔，tick。 */
+    private static final int TIMELINE_EVERY = 5;
     private static final double PACK_DISTANCE = 5.0D;
 
     /** 十五支箭，十个金苹果。 */
@@ -190,28 +194,17 @@ public final class CombatRaidBenchmarkGameTests {
         helper.startSequence()
                 .thenExecuteFor(BUDGET_TICKS, () -> {
                     long tick = helper.getLevel().getGameTime() - start;
-                    // 坐标轨迹。判据读数说不清"她为什么打不过"——站在沟里、
-                    // 卡在台阶下、被围在墙角、还是四个都没走过来，这四种在
-                    // hurt/dealt 上长得一模一样。只有第一局打，其余四局的
-                    // 逐 tick 坐标会把日志淹掉。
-                    if (tick % 20 == 0) {
-                        StringBuilder line = new StringBuilder();
-                        line.append(String.format(
-                                "POS#%d t=%3d maid=(%.1f,%.1f,%.1f) ground=%s hp=%.1f",
-                                index, tick, maid.getX(), maid.getY(), maid.getZ(),
-                                maid.onGround() ? "y" : "N", maid.getHealth()
-                        ));
-                        for (int slot = 0; slot < band.length; slot++) {
-                            Vindicator foe = band[slot];
-                            line.append(String.format(
-                                    " | v%d=%s(%.1f,%.1f,%.1f) d=%.1f",
-                                    slot,
-                                    foe.isAlive() ? "" : "DEAD",
-                                    foe.getX(), foe.getY(), foe.getZ(),
-                                    foe.distanceTo(maid)
-                            ));
-                        }
-                        System.out.println(line);
+                    // 时间线。判据读数说不清"她为什么打不过"——站在沟里、卡在
+                    // 台阶下、被围在墙角、还是四个同时到，这四种在 hurt/dealt 上
+                    // 长得一模一样。所以打的是位置**加上**她准备往哪走、以及她
+                    // 此刻在做什么；组行在 RaidTimeline。
+                    //
+                    // 五 tick 一次而不是二十：她死在第 129 tick 时，二十 tick 只
+                    // 给得出六个采样点，看不出死前那两秒发生了什么。
+                    if (tick % TIMELINE_EVERY == 0 && maid.isAlive()) {
+                        System.out.println(
+                                RaidTimeline.line(index, tick, maid, band)
+                        );
                     }
                     if (maid.isAlive()) {
                         terrain.sample(maid, nearestOf(maid, band));

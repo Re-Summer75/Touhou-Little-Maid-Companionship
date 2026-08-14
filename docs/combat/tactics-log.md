@@ -309,6 +309,36 @@ public Path createPath(...) {
 空气摩擦 0.91 每 tick 已经把它自然限制在约 0.2 格/tick，也就是走路速度。自己定一个
 上限，等于让她在空中比她跟着的那个人还灵活。
 
+## 本体机制：女仆的够到距离不走原版公式（反编译确认）
+
+排查"模组加的攻击距离她不认"时确认的，而结论和最初的猜想相反。
+
+原版 `Mob.getMeleeAttackRangeSqr` 是纯碰撞箱几何，Forge **没有** patch 它：
+
+```java
+public double getMeleeAttackRangeSqr(LivingEntity pEntity) {
+   return (double)(this.getBbWidth() * 2.0F * this.getBbWidth() * 2.0F + pEntity.getBbWidth());
+}
+```
+
+`ForgeMod.ENTITY_REACH` 也只被加进 `Player.createAttributes()`，别的生物默认没有。
+到这里为止"她读不到模组给的距离"看起来是成立的——但 `EntityMaid` 两处都改了：
+
+- `createAttributes()` 里**给女仆加了** `ENTITY_REACH`，基础值 2.0（不是 Forge 的 3.0）。
+  所以物品上的 `forge:entity_reach` 修饰符**会**落到她身上（`AttributeMap` 只对已有的
+  属性应用修饰符，没有这个属性的生物会被静默丢弃）。
+- `getMeleeAttackRangeSqr` 被覆写成 `(getAttributeValue(ENTITY_REACH) + 好感度加成)²`，
+  和碰撞箱再无关系。
+
+于是本模组这边只要一律走 `sqrt(getMeleeAttackRangeSqr(...))`，模组长武器和好感度加成
+就都自动生效。已由 `anythingThatLengthensHerArmMovesHerFeet` 钉住（临时挂一个 +3 的
+属性修饰符，断言她的出手距离和站位距离都跟着涨）——**"读代码看起来是通的"不是证据**，
+这一条本来就是靠读代码得出的结论，钉住它才算数。
+
+> 真正的缺口在**对方**那一侧：模组怪物常把攻击距离硬写在自己的 Goal 里而从不覆写
+> 这个方法，从外面读到的只有碰撞箱宽度。那一截只能从挨打里学，规则见
+> `ThreatReachMemory`——会褪的最大值，不是只增不减的最大值。
+
 ## 本体机制：地面位移随速度的**平方**走（实测 + 反编译确认）
 
 做闪避时踩到的，而且是踩了两遍。

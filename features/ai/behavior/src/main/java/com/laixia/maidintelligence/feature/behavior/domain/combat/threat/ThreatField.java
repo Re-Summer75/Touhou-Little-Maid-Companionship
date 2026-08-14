@@ -153,13 +153,20 @@ public record ThreatField(
             // The first arrival, not the nearest. Something further away but
             // sprinting reaches her before something closer and shuffling, and
             // it is arrival that her hands have to be ready for.
-            soonest = Math.min(soonest, sample.secondsToContact());
+            // 只数**可能转向她**的那些。锁着别人的一只不会在这一秒打到她，而
+            // 这一列是她的手要为之做好准备的那个时刻。
+            boolean atHer = sample.relation().mayTurnOnHer();
+            if (atHer) {
+                soonest = Math.min(soonest, sample.secondsToContact());
+            }
             // The worst single blow, not an average. Averaging is exactly the
             // blindness being corrected: something hitting for thirteen every
             // two seconds and something hitting for three every half second
             // produce the same rate and are not remotely the same risk to a
             // maid with twenty health.
-            heaviest = Math.max(heaviest, sample.strikeDamage());
+            if (atHer) {
+                heaviest = Math.max(heaviest, sample.strikeDamage());
+            }
             // Unweighted by distance, and deliberately outside the arrival gate
             // below: distance changes when a fight happens, not whether it
             // happens, and this is read by the one question whose horizon is
@@ -173,7 +180,7 @@ public record ThreatField(
             // precisely because the kiting is working, and it is still entirely
             // her problem. Without the gate she counted every hostile within
             // sixteen blocks, which in a shared world meant the neighbours.
-            if (sample.relation() != ThreatRelation.UNENGAGED) {
+            if (sample.relation().concernsHer()) {
                 standing += sample.health();
             }
             // 已经在打她所守之人，或者已经站到所守之处旁边（还没动手，但下一下
@@ -182,12 +189,14 @@ public record ThreatField(
                     || sample.relation() == ThreatRelation.NEAR_WARD) {
                 onWard++;
             }
-            if (sample.threatensNow()) {
+            if (atHer && sample.threatensNow()) {
                 converging++;
             }
             // The margin is the one her feet already use, so "she thinks she is
             // surrounded" and "she behaves as though she is" cannot drift apart.
-            if (sample.threatensWithin(SpacingPolicy.instance().safeGap())) {
+            if (atHer
+                    && sample.threatensWithin(
+                            SpacingPolicy.instance().safeGap())) {
                 pressing++;
             }
             // Weighted by arrival rather than gated on reach, so one closing in
@@ -198,8 +207,12 @@ public record ThreatField(
             double weight =
                     sample.convergenceWeight(horizonSeconds, closingSpeed);
             if (weight > 0.0D) {
-                incoming += sample.damagePerSecond() * weight;
-                hits += sample.hitsPerSecond() * weight;
+                // 承伤只收可能转向她的那些；要清掉的血量与横扫的人头照收——
+                // 她**可以**选择去打一只在射牛的骷髅，那时它自然会转过来。
+                if (atHer) {
+                    incoming += sample.damagePerSecond() * weight;
+                    hits += sample.hitsPerSecond() * weight;
+                }
                 health += sample.health() * weight;
                 // The same weight, counted rather than multiplied by anything.
                 // A sweeping weapon is paid once per body in the arc, so what

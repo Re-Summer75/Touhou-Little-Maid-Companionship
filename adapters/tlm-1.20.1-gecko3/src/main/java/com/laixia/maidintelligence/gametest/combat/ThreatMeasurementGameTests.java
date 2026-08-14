@@ -1,22 +1,32 @@
 package com.laixia.maidintelligence.gametest.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatRelation;
 import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.MeleeSwing;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ScannedThreat;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ThreatProfile;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ThreatReachLedger;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
+import com.laixia.maidintelligence.gametest.support.CombatProbe;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 
 import java.util.List;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.animal.Cow;
 import net.minecraft.world.entity.monster.Ravager;
 import net.minecraft.world.entity.monster.Skeleton;
 import net.minecraft.world.entity.monster.Zombie;
+import net.minecraft.world.entity.projectile.Arrow;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraftforge.common.ForgeMod;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
@@ -32,6 +42,12 @@ import net.minecraftforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 @SuppressWarnings("null")
 public final class ThreatMeasurementGameTests {
+    /** 夹具给她临时加的那三格手长。 */
+    private static final UUID A_LONGER_ARM =
+            UUID.fromString("8f3d1c72-5b6e-4a19-9c2f-1d4e7a0b6c53");
+
+    private static final double GRANTED_REACH = 3.0D;
+
     private ThreatMeasurementGameTests() {
     }
 
@@ -185,5 +201,191 @@ public final class ThreatMeasurementGameTests {
                         + "她守的那个点没有算作第二个中心"
         );
         helper.succeed();
+    }
+
+    /**
+     * 打得比它承认的远的东西，她挨一下就记住了。
+     *
+     * <p>模组怪物常把攻击距离硬写在自己的 Goal 里而从不覆写
+     * {@code getMeleeAttackRangeSqr}，于是从外面读到的永远只是它的碰撞箱宽度。
+     * 这里用一记来自僵尸、却发生在僵尸够不着的距离上的近战伤害来复现那种生物——
+     * 判据不认识任何一个物种，所以复现方式和真的模组怪物没有区别。
+     *
+     * <p>褪去的那一半在 {@code verifyThreatReach} 里问，那是纯算术。这里问的是
+     * **接上了没有**：事件筛得对不对、按物种记的那份读不读得回来。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void sheLearnsTheReachAFoeWillNotAdmitTo(
+            GameTestHelper helper
+    ) {
+        ThreatReachLedger.forgetEverything();
+        CompanionScene scene = CompanionScene.room(helper, 9, 5);
+        EntityMaid maid = scene.maid(2, 2, 2);
+
+        Zombie liar = new Zombie(helper.getLevel());
+        liar.setPos(maid.getX() + 4.0D, maid.getY(), maid.getZ());
+        CompanionScene.placeInert(helper, liar);
+
+        double declared = ThreatProfile.declaredReach(liar, maid);
+        helper.assertTrue(
+                ThreatProfile.reach(liar, maid) <= declared + 1.0E-6D,
+                "还没挨过打，她已经在给它加距离了"
+        );
+
+        // 它够不着，却打中了她——世界唯一肯说出口的那句话。
+        maid.hurt(maid.damageSources().mobAttack(liar), 1.0F);
+        double learned = ThreatProfile.reach(liar, maid);
+        helper.assertTrue(
+                learned > declared + 1.0D,
+                "它从四格外打中了她，她给它记的还是 " + learned
+                        + " 格（它自称 " + declared + "）"
+        );
+
+        // 弹射物不算：伤害来源里的直接实体是那支箭，按射手当时的距离学，
+        // 学到的会是"骷髅够十五格"。
+        ThreatReachLedger.forgetEverything();
+        Skeleton shooter = EntityType.SKELETON.create(helper.getLevel());
+        shooter.setPos(maid.getX() + 8.0D, maid.getY(), maid.getZ());
+        CompanionScene.placeInert(helper, shooter);
+        Arrow arrow = new Arrow(
+                helper.getLevel(), maid.getX(), maid.getY(), maid.getZ()
+        );
+        arrow.setOwner(shooter);
+        helper.getLevel().addFreshEntity(arrow);
+        maid.invulnerableTime = 0;
+        maid.hurt(maid.damageSources().arrow(arrow, shooter), 1.0F);
+        helper.assertTrue(
+                ThreatProfile.reach(shooter, maid)
+                        <= ThreatProfile.declaredReach(shooter, maid) + 1.0E-6D,
+                "一支箭教会了她骷髅的近战够到距离"
+        );
+        helper.succeed();
+    }
+
+    /**
+     * 她自己的够到距离长了，她站的位置就该跟着变。
+     *
+     * <p>上面那条问的是"敌人够多远"，这条问的是同一个问题的另一半——**她**够多远。
+     * 玩家报的是"模组武器或者什么东西加了攻击距离，她并不知道"，而这一侧读代码看
+     * 起来是通的：宿主 {@code EntityMaid} 覆写了 {@code getMeleeAttackRangeSqr}，
+     * 返回 {@code (ENTITY_REACH 属性 + 好感度加成)²}，而本模组所有用到"她够多远"
+     * 的地方都走这一个口子。
+     *
+     * <p>"看起来是通的"不是证据，所以这里真的去加一次。用属性修饰符而不是造一件
+     * 武器：模组长武器给的正是这个修饰符，而物品注册表在 GameTest 起来时已经冻结，
+     * 造不出新物品。第一条断言本身也有价值——它确认这个属性**长在女仆身上**，
+     * 否则模组给的加成会被静默丢掉，连游戏本身都不认。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void anythingThatLengthensHerArmMovesHerFeet(
+            GameTestHelper helper
+    ) {
+        CompanionScene scene = CompanionScene.room(helper, 9, 5);
+        EntityMaid maid = scene.maid(2, 2, 2);
+        Zombie zombie = new Zombie(helper.getLevel());
+        zombie.setPos(maid.getX() + 3.0D, maid.getY(), maid.getZ());
+        CompanionScene.placeInert(helper, zombie);
+
+        double before = MeleeSwing.reach(maid, zombie);
+        int stoodAt = MeleeSwing.standoff(maid, zombie);
+
+        AttributeInstance reach =
+                maid.getAttribute(ForgeMod.ENTITY_REACH.get());
+        helper.assertTrue(
+                reach != null,
+                "女仆身上根本没有够到距离这个属性——模组武器给的加成无处可落，"
+                        + "连游戏本身都不会认"
+        );
+        reach.addTransientModifier(new AttributeModifier(
+                A_LONGER_ARM,
+                "gametest reach",
+                GRANTED_REACH,
+                AttributeModifier.Operation.ADDITION
+        ));
+        try {
+            double after = MeleeSwing.reach(maid, zombie);
+            helper.assertTrue(
+                    after >= before + GRANTED_REACH - 1.0E-6D,
+                    "给了她三格额外的够到距离，她算出来只有 " + after
+                            + "（原来 " + before + "）"
+            );
+            helper.assertTrue(
+                    MeleeSwing.standoff(maid, zombie) > stoodAt,
+                    "手长了三格，她站的位置还是 " + stoodAt + " 格"
+            );
+        } finally {
+            reach.removeModifier(A_LONGER_ARM);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * 锁着别人的敌人，不算在打她。
+     *
+     * <p>玩家报的是"她在远处徘徊、迟迟不敢接近"。远程敌人的够到距离就是它的索敌
+     * 范围，于是它在她感知半径内的任何位置都"已经够得到她"——一只在射牛的骷髅在
+     * 承伤账本里和一只正瞄着她的骷髅完全相同，而她据此把自己钉在远处。
+     *
+     * <p>算术那一侧在 {@code verifyCombatCrowdPricing} 里问过。这里问的是**真实
+     * 扫描器认不认得出这件事**：关系是从它自己的 {@code getTarget()} 读的，而那正是
+     * "广播敌人的目标"这件事已经存在的形式——缺的从来不是信息，是花掉它的地方。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void aFoeBusyWithSomebodyElseIsNotShootingHer(
+            GameTestHelper helper
+    ) {
+        CompanionScene scene = CompanionScene.room(helper, 11, 5);
+        EntityMaid maid = scene.maid(2, 2, 2);
+
+        Skeleton archer = EntityType.SKELETON.create(helper.getLevel());
+        archer.setPos(maid.getX() + 6.0D, maid.getY(), maid.getZ());
+        CompanionScene.placeInert(helper, archer);
+        Cow bystander = EntityType.COW.create(helper.getLevel());
+        bystander.setPos(archer.getX() + 1.0D, archer.getY(), archer.getZ());
+        CompanionScene.placeInert(helper, bystander);
+
+        // 先取控制臂：同一只骷髅瞄着她。不先取的话"折价成零"可能只是因为它
+        // 根本没被扫到，而那样这条测试什么也没说。
+        archer.setTarget(maid);
+        double atHer = incomingFrom(maid, archer, helper, "ATTACKING_MAID");
+        helper.assertTrue(
+                atHer > 0.0D,
+                "瞄着她的骷髅算出来的承伤是 " + atHer + "，夹具没成立"
+        );
+
+        archer.setTarget(bystander);
+        double atACow = incomingFrom(maid, archer, helper, "BUSY_ELSEWHERE");
+        helper.assertTrue(
+                atACow == 0.0D,
+                "它转去射牛了，她的承伤账本里仍然记着 " + atACow
+        );
+        helper.succeed();
+    }
+
+    /** 扫一遍，确认关系，返回这一刻的承伤。 */
+    private static double incomingFrom(
+            EntityMaid maid,
+            Skeleton archer,
+            GameTestHelper helper,
+            String wanted
+    ) {
+        // 每次都用新的扫描器：生产实例带 5 tick 缓存，同一 tick 内问两次会拿到
+        // 改目标之前的那一份。
+        List<ScannedThreat> seen = new TlmThreatScanner().scan(maid);
+        ThreatRelation relation = null;
+        for (ScannedThreat threat : seen) {
+            if (threat.entity() == archer) {
+                relation = threat.sample().relation();
+            }
+        }
+        helper.assertTrue(
+                relation != null,
+                "骷髅根本没进威胁清单，这条测试测不到任何东西"
+        );
+        helper.assertTrue(
+                wanted.equals(relation.name()),
+                "它锁着的东西被读成了 " + relation + "，而不是 " + wanted
+        );
+        return CombatProbe.field(maid, seen).incomingDps();
     }
 }

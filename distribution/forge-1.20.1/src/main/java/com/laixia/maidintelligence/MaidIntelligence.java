@@ -6,6 +6,7 @@ import com.laixia.maidintelligence.feature.ai.command.MaidAiCommands;
 import com.laixia.maidintelligence.feature.ai.forge.AiForgeInstaller;
 import com.laixia.maidintelligence.feature.ai.forge.AiServerConfig;
 import com.laixia.maidintelligence.feature.ai.handler.MaidRideAutonomyHandler;
+import com.laixia.maidintelligence.feature.ai.handler.MaidThreatMemoryHandler;
 import com.laixia.maidintelligence.feature.advancement.api.MaidStatisticsApi;
 import com.laixia.maidintelligence.feature.advancement.application.DefaultMaidStatisticsService;
 import com.laixia.maidintelligence.feature.advancement.bridge.HoneySlideHandler;
@@ -309,7 +310,8 @@ public final class MaidIntelligence {
                                 () -> BehaviorServerConfig.tuning()
                                         .diagnosticsEnabled()
                         )::onRegisterCommands,
-                        new MaidRideAutonomyHandler()
+                        new MaidRideAutonomyHandler(),
+                        new MaidThreatMemoryHandler()
                 ),
                 new BehaviorForgeInstaller(
                         behaviors.gazeRecallHandler()::onPlayerTick,

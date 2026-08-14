@@ -59,6 +59,9 @@ public final class CombatCrowdPricingVerification {
         verifiesACrowdDrawsSteelAtBowRange();
         verifiesAnArcBeatsWeightInACrowd();
         verifiesWalkingIntoACrowdIsNotFree();
+        verifiesSomethingShootingSomebodyElseIsNotShootingHer();
+        verifiesAnIdleOneStillCounts();
+        verifiesSheStillHasToKillIt();
         System.out.println("Combat crowd pricing verification passed.");
     }
 
@@ -130,6 +133,87 @@ public final class CombatCrowdPricingVerification {
                 COST.of(sword(IRON_SWORD), contextOf(front, swarmed))
                         > COST.of(sword(IRON_SWORD), contextOf(front, lonely)),
                 "身边多了两只够得着她的敌人，走过去砍同一个目标却一样便宜"
+        );
+    }
+
+    /**
+     * 在射别人的骷髅，不算在射她。
+     *
+     * <p>玩家报的是"她在远处徘徊、迟迟不敢接近"。远程敌人的够到距离就是它的索敌
+     * 范围，于是 {@code secondsToContact} 在感知半径内恒为零、
+     * {@code convergenceWeight} 恒为一——一只在射牛的骷髅在账本里和一只正瞄着她的
+     * 骷髅一模一样。近战身上这个漏洞不显眼，因为到达时钟本来就替她回答了"它是不是
+     * 冲我来的"；远程身上那个时钟不再区分任何东西，只剩"它锁的是谁"。
+     */
+    private static void verifiesSomethingShootingSomebodyElseIsNotShootingHer() {
+        ThreatField atHer = ThreatField.of(
+                List.of(archer(ThreatRelation.ATTACKING_MAID)), HER_REACH
+        );
+        ThreatField atACow = ThreatField.of(
+                List.of(archer(ThreatRelation.BUSY_ELSEWHERE)), HER_REACH
+        );
+        require(
+                atHer.incomingDps() > 0.0D && atHer.converging() == 1,
+                "夹具没造出'正在射她'，下面的对比测不到东西"
+        );
+        require(
+                atACow.incomingDps() == 0.0D,
+                "一只在射别人的骷髅仍然按满额算进她的承伤："
+                        + atACow.incomingDps()
+        );
+        require(
+                atACow.converging() == 0 && atACow.pressing() == 0,
+                "它被算成'此刻够得到她'，于是她会一直躲着一场不存在的火力"
+        );
+        require(
+                !Double.isFinite(atACow.soonestContact()),
+                "最快到达时间被它顶成了 " + atACow.soonestContact()
+                        + " 秒，而它根本没在往她这边看"
+        );
+        require(
+                atACow.heaviestBlow() == 0.0D,
+                "她按一记不会落在自己身上的箭去衡量'再挨一下活不活得成'"
+        );
+    }
+
+    /**
+     * 闲着的那一只照旧满额计入——这一条和上一条方向相反，缺了它就是把"忽略"
+     * 写成了"折价"。
+     *
+     * <p>原版索敌 goal 每十 tick 重扫一次，所以一只还没挑好目标的骷髅下一秒就会
+     * 发现她。把它和"锁着别人"一视同仁，等于让她大摇大摆走进五只闲着的骷髅中间。
+     */
+    private static void verifiesAnIdleOneStillCounts() {
+        ThreatField idle = ThreatField.of(
+                List.of(archer(ThreatRelation.UNENGAGED)), HER_REACH
+        );
+        require(
+                idle.incomingDps() > 0.0D && idle.converging() == 1,
+                "一只闲着的骷髅被当成了不存在"
+        );
+    }
+
+    /**
+     * 折的只是承伤，不是它的存在。
+     *
+     * <p>她照旧看得见它、照旧可以选它当目标、它的血照旧算进"这一群要打多久"。
+     * 否则"不必怕它"就变成了"打不着它"。
+     */
+    private static void verifiesSheStillHasToKillIt() {
+        ThreatField atACow = ThreatField.of(
+                List.of(archer(ThreatRelation.BUSY_ELSEWHERE)), HER_REACH
+        );
+        require(!atACow.isEmpty() && atACow.total() == 1, "它从清单里消失了");
+        require(
+                atACow.convergingHealth() > 0.0D,
+                "她不必打的东西和她打不到的东西被混为一谈了"
+        );
+    }
+
+    /** 骷髅：够到距离就是索敌范围，所以任何可见距离上都"已经够得到"。 */
+    private static ThreatSample archer(ThreatRelation relation) {
+        return new ThreatSample(
+                12.0D, 4.0D, 16.0D, 40, 20.0D, false, 0.0D, relation
         );
     }
 

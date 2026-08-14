@@ -214,7 +214,27 @@ public final class TlmThreatScanner {
         if (owner != null && owner.getLastHurtMob() == hostile) {
             return ThreatRelation.OWNER_TARGET;
         }
+        if (itsTarget != null && !ours(maid, itsTarget)) {
+            // 它已经锁定了别的东西。与"闲着"分开是这一档存在的全部理由，见
+            // ThreatRelation.BUSY_ELSEWHERE——对承伤定价而言两者恰好相反。
+            return ThreatRelation.BUSY_ELSEWHERE;
+        }
         return ThreatRelation.UNENGAGED;
+    }
+
+    /**
+     * 这个被盯上的家伙算不算"我们这边的人"。
+     *
+     * <p>同一个主人的另一个女仆算。她们是同一支队伍，一只正在打她姐妹的东西
+     * 已经卷进了这一场，不该被当成旁观者折价掉。
+     */
+    private static boolean ours(EntityMaid maid, LivingEntity victim) {
+        if (victim == maid || victim == maid.getOwner()) {
+            return true;
+        }
+        return victim instanceof EntityMaid sister
+                && sister.getOwnerUUID() != null
+                && sister.getOwnerUUID().equals(maid.getOwnerUUID());
     }
 
     /**
