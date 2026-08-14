@@ -97,6 +97,16 @@ public final class OwnerFactIds {
     public static final OrchestrationId SPEED =
             id("fact/owner_speed");
 
+    /**
+     * 他在赶路，而不是这一 tick 恰好在动。
+     *
+     * <p>与 {@link #SPEED} 是两件事，缺一不可：瞬时速度分不开"放方块时挪了半格"
+     * 和"他真的要走了"，而跟随该问的正是后者。判据带回差，见
+     * {@code OwnerTravelWatch}。
+     */
+    public static final OrchestrationId ON_THE_MOVE =
+            id("fact/owner_on_the_move");
+
     // What is acting on him. Counts, not fractions.
 
     public static final OrchestrationId HARMFUL_EFFECT_COUNT =
@@ -139,7 +149,8 @@ public final class OwnerFactIds {
                 SPRINTING,
                 RIDING,
                 SLEEPING,
-                FLYING
+                FLYING,
+                ON_THE_MOVE
         }) {
             facts.put(flag, FactType.BOOLEAN);
         }

@@ -1,5 +1,10 @@
-package com.laixia.maidintelligence.feature.orchestration.tlm.errand;
+package com.laixia.maidintelligence.feature.orchestration.tlm.errand.needs;
 
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand
+        .ApproachTarget;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand
+        .ContainerSlotApproachTarget;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.Errand;
 import com.github.tartaricacid.touhoulittlemaid.entity.item.EntityChair;
 import com.github.tartaricacid.touhoulittlemaid.entity.item.EntitySit;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;

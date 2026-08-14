@@ -44,8 +44,39 @@ public interface Errand {
      * The best thing to go to right now, or null if there is nothing worth
      * going to. Called every tick, so it must be cheap and must not reserve
      * anything itself.
+     *
+     * <p><b>And it must keep answering the same thing while she is on her
+     * way.</b> {@link ApproachAndCommitAction} re-derives the target every tick
+     * and compares {@link ApproachTarget#identity()} against the one she set
+     * out for; a different identity is read as "the errand changed its mind",
+     * so the walk target is erased and rewritten. Every errand here derives its
+     * target from the world — an owner, a home, the nearest cabinet — and gets
+     * that stability for free, which is why the requirement went unwritten
+     * until an errand that <em>chose</em> its destination at random broke it.
+     * She re-rolled a destination every tick and walked a block in a new
+     * direction each time.
+     *
+     * <p>So an errand that picks rather than derives has to remember its pick.
+     * The natural place to forget it again is {@link #commit}, which is called
+     * exactly when the errand has finished with that target.
      */
     ApproachTarget find(EntityMaid maid, long gameTime);
+
+    /**
+     * 这一趟走多快，相对计划里写的速度的倍率。
+     *
+     * <p>默认 1.0——照计划走。存在的理由是计划参数是**每个动作一个常数**，而有些
+     * 差事的"多快"该按趟变：一段恒定速度的散步和恒定长度的停顿一样，一眼看得出
+     * 是机器。
+     *
+     * <p>倍率而不是绝对速度：计划里那个数仍然是唯一的标称值，服务器改它照样有效，
+     * 而这里只表达"这一趟相对它快一点还是慢一点"。
+     *
+     * <p>与目标一样，它在一趟之内必须稳定——每 tick 重掷会让她走走停停地抽搐。
+     */
+    default double paceFactor(EntityMaid maid) {
+        return 1.0D;
+    }
 
     /**
      * Do the thing, now that she is there and holds the claim.

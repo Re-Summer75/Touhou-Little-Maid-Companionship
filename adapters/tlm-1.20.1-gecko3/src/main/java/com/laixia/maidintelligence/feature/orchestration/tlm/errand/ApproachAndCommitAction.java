@@ -94,7 +94,12 @@ public final class ApproachAndCommitAction {
                 0.1F,
                 2.0F
         );
-        return walk(maid, held, target, speed, closeEnough);
+        // 计划里那个数是标称值，差事可以按趟给一个倍率——散步用它把恒定速度打散。
+        // 夹在同一组上下限里，所以倍率再离谱也走不出计划允许的范围。
+        float paced = (float) Math.max(
+                0.1D, Math.min(2.0D, speed * errand.paceFactor(maid))
+        );
+        return walk(maid, held, target, paced, closeEnough);
     }
 
     /**

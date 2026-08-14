@@ -28,6 +28,7 @@ import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.S
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.sustenance.CombatAppetite;
 import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.phys.Vec3;
 
@@ -356,19 +357,20 @@ public final class TlmCombatAction {
 
     /** Drop everything this action owns; the orchestrator may resume later. */
     public void cancel(EntityMaid maid) {
-        maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);
         releaseHands(maid);
         CombatMovement.clear(maid);
     }
 
     /**
-     * Let go of whatever her hands are holding open, and nothing else.
+     * Let go of everything the world will not let go of for her.
      *
      * <p>Split from {@link #cancel} because the two are asked at different
      * moments. The fight calls {@code cancel} when it is genuinely over and can
-     * safely tear down everything; the orchestrator calls this when the step it
-     * is running has merely timed out, which during a long fight is a clock
-     * expiring rather than a fight ending.
+     * safely tear down everything, movement included; the orchestrator calls
+     * this when the step it is running has merely timed out, which during a
+     * long fight is a clock expiring rather than a fight ending. What is left
+     * here is exactly the state that survives on its own and would otherwise
+     * survive forever.
      *
      * <p>Tearing down movement there is measurably wrong: the retreat she is
      * halfway through is erased, re-issued, erased again, and she spends half
@@ -386,6 +388,35 @@ public final class TlmCombatAction {
             maid.stopUsingItem();
         }
         maid.setSwingingArms(false);
+        forgetADeadTarget(maid);
+    }
+
+    /**
+     * 指着一具尸体的攻击目标，扔掉。
+     *
+     * <p>自由模式没有宿主行为，**没有任何东西会替她清 {@code ATTACK_TARGET}**——
+     * 原版那个"目标无效就停手"的行为不在 {@code FreedomBrain} 的保留清单里。而每一件
+     * 差事的资格判据都要求这条记忆是空的（见 {@code ApproachAndCommitAction.eligible}），
+     * 于是她把东西打死、意图随后被取消之后，那条记忆永远留着，她此后什么都做不了：
+     * 不跟随、不吃饭、不回家、不落座，站到主人右键她为止。玩家报的"战斗完有概率
+     * 什么任务都无法执行"就是这个。
+     *
+     * <p><b>只扔死的那一个。</b>第一版在这里无条件清目标，两个基准同时变差：僵尸局
+     * 从"六只全杀"退到剩一两只，卫道士局从 2/4 存活退到 0/4。原因是这条路径在编排器
+     * 每次取消时都会走到——一场仗里的步骤超时是钟走完了，不是仗打完了——而清掉活着
+     * 的目标会打断本体的挥击路由。**活着的目标是这一仗的一部分，不归收尾管。**
+     *
+     * <p>而死锁那一侧不需要它：报出来的处境是"打完之后"，那时目标已经是尸体。仗还
+     * 没完时目标活着，威胁压力也还在，战斗意图会照旧被选中——那不是"她什么都做不了"，
+     * 那就是她在打。
+     */
+    private static void forgetADeadTarget(EntityMaid maid) {
+        LivingEntity target = maid.getTarget();
+        if (target != null && target.isAlive() && !target.isRemoved()) {
+            return;
+        }
+        maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);
+        maid.setTarget(null);
     }
 
     private ActionResult finish(EntityMaid maid) {

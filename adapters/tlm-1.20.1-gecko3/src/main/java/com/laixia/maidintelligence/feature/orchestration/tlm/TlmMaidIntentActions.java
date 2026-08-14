@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.feature.orchestration.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.api.MaidAbilityApi;
+import com.laixia.maidintelligence.feature.behavior.domain.CompanionBand;
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionIntentIds;
 import com.laixia.maidintelligence.feature.orchestration.domain.ActionResult;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
@@ -11,20 +12,26 @@ import com.laixia.maidintelligence.feature.status.api.MaidStatusApi;
 import com.laixia.maidintelligence.feature.status.tlm.MaidMealAccess;
 import com.laixia.maidintelligence.feature.status.tlm.MaidSnackCabinetMealSource;
 
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.RangedWeaponRecognizer;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.TlmCombatAction;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmAlertness;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.TlmThreatScanner;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.sustenance.EatFromPackAction;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.ApproachAndCommitAction;
-import com.laixia.maidintelligence.feature.orchestration.tlm.errand.LooseFoodErrand;
-import com.laixia.maidintelligence.feature.orchestration.tlm.errand.CabinetMealErrand;
-import com.laixia.maidintelligence.feature.orchestration.tlm.errand.MaintainProximityErrand;
-import com.laixia.maidintelligence.feature.orchestration.tlm.errand.KeepCompanyErrand;
-import com.laixia.maidintelligence.feature.orchestration.tlm.errand.RestOnSeatErrand;
-import com.laixia.maidintelligence.feature.orchestration.tlm.errand.JoyBlockErrand;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.needs.LooseFoodErrand;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.needs.CabinetMealErrand;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.company.FollowOwnerErrand;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.leisure.LingerNearOwnerErrand;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.needs.ReturnHomeErrand;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.company.KeepCompanyErrand;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.leisure.RestOnSeatErrand;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.leisure.JoyBlockErrand;
 
 /**
  * The sole dispatcher allowed to apply data-driven companion side effects.
@@ -39,9 +46,11 @@ public final class TlmMaidIntentActions
     private final ApproachAndCommitAction restOnSeatAction;
     private final ApproachAndCommitAction joyBlockAction;
     private final ApproachAndCommitAction keepCompanyAction;
+    private final ApproachAndCommitAction lingerNearOwnerAction;
     private final TlmDeployBoatIntentAction deployBoatAction;
     private final TlmCombatAction combatAction;
     private final EatFromPackAction eatFromPackAction;
+    private final Map<OrchestrationId, IntentActionHandler> handlers;
 
     public TlmMaidIntentActions(
             Consumer<EntityMaid> hungerRequestAction
@@ -101,10 +110,10 @@ public final class TlmMaidIntentActions
         // Built from the meal source's own perception and feeding, so both
         // ways of eating agree on what is edible and what is in reach.
         followOwnerAction = new ApproachAndCommitAction(
-                MaintainProximityErrand.followingOwner()
+                FollowOwnerErrand.create()
         );
         returnHomeAction = new ApproachAndCommitAction(
-                MaintainProximityErrand.returningHome()
+                ReturnHomeErrand.create()
         );
         restOnSeatAction = new ApproachAndCommitAction(
                 new RestOnSeatErrand(snackCabinetMeals.perception())
@@ -115,6 +124,9 @@ public final class TlmMaidIntentActions
         keepCompanyAction = new ApproachAndCommitAction(
                 new KeepCompanyErrand(snackCabinetMeals.perception())
         );
+        lingerNearOwnerAction = new ApproachAndCommitAction(
+                LingerNearOwnerErrand.create()
+        );
         looseFoodAction = new ApproachAndCommitAction(
                 new LooseFoodErrand(
                         snackCabinetMeals.perception(),
@@ -124,6 +136,281 @@ public final class TlmMaidIntentActions
         deployBoatAction = abilities == null
                 ? null
                 : new TlmDeployBoatIntentAction(abilities);
+        handlers = register();
+        requireEveryActionHandled(handlers);
+    }
+
+    /**
+     * 建表：每个动作一处登记，三个时刻一起交出去。
+     *
+     * <p>差事那八条走同一个适配器，所以"取消"和"复验"不可能被漏掉——它们不是
+     * 各自写一遍，是同一段代码。
+     */
+    private Map<OrchestrationId, IntentActionHandler> register() {
+        Map<OrchestrationId, IntentActionHandler> table =
+                new LinkedHashMap<>();
+        table.put(CompanionIntentIds.FETCH_SNACK_CABINET_MEAL,
+                errand(CompanionBand.NEEDS, snackCabinetAction));
+        table.put(CompanionIntentIds.PICK_UP_LOOSE_FOOD,
+                errand(CompanionBand.NEEDS, looseFoodAction));
+        table.put(CompanionIntentIds.FOLLOW_OWNER_ANCHOR,
+                errand(CompanionBand.COMPANIONSHIP, followOwnerAction));
+        table.put(CompanionIntentIds.RETURN_HOME_ANCHOR,
+                errand(CompanionBand.NEEDS, returnHomeAction));
+        table.put(CompanionIntentIds.REST_ON_SEAT, errand(CompanionBand.LEISURE, restOnSeatAction));
+        table.put(CompanionIntentIds.USE_JOY_BLOCK, errand(CompanionBand.LEISURE, joyBlockAction));
+        table.put(CompanionIntentIds.KEEP_COMPANY, errand(CompanionBand.COMPANIONSHIP, keepCompanyAction));
+        table.put(CompanionIntentIds.LINGER_NEAR_OWNER,
+                errand(CompanionBand.LEISURE, lingerNearOwnerAction));
+
+        table.put(CompanionIntentIds.ENGAGE_THREAT, new IntentActionHandler() {
+            @Override
+            public CompanionBand band() {
+                return CompanionBand.SAFETY;
+            }
+
+            @Override
+            public ActionResult execute(
+                    EntityMaid maid,
+                    Map<String, String> parameters,
+                    long gameTime,
+                    int elapsedTicks
+            ) {
+                return combatAction.execute(maid);
+            }
+
+            @Override
+            public void cancel(
+                    EntityMaid maid, Map<String, String> parameters
+            ) {
+                // 只放手上的东西和攻击目标，**不拆移动**：一场仗中途超时抹掉她
+                // 走了一半的撤退是量出来更糟的（两百 tick 里九十二 tick 站着
+                // 不动）。完整收尾归战斗自己，它在仗真的结束时做。
+                combatAction.releaseHands(maid);
+            }
+        });
+
+        table.put(CompanionIntentIds.EAT_FROM_PACK, new IntentActionHandler() {
+            @Override
+            public CompanionBand band() {
+                return CompanionBand.NEEDS;
+            }
+
+            @Override
+            public ActionResult execute(
+                    EntityMaid maid,
+                    Map<String, String> parameters,
+                    long gameTime,
+                    int elapsedTicks
+            ) {
+                return eatFromPackAction.execute(maid);
+            }
+
+            @Override
+            public void cancel(
+                    EntityMaid maid, Map<String, String> parameters
+            ) {
+                eatFromPackAction.cancel(maid);
+            }
+        });
+
+        table.put(CompanionIntentIds.APPROACH_OWNER, new IntentActionHandler() {
+            @Override
+            public CompanionBand band() {
+                return CompanionBand.OWNER_COMMAND;
+            }
+
+            @Override
+            public ActionResult execute(
+                    EntityMaid maid,
+                    Map<String, String> parameters,
+                    long gameTime,
+                    int elapsedTicks
+            ) {
+                return ownerAction.approach(maid, parameters, gameTime);
+            }
+
+            @Override
+            public void cancel(
+                    EntityMaid maid, Map<String, String> parameters
+            ) {
+                ownerAction.cancelApproach(maid, parameters);
+            }
+
+            @Override
+            public boolean revalidate(
+                    EntityMaid maid,
+                    Map<String, String> parameters,
+                    long gameTime
+            ) {
+                return ownerAction.revalidateMovement(
+                        maid, parameters, gameTime
+                );
+            }
+        });
+
+        table.put(
+                CompanionIntentIds.COMPANION_COMMAND_WINDOW,
+                new IntentActionHandler() {
+                    @Override
+                    public CompanionBand band() {
+                        return CompanionBand.OWNER_COMMAND;
+                    }
+
+                    @Override
+                    public ActionResult execute(
+                            EntityMaid maid,
+                            Map<String, String> parameters,
+                            long gameTime,
+                            int elapsedTicks
+                    ) {
+                        return ownerAction.commandWindow(
+                                maid, parameters, gameTime, elapsedTicks
+                        );
+                    }
+
+                    @Override
+                    public void cancel(
+                            EntityMaid maid, Map<String, String> parameters
+                    ) {
+                        ownerAction.cancelCommandWindow(maid);
+                    }
+
+                    @Override
+                    public boolean revalidate(
+                            EntityMaid maid,
+                            Map<String, String> parameters,
+                            long gameTime
+                    ) {
+                        return ownerAction.revalidateMovement(
+                                maid, parameters, gameTime
+                        );
+                    }
+                }
+        );
+
+        table.put(
+                CompanionIntentIds.REQUEST_HUNGER_ATTENTION,
+                new IntentActionHandler() {
+                    @Override
+                    public CompanionBand band() {
+                        return CompanionBand.NEEDS;
+                    }
+
+                    @Override
+                    public ActionResult execute(
+                            EntityMaid maid,
+                            Map<String, String> parameters,
+                            long gameTime,
+                            int elapsedTicks
+                    ) {
+                        return ownerAction.requestHungerAttention(maid);
+                    }
+
+                    @Override
+                    public boolean revalidate(
+                            EntityMaid maid,
+                            Map<String, String> parameters,
+                            long gameTime
+                    ) {
+                        return ownerAction.revalidateHungerRequest(maid);
+                    }
+                }
+        );
+
+        // 没有能力接口时也登记，返回失败即可。少登记一个会让完整性检查失去意义，
+        // 而"这一局没装这个功能"和"有人忘了接线"必须是两种不同的东西。
+        table.put(CompanionIntentIds.DEPLOY_BOAT, new IntentActionHandler() {
+            @Override
+            public CompanionBand band() {
+                return CompanionBand.OWNER_COMMAND;
+            }
+
+            @Override
+            public ActionResult execute(
+                    EntityMaid maid,
+                    Map<String, String> parameters,
+                    long gameTime,
+                    int elapsedTicks
+            ) {
+                return deployBoatAction == null
+                        ? ActionResult.FAILED
+                        : deployBoatAction.execute(maid, parameters, gameTime);
+            }
+
+            @Override
+            public boolean revalidate(
+                    EntityMaid maid,
+                    Map<String, String> parameters,
+                    long gameTime
+            ) {
+                return deployBoatAction != null
+                        && deployBoatAction.revalidate(
+                                maid, parameters, gameTime
+                        );
+            }
+        });
+        return table;
+    }
+
+    /** 差事的三个时刻都由骨架回答，所以它们只需要交出去一次。 */
+    private static IntentActionHandler errand(
+            CompanionBand band,
+            ApproachAndCommitAction action
+    ) {
+        return new IntentActionHandler() {
+            @Override
+            public CompanionBand band() {
+                return band;
+            }
+
+            @Override
+            public ActionResult execute(
+                    EntityMaid maid,
+                    Map<String, String> parameters,
+                    long gameTime,
+                    int elapsedTicks
+            ) {
+                return action.execute(maid, parameters, gameTime);
+            }
+
+            @Override
+            public void cancel(
+                    EntityMaid maid, Map<String, String> parameters
+            ) {
+                action.cancel(maid);
+            }
+
+            @Override
+            public boolean revalidate(
+                    EntityMaid maid,
+                    Map<String, String> parameters,
+                    long gameTime
+            ) {
+                return action.revalidate(maid, gameTime);
+            }
+        };
+    }
+
+    /**
+     * 词表里的每一个动作都必须有人接。
+     *
+     * <p>此前漏接一个动作的表现是它静默失败——引擎照常选中它、照常报"执行失败"，
+     * 而失败在这套系统里是**正常结果**（没有空座位、认领被抢走），所以没有任何人
+     * 会注意到。现在漏接的是启动时就说话的错误。
+     */
+    private static void requireEveryActionHandled(
+            Map<OrchestrationId, IntentActionHandler> table
+    ) {
+        Set<OrchestrationId> missing = new LinkedHashSet<>(
+                CompanionIntentIds.vocabulary().actions()
+        );
+        missing.removeAll(table.keySet());
+        if (!missing.isEmpty()) {
+            throw new IllegalStateException(
+                    "Companion actions with no handler: " + missing
+            );
+        }
     }
 
     @Override
@@ -134,62 +421,16 @@ public final class TlmMaidIntentActions
             long gameTime,
             int elapsedTicks
     ) {
-        if (action.equals(CompanionIntentIds.ENGAGE_THREAT)) {
-            return combatAction.execute(maid);
+        IntentActionHandler handler = handlers.get(action);
+        if (handler == null) {
+            return ActionResult.FAILED;
         }
-        if (action.equals(CompanionIntentIds.APPROACH_OWNER)) {
-            return ownerAction.approach(maid, parameters, gameTime);
+        // 许可矩阵，问在唯一一处每个动作都必经的地方。放在这里而不是各个动作里，
+        // 是因为"这一类事现在能不能做"只有一个答案，而散着问必然会散着答。
+        if (!TlmAlertness.of(maid).permits(handler.band())) {
+            return ActionResult.FAILED;
         }
-        if (action.equals(
-                CompanionIntentIds.FETCH_SNACK_CABINET_MEAL
-        )) {
-            return snackCabinetAction.execute(
-                    maid,
-                    parameters,
-                    gameTime
-            );
-        }
-        if (action.equals(CompanionIntentIds.EAT_FROM_PACK)) {
-            return eatFromPackAction.execute(maid);
-        }
-        if (action.equals(CompanionIntentIds.PICK_UP_LOOSE_FOOD)) {
-            return looseFoodAction.execute(maid, parameters, gameTime);
-        }
-        if (action.equals(CompanionIntentIds.FOLLOW_OWNER_ANCHOR)) {
-            return followOwnerAction.execute(maid, parameters, gameTime);
-        }
-        if (action.equals(CompanionIntentIds.RETURN_HOME_ANCHOR)) {
-            return returnHomeAction.execute(maid, parameters, gameTime);
-        }
-        if (action.equals(CompanionIntentIds.REST_ON_SEAT)) {
-            return restOnSeatAction.execute(maid, parameters, gameTime);
-        }
-        if (action.equals(CompanionIntentIds.USE_JOY_BLOCK)) {
-            return joyBlockAction.execute(maid, parameters, gameTime);
-        }
-        if (action.equals(CompanionIntentIds.KEEP_COMPANY)) {
-            return keepCompanyAction.execute(maid, parameters, gameTime);
-        }
-        if (action.equals(
-                CompanionIntentIds.COMPANION_COMMAND_WINDOW
-        )) {
-            return ownerAction.commandWindow(
-                    maid,
-                    parameters,
-                    gameTime,
-                    elapsedTicks
-            );
-        }
-        if (action.equals(
-                CompanionIntentIds.REQUEST_HUNGER_ATTENTION
-        )) {
-            return ownerAction.requestHungerAttention(maid);
-        }
-        if (action.equals(CompanionIntentIds.DEPLOY_BOAT)
-                && deployBoatAction != null) {
-            return deployBoatAction.execute(maid, parameters, gameTime);
-        }
-        return ActionResult.FAILED;
+        return handler.execute(maid, parameters, gameTime, elapsedTicks);
     }
 
     @Override
@@ -198,42 +439,9 @@ public final class TlmMaidIntentActions
             OrchestrationId action,
             Map<String, String> parameters
     ) {
-        if (action.equals(CompanionIntentIds.ENGAGE_THREAT)) {
-            // Her hands, and deliberately not the rest of the fight. Nothing in
-            // the world clears a use state — only letting go does — so an
-            // archer whose fight ended between two ticks stayed at full draw
-            // for good, aiming at nothing. That is what this call is for.
-            //
-            // The full teardown belongs to the fight itself, which performs it
-            // when the fight is actually over. This hook fires when a step times
-            // out, and a step timing out during a long fight is a clock running
-            // down, not a fight ending: erasing her retreat there costs her
-            // ninety-two motionless ticks out of two hundred.
-            combatAction.releaseHands(maid);
-        } else if (action.equals(CompanionIntentIds.APPROACH_OWNER)) {
-            ownerAction.cancelApproach(maid, parameters);
-        } else if (action.equals(
-                CompanionIntentIds.FETCH_SNACK_CABINET_MEAL
-        )) {
-            snackCabinetAction.cancel(maid);
-        } else if (action.equals(CompanionIntentIds.EAT_FROM_PACK)) {
-            eatFromPackAction.cancel(maid);
-        } else if (action.equals(CompanionIntentIds.PICK_UP_LOOSE_FOOD)) {
-            looseFoodAction.cancel(maid);
-        } else if (action.equals(CompanionIntentIds.FOLLOW_OWNER_ANCHOR)) {
-            followOwnerAction.cancel(maid);
-        } else if (action.equals(CompanionIntentIds.RETURN_HOME_ANCHOR)) {
-            returnHomeAction.cancel(maid);
-        } else if (action.equals(CompanionIntentIds.REST_ON_SEAT)) {
-            restOnSeatAction.cancel(maid);
-        } else if (action.equals(CompanionIntentIds.USE_JOY_BLOCK)) {
-            joyBlockAction.cancel(maid);
-        } else if (action.equals(CompanionIntentIds.KEEP_COMPANY)) {
-            keepCompanyAction.cancel(maid);
-        } else if (action.equals(
-                CompanionIntentIds.COMPANION_COMMAND_WINDOW
-        )) {
-            ownerAction.cancelCommandWindow(maid);
+        IntentActionHandler handler = handlers.get(action);
+        if (handler != null) {
+            handler.cancel(maid, parameters);
         }
     }
 
@@ -244,52 +452,8 @@ public final class TlmMaidIntentActions
             Map<String, String> parameters,
             long gameTime
     ) {
-        if (action.equals(
-                CompanionIntentIds.FETCH_SNACK_CABINET_MEAL
-        )) {
-            return snackCabinetAction.revalidate(maid, gameTime);
-        }
-        if (action.equals(CompanionIntentIds.PICK_UP_LOOSE_FOOD)) {
-            return looseFoodAction.revalidate(maid, gameTime);
-        }
-        if (action.equals(CompanionIntentIds.FOLLOW_OWNER_ANCHOR)) {
-            return followOwnerAction.revalidate(maid, gameTime);
-        }
-        if (action.equals(CompanionIntentIds.RETURN_HOME_ANCHOR)) {
-            return returnHomeAction.revalidate(maid, gameTime);
-        }
-        if (action.equals(CompanionIntentIds.REST_ON_SEAT)) {
-            return restOnSeatAction.revalidate(maid, gameTime);
-        }
-        if (action.equals(CompanionIntentIds.USE_JOY_BLOCK)) {
-            return joyBlockAction.revalidate(maid, gameTime);
-        }
-        if (action.equals(CompanionIntentIds.KEEP_COMPANY)) {
-            return keepCompanyAction.revalidate(maid, gameTime);
-        }
-        if (action.equals(CompanionIntentIds.APPROACH_OWNER)
-                || action.equals(
-                CompanionIntentIds.COMPANION_COMMAND_WINDOW
-        )) {
-            return ownerAction.revalidateMovement(
-                    maid,
-                    parameters,
-                    gameTime
-            );
-        }
-        if (action.equals(
-                CompanionIntentIds.REQUEST_HUNGER_ATTENTION
-        )) {
-            return ownerAction.revalidateHungerRequest(maid);
-        }
-        if (action.equals(CompanionIntentIds.DEPLOY_BOAT)
-                && deployBoatAction != null) {
-            return deployBoatAction.revalidate(
-                    maid,
-                    parameters,
-                    gameTime
-            );
-        }
-        return false;
+        IntentActionHandler handler = handlers.get(action);
+        return handler != null
+                && handler.revalidate(maid, parameters, gameTime);
     }
 }

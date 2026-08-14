@@ -98,6 +98,14 @@ public final class CompanionIntentIds {
     /** Drift over and be near her owner for its own sake. */
     public static final OrchestrationId KEEP_COMPANY =
             id("action/keep_company");
+    /**
+     * 主人停下来的时候，在他附近晃一晃——有时候晃回他身边。
+     *
+     * <p>与 {@link #KEEP_COMPANY} 的差别是方向：那一条把离得远的她带回来，这一条
+     * 让已经在他身边的她别像一件家具那样钉着。
+     */
+    public static final OrchestrationId LINGER_NEAR_OWNER =
+            id("action/linger_near_owner");
     /** Walk to a dropped item and take it, rather than opening anything. */
     public static final OrchestrationId PICK_UP_LOOSE_FOOD =
             id("action/pick_up_loose_food");
@@ -194,6 +202,7 @@ public final class CompanionIntentIds {
                         REST_ON_SEAT,
                         USE_JOY_BLOCK,
                         KEEP_COMPANY,
+                        LINGER_NEAR_OWNER,
                         COMPANION_COMMAND_WINDOW,
                         REQUEST_HUNGER_ATTENTION,
                         DEPLOY_BOAT,
@@ -350,6 +359,19 @@ public final class CompanionIntentIds {
                                 KEEP_COMPANY,
                                 new ActionSchema(
                                         KEEP_COMPANY,
+                                        Map.of(
+                                                "speed",
+                                                ActionParameterType.NUMBER,
+                                                "close_distance",
+                                                ActionParameterType.INTEGER
+                                        ),
+                                        Set.of()
+                                )
+                        ),
+                        Map.entry(
+                                LINGER_NEAR_OWNER,
+                                new ActionSchema(
+                                        LINGER_NEAR_OWNER,
                                         Map.of(
                                                 "speed",
                                                 ActionParameterType.NUMBER,

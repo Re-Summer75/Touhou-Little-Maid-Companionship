@@ -64,6 +64,41 @@ public enum CompanionAlertness {
         return this == CALM;
     }
 
+    /**
+     * 这一档处境下，这一类事情还能不能做。
+     *
+     * <p>**许可矩阵就是这一个方法。**在它出现之前，同一个问题在四个地方各答一遍：
+     * 差事骨架里的原始记忆检查、三条进食意图 JSON 里的敌情条件、{@code
+     * hostile_pressure}、以及本枚举那三个没有生产消费者的谓词。四份判据不可能长期
+     * 一致，而不一致的表现是"某一类行为在某种处境下偶尔还会发生"，没有人看得出来。
+     *
+     * <p>它只**收回**选项，不挑动作。挑动作永远是意图引擎的事——任何会设置状态并
+     * 据此选择行为的东西都是第二个调度器。
+     *
+     * <table>
+     *   <caption>处境 × 类别</caption>
+     *   <tr><th></th><th>安全</th><th>主人命令</th><th>生存</th><th>陪伴</th>
+     *       <th>自娱</th></tr>
+     *   <tr><td>平静</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+     *   <tr><td>警戒</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✗</td></tr>
+     *   <tr><td>危险</td><td>✓</td><td>✓</td><td>✗</td><td>✗</td><td>✗</td></tr>
+     *   <tr><td>交战</td><td>✓</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td></tr>
+     * </table>
+     */
+    public boolean permits(CompanionBand band) {
+        if (band == null) {
+            // 认不出的类别一律不许。数据包写了新的优先级数字时，该由闸门拒绝并
+            // 说出来，而不是在这里被静默放行。
+            return false;
+        }
+        return switch (band) {
+            case SAFETY -> true;
+            case OWNER_COMMAND -> this != FIGHTING;
+            case NEEDS, COMPANIONSHIP -> allowsErrands();
+            case LEISURE -> allowsLeisure();
+        };
+    }
+
     /** Whether her hands need to stay free for a weapon. */
     public boolean needsHandsFree() {
         return atLeast(THREATENED);

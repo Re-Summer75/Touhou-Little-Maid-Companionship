@@ -101,6 +101,14 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
 - `MaidSeatAutonomyBridge`：自由模式下因跟随需要自主下乘，入口统一在 `canLeaveSeatState`
   上判模式。
 
+### 行为规范
+
+自由模式是故意做成的白板，将来要往上加本模组自己的工作与休闲。新增行为必须回答的问题、
+三根不许合并的轴（处境／占用／类别）、许可矩阵、以及"派生优先于存储"这条状态规则，
+统一写在[行为规范](behavior-spec.md)。**每一条都要指得出钉住它的那道闸**——指不出来的
+条款在那一页里标为待办，因为已经有过一个反例：处境四档模型文档完整、验证齐全，而生产
+代码里一个调用都没有。
+
 ### 感知半径是行为的地基
 
 - `PerceptionRange`（`:features:ai:behavior`）是唯一的感知距离来源，值为 **16 格**。
@@ -223,9 +231,9 @@ installer 基础设施。新增版本不得复制 `kernel`、`shared` 或 `featu
   掉"椅子也是 LivingEntity"与"女仆坐在掉落物上"两类错误。
 - 内置目录定义 `gaze_recall`、`hungry_feedback`、`hungry_standard`、
   `hungry_high_trust`、`snack_cabinet_meal`、
-  `anticipate_departure`、`loose_food_meal`、`return_home`、
-  `rest_on_seat`、`keep_company`、`enjoy_pastime` 等意图与对应计划；优先级编码语义
-  （回家 50 > 跟随 40 > 陪伴 30 > 消遣 12 > 落座 10，地面食物 65 > 零食柜 60）。
+  `escort_owner`、`linger_near_owner`、`loose_food_meal`、`return_home`、
+  `rest_on_seat`、`keep_company`、`enjoy_pastime` 等意图与对应计划；优先级归入五个
+  band（安全 100、主人命令 80、生存 50、陪伴 30、自娱 10），band 内由分数排序。
   意图数据验证按目录自动发现计划，不维护手工清单。
 - 娱乐方块（书架、棋盘、电脑）在自由模式下由 `enjoy_pastime` 决定，
   `MaidJoyTaskMovementCoordinationMixin` 令本体 `MaidJoyTask` 在该模式下让位；

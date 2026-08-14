@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.feature.orchestration.tlm.context;
 
 import com.laixia.maidintelligence.feature.behavior.domain.owner.OwnerFacts;
+import com.laixia.maidintelligence.feature.behavior.domain.owner.OwnerTravelWatch;
 import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.LivingEntity;
@@ -71,6 +72,9 @@ public final class TlmOwnerFactReader {
         ItemStack off = owner.getOffhandItem();
         Player player = owner instanceof Player casted ? casted : null;
         refreshInventory(player, gameTime, entry);
+        // 先量，再读。"他在赶路"是这一次测速的副产物，写在参数表里就要靠参数
+        // 求值顺序才对——那种依赖挪一行就会坏，而且坏得没有声音。
+        double groundSpeed = speed(owner, gameTime, entry);
         return new OwnerFacts(
                 flag(isFood(owner, main) || isFood(owner, off)),
                 foodQuality(owner, main, off),
@@ -95,7 +99,8 @@ public final class TlmOwnerFactReader {
                 flag(owner.isSleeping()),
                 flag(owner.isFallFlying()
                         || (player != null && player.getAbilities().flying)),
-                speed(owner, gameTime, entry),
+                groundSpeed,
+                entry.travel.flag(),
                 effectCount(owner, MobEffectCategory.HARMFUL),
                 effectCount(owner, MobEffectCategory.BENEFICIAL),
                 entry.inventoryFood,
@@ -118,14 +123,21 @@ public final class TlmOwnerFactReader {
         double z = owner.getZ();
         long elapsed = gameTime - entry.positionTick;
         double result = 0.0D;
-        if (entry.positionTick != Long.MIN_VALUE
+        boolean measured = entry.positionTick != Long.MIN_VALUE
                 && elapsed > 0L
-                && elapsed <= 20L) {
+                && elapsed <= 20L;
+        if (measured) {
             double dx = x - entry.lastX;
             double dz = z - entry.lastZ;
             double perTick = Math.sqrt(dx * dx + dz * dz) / elapsed;
             result = Math.min(1.0D, perTick / SPRINT_SPEED);
         }
+        // 同一次位移量出两件事。"他在赶路"必须在这里推进而不是在读事实的地方，
+        // 因为那个判据按**经过的 tick** 累加，而只有这里知道过了多久——两次读数
+        // 隔得太远时位移不再是"他走了多少"，那种时候从头数。
+        entry.travel = measured
+                ? entry.travel.advance(result, elapsed)
+                : entry.travel.lost();
         entry.lastX = x;
         entry.lastZ = z;
         entry.positionTick = gameTime;
@@ -241,5 +253,6 @@ public final class TlmOwnerFactReader {
         private long inventoryTick = Long.MIN_VALUE;
         private double inventoryFood = Double.NaN;
         private double inventoryFullness = Double.NaN;
+        private OwnerTravelWatch travel = OwnerTravelWatch.UNSEEN;
     }
 }

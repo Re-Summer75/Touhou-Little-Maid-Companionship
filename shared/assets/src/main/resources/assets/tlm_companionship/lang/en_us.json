@@ -34,7 +34,8 @@
   "gui.tlm_companionship.insight.no_data": "Her mind is not clear yet",
 
   "_comment_intent": "==== Soul Lens: intent names ====",
-  "intent.tlm_companionship.anticipate_departure": "keep up with you",
+  "intent.tlm_companionship.escort_owner": "keep up with you",
+  "intent.tlm_companionship.linger_near_owner": "potter about near you",
   "intent.tlm_companionship.gaze_recall": "answer your gaze",
   "intent.tlm_companionship.hungry_feedback": "ask you for food",
   "intent.tlm_companionship.hungry_standard": "ask you for food",

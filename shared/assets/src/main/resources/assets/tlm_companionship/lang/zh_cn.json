@@ -34,7 +34,8 @@
   "gui.tlm_companionship.insight.no_data": "还没看清她的心思",
 
   "_comment_intent": "==== 灵魂透镜 · 意图名称 ====",
-  "intent.tlm_companionship.anticipate_departure": "跟上你",
+  "intent.tlm_companionship.escort_owner": "跟上你",
+  "intent.tlm_companionship.linger_near_owner": "在你附近转转",
   "intent.tlm_companionship.gaze_recall": "回应你的注视",
   "intent.tlm_companionship.hungry_feedback": "跟你要吃的",
   "intent.tlm_companionship.hungry_standard": "跟你要吃的",

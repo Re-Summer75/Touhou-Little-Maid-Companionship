@@ -4,6 +4,9 @@ import com.github.tartaricacid.touhoulittlemaid.api.entity.ai.IExtraMaidBrain;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
 import com.laixia.maidintelligence.feature.orchestration.tlm.MaidIntentBehavior;
+import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmIdleGaze;
+import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmWeaponStow;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.guard.ProjectileDodge;
 import com.mojang.datafixers.util.Pair;
 import net.minecraft.world.entity.ai.behavior.BehaviorControl;
 
@@ -30,6 +33,30 @@ public final class BehaviorExtraBrain implements IExtraMaidBrain {
         );
     }
 
+    /**
+     * 每 tick 都发生、与"她此刻在做什么"无关的那些。
+     *
+     * <p>几件事共用一个钩子，而它跑在意图**之前**：环顾写下的注视目标会被任何有事
+     * 做的意图盖掉，于是"看哪儿"成了默认值而不是又一个决定——不需要协调器，也不会
+     * 有第二个写入者去抢同一块记忆。
+     *
+     * <p>它们都不是意图：不占她的脚、不与任何东西竞争，也不该按 band 被收回许可。
+     * 一个正被什么东西盯着的人**更**该四处看。
+     *
+     * <p>闪避挂在这里而不是交战动作里，理由是同一个：被冷箭射中不需要她先决定
+     * "我在打架"，射她的那一个也可能根本不在她视野里——她看见的是箭。它确实会占
+     * 她的脚，但只占到落点为止，而且是安全那一档，本来就压得过任何别的事。
+     */
+    private void ambient(EntityMaid maid, long gameTime) {
+        boatAutonomy.tick(maid, gameTime);
+        gaze.tick(maid, gameTime);
+        stow.tick(maid, gameTime);
+        ProjectileDodge.consider(maid);
+    }
+
+    private final TlmIdleGaze gaze = TlmIdleGaze.create();
+    private final TlmWeaponStow stow = TlmWeaponStow.create();
+
     @Override
     public List<Pair<Integer, BehaviorControl<? super EntityMaid>>>
     getCoreBehaviors() {
@@ -38,7 +65,7 @@ public final class BehaviorExtraBrain implements IExtraMaidBrain {
                         INTENT_PRIORITY,
                         new MaidIntentBehavior(
                                 intents,
-                                boatAutonomy::tick
+                                this::ambient
                         )
                 )
         );

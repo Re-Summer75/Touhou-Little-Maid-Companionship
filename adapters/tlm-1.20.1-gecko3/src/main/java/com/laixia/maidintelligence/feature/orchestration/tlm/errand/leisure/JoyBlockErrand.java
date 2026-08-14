@@ -1,5 +1,10 @@
-package com.laixia.maidintelligence.feature.orchestration.tlm.errand;
+package com.laixia.maidintelligence.feature.orchestration.tlm.errand.leisure;
 
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand
+        .ApproachTarget;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand
+        .BlockApproachTarget;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.Errand;
 import com.github.tartaricacid.touhoulittlemaid.advancements.maid.TriggerType;
 import com.github.tartaricacid.touhoulittlemaid.block.BlockJoy;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;

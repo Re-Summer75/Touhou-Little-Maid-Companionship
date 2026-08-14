@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.feature.behavior;
 
 import com.laixia.maidintelligence.feature.behavior.domain.OwnerFollowPolicy;
 import com.laixia.maidintelligence.feature.behavior.domain.GazeRecallPolicy;
+import com.laixia.maidintelligence.feature.behavior.domain.OwnerLingerPolicy;
 import com.laixia.maidintelligence.feature.behavior.domain.perception.PerceptionRange;
 
 /**
@@ -25,6 +26,7 @@ public final class PerceptionRangeVerification {
         verifiesClampNeverWidens();
         verifiesTeleportOutrunsPerception();
         verifiesGazeDoesNotExceedPerception();
+        verifiesAStrollNeverStrandsHer();
         verifiesPlanningStaysInsideTheLeash();
         verifiesLeashNeverPinsAMaidAlreadyOutside();
         verifiesEveryHeadingEndsInsideTheLeash();
@@ -187,6 +189,34 @@ public final class PerceptionRangeVerification {
         require(
                 GazeRecallPolicy.DEFAULT_RANGE <= PerceptionRange.BLOCKS,
                 "Gaze recall reaches past what she can perceive"
+        );
+    }
+
+    /**
+     * 游走那一圈也是一个射程，所以它以感知表达，而不是自己新起一个数。
+     *
+     * <p>{@code GazeRecallPolicy} 当年写死八格就是反例：一个不与感知一致的射程
+     * 无人写下、也无人察觉，直到她能在看不见的地方做出决定。
+     *
+     * <p>这一圈取满感知，是一个明确的取舍：**她走得动的范围就是她看得见的范围**。
+     * 因此这里问的不是"有没有收窄"，而是那条真正不能越过的线——**散步不许把她
+     * 晃到会被拉回来的地方**。牵引绳比感知长（上一条断言），所以取满感知的游走
+     * 天然在绳内，而这条断言把"天然"变成"钉住的"：任何一次把半径调大到绳外的
+     * 改动都会在这里响，而不是在玩家眼里表现为她走着走着被瞬移。
+     */
+    private static void verifiesAStrollNeverStrandsHer() {
+        require(
+                OwnerLingerPolicy.RADIUS <= PerceptionRange.BLOCKS,
+                "游走比她看得还远"
+        );
+        require(
+                OwnerLingerPolicy.RADIUS
+                        < OwnerFollowPolicy.TELEPORT_DISTANCE,
+                "游走够得到牵引绳：她会走着走着被瞬移回主人身边"
+        );
+        require(
+                OwnerLingerPolicy.MINIMUM_STEP < OwnerLingerPolicy.RADIUS,
+                "最小步幅不小于半径，圆内没有合法落点"
         );
     }
 

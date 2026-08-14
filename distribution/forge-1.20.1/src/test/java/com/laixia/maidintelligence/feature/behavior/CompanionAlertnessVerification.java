@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.feature.behavior;
 
 import com.laixia.maidintelligence.feature.behavior.domain.CompanionAlertness;
+import com.laixia.maidintelligence.feature.behavior.domain.CompanionBand;
 
 /**
  * 状态分类：处境决定她被允许做什么。
@@ -22,7 +23,61 @@ public final class CompanionAlertnessVerification {
         verifiesArrivalNotDistanceRaisesTheAlarm();
         verifiesFightingOverridesEverything();
         verifiesUnknownArrivalIsTreatedAsUrgent();
+        verifiesTheWholePermissionMatrix();
+        verifiesAnUnknownBandIsRefused();
         System.out.println("Companion alertness verification passed.");
+    }
+
+    /**
+     * 整张许可矩阵，逐格。
+     *
+     * <p>写成一张字面表而不是"重述一遍实现"，是这条断言的全部意义：把每一格的
+     * 期望值单独列出来，改实现时必须回来改这里，于是"顺手放宽一格"不可能悄悄
+     * 发生。行数换的是这个。
+     */
+    private static void verifiesTheWholePermissionMatrix() {
+        CompanionBand[] columns = {
+                CompanionBand.SAFETY, CompanionBand.OWNER_COMMAND,
+                CompanionBand.NEEDS, CompanionBand.COMPANIONSHIP,
+                CompanionBand.LEISURE
+        };
+        CompanionAlertness[] rows = {
+                CompanionAlertness.CALM, CompanionAlertness.WARY,
+                CompanionAlertness.THREATENED, CompanionAlertness.FIGHTING
+        };
+        boolean[][] expected = {
+                {true, true, true, true, true},
+                {true, true, true, true, false},
+                {true, true, false, false, false},
+                {true, false, false, false, false}
+        };
+        for (int row = 0; row < rows.length; row++) {
+            for (int column = 0; column < columns.length; column++) {
+                require(
+                        rows[row].permits(columns[column])
+                                == expected[row][column],
+                        rows[row] + " 对 " + columns[column] + " 答了 "
+                                + rows[row].permits(columns[column])
+                                + "，与矩阵不符"
+                );
+            }
+        }
+    }
+
+    /**
+     * 认不出的类别一律拒绝。
+     *
+     * <p>数据包写了一个新的优先级数字时 {@code CompanionBand.of} 答 null，而这里
+     * 必须是"不许"而不是"随便"——否则一个绕过闸门的新 band 会静默获得全部许可。
+     */
+    private static void verifiesAnUnknownBandIsRefused() {
+        require(
+                CompanionBand.of(77) == null,
+                "77 不是一个 band，却被归了类"
+        );
+        for (CompanionAlertness state : CompanionAlertness.values()) {
+            require(!state.permits(null), state + " 放行了一个认不出的类别");
+        }
     }
 
     /** 没有敌人就没有限制。 */

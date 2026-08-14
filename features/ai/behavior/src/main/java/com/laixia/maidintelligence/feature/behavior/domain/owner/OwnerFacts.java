@@ -35,6 +35,7 @@ public record OwnerFacts(
         double sleeping,
         double flying,
         double speed,
+        double onTheMove,
         double harmfulEffectCount,
         double beneficialEffectCount,
         double inventoryFood,
@@ -46,7 +47,8 @@ public record OwnerFacts(
             Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
             Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
             Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
-            Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN
+            Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
+            Double.NaN
     );
 
     /** No owner in reach, so nothing has been observed about one. */
@@ -124,6 +126,9 @@ public record OwnerFacts(
         }
         if (fact.equals(OwnerFactIds.SPEED)) {
             return speed;
+        }
+        if (fact.equals(OwnerFactIds.ON_THE_MOVE)) {
+            return onTheMove;
         }
         if (fact.equals(OwnerFactIds.HARMFUL_EFFECT_COUNT)) {
             return harmfulEffectCount;

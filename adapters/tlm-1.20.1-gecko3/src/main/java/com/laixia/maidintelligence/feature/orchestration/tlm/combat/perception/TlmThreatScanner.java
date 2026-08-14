@@ -44,8 +44,14 @@ public final class TlmThreatScanner {
      */
     private static final int SWEEP_INTERVAL_TICKS = 5;
 
-    /** Vertical half-extent of the sweep; she fights up and down stairs. */
-    private static final double VERTICAL_REACH = 6.0D;
+    /**
+     * Vertical half-extent of the sweep; she fights up and down stairs.
+     *
+     * <p>Public because the dodge sweeps for projectiles on the same shape, and
+     * "how far up and down does she notice things" is one question with one
+     * answer — two copies of it drift.
+     */
+    public static final double VERTICAL_REACH = 6.0D;
 
     /**
      * Results between sweeps, and the tick each was taken on.

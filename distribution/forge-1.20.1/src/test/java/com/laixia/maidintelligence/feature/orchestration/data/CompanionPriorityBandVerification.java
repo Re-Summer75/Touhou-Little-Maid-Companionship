@@ -159,7 +159,7 @@ public final class CompanionPriorityBandVerification {
     private static void followingStaysTheAnswerToDistance(
             Map<String, IntentDefinition> intents
     ) {
-        IntentDefinition following = intents.get("anticipate_departure");
+        IntentDefinition following = intents.get("escort_owner");
         for (double distance : new double[]{6.0D, 12.0D, 24.0D}) {
             double follow =
                     score(following, facts(60.0D, 0.0D, 0.0D, distance));
@@ -204,7 +204,7 @@ public final class CompanionPriorityBandVerification {
                     "companionship band, owner " + (int) distance
                             + " blocks: following="
                             + String.format("%.3f", score(
-                                    intents.get("anticipate_departure"),
+                                    intents.get("escort_owner"),
                                     facts(60.0D, 0.0D, 0.0D, distance)
                             ))
                             + " keep_company="

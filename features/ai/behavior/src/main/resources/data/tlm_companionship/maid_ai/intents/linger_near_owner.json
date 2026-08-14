@@ -1,6 +1,6 @@
 {
   "format_version": 2,
-  "plan": "tlm_companionship:follow_owner",
+  "plan": "tlm_companionship:linger_near_owner",
   "aggregation": "product",
   "conditions": [
     {
@@ -9,9 +9,9 @@
       "value": 1.0
     },
     {
-      "fact": "tlm_companionship:fact/follow_mode",
+      "fact": "tlm_companionship:fact/owner_on_the_move",
       "operator": "eq",
-      "value": 1.0
+      "value": 0.0
     },
     {
       "fact": "tlm_companionship:fact/can_move",
@@ -24,42 +24,40 @@
       "value": 0.0
     },
     {
-      "fact": "tlm_companionship:fact/owner_distance",
+      "fact": "tlm_companionship:fact/hunger",
       "operator": "gte",
-      "value": 5.0,
+      "value": 35.0
+    },
+    {
+      "fact": "tlm_companionship:fact/owner_distance",
+      "operator": "lte",
+      "value": 16.0,
       "entry_only": true
     },
     {
       "fact": "tlm_companionship:fact/behavior_occupancy_level",
-      "operator": "lte",
-      "value": 1.0,
+      "operator": "eq",
+      "value": 0.0,
       "entry_only": true
     }
   ],
   "utility": [
     {
-      "fact": "tlm_companionship:fact/owner_distance",
-      "minimum": 3.0,
-      "maximum": 16.0,
-      "weight": 0.9,
-      "curve": "linear"
-    },
-    {
-      "fact": "tlm_companionship:fact/forecast_lift/travelling",
-      "minimum": 0.1,
-      "maximum": 0.64,
-      "weight": 0.4,
+      "fact": "tlm_companionship:fact/favorability",
+      "minimum": 0.0,
+      "maximum": 3.0,
+      "weight": 0.3,
       "curve": "logistic"
     }
   ],
   "selection": {
-    "base_score": 1.0,
-    "minimum_score": 0.5,
+    "base_score": 0.5,
+    "minimum_score": 0.02,
     "activation_chance": 1.0,
-    "evaluation_interval_ticks": 10,
-    "minimum_commit_ticks": 20,
-    "switch_margin": 0.15,
-    "interrupt_priority": 30,
+    "evaluation_interval_ticks": 40,
+    "minimum_commit_ticks": 40,
+    "switch_margin": 0.2,
+    "interrupt_priority": 10,
     "cooldown_ticks": 0
   }
 }
