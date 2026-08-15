@@ -442,10 +442,7 @@ public final class DefaultMaidIntentOrchestrator<M>
             metrics.activated();
             return "activated:" + selected.intent().id();
         }
-        if (result == IntentActivationCoordinator.StartResult.RESUMED) {
-            return "resumed:" + selected.intent().id();
-        }
-        return "resume_aborted:" + selected.intent().id();
+        return "resumed:" + selected.intent().id();
     }
 
     private void cancelActive(

@@ -35,6 +35,47 @@ public final class RecoverablePlanVerification {
         checkpointPolicyResumesSemanticCheckpoint();
         replanSuffixFallsBackToInitialStep();
         atomicPolicyHaltsInsteadOfSuspending();
+        aRefusedResumeStartsOverInsteadOfStalling();
+    }
+
+    /**
+     * 恢复被拒，就从头开始——不是什么都不做。
+     *
+     * <p>这里曾经是：恢复失败 → 记二十 tick 冷却 → 返回 ABORTED，这一 tick 什么
+     * 都不跑。**那个退避保护的循环并不存在**：挂起帧在尝试恢复时就已经被
+     * {@code takeSuspended} 摘掉了，所以"反复去恢复同一个坏帧"从来不会发生，退避
+     * 只是让一个刚被选中的意图继续停摆一秒。
+     *
+     * <p>代价是量出来的。四个卫道士的基准里，战斗意图恢复失败之后编排器依次报
+     * {@code resume_aborted}、{@code 1.00/cooldown}、{@code 1.00/eligible}——满分、
+     * 条件全满足、优先级一百、无人竞争，而她连续二十三 tick 一个意图都没有，握着
+     * 能用的弓、十三支箭、看得见目标，站在四把斧头中间被打死。修好之后同一基准
+     * 存活 0–2/4 → 5/8，其中四局满清，且 198 条 required 连跑两轮全绿。
+     *
+     * <p>断言的是"她有意图在跑"，不是"转移原因等于某个字符串"：前者是规则，后者
+     * 是这一次的实现。
+     */
+    private static void aRefusedResumeStartsOverInsteadOfStalling() {
+        RecoveryFixture fixture = new RecoveryFixture(
+                singleStepPlan(ResumePolicy.RESTART_STEP)
+        );
+        fixture.runNormalThenUrgent();
+        // 让恢复被拒：动作声明它挂起的那一步已经不成立了。
+        fixture.actions.invalidOnResume = WAIT;
+        fixture.facts.put(FACT_B, 0.0D);
+        fixture.intents.tick("maid", 2L);
+
+        require(
+                fixture.intents.inspect("maid").activeIntent() != null,
+                "恢复被拒之后她一个意图都没有——挂起帧已经被摘掉，本来就该当作"
+                        + "第一次激活重新开始"
+        );
+        require(
+                fixture.intents.inspect("maid").lastTransition()
+                        .startsWith("activated:"),
+                "恢复被拒之后没有走全新激活那条路，转移原因是 "
+                        + fixture.intents.inspect("maid").lastTransition()
+        );
     }
 
     private static void restartStepQuiescesAndResumesWithoutNewActivation() {
