@@ -150,6 +150,9 @@ public final class TlmCombatAction {
             return finish(maid);
         }
         List<ThreatSample> samples = TlmThreatScanner.samplesOf(scanned);
+        // 扫描之前先腾副手：军械表不看副手，所以插在那里的武器要先回背包，才能
+        // 在**这一 tick** 就成为一个选项，而不是等到下一 tick。
+        swap.unpark(maid);
         List<WeaponCandidate> arsenal = weapons.scan(maid);
         CombatCapability capability =
                 CombatReadiness.of(maid, arsenal, scanned);
@@ -232,7 +235,7 @@ public final class TlmCombatAction {
         return switch (verdict) {
             case STAND_DOWN -> finish(maid);
             case WITHDRAW -> {
-                withdrawal.run(maid, target, crowd, field);
+                withdrawal.run(maid, target, scanned, crowd, field);
                 yield ActionResult.RUNNING;
             }
             case ENGAGE, SKIRMISH -> engage(
@@ -290,7 +293,7 @@ public final class TlmCombatAction {
             case RUNNING -> ActionResult.RUNNING;
             case FINISH -> finish(maid);
             case WITHDRAW -> {
-                withdrawal.run(maid, target, crowd, field);
+                withdrawal.run(maid, target, scanned, crowd, field);
                 yield ActionResult.RUNNING;
             }
         };
@@ -389,6 +392,9 @@ public final class TlmCombatAction {
         }
         maid.setSwingingArms(false);
         forgetADeadTarget(maid);
+        // 走还是站住那个姿态也是这一仗的状态，且没有别处会清。留着它，下一仗开头
+        // 的半秒会照着一群已经不在的敌人走。
+        Withdrawal.forget(maid);
     }
 
     /**

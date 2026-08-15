@@ -65,6 +65,16 @@ public final class CombatTrace {
     private final List<String> rows = new ArrayList<>();
     private final CombatMetrics metrics = new CombatMetrics();
 
+    /**
+     * 全部敌人，不只是最近那一只。
+     *
+     * <p>四打一里"她为什么死"是个**阵型**问题：被夹在两只之间、退路那一侧站着
+     * 第三只、盾朝着甲而挨的是乙——这些在只跟最近一只的行里全都长成同一个样子。
+     */
+    private List<? extends LivingEntity> watched = List.of();
+
+    private float previousHealth = Float.NaN;
+
     private String previousIntent = "";
     private String previousVerdict = "";
     private String previousHeld = "";
@@ -82,7 +92,19 @@ public final class CombatTrace {
                 "hp", "dist", "closing", "toC",
                 "intent", "verdict", "stance", "alert",
                 "hand", "wpn", "escape", "bear", "canOpen", "spd",
-                "foes", "conv", "inDps", "heavy", "goalToFoe"));
+                "foes", "conv", "inDps", "heavy", "goalToFoe",
+                "hurt", "ring", "walkTo", "see", "foeAt",
+                "usable", "quiver", "orch"));
+    }
+
+    /**
+     * 把整队敌人交给它，`ring` 那一列才有东西可印。
+     *
+     * <p>做成 setter 而不是加参数：既有六个调用点一个都不用改，而只有真正需要
+     * 阵型的那一局（四个卫道士）才付这份开销。
+     */
+    public void watch(List<? extends LivingEntity> band) {
+        this.watched = band;
     }
 
     /**
@@ -206,8 +228,102 @@ public final class CombatTrace {
                 Integer.toString(crowd.converging()),
                 fixed(crowd.incomingDps()),
                 fixed(crowd.heaviestBlow()),
-                walkId
+                walkId,
+                bloodSinceLastRow(maid),
+                ring(maid),
+                walkTo(walk),
+                // 看不看得见，单独一列。远程站位有一支写着"看不见就把要保持的距离
+                // 设成零，走过去"——那条对着墙后的一只是对的，对着地形挡住的四把
+                // 斧头就是自己走进去。而只看 walkTo 分不出"她在追"和"她在退"，
+                // 两者都只是一个坐标。
+                maid.hasLineOfSight(foe) ? "y" : "NO",
+                // 目标此刻在哪。和 walkTo 摆在一起，一眼看得出她要去的是不是它。
+                String.format("%.1f,%.1f", foe.getX(), foe.getZ()),
+                // 手里那件此刻算不算"能用"。`canStrike` 由它决定，而 `canStrike`
+                // 又决定 `shooting` 是问手还是问姿态——远程站位距离与近战贴近距离
+                // 的分岔就在这里。手持一列只说她拿着什么，说不出这一件是不是废的。
+                WEAPONS.isUsable(maid, maid.getMainHandItem()) ? "y" : "NO",
+                // 箭还剩几支。弓没箭就不算武器，这是"能不能用"最常见的那个原因。
+                Integer.toString(quiver(maid)),
+                // 编排器给这一架打了多少分、为什么没选它。intent 那一列只会在她
+                // 没打的时候印一个"-"，而"没被选中"和"选中了做不到"要改的地方
+                // 完全不同。
+                CombatProbe.engagement(maid)
         ));
+        previousHealth = maid.getHealth();
+    }
+
+    /**
+     * 这一段掉了多少血，以及来自哪个方位。
+     *
+     * <p>整场仗只报一个总数说不出她是怎么死的：连着挨同一侧三下（盾没转过去）、
+     * 和四个方向各挨一下（被围了），总数一模一样而要改的地方完全不同。
+     *
+     * <p>只报净损失。回血和伤害吸收会把差额抹平，那正是"苹果吃下去了没有"该由
+     * 另一列回答的问题，混进来只会让这一列既不是伤害也不是净变化。
+     */
+    private String bloodSinceLastRow(EntityMaid maid) {
+        float now = maid.getHealth();
+        if (Float.isNaN(previousHealth) || now >= previousHealth) {
+            return ".";
+        }
+        String from = maid.getLastHurtByMob() == null
+                ? "?"
+                : Integer.toString(sectorOf(maid, maid.getLastHurtByMob()));
+        return String.format("-%.0f@%s", previousHealth - now, from);
+    }
+
+    /**
+     * 周围每一只在她的哪个方位、多远。
+     *
+     * <p>方位相对**身体朝向**而不是世界坐标，因为格挡判的就是身体朝向
+     * （{@code isDamageSourceBlocked} 拿 {@code getViewVector} 点积，而它读
+     * {@code getYRot}）。所以 `0:` 那一只是盾罩得住的，`5:` 和 `6:` 那两只不是
+     * ——这一列因此同时回答"被围了吗"和"盾朝对了吗"。
+     *
+     * <p>30° 一格，与方位场的十二扇区同一套刻度，读数可以直接对上。
+     */
+    private String ring(EntityMaid maid) {
+        if (watched.isEmpty()) {
+            return "-";
+        }
+        StringBuilder out = new StringBuilder();
+        for (LivingEntity foe : watched) {
+            if (out.length() > 0) {
+                out.append(' ');
+            }
+            if (!foe.isAlive()) {
+                out.append('x');
+                continue;
+            }
+            out.append(sectorOf(maid, foe))
+                    .append(':')
+                    .append(String.format("%.1f", maid.distanceTo(foe)));
+        }
+        return out.toString();
+    }
+
+    /**
+     * 相对她身体朝向的方位，30° 一格：0 正前，±1..±5 两侧，6 正后。
+     */
+    private static int sectorOf(EntityMaid maid, LivingEntity foe) {
+        double dx = foe.getX() - maid.getX();
+        double dz = foe.getZ() - maid.getZ();
+        double toward = Math.toDegrees(Math.atan2(dz, dx)) - 90.0D;
+        double relative = net.minecraft.util.Mth.wrapDegrees(
+                toward - maid.getYRot()
+        );
+        int sector = (int) Math.round(relative / 30.0D);
+        return sector == -6 ? 6 : sector;
+    }
+
+    /** 她要走去哪。和 ring 摆在一起才看得出她是不是正走进某一只怀里。 */
+    private static String walkTo(WalkTarget walk) {
+        if (walk == null) {
+            return "-";
+        }
+        Vec3 to = walk.getTarget().currentPosition();
+        return String.format("%.1f,%.1f", to.x, to.z);
     }
 
     /** Closest the threat ever got, at any point in the scenario. */
@@ -340,6 +456,21 @@ public final class CombatTrace {
                         && maid.getUsedItemHand()
                                 == net.minecraft.world.InteractionHand.OFF_HAND
                         ? "^" : "");
+    }
+
+    /** 背包加两只手里一共还有几支箭。 */
+    private static int quiver(EntityMaid maid) {
+        int found = 0;
+        net.minecraftforge.items.IItemHandler pack =
+                maid.getAvailableBackpackInv();
+        for (int slot = 0; slot < pack.getSlots(); slot++) {
+            net.minecraft.world.item.ItemStack stack =
+                    pack.getStackInSlot(slot);
+            if (stack.getItem() instanceof net.minecraft.world.item.ArrowItem) {
+                found += stack.getCount();
+            }
+        }
+        return found;
     }
 
     private static String fixed(double value) {

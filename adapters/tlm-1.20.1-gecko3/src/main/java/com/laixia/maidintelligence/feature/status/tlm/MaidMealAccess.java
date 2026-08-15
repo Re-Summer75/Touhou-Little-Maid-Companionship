@@ -27,8 +27,7 @@ public final class MaidMealAccess {
             }
         }
 
-        InteractionHand eatingHand = findEatingHand(maid);
-        ItemStack previousHandStack = maid.getItemInHand(eatingHand).copy();
+        InteractionHand intended = findEatingHand(maid);
         var backpack = maid.getAvailableBackpackInv();
 
         // Keep TLM's external-inventory request hook available before the local scan.
@@ -36,17 +35,27 @@ public final class MaidMealAccess {
 
         for (int slot = 0; slot < backpack.getSlots(); slot++) {
             ItemStack candidate = backpack.getStackInSlot(slot);
-            IMaidMeal handler = findHandler(maid, candidate, eatingHand, mealHandlers);
+            IMaidMeal handler = findHandler(maid, candidate, intended, mealHandlers);
             if (handler == null) {
                 continue;
             }
 
+            // 先把饭取出来，再腾手。反过来写会让**背包塞满的工作女仆饿死**：腾
+            // 手要往背包里放东西，而这一口饭占着的那一格正是唯一的空位——取出来
+            // 就有了，没取出来就永远没有。格子越多的背包越会长期处在这个状态。
             ItemStack food = backpack.extractItem(slot, candidate.getCount(), false);
             if (food.isEmpty()) {
                 continue;
             }
+            // 腾手也放在**找到食物之后**：先腾再找，会为了一顿不存在的饭把她副手
+            // 那面盾收进背包。
+            InteractionHand eatingHand = prepareEatingHand(maid);
+            if (eatingHand == null) {
+                // 原样放回。刚从这里拿走的，一定放得回去。
+                backpack.insertItem(slot, food, false);
+                return false;
+            }
             maid.setItemInHand(eatingHand, food);
-            maid.memoryHandItemStack(previousHandStack);
             handler.onMaidEat(maid, maid.getItemInHand(eatingHand), eatingHand);
             return true;
         }
@@ -108,10 +117,12 @@ public final class MaidMealAccess {
             return false;
         }
 
-        ItemStack previousHandStack = maid.getItemInHand(eatingHand).copy();
-        maid.setItemInHand(eatingHand, food);
-        maid.memoryHandItemStack(previousHandStack);
-        handler.onMaidEat(maid, maid.getItemInHand(eatingHand), eatingHand);
+        InteractionHand freed = prepareEatingHand(maid);
+        if (freed == null) {
+            return false;
+        }
+        maid.setItemInHand(freed, food);
+        handler.onMaidEat(maid, maid.getItemInHand(freed), freed);
         return true;
     }
 
@@ -181,6 +192,13 @@ public final class MaidMealAccess {
         }
     };
 
+    /**
+     * 她准备用哪只手吃，这一问只用来预判、不动任何东西。
+     *
+     * <p>两只手都占着时答"副手"，因为那是真正吃饭的时候会腾的那一只——
+     * {@link #prepareEatingHand} 腾的也是它，两处必须给出同一个答案，否则
+     * {@code canMaidEat} 是按一只手问的、饭却吃在另一只手上。
+     */
     private InteractionHand findEatingHand(EntityMaid maid) {
         for (InteractionHand hand : HandUtils.NATIVE_HANDS) {
             if (maid.getItemInHand(hand).isEmpty()) {
@@ -188,5 +206,28 @@ public final class MaidMealAccess {
             }
         }
         return InteractionHand.OFF_HAND;
+    }
+
+    /**
+     * 真的把一只手腾出来，腾不出来就返回 null。
+     *
+     * <p>原先这里不腾手：直接把食物写进副手，把原本那件东西交给本体的
+     * {@code memoryHandItemStack} 代管。那个方法**在隐藏槽已经有东西时会把它扔
+     * 在地上**，而隐藏槽有东西恰恰是常态——它只在 {@code completeUsingItem} 里
+     * 归还，战斗打断进食就永远走不到那一步。于是上一顿饭扣下的盾，会在下一顿饭
+     * 开始的瞬间掉在地上。
+     *
+     * <p>现在东西进背包（{@link MaidOffhand} 保证整份放得下才放），进食路径不再
+     * 碰那个隐藏槽。装不下就这一 tick 不吃——饿一会儿是可以恢复的，武器掉在
+     * 尸潮里不是。
+     */
+    private InteractionHand prepareEatingHand(EntityMaid maid) {
+        MaidOffhand.recoverStranded(maid);
+        for (InteractionHand hand : HandUtils.NATIVE_HANDS) {
+            if (maid.getItemInHand(hand).isEmpty()) {
+                return hand;
+            }
+        }
+        return MaidOffhand.vacate(maid) ? InteractionHand.OFF_HAND : null;
     }
 }

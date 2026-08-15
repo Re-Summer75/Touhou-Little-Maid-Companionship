@@ -47,6 +47,35 @@ public final class RangedDrawCycle {
      */
     private static final int HELD_INDEFINITELY_TICKS = 200;
 
+    /**
+     * 视线断多久才算真的没得瞄。
+     *
+     * <p>{@code hasLineOfSight} 是个逐 tick 会抖的判据：它做的是从眼睛到目标的射线
+     * 检测，而两边都在走，中间有台阶、柱子、或者干脆是另一只怪的碰撞箱。断一 tick
+     * 就把蓄力清掉，等于把这个抖动一比一变成"她永远射不出箭"——弓要连续二十 tick
+     * 才拉满，而实测卫道士局四局的蓄力停在 14、13、7、5，一支箭都没出来，同时她一
+     * 直做着瞄准的样子。
+     *
+     * <p>取十 tick 有据：这是弓拉满所需二十 tick 的一半，也就是**宽限期本身不足以
+     * 让一次蓄力凭空走完**——她仍然必须真的看得见目标才射得出去，只是不再因为半秒
+     * 内的一次遮挡从头再来。而举着一张已经拉开的弓不花她任何东西：弓的使用时长是
+     * 72000 tick，握着和放下对她的移动、格挡、挥刀都没有区别。
+     *
+     * <p>这与 {@code behavior-spec.md} 第五节是同一条：判据在边界附近本来就抖，抖动
+     * 不该直接驱动动作。
+     */
+    private static final int BLIND_GRACE_TICKS = 10;
+
+    /**
+     * 每个女仆的视线已经断了几 tick。
+     *
+     * <p>存的理由是它派生不出来——"断了多久"要跨 tick 累计，而
+     * {@code hasLineOfSight} 只回答此刻。所有者只有这个类，看见目标就归零，
+     * 放弃蓄力也归零，实体卸载随弱引用一起走。
+     */
+    private static final java.util.Map<EntityMaid, Integer> BLIND =
+            new java.util.WeakHashMap<>();
+
     private RangedDrawCycle() {
     }
 
@@ -71,8 +100,8 @@ public final class RangedDrawCycle {
         maid.getLookControl().setLookAt(
                 victim.getX(), victim.getEyeY(), victim.getZ()
         );
-        if (!maid.hasLineOfSight(victim)) {
-            // Nothing to aim at any more; relax rather than hold a full draw.
+        if (!seesThroughTheFlicker(maid, victim)) {
+            // 真的看不见了——不是被挡了半秒，是断够了 BLIND_GRACE_TICKS。
             if (maid.isUsingItem()) {
                 maid.stopUsingItem();
             }
@@ -84,6 +113,33 @@ public final class RangedDrawCycle {
             return;
         }
         release(maid, victim, weapons);
+    }
+
+    /**
+     * 看得见，或者刚看不见没多久。
+     *
+     * <p>看得见就归零；看不见就累加，超过 {@link #BLIND_GRACE_TICKS} 才认。
+     * 这是这个类的规矩——"一次蓄力只会前进，或者变成一支箭"——唯一还没被守住的
+     * 那个缺口：别的路径都改成走 {@link #releaseOrKeepDraw} 了，只有视线这一条
+     * 仍在逐 tick 地丢弃它。
+     */
+    private static boolean seesThroughTheFlicker(
+            EntityMaid maid,
+            LivingEntity victim
+    ) {
+        if (victim != null && maid.hasLineOfSight(victim)) {
+            BLIND.remove(maid);
+            return true;
+        }
+        // 超限之后**不复位**，只有真看见才清。复位过一版，代价是长期看不见时她会
+        // 在"拉十 tick、停一 tick"之间循环——`isUsingItem()` 十一分之十的时间为真，
+        // 而 `WeaponSwap.equip` 正以它为门，于是换手被压住，表现成"姿态已经改判近战、
+        // 手里还是弓"。宽限是给抖动的，不是给一段接一段地重新开始的。
+        int blind = Math.min(
+                BLIND.getOrDefault(maid, 0) + 1, BLIND_GRACE_TICKS + 1
+        );
+        BLIND.put(maid, blind);
+        return blind <= BLIND_GRACE_TICKS;
     }
 
     /**
@@ -105,7 +161,7 @@ public final class RangedDrawCycle {
         if (!maid.isUsingItem()) {
             return;
         }
-        if (victim == null || !maid.hasLineOfSight(victim)) {
+        if (victim == null || !seesThroughTheFlicker(maid, victim)) {
             maid.stopUsingItem();
             return;
         }

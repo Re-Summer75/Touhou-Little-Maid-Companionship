@@ -4,6 +4,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.CombatCapability;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.CombatStance;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.EngagementContext;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.SpacingPolicy;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatField;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponCandidate;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponKind;
@@ -127,6 +128,19 @@ public final class Engagement {
             return Outcome.FINISH;
         }
 
+        // 看不见就往前挪，但**挪到对方的触及边缘为止**，不是挪到贴脸。
+        //
+        // 这一支原先写的是 0，也就是"一路走到它身上"。对着墙后的一只那是对的：
+        // 走过去视线就回来了，走不回来也已经站到能砍的地方。对着四把斧头它是自
+        // 杀。实测卫道士局第四局：她握着能用的弓、箭袋十三支、`see=NO`，从十二格
+        // 一路走到一格二，来袭 DPS 从 16.6 爬到 42.5，一箭未发——`walkTo` 与目标
+        // 坐标逐位相同，她是自己走进去的。
+        //
+        // 底线用 `clearanceBeyond`，与冷却期站位、与"打不过就脱离"用的是同一个数，
+        // 不是为这里新拍的常数。走到那儿仍然看不见，就该由交战定价去判要不要退，
+        // 而不是继续往里走——那本来就是定价该回答的问题。
+        //
+        // 原注释保留在下面，因为它说的那件事仍然成立，只是不再无条件：
         // Blocked, she closes regardless: that usually restores the line of
         // sight, and failing that puts her close enough for melee next tick.
         //
@@ -141,7 +155,7 @@ public final class Engagement {
         // finishing a hurt one. Judged off the quarry, she would call six
         // blocks comfortable while a second zombie stood at her elbow.
         double desired = shooting
-                ? (canSee ? standoff(stance) : 0.0D)
+                ? (canSee ? standoff(stance) : blindApproach(pressing))
                 : MeleeSwing.holdDistance(
                         maid, pressing, crowd, pack, TlmCombatAction.MOVE_SPEED
                 );
@@ -166,7 +180,22 @@ public final class Engagement {
         // is what she does with the part of the exchange she cannot swing in,
         // so it has to see the swing's outcome — asked first, it would put the
         // shield up on the same tick the sword comes down and cancel it.
-        ShieldGuard.consider(maid, target, field, shooting || chewing);
+        //
+        // 让路的理由有两个，缺一个都会坏，而且坏法相反。
+        //
+        // ①**这一 tick 打算射箭**（`shooting`）。这条不能省：拉弓要先
+        //   `startUsingItem(MAIN_HAND)`，而那个方法遇到 `isUsingItem()` 为真直接
+        //   返回——盾举在副手，弓就永远起不了手。只留下面那条的版本实测过：她举着
+        //   `bow+shield^` 站了十六 tick，一次蓄力都没开始，整局射出一支箭。
+        //
+        // ②**槽里已经有别人**（正在用，且用的不是盾）。这条也不能省：姿态从远程翻
+        //   到近战的那一 tick，`shooting` 变假而弓的蓄力还在手上，只看 ①的版本会让
+        //   盾抢走槽，把一次拉到十九 tick 的蓄力清成零。实测那是第一局唯一一次拉满。
+        //
+        // 两条是"她要用"和"她在用"，本来就不是同一个问题。
+        boolean handsBusy = shooting || chewing
+                || (maid.isUsingItem() && !ShieldGuard.raised(maid));
+        ShieldGuard.consider(maid, target, field, handsBusy);
         // Facing last, after the guard is up and after movement has been
         // written. Blocking only answers what arrives from in front, and her
         // body points wherever she is walking — so this is the difference
@@ -183,6 +212,17 @@ public final class Engagement {
      * rather than to zero — zero reads as "close in", which is the opposite of
      * what a ranged posture wants.
      */
+    /**
+     * 看不见目标时她愿意走到多近。
+     *
+     * <p>问最近那一只的触及距离，不问她挑中的那个——挡住视线的和会打到她的常常
+     * 不是同一只，而挨打这件事只认前者。
+     */
+    private static double blindApproach(ScannedThreat pressing) {
+        return SpacingPolicy.instance()
+                .clearanceBeyond(pressing.sample().reach());
+    }
+
     private static double standoff(CombatStance stance) {
         double declared = stance.preferredRange();
         return declared > 0.0D

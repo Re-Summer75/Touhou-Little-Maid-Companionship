@@ -12,6 +12,27 @@
 > 随后副手空了两百多 tick。需要副手的功能必须每 tick 复查并重新装备，
 > 见 `ShieldGuard.equipFromPack`。
 >
+> ⚠️ **那套协议的两个方法都会掉东西，且断口是常态。** `memoryHandItemStack` 往
+> `hideInv[0]` 存之前，若那一格已有物品**直接生成 `ItemEntity` 扔掉**；
+> `backCurrentHandItemStack` 把副手塞进背包时，塞不下的部分**同样扔在地上**。
+> 两者假定"存"和"还"总是成对发生、由 `completeUsingItem` 收尾——而战斗每次换武器
+> 都会 `stopUsingItem` 打断进食，于是这一对就断了：盾滞留在 `hideInv[0]`、食物滞留
+> 在副手，`canUseShield()` 从此为假，而下一顿饭的"存"把玩家的盾扔在地上。
+>
+> **本模组的规则：副手归自己管，腾空只走背包，整份放得下才放，放不下就一动不动
+> ——不产生掉落物。**实现在 `MaidOffhand`（`vacate` / `recoverStranded`）。
+>
+> 配套的顺序规则：**先从背包取出要用的那件东西，再腾手；腾不出来就原样放回。**
+> 腾手要往背包里放东西，而要取的那件（那口饭、那面盾）占着的往往就是唯一的空位。
+> 反过来写的后果是"背包满了她就守着食物饿死"、"背包满了她永远拿不到盾"——
+> 而背包容量 6/12/18/24/36 里，格子越多的越容易长期处在塞满状态，
+> 所以这一条随背包变大而变重要。
+>
+> 三个入口都经 `MaidOffhand`：`ShieldGuard.equipFromPack`（拿盾前腾手）、`MaidMealAccess`（不再借
+> `memoryHandItemStack`）、`WeaponSwap.unpark`（副手只放盾，别的武器回背包，回去之后
+> 军械表才看得见它——本体的 `tryEquipFromBackpack` 只在主手和背包之间换，
+> **副手从来不是它的一个选项**）。
+>
 > 盾牌相关的本体机制：`canUseShield()`（副手能 `SHIELD_BLOCK` 且不在冷却）、
 > `isBlocking()` **覆写掉了原版的五 tick 预热**（举起即生效）、`blockUsingShield()`
 > 实现斧破盾（100 tick 冷却）、`passiveUseShieldTick` 是中弹射物后的自动举盾。

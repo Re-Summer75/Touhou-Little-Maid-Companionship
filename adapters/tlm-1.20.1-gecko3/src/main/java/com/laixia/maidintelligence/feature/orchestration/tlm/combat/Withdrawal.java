@@ -1,9 +1,11 @@
 package com.laixia.maidintelligence.feature.orchestration.tlm.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.behavior.domain.combat.WithdrawCommitPolicy;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatField;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.CombatMovement;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.ExchangeAffordability;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.MeleeSwing;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.RangedDrawCycle;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.execution.RetreatSpace;
@@ -33,6 +35,15 @@ import java.util.Objects;
  * so the leash caps this direction like any other.
  */
 public final class Withdrawal {
+    /**
+     * 她此刻守着的是"走"还是"站住"，以及守了多久。
+     *
+     * <p>存这一份是因为它派生不出来：判据每 tick 的答案正是那个会抖的符号，而姿态
+     * 恰恰是"上一次答案加上守多久"。所有者只有这里一个，弱引用随实体卸载而去。
+     */
+    private static final java.util.Map<EntityMaid, int[]> STANCE =
+            new java.util.WeakHashMap<>();
+
     private final TlmWeaponScanner weapons;
 
     public Withdrawal(TlmWeaponScanner weapons) {
@@ -47,6 +58,7 @@ public final class Withdrawal {
     public void run(
             EntityMaid maid,
             ScannedThreat target,
+            List<ScannedThreat> pack,
             List<Vec3> crowd,
             ThreatField field
     ) {
@@ -120,10 +132,27 @@ public final class Withdrawal {
         // shrinking with her already retreating. Positive is the one case where
         // a retreat is not an escape but a choice of where to be cornered.
         boolean gaining = target.sample().closingSpeed() > 0.0D;
-        boolean roomToLeave = escape != null && !gaining
+        // 被追上不等于该站住——**还要扛得住这一场对砍**。
+        //
+        // "跑不掉就站住"这条是对的，但它是在她背着盾的时候量出来的，而判据里
+        // 没有任何一项知道盾的存在。于是把盾拿走之后她照样站住，只是不再挡得下
+        // 任何东西：僵尸局挨打从加盾前的 1.08 涨到 6.5，比从来没有盾时还差几倍。
+        //
+        // 现在站住要先过 `canAfford`，而那个判据已经把盾折算进去了。带盾时它照旧
+        // 判"扛得住"，行为不变；没盾时它判"扛不住"，她继续退——退回加盾之前那条
+        // 本来就正确的行为。**一条判据同时服务两种装备，而不是给无盾另开一支。**
+        boolean affordable = ExchangeAffordability.canAfford(
+                maid, pack, TlmCombatAction.MOVE_SPEED
+        );
+        boolean rawLeaving = escape != null && (!gaining || !affordable)
                 && RetreatSpace.outpaces(
                         maid, target.entity(), TlmCombatAction.MOVE_SPEED
                 );
+        // 这三道门里只有"有没有地方退"是硬的，另外两道都建立在接近速率的符号上，
+        // 而那个符号每几 tick 穿一次零。直接拿它开关腿的后果量过：符号一翻她就不
+        // 再写移动目标，而上一个已经被寻路失败抹掉——四把斧头面前站满六 tick，
+        // 掉了全部血量的四成半。姿态守十 tick 再允许改主意。
+        boolean roomToLeave = commit(maid, rawLeaving, escape != null);
         if (roomToLeave) {
             CombatMovement.giveGround(
                     maid, crowd, TlmCombatAction.WITHDRAW_DISTANCE,
@@ -170,5 +199,41 @@ public final class Withdrawal {
         // matters in: something she cannot outrun is something she should be
         // blocking rather than showing her back to.
         ShieldGuard.faceThreat(maid, target);
+    }
+
+    /**
+     * 把这一 tick 的判据折进她守着的那个姿态。
+     *
+     * <p>状态是 {@code [是否在走, 守了多久]}，两个数一起改，别处不写。
+     */
+    private static boolean commit(
+            EntityMaid maid,
+            boolean rawLeaving,
+            boolean hasRoom
+    ) {
+        int[] held = STANCE.get(maid);
+        boolean wasLeaving = held != null && held[0] != 0;
+        int heldTicks = held == null ? Integer.MAX_VALUE : held[1];
+        boolean leaving = WithdrawCommitPolicy.INSTANCE.leaving(
+                wasLeaving, heldTicks, rawLeaving, hasRoom
+        );
+        STANCE.put(maid, new int[]{
+                leaving ? 1 : 0,
+                WithdrawCommitPolicy.INSTANCE.nextHeld(
+                        wasLeaving, leaving, held == null ? 0 : heldTicks
+                )
+        });
+        return leaving;
+    }
+
+    /**
+     * 忘掉这一仗守着的姿态。
+     *
+     * <p>由收尾调用。不清的话下一仗开头会继承上一仗最后那半秒的决定，而那半秒
+     * 说的是一群已经不在了的敌人——{@code behavior-spec.md} 第四节那条"每一条退出
+     * 路径都要清"，这里就是那条退出路径。
+     */
+    public static void forget(EntityMaid maid) {
+        STANCE.remove(maid);
     }
 }

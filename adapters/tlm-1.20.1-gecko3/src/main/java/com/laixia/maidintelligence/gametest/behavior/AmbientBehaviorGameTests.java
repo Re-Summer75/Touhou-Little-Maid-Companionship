@@ -18,6 +18,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.behavior.PositionTracker;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.ai.memory.WalkTarget;
 import net.minecraft.world.entity.ai.memory.NearestVisibleLivingEntities;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.projectile.Arrow;
@@ -323,7 +324,11 @@ public final class AmbientBehaviorGameTests {
             timeoutTicks = 120
     )
     public static void sheStepsOutOfTheLineOfALongShot(GameTestHelper helper) {
-        CompanionScene scene = CompanionScene.room(helper, 9, 9);
+        CompanionScene scene = CompanionScene.walledRoom(helper, 9, 9);
+        // 围墙不是装饰。共用的房间抬高十二格且四周悬空，而这条测试挂的是自由
+        // 模式——她会自己游走出地板，摔下去正好九到十点，断言随即报"让开了却还
+        // 是中了"。实测抓到过：来源 fall、落点 y=-60。那不是没躲开箭，那是她已经
+        // 不在场了，连上面两条横移断言都失去意义。
         EntityMaid maid = scene.maid(4, 2, 4);
         maid.setTask(new FreedomMaidTask());
 
@@ -362,10 +367,28 @@ public final class AmbientBehaviorGameTests {
                             aside <= A_STEP_ASIDE,
                             "她不是让了一步，是横穿了房间 — 挪了 " + aside + " 格"
                     );
+                    // 伤害来源要印出来。这条断言只说"她掉了血"，而掉血的原因
+                    // 不止一种——中箭、摔下平台、隔壁夹具跑过来的怪，三者要改
+                    // 的地方完全不同，只报一个数字分不出是哪一种。
                     helper.assertTrue(
                             maid.getHealth() >= unhurt,
                             "让开了却还是中了 — 掉了 "
-                                    + (unhurt - maid.getHealth()) + " 点血"
+                                    + (unhurt - maid.getHealth()) + " 点血，来源="
+                                    + (maid.getLastDamageSource() == null
+                                            ? "?"
+                                            : maid.getLastDamageSource()
+                                                    .getMsgId())
+                                    + " 直接实体="
+                                    + (maid.getLastDamageSource() == null
+                                            || maid.getLastDamageSource()
+                                                    .getDirectEntity() == null
+                                            ? "?"
+                                            : maid.getLastDamageSource()
+                                                    .getDirectEntity()
+                                                    .getType()
+                                                    .toShortString())
+                                    + " 落点 y=" + String.format(
+                                            "%.1f", maid.getY())
                     );
                 })
                 .thenSucceed();

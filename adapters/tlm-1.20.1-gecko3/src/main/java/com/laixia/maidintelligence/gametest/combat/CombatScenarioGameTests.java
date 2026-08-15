@@ -9,6 +9,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 
 import net.minecraft.world.entity.monster.Vindicator;
 import net.minecraft.world.item.ItemStack;
@@ -334,6 +335,140 @@ public final class CombatScenarioGameTests {
                             trace.farthestReached() >= 8.0D,
                             "她最远只拉开到 " + trace.farthestReached()
                                     + " 格，没有真正脱离过。" + trace.summary()
+                    );
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * 视线闪一下，那一箭不能作废。
+     *
+     * <p>放在这一组而不是远程那一组，是因为它测的正是这一组存在的理由：缺陷活在
+     * **跨 tick 的累积**里。单看任何一 tick，"看不见就别拉弓"都是对的；错的是这个
+     * 判据每 tick 都能翻，而弓要连续二十 tick 才拉满。
+     *
+     * <p>夹具直接把目标搬进方块后面再搬回来，因为地形抖动本身不可控——实测卫道士局
+     * 里蓄力停在 14、13、7、5，一支箭都没出来，而那是台阶和柱子随机遮挡的结果。
+     * 这里用一次确定的遮挡代替，问的是同一件事。
+     *
+     * <p>断言看的是**蓄力有没有跨过遮挡继续涨**，不是看有没有射出箭：射不射得出去
+     * 还取决于距离、弹药和目标死没死，而那些都不是这条规则。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            timeoutTicks = 200)
+    public static void aBlinkOfCoverDoesNotBinTheDraw(GameTestHelper helper) {
+        CompanionScene scene = CompanionScene.room(helper, 9, 9);
+        EntityMaid maid = scene.maid(2, 2, 4);
+        maid.setTask(new FreedomMaidTask());
+        maid.getAvailableBackpackInv().setStackInSlot(
+                0, new ItemStack(Items.BOW)
+        );
+        maid.getAvailableBackpackInv().setStackInSlot(
+                1, new ItemStack(Items.ARROW, 8)
+        );
+
+        Vindicator quarry = hostile(helper);
+        quarry.setPos(maid.getX() + 6.0D, maid.getY(), maid.getZ());
+        quarry.setNoAi(true);
+        quarry.restrictTo(quarry.blockPosition(), 4);
+        helper.getLevel().addFreshEntity(quarry);
+
+        double parked = quarry.getY();
+        int[] peak = {0};
+        int[] afterCover = {0};
+        helper.startSequence()
+                // 先让她把弓拉起来。
+                .thenExecuteFor(24, () -> peak[0] =
+                        Math.max(peak[0], maid.getTicksUsingItem()))
+                // 遮挡三 tick：把目标沉到地板下面，视线判据立刻转假。三 tick 远
+                // 短于宽限期，也远短于一次完整蓄力。
+                .thenExecute(() -> quarry.setPos(
+                        quarry.getX(), parked - 3.0D, quarry.getZ()
+                ))
+                .thenExecuteFor(3, () -> { })
+                .thenExecute(() -> quarry.setPos(
+                        quarry.getX(), parked, quarry.getZ()
+                ))
+                .thenExecuteFor(6, () -> afterCover[0] =
+                        Math.max(afterCover[0], maid.getTicksUsingItem()))
+                .thenExecute(() -> {
+                    helper.assertTrue(
+                            peak[0] > 0,
+                            "遮挡之前她根本没拉过弓，这条测试没有测到任何东西"
+                    );
+                    // 归零意味着遮挡把它清了；只要没归零，累积就跨过去了。
+                    helper.assertTrue(
+                            afterCover[0] > 0,
+                            "视线断了三 tick，蓄力被清成零——弓要连续二十 tick 才"
+                                    + "拉满，这样她永远射不出一支满蓄力的箭"
+                    );
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * 被一群重手围住时她不许往里走——**哪怕带着盾**。
+     *
+     * <p>拿一个实机缺陷换来的，而当时两个基准都在报好消息（僵尸局 12/12 零伤害、
+     * 卫道士局 8/12 存活），玩家看到的却是她被围住后不退反进直到血打完。盲区要三条
+     * 同时成立才显形：**一群、每击够重、她带着盾**。僵尸局缺第二条（每击三点，"最重
+     * 一击"那道测试几乎不触发），卫道士局四局的跨度把退步埋进噪声。这里凑齐三条。
+     *
+     * <p>根因：{@code ExchangeAffordability} 把盾的**份额**同时折进了"累计挨多少"和
+     * "最重的一击"。前者是期望值，折算正确；后者问最坏情况下她还站不站得住，而盾要么
+     * 挡下那一击要么没挡下——折算之后"扛不住就真的脱离接触"再也不触发。
+     *
+     * <p>断言看距离不看伤害：伤害受运气影响，而"往里走"就是这个缺陷的定义。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            timeoutTicks = 400)
+    public static void mobbedWithAShieldSheStillBacksOff(
+            GameTestHelper helper
+    ) {
+        CompanionScene scene = CompanionScene.room(helper, 23, 15);
+        scene.ownerAt(11, 2, 7);
+        EntityMaid maid = scene.maid(11, 2, 7);
+        maid.setTask(new FreedomMaidTask());
+        var pack = maid.getAvailableBackpackInv();
+        pack.setStackInSlot(0, new ItemStack(Items.IRON_SWORD));
+        // 盾是要害：没有它，"最重一击"本来就不会被折算，缺陷不显形。
+        pack.setStackInSlot(1, new ItemStack(Items.SHIELD));
+
+        // 一侧的扇形，五格起手。**不能摆成整圈**：那样"后退"根本不存在，离开
+        // 任何一只都在接近另一只，测到的是几何不是她的判断。五格是让她还来得及
+        // 做决定——三格已经在斧头的触及里，那时只剩挨打。
+        Vindicator[] band = new Vindicator[4];
+        for (int slot = 0; slot < band.length; slot++) {
+            double angle = Math.toRadians(-45.0D + slot * 30.0D);
+            Vindicator axe = hostile(helper);
+            axe.setPos(maid.getX() + Math.cos(angle) * 5.0D, maid.getY(),
+                    maid.getZ() + Math.sin(angle) * 5.0D);
+            axe.setItemSlot(EquipmentSlot.MAINHAND,
+                    new ItemStack(Items.IRON_AXE));
+            axe.setTarget(maid);
+            axe.setPersistenceRequired();
+            axe.restrictTo(axe.blockPosition(), 10);
+            helper.getLevel().addFreshEntity(axe);
+            band[slot] = axe;
+        }
+
+        CombatTrace trace = new CombatTrace("mobbedWithAShield");
+        long start = helper.getLevel().getGameTime();
+        helper.startSequence()
+                .thenExecuteFor(SOAK_TICKS, () -> trace.sample(
+                        helper.getLevel().getGameTime() - start, maid, band[0]
+                ))
+                .thenExecute(() -> {
+                    trace.dump();
+                    // 走到近战站位本身是对的，所以不断言"她有没有靠近"——量的是
+                    // **她有没有站在他们怀里不动**，那才是这个缺陷的形状。
+                    helper.assertTrue(
+                            trace.stationaryInReachShare() < IN_REACH_SHARE,
+                            "被四把斧头围住时，她有 " + Math.round(
+                                    trace.stationaryInReachShare() * 100)
+                                    + "% 的时间站在他们够得着的地方不动——"
+                                    + "扛不住就脱离接触那一支没有生效。"
+                                    + trace.summary()
                     );
                 })
                 .thenSucceed();

@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.feature.orchestration.tlm.combat.guard;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.threat.ThreatField;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.ScannedThreat;
+import com.laixia.maidintelligence.feature.status.tlm.MaidOffhand;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -37,6 +38,21 @@ import net.minecraftforge.items.IItemHandler;
  * one tick is a price worth paying to not look like a bug.
  */
 public final class ShieldGuard {
+    /**
+     * 她到底用不用盾。**当前开着。**
+     *
+     * <p>关在这一处，是因为这一处一关，后面全都自动跟着关：她不再从背包里把盾拿到
+     * 副手 → 副手空着 → {@code maid.canUseShield()} 为假 → {@code guardedShare}
+     * 归零，交战定价回到"她没有盾"的算法 → {@code raised()} 恒假，举盾后退的转身
+     * （{@code MaidMoveControlGuardFacingMixin}）与让开箭时的"盾挡得住"分支也一并
+     * 失效。**没有第二处需要改，也不会留下一半开一半关的状态。**
+     *
+     * <p>留成开关而不是把这套删掉：盾这套东西（承伤定价、破盾折算、倒着走）是量过
+     * 的，僵尸局曾把击杀 3.13 → 5.13、零伤害局 3/8 → 7/8。要是它不是问题所在，翻回
+     * 来只要改这一个字；确认要长期去掉，再连同定价和那处注入一起删干净。
+     */
+    private static final boolean USE_SHIELD = true;
+
     /**
      * 她这一刻在防谁。
      *
@@ -130,6 +146,9 @@ public final class ShieldGuard {
             ThreatField field,
             boolean handsBusy
     ) {
+        if (!USE_SHIELD) {
+            return;
+        }
         equipFromPack(maid);
         boolean usable = maid.canUseShield();
         // Recorded every tick she is in a fight, not only when she wants it:
@@ -229,11 +248,28 @@ public final class ShieldGuard {
      * pack should be no different, and requiring a player to pre-place it in the
      * off hand would be a rule nobody could guess.
      *
-     * <p>Only when the off hand is empty, so this can never displace something
-     * the player put there on purpose, and never fights the host over the slot.
+     * <p>副手里剩着一口没吃完的饭时，先把它收进背包再拿盾。这一条曾经写成"副手
+     * 非空就放弃"，理由是不去动玩家特意放的东西。那个理由对了一半：副手在本体那
+     * 边没有任何一条取出的路，所以对**不是玩家放的**那些东西，"不去动"的实际含义
+     * 是那一格从此作废——战斗打断进食会把半块面包永久留在她副手，她整局举不起盾，
+     * 而每一 tick 都如实报告"她没有盾"。
+     *
+     * <p>只动食物。武器由 {@code WeaponSwap.unpark} 在更上游收走了，所以能走到这
+     * 里的非盾物品要么是那口饭，要么就真是玩家放的——图腾、火把、地图不动。副手
+     * 那个图腾是她少死一次的全部原因，为了一面盾把它收进背包是净亏。
+     *
+     * <p>收不进背包就什么都不做。宁可这一局没有盾，也不产生掉落物——
+     * {@link MaidOffhand} 存在的全部理由就是这一句。
      */
     private static void equipFromPack(EntityMaid maid) {
-        if (!maid.getOffhandItem().isEmpty()) {
+        // 先把上一顿被打断的饭扣在隐藏槽里的东西要回来。那件东西经常**就是这面
+        // 盾**——她吃饭时盾被存进去，战斗打断了进食，于是盾再也没还回来，而背包
+        // 里也找不到它。不先做这一步，下面整个循环会诚实地报告"她没有盾"。
+        MaidOffhand.recoverStranded(maid);
+        ItemStack held = maid.getOffhandItem();
+        if (!held.isEmpty()
+                && (held.canPerformAction(ToolActions.SHIELD_BLOCK)
+                        || held.getFoodProperties(maid) == null)) {
             return;
         }
         IItemHandler pack = maid.getAvailableBackpackInv();
@@ -243,8 +279,17 @@ public final class ShieldGuard {
                     || !candidate.canPerformAction(ToolActions.SHIELD_BLOCK)) {
                 continue;
             }
+            // 先取盾再腾手。反过来写会在**背包塞满时永远拿不到盾**：腾手要往背
+            // 包里放东西，而这面盾占着的那一格往往就是唯一的空位。盾不可堆叠，
+            // 取一件必定空出一格，所以这个顺序总是成立。
             ItemStack taken = pack.extractItem(slot, 1, false);
             if (taken.isEmpty()) {
+                return;
+            }
+            if (!MaidOffhand.vacate(maid)) {
+                // 原样放回。取出来之后才发现腾不出手，那面盾就悬在半空，谁都不
+                // 持有它——刚从这里拿走的，一定放得回去。
+                pack.insertItem(slot, taken, false);
                 return;
             }
             maid.setItemSlot(EquipmentSlot.OFFHAND, taken);

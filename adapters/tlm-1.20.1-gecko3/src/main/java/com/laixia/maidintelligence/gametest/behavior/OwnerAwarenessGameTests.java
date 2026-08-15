@@ -261,10 +261,19 @@ public final class OwnerAwarenessGameTests {
         steak.discard();
 
         // Past the advertisement's life, without it ever being re-observed.
+        //
+        // 只看她脚边这一圈。那个 8 是 topK 不是半径——广告板的空间范围是
+        // PERCEPTION_RANGE，够得着隔壁那格结构，于是不加这一句时这条断言真正
+        // 在说的是"整个感知范围内没有任何食物广告"，而隔壁摆什么不归它管。
+        // 表现为加进来一批无关的测试就把它挤红，且红的理由与它检验的东西无关。
         long later = gameTime + 120L;
+        List<ItemEntity> nearby = perception.queryLooseFood(maid, 8, later)
+                .stream()
+                .filter(item -> item.distanceToSqr(maid) < 8.0D * 8.0D)
+                .toList();
         helper.assertTrue(
-                perception.queryLooseFood(maid, 8, later).isEmpty(),
-                "A vanished steak was still being advertised"
+                nearby.isEmpty(),
+                "A vanished steak was still being advertised: " + nearby
         );
         helper.succeed();
     }

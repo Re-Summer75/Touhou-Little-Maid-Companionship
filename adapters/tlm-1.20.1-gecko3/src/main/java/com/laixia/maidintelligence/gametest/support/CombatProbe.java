@@ -333,4 +333,31 @@ public final class CombatProbe {
         }
         return trace.activeIntent().path() + ":" + trace.activeState();
     }
+
+    /**
+     * 编排器怎么看待"打这一架"这件事。
+     *
+     * <p>{@link #intent} 只说她**在做**什么，说不出为什么没在做。实测四个卫道士
+     * 贴到她身上时她连续几十 tick 一个意图都没有——`foes=4`、条件全满足、优先级
+     * 一百、四 tick 评估一次，而 `intent` 只会印一个 `-`。分数和状态在候选名单里，
+     * 不问就永远只能猜。
+     *
+     * <p>格式 {@code 分数/状态}，没有这个候选时印 {@code 转移原因}。
+     */
+    public static String engagement(EntityMaid maid) {
+        @SuppressWarnings("unchecked")
+        MaidIntentApi<EntityMaid> intents =
+                (MaidIntentApi<EntityMaid>) AdapterRuntime.require(
+                        MaidIntentApi.class
+                );
+        IntentTrace trace = intents.inspect(maid);
+        for (IntentTrace.Candidate candidate : trace.candidates()) {
+            if (candidate.intent().path().contains("engage_threat")) {
+                return String.format(
+                        "%.2f/%s", candidate.score(), candidate.status()
+                );
+            }
+        }
+        return "none:" + trace.lastTransition();
+    }
 }

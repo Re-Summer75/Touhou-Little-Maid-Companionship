@@ -4,7 +4,9 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.util.TaskEquipUtil;
 import com.laixia.maidintelligence.feature.behavior.domain.combat.weapon.WeaponCandidate;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.guard.ShieldGuard;
+import com.laixia.maidintelligence.feature.status.tlm.MaidOffhand;
 import net.minecraft.world.item.ItemStack;
+import net.minecraftforge.common.ToolActions;
 
 import java.util.Objects;
 
@@ -32,6 +34,31 @@ public final class WeaponSwap {
 
     public WeaponSwap(TlmWeaponScanner weapons) {
         this.weapons = Objects.requireNonNull(weapons, "weapons");
+    }
+
+    /**
+     * Move a weapon parked in the off hand back into the pack.
+     *
+     * <p>军械表只看主手和背包，副手从来不是它的一个选项——而本体那边**也没有任
+     * 何一条把副手东西拿出来的路**。两件事合起来的效果是：插在副手的那把剑对她
+     * 而言不存在，她拿不出来、换不过去、也不会因为它而放弃更差的主手武器，而那
+     * 一格同时还堵着盾。
+     *
+     * <p>与其给军械表加一个"副手"位置，不如让这条不变量成立：**副手只放盾，或
+     * 她这一刻正在用的东西。**别的武器回背包，回去之后现成的换手就能把它拿到主
+     * 手，盾也重新有地方放。一个动作解开三处。
+     *
+     * <p>只管军械表认得的东西。火把、图腾、地图不是武器，动它们既没有理由，也
+     * 会真的害她——副手那个图腾是她少挨一次死的全部原因。
+     */
+    public void unpark(EntityMaid maid) {
+        ItemStack held = maid.getOffhandItem();
+        if (held.isEmpty()
+                || held.canPerformAction(ToolActions.SHIELD_BLOCK)
+                || !weapons.isWeapon(held)) {
+            return;
+        }
+        MaidOffhand.vacate(maid);
     }
 
     /**

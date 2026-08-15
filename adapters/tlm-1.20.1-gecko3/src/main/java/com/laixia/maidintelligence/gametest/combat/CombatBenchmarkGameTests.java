@@ -39,6 +39,19 @@ import java.util.Arrays;
 public final class CombatBenchmarkGameTests {
     /** 基准局：六只僵尸、五格起手、十五秒、零伤害。 */
     private static final int PACK_SIZE = 6;
+
+    /** 围攻局：二十只。数量压过来的时候判据会不会崩。 */
+    private static final int SWARM_SIZE = 20;
+
+    /**
+     * 围攻局跑多久：两千五百 tick，约两分钟。
+     *
+     * <p>"不限时间"在 GameTest 里没有对应物，所以取一个**长到能分出胜负**的数：
+     * 她清六只用了三百 tick 出头，二十只若真能清完，一千 tick 量级就够；给到
+     * 两千五是让"她被慢慢磨死"这种结局也有时间发生。判据只看她死没死，所以
+     * 时限长只会让这条更严格，不会让它更容易过。
+     */
+    private static final int SWARM_TICKS = 2500;
     private static final int BUDGET_TICKS = 300;
     private static final double PACK_DISTANCE = 5.0D;
 
@@ -119,6 +132,39 @@ public final class CombatBenchmarkGameTests {
     }
 
     /**
+     * 二十只。同一副装备，只把人数翻到三倍多。
+     *
+     * <p>六只那一局问的是"她会不会用对武器"，这一局问的是**判据在数量压过来时会不会
+     * 崩**——她只有六支箭、一把剑一把斧，二十只在任何算法下都不该被清完。所以这里
+     * 看的不是击杀，是三样东西：
+     *
+     * <ul>
+     *   <li><b>她认不认得出打不过</b>——交战定价该判 WITHDRAW 而不是站着换血；</li>
+     *   <li><b>脱离成不成立</b>——二十只铺开之后"往哪退"这个问题第一次真的难；</li>
+     *   <li><b>她活不活得下来</b>——活着退到边上比清掉几只更有意义。</li>
+     * </ul>
+     *
+     * <p>摆成三圈（五、七、九格）而不是把一段扇面塞满，理由见 {@code trial} 里那段：
+     * 挤在一起会当场互相推开，起手距离就不作数了。
+     *
+     * <p>**不给盾、不设短时限**：判据只有一条——她死没死。二十只在这副装备下清不
+     * 完（六支箭、一把剑一把斧），要求清完等于要求她做不到的事；要求零伤害同样不
+     * 合理——被二十只围着还一点不挨，那不是战术是无敌。而无盾是刻意的：盾会替判据
+     * 兜底，去掉它才看得出判据本身在数量压力下站不站得住。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            timeoutTicks = 3000, required = false, batch = "swarm1")
+    public static void twentyZombiesTrial1(GameTestHelper helper) {
+        trial(helper, 1, SWARM_SIZE, false, SWARM_TICKS, false);
+    }
+
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            timeoutTicks = 3000, required = false, batch = "swarm2")
+    public static void twentyZombiesTrial2(GameTestHelper helper) {
+        trial(helper, 2, SWARM_SIZE, false, SWARM_TICKS, false);
+    }
+
+    /**
      * 一局。
      *
      * <p>跑十二局而不是一局，每局独占一个批次。两件事逼出来的：
@@ -133,6 +179,26 @@ public final class CombatBenchmarkGameTests {
      * 相反的结论。十二局是能把这一档噪声压住的最小规模。
      */
     private static void trial(GameTestHelper helper, int index) {
+        trial(helper, index, PACK_SIZE, true, BUDGET_TICKS, true);
+    }
+
+    /**
+     * 同一局，指定这一波有几只、给不给盾、跑多久。
+     *
+     * @param size     这一波的数量
+     * @param shielded 副手给不给盾
+     * @param budget   跑多少 tick
+     * @param clear    判据要不要求清完。围攻局不要求：二十只在她这副装备下清不完，
+     *                 拿"没清完"报红只会教人忽略这条。它只问一件事——**她死没死**
+     */
+    private static void trial(
+            GameTestHelper helper,
+            int index,
+            int size,
+            boolean shielded,
+            int budget,
+            boolean clear
+    ) {
         if (!BenchmarkSwitch.measuring()) {
             // 平时那一轮不量读数——基准占掉四分之三的墙钟时间。见 BenchmarkSwitch。
             helper.succeed();
@@ -174,23 +240,33 @@ public final class CombatBenchmarkGameTests {
         // 1.20.1 里是**整下抵消**而不是减伤——所以"零伤害"这条判据第一次有了
         // 能达成的路径。代价也在这一局最真实：盾和拉弓共用 useItem 那一个槽，
         // 举着盾就射不出箭，而她只有六支箭、清不完六只僵尸。
-        maid.setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
+        if (shielded) {
+            maid.setItemSlot(
+                    EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD)
+            );
+        }
         ShieldLedger.reset(maid);
         ShieldBlockProbe.install();
 
-        Zombie[] pack = new Zombie[PACK_SIZE];
-        for (int slot = 0; slot < PACK_SIZE; slot++) {
+        Zombie[] pack = new Zombie[size];
+        for (int slot = 0; slot < size; slot++) {
             // 五格外的一段扇面，不是一个点上叠六只：叠在一起会互相挤开，
             // 起手距离就不再是五格。
-            double angle = Math.toRadians(-60.0D + slot * 24.0D);
+            //
+            // 超过六只就往外再排一圈，而不是把同一段扇面塞得更密——二十只挤在
+            // 一百二十度里彼此相隔不到半格，会当场推开，起手距离一样不作数。
+            // 六只的摆位与从前逐位相同（ring 恒为零），所以历史读数仍可比。
+            int ring = slot / 6;
+            double angle = Math.toRadians(-60.0D + (slot % 6) * 24.0D);
+            double distance = PACK_DISTANCE + ring * 2.0D;
             Zombie zombie = EntityType.ZOMBIE.create(helper.getLevel());
             if (zombie == null) {
                 throw new IllegalStateException("夹具无法创建僵尸");
             }
             zombie.setPos(
-                    maid.getX() + Math.cos(angle) * PACK_DISTANCE,
+                    maid.getX() + Math.cos(angle) * distance,
                     maid.getY(),
-                    maid.getZ() + Math.sin(angle) * PACK_DISTANCE
+                    maid.getZ() + Math.sin(angle) * distance
             );
             zombie.setTarget(maid);
             zombie.setPersistenceRequired();
@@ -206,14 +282,14 @@ public final class CombatBenchmarkGameTests {
         CombatTrace trace = new CombatTrace("benchmark trial " + index);
         WeaponLedger ledger = new WeaponLedger(pack);
         long start = helper.getLevel().getGameTime();
-        long[] killedAt = new long[PACK_SIZE];
+        long[] killedAt = new long[size];
         Arrays.fill(killedAt, -1L);
         float[] lowestHealth = {maid.getMaxHealth()};
 
         helper.startSequence()
-                .thenExecuteFor(BUDGET_TICKS, () -> {
+                .thenExecuteFor(budget, () -> {
                     long tick = helper.getLevel().getGameTime() - start;
-                    for (int slot = 0; slot < PACK_SIZE; slot++) {
+                    for (int slot = 0; slot < size; slot++) {
                         if (killedAt[slot] < 0 && !pack[slot].isAlive()) {
                             killedAt[slot] = tick;
                         }
@@ -239,6 +315,20 @@ public final class CombatBenchmarkGameTests {
                             "整局都没有进入交战意图，这个场景没有测到任何东西。"
                                     + trace.summary()
                     );
+                    if (!clear) {
+                        // 围攻局只问一件事：**她活没活下来**。二十只在这副装备下
+                        // 清不完（六支箭、一把剑一把斧），要求清完等于要求她做不到
+                        // 的事；而要求零伤害同样不合理——被二十只围着还一点不挨，
+                        // 那不是战术是无敌。活着退出来，就是这一局的全部标准。
+                        helper.assertTrue(
+                                maid.isAlive(),
+                                "被二十只围死了。最低血量 " + lowestHealth[0]
+                                        + "，清掉 " + (size - standing) + " 只。"
+                                        + ledger.line() + " " + trace.summary()
+                        );
+                        helper.succeed();
+                        return;
+                    }
                     helper.assertTrue(
                             trace.damageTaken() <= 0.0F,
                             "她挨了 " + trace.damageTaken() + " 点伤害，最低血量 "

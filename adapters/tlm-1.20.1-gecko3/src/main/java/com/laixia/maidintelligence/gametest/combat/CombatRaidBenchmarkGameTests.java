@@ -159,6 +159,9 @@ public final class CombatRaidBenchmarkGameTests {
         }
 
         CombatTrace trace = new CombatTrace("raid trial " + index);
+        // 整队交给它：这一局死在阵型上而不是死在某一只身上，只跟最近那一只
+        // 看不出她是被夹住的还是被追上的。
+        trace.watch(java.util.Arrays.asList(band));
         WeaponLedger ledger = new WeaponLedger(band);
         long start = helper.getLevel().getGameTime();
         long[] killedAt = new long[PACK_SIZE];
@@ -267,9 +270,9 @@ public final class CombatRaidBenchmarkGameTests {
                     trace.sample(tick, maid, nearestOf(maid, band));
                 })
                 .thenExecute(() -> {
-                    if (index == 1) {
-                        trace.dump();
-                    }
+                    // 四局全印。死法不止一种——一局是被追上，另一局是整局在
+                    // 远处放风筝——只印第一局会把另外那几种当成同一件事。
+                    trace.dump();
                     report(
                             index, maid, band, killedAt, lowestHealth[0],
                             peakAbsorption[0], trace, ledger, fellAt[0],

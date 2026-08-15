@@ -130,13 +130,38 @@ public final class ExchangeAffordability {
                 sheddable &= outruns(maid, threat.entity(), speed);
             }
         }
+        // 盾也算进来。它挡掉的那一份**只在她真的能举起来的时候**存在，而
+        // `guardedShare` 已经把"能挡的方向"和"会不会被斧头打掉"都折算过了：没有
+        // 盾、盾在冷却、或者对面全是持斧的，它就是零。
+        //
+        // 不加这一项的后果是量出来的：这套判据当初是**在她背着盾的时候**验证的，
+        // 而它自己不知道盾的存在。于是把盾拿走之后她仍然按"扛得住"行事——僵尸局
+        // 挨打从加盾前的 1.08 涨到 6.5，比从来没有盾的时候还差三到六倍。她不是
+        // 少了一面盾，是**以为自己还有**。
+        // 空军械表：这里只要 guardedShare，而它只看她副手那面盾和面前这群人，
+        // 与她带了什么武器无关。传武器进来只会让这一处依赖一个它不使用的东西。
+        double guarded = CombatReadiness
+                .of(maid, java.util.List.of(), pack)
+                .guardedShare();
         double mine = CombatReadiness.effectiveHealth(maid);
         // Two tests, because they catch different deaths. The rate says whether
         // she can pay for the exchange; the blow says whether she is still
         // standing to pay for the next one.
+        //
+        // **盾只折算前者。**`guardedShare` 是一个份额——"飞来的伤害里她平均挡得下
+        // 多少"，那是个期望值，用来打折"这段时间累计挨多少"是对的。而 `heaviest`
+        // 问的是**最坏的那一下**：盾要么挡下它要么没挡下，没有"挡下四分之一"这回
+        // 事。拿份额去打折它，等于让她以为最重的一击变轻了，而那条测试存在的全部
+        // 理由就是"她还站不站得住"。
+        //
+        // 这个错误已经付过一次代价：第一版两条都折，实机表现是**被一群敌人围住
+        // 之后她不但不退，反而往里走，直到血打完**——因为下面那个"扛不住就真的
+        // 脱离接触"的分支再也不触发，而挥刀窗口一开又把站位距离要成零。
         if (heaviest > 0.0D && mine < heaviest * MINIMUM_BLOWS_SURVIVED) {
             return false;
         }
+        double taken = landing * (1.0D - guarded);
+        landing = taken;
         double share = sheddable
                 ? SHEDDABLE_EXCHANGE_SHARE
                 : COMMITTED_EXCHANGE_SHARE;

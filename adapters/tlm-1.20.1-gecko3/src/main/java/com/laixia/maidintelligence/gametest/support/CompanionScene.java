@@ -94,6 +94,37 @@ public final class CompanionScene {
         return new CompanionScene(helper, owner, lift);
     }
 
+    /**
+     * 同样的房间，四周砌两格墙。
+     *
+     * <p>房间抬高十二格且默认悬空，而挂了自由模式的女仆会自己游走出去。摔十二格
+     * 正好九到十点，落在世界地面——实测抓到过一次，表现是一条闪避测试报"让开了却
+     * 还是中了"，而她其实已经不在场了。
+     *
+     * <p>做成另一个入口而不是改 {@link #room}：有些场景要的正是"边缘就是断崖"
+     * （退无可退那一支靠它成立），统一砌墙会让那些测试改测别的东西。
+     *
+     * <p>两格高，因为箭走的是她的眼高——挡得住脚，挡不住这条测试要的那一箭。
+     */
+    public static CompanionScene walledRoom(
+            GameTestHelper helper,
+            int width,
+            int depth
+    ) {
+        CompanionScene scene = room(helper, width, depth);
+        for (int y = 1; y <= 2; y++) {
+            for (int x = 0; x <= width; x++) {
+                helper.setBlock(new BlockPos(x, LIFT + y, 0), Blocks.STONE);
+                helper.setBlock(new BlockPos(x, LIFT + y, depth), Blocks.STONE);
+            }
+            for (int z = 0; z <= depth; z++) {
+                helper.setBlock(new BlockPos(0, LIFT + y, z), Blocks.STONE);
+                helper.setBlock(new BlockPos(width, LIFT + y, z), Blocks.STONE);
+            }
+        }
+        return scene;
+    }
+
     public Player owner() {
         return owner;
     }
