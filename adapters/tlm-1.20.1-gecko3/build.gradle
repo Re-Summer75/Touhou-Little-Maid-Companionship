@@ -127,9 +127,12 @@ tasks.register('verifyAdapterLayout') {
         ) {
             include '**/*.java'
         }.files
-        if (mixins.size() != 16) {
+        // +1 tlm.GeckoMaidEntityRunBankMixin：跑步时整个模型侧倾。那是 Gecko
+        // 自己在 setCustomAnimations 里对 Root 骨骼写的 Z 轴倾角，与模型骨骼、
+        // 与动画文件都无关，所以只能在那一层压掉。
+        if (mixins.size() != 17) {
             throw new GradleException(
-                    "Expected 16 TLM/Gecko Mixins, found ${mixins.size()}."
+                    "Expected 17 TLM/Gecko Mixins, found ${mixins.size()}."
             )
         }
         mixins.each { mixin ->

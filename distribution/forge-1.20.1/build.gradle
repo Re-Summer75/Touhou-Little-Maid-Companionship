@@ -288,6 +288,10 @@ tasks.register('verifyMixinLayout') {
     group = 'verification'
     def configs = [
             'tlm_companionship.common.mixins.json'     : [
+                    // 只翻 Entity 的第 3 号共享标志位，不走 LivingEntity 那个
+                    // 会顺手挂上 +30% 速度修饰符的覆写入口。跑步动画要的就是
+                    // 这个标志位。
+                    'EntitySharedFlagsAccessor',
                     'HoneyBlockSlideMixin',
                     'PlayerListAccessor',
                     'ServerPlayerAccessor'
@@ -316,6 +320,9 @@ tasks.register('verifyMixinLayout') {
                     'EntityMaidClientRandomHealingMixin',
                     'EntityMaidRendererYsmCaptureMixin',
                     'GeckoMaidEntityBonePhysicsMixin',
+                    // 去掉模型自带动画里那条按视角的跑步侧倾（Root 骨骼绕 Z
+                    // 轴 = 0.4×头部偏航）。见类注释。
+                    'GeckoMaidEntityRunBankMixin',
                     'GeoRendererOutsideNormalMixin',
                     'SodiumDownNormalPackingMixin',
                     'SodiumOutsideNormalFallbackMixin'

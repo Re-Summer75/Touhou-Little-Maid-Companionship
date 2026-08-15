@@ -19,6 +19,7 @@
     "EntityMaidClientRandomHealingMixin",
     "EntityMaidRendererYsmCaptureMixin",
     "GeckoMaidEntityBonePhysicsMixin",
+    "GeckoMaidEntityRunBankMixin",
     "GeoRendererOutsideNormalMixin",
     "SodiumDownNormalPackingMixin",
     "SodiumOutsideNormalFallbackMixin"
