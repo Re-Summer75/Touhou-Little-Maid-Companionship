@@ -25,6 +25,14 @@ import net.minecraft.world.phys.Vec3;
  * the orchestrator that drives every caller starts only there. That is the
  * general shape of the isolation — other modes are untouched because the code
  * that touches them no longer exists, not because it checks first.
+ *
+ * <p><b>资源契约：移动目标在任一时刻只有一个持有者。</b>持有者是当前活动意图的
+ * 动作——编排器一次只跑一个意图，所以这条契约由结构保证，不需要锁。两条纪律从它
+ * 推出：其一，动作只撤回**自己写的**那个目标（{@code ApproachAndCommitAction}
+ * 的 clearMovement 核对的就是这个身份），别人的目标别人撤；其二，想在别人持有
+ * 移动期间做事的行为**不许碰脚**，只能借空闲的资源——顺路捡拾
+ * （{@code TlmEnRouteScoop}）借的是手，跑步动画借的是表现层，两者都不写这里。
+ * 违反其二的样子在实机量到过：两个意图各写各的目标，她在两个方向之间来回。
  */
 public final class FreedomMovement {
     private FreedomMovement() {

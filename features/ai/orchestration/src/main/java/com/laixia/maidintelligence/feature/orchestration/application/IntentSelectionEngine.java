@@ -15,6 +15,17 @@ final class IntentSelectionEngine<M> {
     private static final int MAX_TRACE_CANDIDATES = 8;
     private static final double MAX_UTILITY_MODIFIER = 50.0D;
 
+    /**
+     * 见 {@link IntentDefinition#IMPERATIVE_INTERRUPT_PRIORITY}。
+     *
+     * <p>此前高 band 打断一律零代价，代价是量出来的：把评估节拍调快之后，
+     * COMPANIONSHIP 每五 tick 就有一次机会把清扫中的她拿走，实机表现是"捡东西
+     * 又不连贯了"——两条规则各自都对，合在一起互相拆台。打断有了代价，节拍才
+     * 能安全地快。
+     */
+    private static final int IMPERATIVE_INTERRUPT_PRIORITY =
+            IntentDefinition.IMPERATIVE_INTERRUPT_PRIORITY;
+
     private final ToLongFunction<M> identity;
     private final UtilityModifierPort<M> modifiers;
 
@@ -62,26 +73,11 @@ final class IntentSelectionEngine<M> {
                     budgetCursor = (index + 1) % intentCount;
                 }
             }
-            /*
-             * Interrupt priority is compared before score, so an intent that
-             * ranks below the incumbent band cannot overtake it at any score
-             * at all and does not need one. Skipping after the budget has
-             * already been charged keeps the round-robin cursor identical to
-             * an unpruned pass.
-             *
-             * <p>Never for a continuation: the active intent's score is what
-             * hysteresis compares against next tick, and a suspended one still
-             * has to be scored to decide whether it may resume. Never while a
-             * trace is retained either — `ai explain` exists to show why an
-             * intent lost, and "it was skipped" is not that answer.
-             */
-            if (!retainTrace
-                    && !continuation
-                    && winner != null
-                    && intent.definition().interruptPriority()
-                    < winner.intent().definition().interruptPriority()) {
-                continue;
-            }
+            // 这里曾有一段按 band 的整段跳过——"低于现胜者的 band 就连分都不用
+            // 算"。它成立的前提是 band 先于分数排序，而那个前提正是被
+            // `betterThan` 撤掉的东西：现在低 band 的候选完全可以以分数取胜，
+            // 跳过它就是替它输掉。剪枝改由 `pruneFloor` 承担——不看 band，只看
+            // "还能不能超过现胜者的分数"，对 PRODUCT 聚合这一样便宜。
             double score = score(
                     subject,
                     intent,
@@ -150,14 +146,27 @@ final class IntentSelectionEngine<M> {
         );
     }
 
+    /**
+     * 换手要么是**打断**，要么是**赢**，两条路的规矩不同。
+     *
+     * <p>打断：候选的 band 严格更高、且达到
+     * {@link #IMPERATIVE_INTERRUPT_PRIORITY}——外界的要求（战斗、主人的命令）不等
+     * 承诺窗口。这是 band 契约里"谁能打断谁"的全部含义。
+     *
+     * <p>赢：其余一切换手都要付两笔钱——等掉现任的 {@code minimum_commit_ticks}，
+     * 再以分数超出 {@code switch_margin}。此前高 band 走的也是免费打断那条路，
+     * 于是 COMPANIONSHIP(30) 可以零代价从清扫(10)手里把她拿走再被拿回来，实机
+     * 就是"跟着走和捡东西打架"。band 从此不再是插队证，只是打断资格。
+     */
     boolean canSwitch(
             MaidIntentRuntimeState state,
             IntentCatalog.CompiledIntent active,
             ScoredIntent candidate,
             long gameTime
     ) {
-        if (candidate.intent().definition().interruptPriority()
-                > active.definition().interruptPriority()) {
+        int challenger = candidate.intent().definition().interruptPriority();
+        if (challenger > active.definition().interruptPriority()
+                && challenger >= IMPERATIVE_INTERRUPT_PRIORITY) {
             return true;
         }
         return gameTime >= state.committedUntilTick
@@ -378,9 +387,8 @@ final class IntentSelectionEngine<M> {
      * The score an intent must be able to beat, or
      * {@link Double#NEGATIVE_INFINITY} when it has to be scored in full.
      *
-     * <p>Only a candidate inside the incumbent's interrupt band is bounded by
-     * its score. Above the band it wins on priority no matter what it scores,
-     * and below it the caller has already skipped it.
+     * <p>排序交还给分数之后，这条下界对**所有** band 的候选都成立——不再有"高 band
+     * 不用比分"的豁免，也不再有被调用方整段跳过的低 band。
      */
     private double pruneFloor(
             ScoredIntent winner,
@@ -391,12 +399,14 @@ final class IntentSelectionEngine<M> {
         if (retainTrace || continuation || winner == null) {
             return Double.NEGATIVE_INFINITY;
         }
+        // 强制档不剪：它们不按分数参赛（线上按等级），剪出来的上界值一旦流进
+        // 同档平手比较就是错的排序依据。强制档一共两三个意图，全额算得起。
         if (intent.definition().interruptPriority()
-                != winner.intent().definition().interruptPriority()) {
+                >= IMPERATIVE_INTERRUPT_PRIORITY) {
             return Double.NEGATIVE_INFINITY;
         }
-        // Strict, because an exact tie is still resolved by intent id and an
-        // over-estimate must never be allowed to reach that comparison.
+        // Strict, because an exact tie is still resolved by priority and then
+        // intent id, and an over-estimate must never reach those comparisons.
         return winner.score();
     }
 
@@ -452,17 +462,49 @@ final class IntentSelectionEngine<M> {
             IntentCatalog.CompiledIntent intent,
             double score
     ) {
+        /**
+         * 分界线以上按等级，以下按分数。
+         *
+         * <p>此前是全场先比 band 再比分数：band 30 的 0.51 永远赢 band 10 的
+         * 0.99——效用层在跨 band 时被结构性关掉，正是 {@code CompanionBand} 的
+         * javadoc 警告的那件事（"把偏好写回这些数字，等于关掉效用层"）。护送与
+         * 清扫的拉锯从这里来：不是分数没调好，是分数根本没被比较过。
+         *
+         * <p>但"全场只看分数"也试过，立刻在闸门上翻车：强制档（战斗、主人的命令）
+         * 的存在意义就是**不看分**——0.5 分的命令也要立刻拿走她，而按分数排它连
+         * 胜者都当不上，{@code canSwitch} 根本见不到它。所以线上线下两种法则：
+         * 线上（>= {@code IMPERATIVE_INTERRUPT_PRIORITY}）是外界的要求，压过她
+         * 自己的一切安排，彼此间按等级；线下是她自己的安排，只按分数，band 至多
+         * 做平手裁决。
+         */
         boolean betterThan(ScoredIntent other) {
+            boolean imperative = intent.definition().interruptPriority()
+                    >= IMPERATIVE_INTERRUPT_PRIORITY;
+            boolean otherImperative =
+                    other.intent.definition().interruptPriority()
+                            >= IMPERATIVE_INTERRUPT_PRIORITY;
+            if (imperative != otherImperative) {
+                return imperative;
+            }
+            if (imperative) {
+                int priorityOrder = Integer.compare(
+                        intent.definition().interruptPriority(),
+                        other.intent.definition().interruptPriority()
+                );
+                if (priorityOrder != 0) {
+                    return priorityOrder > 0;
+                }
+            }
+            int scoreOrder = Double.compare(score, other.score);
+            if (scoreOrder != 0) {
+                return scoreOrder > 0;
+            }
             int priorityOrder = Integer.compare(
                     intent.definition().interruptPriority(),
                     other.intent.definition().interruptPriority()
             );
             if (priorityOrder != 0) {
                 return priorityOrder > 0;
-            }
-            int scoreOrder = Double.compare(score, other.score);
-            if (scoreOrder != 0) {
-                return scoreOrder > 0;
             }
             return intent.id().compareTo(other.intent.id()) < 0;
         }

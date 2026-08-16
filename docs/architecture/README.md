@@ -4,7 +4,9 @@
 [`gradle/version-matrix.json`](../../gradle/version-matrix.json)；不得再把 Minecraft、Forge、
 Java、Parchment、TLM、Gecko 及项目路径组合复制到 `gradle.properties`、版本目录或其他清单。
 陪伴智能的所有权、生命周期、不变量、生产接线和验证注册规则见
-[陪伴智能维护契约](companion-intelligence.md)。
+[陪伴智能维护契约](companion-intelligence.md)。AI 系统的结构性缺陷审计
+（缺陷为什么持续产生、四条接缝、升级的依赖顺序）见
+[AI 缺陷审计](ai-defect-audit.md)。
 
 当前默认 target 为 `1.20.1`：
 

@@ -17,19 +17,14 @@ import java.util.function.ToDoubleFunction;
 /**
  * Holds the shipped catalog to the shape that makes its utility layer real.
  *
- * <p>The engine compares {@code interruptPriority} first and only falls through
- * to score when two candidates share one — a property its own pruning test
- * relies on. So a catalog where every intent has a distinct priority is a
- * priority list with utility bolted to the side: the scores are computed, and
- * then never consulted. That was the state of this data pack, and no test would
- * have noticed, because every individual definition was valid.
+ * <p>排序已经交还给分数：引擎按 score 排全场，band 只裁决打断资格（80 以上可以
+ * 无视承诺，其余要等 {@code minimum_commit_ticks} 再赢过 {@code switch_margin}）。
+ * 这让**全目录**的分数第一次互相可比，所以这里的要求从"同 band 内可比"升级为
+ * "整个目录可比"——{@code PRODUCT} 聚合是这个性质的来源，{@code SUM} 无上界、
+ * 其含义随条目数漂移，一条都不能混进来。
  *
- * <p>What follows therefore checks the catalog as a whole rather than its
- * entries: intents must be grouped into bands, bands must contain more than one
- * member, and members of a band must be comparable — which is what
- * {@code PRODUCT} buys and {@code SUM} does not, since a sum is unbounded and
- * its base score only means the same thing between intents that happen to
- * declare the same number of terms.
+ * <p>band 的取值仍然只允许五档，且与 {@code CompanionBand} 一字不差：它现在只
+ * 表达"外界的要求 / 她自己的安排"这条打断分界，写出新数字不是调参，是改闸门。
  */
 public final class CompanionPriorityBandVerification {
     /**
@@ -53,6 +48,7 @@ public final class CompanionPriorityBandVerification {
 
     public static void main(String[] args) throws IOException {
         Map<String, IntentDefinition> intents = bundledIntents();
+        imperativeLineMatchesTheBandTable();
         everyIntentIsScoreComparable(intents);
         prioritiesFallIntoDeclaredBands(intents);
         bandsActuallyContest(intents);
@@ -256,6 +252,27 @@ public final class CompanionPriorityBandVerification {
                             + "cannot be compared with the rest of its band"
             );
         }
+    }
+
+    /**
+     * 打断分界线与 band 表对齐：外界的要求从 OWNER_COMMAND 起，往下都是她自己的
+     * 安排。分界挪了而这里没改，就是有人只调了一头。
+     */
+    private static void imperativeLineMatchesTheBandTable() {
+        require(
+                IntentDefinition.IMPERATIVE_INTERRUPT_PRIORITY == OWNER_COMMAND,
+                "The imperative interrupt line ("
+                        + IntentDefinition.IMPERATIVE_INTERRUPT_PRIORITY
+                        + ") no longer sits on OWNER_COMMAND ("
+                        + OWNER_COMMAND + ")"
+        );
+        require(
+                IntentDefinition.IMPERATIVE_INTERRUPT_PRIORITY > NEEDS
+                        && IntentDefinition.IMPERATIVE_INTERRUPT_PRIORITY
+                        <= SAFETY,
+                "The imperative line must separate her own arrangements from "
+                        + "the world's demands"
+        );
     }
 
     private static void prioritiesFallIntoDeclaredBands(

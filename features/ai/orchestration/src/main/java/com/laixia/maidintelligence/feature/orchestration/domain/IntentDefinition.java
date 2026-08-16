@@ -20,6 +20,19 @@ public record IntentDefinition(
         int cooldownTicks,
         UtilityAggregation aggregation
 ) {
+    /**
+     * 打断可以无视承诺的最低优先级。
+     *
+     * <p>band 契约（{@code CompanionBand}）：数值只回答"谁能打断谁"，偏好由效用
+     * 分数回答。这条线以上（SAFETY、OWNER_COMMAND）是**外界的要求**——打起来了、
+     * 主人叫她——可以立刻拿走她；以下是**她自己的安排**，互相之间只以分数竞争，
+     * 且必须尊重现任的 {@code minimumCommitTicks}。
+     *
+     * <p>与 band 表的数值对齐由 {@code CompanionPriorityBandVerification} 把守；
+     * 消费它的是选择引擎的 {@code canSwitch}。
+     */
+    public static final int IMPERATIVE_INTERRUPT_PRIORITY = 80;
+
     public IntentDefinition {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(plan, "plan");

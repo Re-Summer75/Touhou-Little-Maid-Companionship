@@ -4,6 +4,7 @@ import com.github.tartaricacid.touhoulittlemaid.api.entity.ai.IExtraMaidBrain;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
 import com.laixia.maidintelligence.feature.orchestration.tlm.MaidIntentBehavior;
+import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmEnRouteScoop;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmIdleGaze;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmSprint;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmWeaponStow;
@@ -56,12 +57,16 @@ public final class BehaviorExtraBrain implements IExtraMaidBrain {
         // 意图之前，读的就是上一 tick 落定的那个移动目标——一 tick 的滞后正好，
         // 因为它描述的本来就是她已经在走的那段路。
         sprint.tick(maid, gameTime);
+        // 路过的东西顺手收了。手是空闲资源，脚不是她的——不绕路、不停步、
+        // 不与任何意图竞争，这正是"跟着走还能顺手捡"的那一半。
+        scoop.tick(maid, gameTime);
         ProjectileDodge.consider(maid);
     }
 
     private final TlmIdleGaze gaze = TlmIdleGaze.create();
     private final TlmWeaponStow stow = TlmWeaponStow.create();
     private final TlmSprint sprint = TlmSprint.create();
+    private final TlmEnRouteScoop scoop = TlmEnRouteScoop.create();
 
     @Override
     public List<Pair<Integer, BehaviorControl<? super EntityMaid>>>

@@ -370,8 +370,11 @@ public final class OffhandGameTests {
     private static void assertNothingDropped(
             GameTestHelper helper, EntityMaid maid
     ) {
+        // 只看她身边四格，不看十二格。测试结构在共享世界里紧挨着排，十二格伸进
+        // 邻居家——实测被隔壁掉进来的一根铁轨打红过一次。这条断言守的是"**她**
+        // 不产生掉落物"，而她的每一次操作都发生在原地。
         List<ItemEntity> dropped = helper.getLevel().getEntitiesOfClass(
-                ItemEntity.class, maid.getBoundingBox().inflate(12.0D)
+                ItemEntity.class, maid.getBoundingBox().inflate(4.0D)
         );
         helper.assertTrue(
                 dropped.isEmpty(),

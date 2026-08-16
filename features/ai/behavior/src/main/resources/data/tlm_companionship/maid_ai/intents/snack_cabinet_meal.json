@@ -59,7 +59,7 @@
     "base_score": 0.85,
     "minimum_score": 0.02,
     "activation_chance": 1.0,
-    "evaluation_interval_ticks": 20,
+    "evaluation_interval_ticks": 5,
     "minimum_commit_ticks": 20,
     "switch_margin": 0.1,
     "interrupt_priority": 50,
