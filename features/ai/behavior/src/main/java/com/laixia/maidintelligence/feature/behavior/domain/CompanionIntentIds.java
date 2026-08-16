@@ -30,6 +30,18 @@ public final class CompanionIntentIds {
     /** Something edible is lying within reach and free to take. */
     public static final OrchestrationId LOOSE_FOOD_AVAILABLE =
             id("fact/loose_food_available");
+    /**
+     * 附近躺着她会收走的东西。
+     *
+     * <p>与 {@link #LOOSE_FOOD_AVAILABLE} 的分别是"为什么去"和"顺手带走"：那一条
+     * 问的是饿了能不能就地解决，这一条不问用途，只问她会不会捡。
+     *
+     * <p>**拾物开关就折在这一条里。**答案来自本体的 {@code canPickup}，而那个谓词
+     * 已经包含开关、物品过滤和背包余量——关掉拾物、或者背包满了，这条事实就是
+     * 假的。所以意图那边不需要再写一条"拾物已开启"的条件：一条事实一个来源。
+     */
+    public static final OrchestrationId LOOSE_DROP_AVAILABLE =
+            id("fact/loose_drop_available");
     public static final OrchestrationId SNACK_CABINET_MEAL_AVAILABLE =
             id("fact/snack_cabinet_meal_available");
     /**
@@ -109,6 +121,15 @@ public final class CompanionIntentIds {
     /** Walk to a dropped item and take it, rather than opening anything. */
     public static final OrchestrationId PICK_UP_LOOSE_FOOD =
             id("action/pick_up_loose_food");
+    /**
+     * 把地上的东西收起来，一件接一件。
+     *
+     * <p>与 {@link #PICK_UP_LOOSE_FOOD} 走的是同一套"走过去再动手"，要的东西不同：
+     * 那一条是为了吃，只挑吃得下的，走到了立刻开吃；这一条不挑，走到了由本体自己
+     * 的拾取把它收进背包。
+     */
+    public static final OrchestrationId PICK_UP_LOOSE_DROP =
+            id("action/pick_up_loose_drop");
     public static final OrchestrationId COMPANION_COMMAND_WINDOW =
             id("action/companion_command_window");
     public static final OrchestrationId REQUEST_HUNGER_ATTENTION =
@@ -160,6 +181,7 @@ public final class CompanionIntentIds {
                 HUNGER,
                 SNACK_CABINET_MEAL_AVAILABLE,
                 LOOSE_FOOD_AVAILABLE,
+                LOOSE_DROP_AVAILABLE,
                 PACK_MEAL_AVAILABLE,
                 HOME_DISTANCE,
                 FOLLOW_MODE,
@@ -196,6 +218,7 @@ public final class CompanionIntentIds {
                         APPROACH_OWNER,
                         FETCH_SNACK_CABINET_MEAL,
                         PICK_UP_LOOSE_FOOD,
+                        PICK_UP_LOOSE_DROP,
                         EAT_FROM_PACK,
                         FOLLOW_OWNER_ANCHOR,
                         RETURN_HOME_ANCHOR,
@@ -220,6 +243,10 @@ public final class CompanionIntentIds {
                         ),
                         Map.entry(
                                 LOOSE_FOOD_AVAILABLE,
+                                FactType.BOOLEAN
+                        ),
+                        Map.entry(
+                                LOOSE_DROP_AVAILABLE,
                                 FactType.BOOLEAN
                         ),
                         Map.entry(
@@ -281,6 +308,19 @@ public final class CompanionIntentIds {
                                 FETCH_SNACK_CABINET_MEAL,
                                 new ActionSchema(
                                         FETCH_SNACK_CABINET_MEAL,
+                                        Map.of(
+                                                "speed",
+                                                ActionParameterType.NUMBER,
+                                                "close_distance",
+                                                ActionParameterType.INTEGER
+                                        ),
+                                        Set.of()
+                                )
+                        ),
+                        Map.entry(
+                                PICK_UP_LOOSE_DROP,
+                                new ActionSchema(
+                                        PICK_UP_LOOSE_DROP,
                                         Map.of(
                                                 "speed",
                                                 ActionParameterType.NUMBER,

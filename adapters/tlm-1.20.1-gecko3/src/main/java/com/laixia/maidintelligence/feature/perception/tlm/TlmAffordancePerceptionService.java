@@ -19,6 +19,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -286,6 +287,59 @@ public final class TlmAffordancePerceptionService {
                 topK,
                 gameTime
         );
+    }
+
+    /**
+     * 她会收走的东西，最近的在前。
+     *
+     * <p><b>这一问不走广告板，直接扫实体。</b>其余的感知走广告板，是因为它们问的
+     * 是方块——柜子、椅子——那种东西每个人各扫一遍世界太贵，登记一次共享才划算。
+     * 掉落物不是那种问题：它就是身边的一圈实体，原版判"附近有没有东西可捡"也是
+     * 这么判的。
+     *
+     * <p>送进广告板的代价是量出来的：二十件散落，她收了几件之后就站着不动，读数
+     * 是 {@code blocked: loose_drop_available} 占一百七十一 tick——**她确实看不见**。
+     * 三道关卡叠在一起：每只女仆二十 tick 才观察一次、广告有六十 tick 的存活期、
+     * 而索引每 tick 有检查预算（下限八条，还要和同一 tick 里别的查询分）。一堆
+     * 随捡随消失的东西，正好把这三道关卡的短处全占了。
+     *
+     * <p>直接扫的代价是一次 {@code getEntitiesOfClass}，按区块分段索引，原版每
+     * tick 都在做。它顺带取消了三件事：观察节流、广告过期、以及"捡走之后广告还
+     * 挂着"——最后这一条曾经把索引的检查预算吃光，让她对满地的东西视而不见。
+     *
+     * <p>返回 {@code Entity} 而不是 {@code ItemEntity}：经验球和 P 点也在这一批
+     * 里，而它们不是物品。收成一类是有意的——按距离一件件收，不分类别，否则她会
+     * 为了一颗远处的经验球放着脚边的铁锭不管。
+     */
+    public List<Entity> queryLooseDrops(
+            EntityMaid maid,
+            int topK,
+            long gameTime
+    ) {
+        if (!(maid.level() instanceof ServerLevel level)) {
+            return List.of();
+        }
+        AABB bounds = maid.getBoundingBox().inflate(
+                PERCEPTION_RANGE,
+                PERCEPTION_RANGE / 2.0D,
+                PERCEPTION_RANGE
+        );
+        // 先按类型和距离筛——两步都很便宜；`canPickup` 会模拟一次背包插入，
+        // 那一步留到最后，且只对真正要返回的那几件做。
+        List<Entity> nearby = new ArrayList<>(
+                level.getEntities(maid, bounds, TlmLooseDrop::couldBeTaken)
+        );
+        nearby.sort(java.util.Comparator.comparingDouble(maid::distanceToSqr));
+        List<Entity> found = new ArrayList<>();
+        for (Entity candidate : nearby) {
+            if (found.size() >= Math.max(1, topK)) {
+                break;
+            }
+            if (TlmLooseDrop.collectable(maid, candidate)) {
+                found.add(candidate);
+            }
+        }
+        return List.copyOf(found);
     }
 
     public List<ItemEntity> queryLooseFood(

@@ -41,11 +41,25 @@ import java.util.List;
 @PrefixGameTestTemplate(false)
 @SuppressWarnings("null")
 public final class AmbientBehaviorGameTests {
-    /** 她的感知半径，也是她最早能看见一支箭的距离。 */
-    private static final double SHOT_RANGE = 16.0D;
+    /**
+     * 箭从多远处飞来。
+     *
+     * <p>曾经是十六格——她的感知半径，"她最早能看见一支箭"的那个距离。读起来很
+     * 对，实机上却是个陷阱：房间只有九格深，所以那支箭是在**测试结构外面**生成的，
+     * 而 GameTest 只强加载各个结构所在的区块。落在加载区外的实体根本不被 tick。
+     *
+     * <p>症状不是"箭被挡住了"，而是**箭原地不动**：实测 alive=true、速度仍是
+     * (0,0,1.6)、位置二十八 tick 一格未挪。它此前能过，只是碰巧生成在隔壁结构的
+     * 加载范围里——世界里多摆几个测试，这份运气就没了，而报出来的错是"那支箭根本
+     * 没飞"，看上去像闪避坏了。
+     *
+     * <p>现在整条弹道待在房间内。距离缩短、速度同比降低，**飞行时间仍是十 tick**
+     * ——闪避判据吃的是撞击前还剩多久，那才是这条测试要给的东西。
+     */
+    private static final double SHOT_RANGE = 7.0D;
 
-    /** 骷髅箭每 tick 的位移。 */
-    private static final double ARROW_SPEED = 1.6D;
+    /** 箭每 tick 的位移。与 {@link #SHOT_RANGE} 配成十 tick 的飞行时间。 */
+    private static final double ARROW_SPEED = 0.7D;
 
     /** 让开自己半个身位加上飞行物的判定余量，才算真的让开了。 */
     private static final double CLEARED_BODY = 0.6D;
@@ -329,7 +343,8 @@ public final class AmbientBehaviorGameTests {
         // 模式——她会自己游走出地板，摔下去正好九到十点，断言随即报"让开了却还
         // 是中了"。实测抓到过：来源 fall、落点 y=-60。那不是没躲开箭，那是她已经
         // 不在场了，连上面两条横移断言都失去意义。
-        EntityMaid maid = scene.maid(4, 2, 4);
+        // 站在房间靠里的一侧，好让整条弹道（七格）都落在地板上方。
+        EntityMaid maid = scene.maid(4, 2, 8);
         maid.setTask(new FreedomMaidTask());
 
         double lineX = maid.getX();
@@ -355,6 +370,12 @@ public final class AmbientBehaviorGameTests {
                                     || arrow.getZ() > maid.getZ()
                                     - SHOT_RANGE / 2.0D,
                             "那支箭根本没飞——这条测试什么也没测到"
+                                    + "（箭 alive=" + arrow.isAlive()
+                                    + " 在 " + arrow.blockPosition()
+                                    + " 速度 " + arrow.getDeltaMovement()
+                                    + "，她在 " + maid.blockPosition()
+                                    + "，出生 z=" + (maid.getZ() - SHOT_RANGE)
+                                    + "）"
                     );
                     helper.assertTrue(
                             aside >= CLEARED_BODY,

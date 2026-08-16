@@ -1,0 +1,19 @@
+{
+  "format_version": 2,
+  "initial_state": "collect",
+  "resume_policy": "restart_step",
+  "maximum_suspend_ticks": 200,
+  "states": {
+    "collect": {
+      "action": "tlm_companionship:action/pick_up_loose_drop",
+      "parameters": {
+        "speed": "0.7",
+        "close_distance": "1"
+      },
+      "timeout_ticks": 1200,
+      "on_success": "$success",
+      "on_failure": "$failure",
+      "on_cancel": "$failure"
+    }
+  }
+}

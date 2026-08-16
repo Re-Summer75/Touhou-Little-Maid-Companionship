@@ -308,6 +308,8 @@ public final class TlmMaidFactReader {
                  * its own, and the intent tests them itself.
                  */
                 !perception.queryLooseFood(maid, 1, gameTime).isEmpty(),
+                // 拾物开关折在这一问里：广告主只在 `canPickup` 点头时才登记它。
+                !perception.queryLooseDrops(maid, 1, gameTime).isEmpty(),
                 // 她身上有没有能吃的。与上面两条不同的是，这一条不需要她走
                 // 任何一步——所以它也是唯一一条在被围住时仍然可用的。
                 hasPackMeal(maid),
@@ -407,6 +409,9 @@ public final class TlmMaidFactReader {
         }
         if (fact.equals(CompanionIntentIds.LOOSE_FOOD_AVAILABLE)) {
             return bool(snapshot.looseFoodAvailable());
+        }
+        if (fact.equals(CompanionIntentIds.LOOSE_DROP_AVAILABLE)) {
+            return bool(snapshot.looseDropAvailable());
         }
         if (fact.equals(CompanionIntentIds.HOME_DISTANCE)) {
             return snapshot.homeDistance();

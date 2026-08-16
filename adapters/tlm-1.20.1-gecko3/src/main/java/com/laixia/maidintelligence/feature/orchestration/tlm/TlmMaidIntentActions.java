@@ -24,6 +24,7 @@ import com.laixia.maidintelligence.feature.orchestration.tlm.combat.perception.T
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.sustenance.EatFromPackAction;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.arsenal.TlmWeaponScanner;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.ApproachAndCommitAction;
+import com.laixia.maidintelligence.feature.orchestration.tlm.errand.leisure.LooseDropErrand;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.needs.LooseFoodErrand;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.needs.CabinetMealErrand;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.company.FollowOwnerErrand;
@@ -41,6 +42,7 @@ public final class TlmMaidIntentActions
     private final TlmOwnerCompanionIntentAction ownerAction;
     private final ApproachAndCommitAction snackCabinetAction;
     private final ApproachAndCommitAction looseFoodAction;
+    private final ApproachAndCommitAction looseDropAction;
     private final ApproachAndCommitAction followOwnerAction;
     private final ApproachAndCommitAction returnHomeAction;
     private final ApproachAndCommitAction restOnSeatAction;
@@ -133,6 +135,11 @@ public final class TlmMaidIntentActions
                         snackCabinetMeals.mealAccess()
                 )
         );
+        // 同一份掉落物索引的第三个读者。前两个各自为了一个需求而去（吃、打），
+        // 这一个不问用途——她愿意收的就收，而"愿不愿意"由本体的拾物开关回答。
+        looseDropAction = new ApproachAndCommitAction(
+                new LooseDropErrand(snackCabinetMeals.perception())
+        );
         deployBoatAction = abilities == null
                 ? null
                 : new TlmDeployBoatIntentAction(abilities);
@@ -153,6 +160,10 @@ public final class TlmMaidIntentActions
                 errand(CompanionBand.NEEDS, snackCabinetAction));
         table.put(CompanionIntentIds.PICK_UP_LOOSE_FOOD,
                 errand(CompanionBand.NEEDS, looseFoodAction));
+        // LEISURE：吃饭、跟随、打架任何一个都能打断它，而打断它没有代价——
+        // 掉落物还在原地，回头再来就是。
+        table.put(CompanionIntentIds.PICK_UP_LOOSE_DROP,
+                errand(CompanionBand.LEISURE, looseDropAction));
         table.put(CompanionIntentIds.FOLLOW_OWNER_ANCHOR,
                 errand(CompanionBand.COMPANIONSHIP, followOwnerAction));
         table.put(CompanionIntentIds.RETURN_HOME_ANCHOR,

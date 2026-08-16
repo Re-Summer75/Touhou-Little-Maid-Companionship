@@ -161,6 +161,15 @@ public final class CompanionScene {
         };
         maid.setPos(GameTestPositions.center(helper, x, y + lift - 1, z));
         maid.setTame(true);
+        // 拾物默认是**开**的（本体 `define(DATA_PICKUP, true)`，类型 ALL），而清扫
+        // 的感知半径有十六格——够得着同一个世界里紧挨着排的别的测试结构。不关掉的
+        // 话，任何一条测试的女仆都可能中途跑去捡邻居的东西，而那条测试量的往往是
+        // 别的：跑步动画那条就这么红过，报的是"她已经停下来了还在跑"，其实是她被
+        // 一件掉落物拉着没停。
+        //
+        // 要清扫的测试自己 `setPickup(true)`——那也让"这条测试依赖拾物"变成写在
+        // 测试里的一句话，而不是一个默认值。
+        maid.setPickup(false);
         maid.setHomeModeEnable(false);
         maid.setOwnerUUID(owner.getUUID());
         helper.getLevel().addFreshEntity(maid);
