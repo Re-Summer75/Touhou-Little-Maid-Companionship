@@ -18,9 +18,9 @@ import java.util.WeakHashMap;
 /**
  * 东张西望。
  *
- * <p>写在**意图之前**，所以任何有事做的意图都会盖掉这一眼——走向某处时看着那处，
- * 打架时看着对手。环顾因此是默认值而不是决定，不需要谁去协调，也不会和别的写入者
- * 抢同一块记忆。
+ * <p>只在她**没有行程**时上岗：脚被走路或战斗占着的时候，眼睛归路和对手，这里
+ * 一个字不写（见 {@code tick} 里的让位）。环顾因此是空闲时的默认值而不是决定，
+ * 不需要谁去协调，也不会和别的写入者抢同一块记忆。
  *
  * <p>一眼要**记住**，理由和游走落点完全一样：每 tick 重挑一个方向不是环顾，是抽搐。
  * 这条契约在差事骨架那边是写下来的（{@code Errand#find} 的稳定性），这里没有骨架
@@ -54,6 +54,19 @@ public final class TlmIdleGaze {
     /** 每 tick 一次，由 {@code MaidIntentBehavior} 的 preTick 驱动。 */
     public void tick(EntityMaid maid, long gameTime) {
         if (!maid.isAlive() || maid.isSleeping()) {
+            return;
+        }
+        // 在路上不写：脚被行程占着的时候，眼睛默认归路。
+        //
+        // 类注释曾说"任何有事做的意图都会盖掉这一眼"，实际不成立：差事只在写入
+        // **新**路线的那一 tick 顺手写一次注视（alreadyHeading 提前返回），而这里
+        // 每 tick 都在覆写——于是整段行走期间她的头归闲看管，四成时间扭头盯着
+        // 主人走路，实机看着极不自然。行程写下的注视目标（EntityTracker 会跟着
+        // 移动的目的地走）留在记忆里不动，正好就是"看着要去的地方"。
+        // 打架同理，脸归战斗的 face 管，这里不去抢。
+        if (maid.getBrain().hasMemoryValue(MemoryModuleType.WALK_TARGET)
+                || maid.getBrain().hasMemoryValue(
+                        MemoryModuleType.ATTACK_TARGET)) {
             return;
         }
         Glance current = glances.get(maid);

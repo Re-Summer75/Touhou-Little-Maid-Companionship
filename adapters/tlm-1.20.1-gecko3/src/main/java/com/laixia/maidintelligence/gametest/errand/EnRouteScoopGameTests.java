@@ -4,6 +4,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmEnRouteScoop;
+import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmIdleGaze;
 import com.laixia.maidintelligence.gametest.support.GameTestPositions;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.core.BlockPos;
@@ -59,6 +60,37 @@ public final class EnRouteScoopGameTests {
                         .getMemory(MemoryModuleType.WALK_TARGET)
                         .orElse(null) == heading,
                 "The scoop touched her walk target — hands only, never feet"
+        );
+        maid.discard();
+        helper.succeed();
+    }
+
+    /**
+     * 赶路时她的眼睛在路上，不在闲看手里。
+     *
+     * <p>差事只在写入**新**路线的那一 tick 顺手写一次注视（之后 alreadyHeading
+     * 提前返回），而闲看曾经每 tick 无条件覆写——于是整段行走期间她的头归闲看管，
+     * 四成时间扭头盯着主人走路。实机报的"走路时也总看着主人、不自然"就是它。
+     * 修法：脚被行程占着时闲看一个字不写，行程写下的注视目标（EntityTracker
+     * 跟着目的地走）留在记忆里，正是"看着要去的地方"。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty")
+    public static void enRouteHerEyesStayOnTheRoad(GameTestHelper helper) {
+        EntityMaid maid = maid(helper);
+        TlmIdleGaze gaze = TlmIdleGaze.create();
+        walkFarAway(helper, maid);
+
+        gaze.tick(maid, helper.getLevel().getGameTime());
+        helper.assertFalse(
+                maid.getBrain().hasMemoryValue(MemoryModuleType.LOOK_TARGET),
+                "The idle gaze grabbed her eyes while she was going somewhere"
+        );
+
+        maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+        gaze.tick(maid, helper.getLevel().getGameTime());
+        helper.assertTrue(
+                maid.getBrain().hasMemoryValue(MemoryModuleType.LOOK_TARGET),
+                "Standing idle she stopped looking at the world entirely"
         );
         maid.discard();
         helper.succeed();
