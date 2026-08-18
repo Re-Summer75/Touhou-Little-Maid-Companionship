@@ -239,6 +239,9 @@ band 30 的 0.51 永远赢 band 10 的 0.99——效用层在跨 band 时被结�
 | 差一跳要起跳 | `JumpForTarget` |
 | 走路时借空手顺路收 | `TlmEnRouteScoop` |
 | 够不够得着（含跳与站位） | `TlmLooseDrop` |
+| 立足点必须真实存在（活板门/门的分类口子） | `SafeFootingNodeEvaluator` + `SureFootedNavigation` |
+| 绕路还是跨越由 A* 距离裁决（三维跳跃连线：同层一到三格、上一格跨一到二、下一格跨一到三，定价只做平手） | 同上（`GAP_JUMP_MALUS` + `MAX_GAP_SPAN` + `UP_HOP_MAX_REACH`，推力配速、落地收腿、崖边收步在执行侧） |
+| 上一格的坎撞上之前就起跳、速度带过去（不加冲量，不跳过头） | `SureFootedNavigation.maybeJumpAStep`（战斗 `StepAhead` 的同一课，一个按路径判、一个按航向判） |
 
 下沉也包括**退货**：`OwnerLeash`（跟随时只在主人八格内挑清扫目标）曾在这张表上，
 承诺模型落地后被删——它把拾取的有效感知缩成主人周围一小圈，而战斗、柜子、座位全是

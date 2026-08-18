@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.feature.behavior.tlm;
 
 import com.github.tartaricacid.touhoulittlemaid.api.entity.ai.IExtraMaidBrain;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.laixia.maidintelligence.feature.behavior.tlm.pathing.SureFootedNavigation;
 import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
 import com.laixia.maidintelligence.feature.orchestration.tlm.MaidIntentBehavior;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmEnRouteScoop;
@@ -50,6 +51,9 @@ public final class BehaviorExtraBrain implements IExtraMaidBrain {
      * 她的脚，但只占到落点为止，而且是安全那一档，本来就压得过任何别的事。
      */
     private void ambient(EntityMaid maid, long gameTime) {
+        // 寻路升级守卫：拿着裸的地面导航就换成会查立足点的那个。放在最前，
+        // 因为这一 tick 里随后写下的任何移动目标都该用升级后的评估。
+        SureFootedNavigation.upgrade(maid);
         boatAutonomy.tick(maid, gameTime);
         gaze.tick(maid, gameTime);
         stow.tick(maid, gameTime);
