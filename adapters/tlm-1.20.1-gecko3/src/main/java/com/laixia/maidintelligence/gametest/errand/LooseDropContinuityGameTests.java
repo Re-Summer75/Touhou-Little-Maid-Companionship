@@ -92,7 +92,7 @@ public final class LooseDropContinuityGameTests {
      * 要重新选中它才会有下一次 {@code find}，而那一次调用什么都没收。这条断言就是
      * 冲着它去的——顺带也钉住了"整趟从不松手"，因为每一次的返回都必须是 RUNNING。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "loosedropcontinuity", templateNamespace = "minecraft", template = "empty")
     public static void fourAtHerFeetTakeFourTicks(GameTestHelper helper) {
         EntityMaid maid = maid(helper, 2, 2, 1);
         List<ItemEntity> pile = new ArrayList<>();
@@ -139,7 +139,7 @@ public final class LooseDropContinuityGameTests {
      *   <li>第三拍：目标换成剩下的那一件，她接着走。</li>
      * </ol>
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "loosedropcontinuity", templateNamespace = "minecraft", template = "empty")
     public static void collectingOneNeverDropsHerPath(GameTestHelper helper) {
         EntityMaid maid = maid(helper, 1, 2, 1);
         ItemEntity near = drop(helper, Items.COBBLESTONE, 5, 2, 1);
@@ -210,7 +210,7 @@ public final class LooseDropContinuityGameTests {
      * loose_drop_available}——她**确实看不见**地上的东西。把这一问从广告板挪到直接
      * 扫实体之后，那一项彻底消失。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
+    @GameTest(batch = "loosedropcontinuity", templateNamespace = "minecraft", template = "empty",
             timeoutTicks = WATCHED_TICKS + 100)
     public static void twentyScatteredDropsNeverLeaveHerStanding(
             GameTestHelper helper

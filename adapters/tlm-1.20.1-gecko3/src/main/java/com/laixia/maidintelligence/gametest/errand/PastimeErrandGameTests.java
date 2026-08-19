@@ -37,7 +37,7 @@ public final class PastimeErrandGameTests {
     private PastimeErrandGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "pastimeerrand", templateNamespace = "minecraft", template = "empty")
     public static void aPastimeAcrossTheRoomIsWalkedToward(
             GameTestHelper helper
     ) {
@@ -60,7 +60,7 @@ public final class PastimeErrandGameTests {
      * A joy block seats one maid, so the second to want it must be told no
      * rather than allowed to walk over and find it taken.
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "pastimeerrand", templateNamespace = "minecraft", template = "empty")
     public static void oneBookshelfSeatsOneMaid(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 8, 2);
         EntityMaid first = scene.maid(1, 2, 1);
@@ -83,7 +83,7 @@ public final class PastimeErrandGameTests {
     }
 
     /** Nothing to do is not the same as somewhere to go. */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "pastimeerrand", templateNamespace = "minecraft", template = "empty")
     public static void withoutAJoyBlockThereIsNoPastime(
             GameTestHelper helper
     ) {
@@ -110,7 +110,7 @@ public final class PastimeErrandGameTests {
      * assertion that nothing happened proves nothing on its own — the same
      * result would follow from the bookshelf never having been found.
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "pastimeerrand", templateNamespace = "minecraft", template = "empty")
     public static void theNativeBehaviourStandsDownUnderFreedom(
             GameTestHelper helper
     ) {

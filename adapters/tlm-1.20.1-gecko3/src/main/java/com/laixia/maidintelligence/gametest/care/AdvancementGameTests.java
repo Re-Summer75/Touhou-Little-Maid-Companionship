@@ -63,7 +63,7 @@ public final class AdvancementGameTests {
     private AdvancementGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "advancement", templateNamespace = "minecraft", template = "empty")
     public static void maidEarnsVanillaAdvancement(GameTestHelper helper) {
         EntityMaid maid = ownedMaid(helper);
         ItemStack craftingTable = new ItemStack(Items.CRAFTING_TABLE);
@@ -77,7 +77,7 @@ public final class AdvancementGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "advancement", templateNamespace = "minecraft", template = "empty")
     public static void mirrorProjectionIsSideEffectFreeAndIsolated(GameTestHelper helper) {
         EntityMaid first = ownedMaid(helper);
         EntityMaid second = ownedMaid(helper);
@@ -152,7 +152,7 @@ public final class AdvancementGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty", timeoutTicks = 200)
+    @GameTest(batch = "advancement", templateNamespace = "minecraft", template = "empty", timeoutTicks = 200)
     public static void dimensionReplacementKeepsTrackersDetached(GameTestHelper helper) {
         EntityMaid maid = ownedMaid(helper);
         MaidMirrorPlayer[] mirrors = new MaidMirrorPlayer[2];
@@ -200,7 +200,7 @@ public final class AdvancementGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "advancement", templateNamespace = "minecraft", template = "empty")
     public static void maidRootComesFromOwnLevel(GameTestHelper helper) {
         EntityMaid maid = ownedMaid(helper);
         progressTriggers().replaceStanding(
@@ -225,7 +225,7 @@ public final class AdvancementGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "advancement", templateNamespace = "minecraft", template = "empty")
     public static void statisticsDriveThresholdAdvancements(GameTestHelper helper) {
         EntityMaid maid = ownedMaid(helper);
         for (int index = 0; index < SWEET_TOOTH_GOAL - 1; index++) {
@@ -244,7 +244,7 @@ public final class AdvancementGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "advancement", templateNamespace = "minecraft", template = "empty")
     public static void progressSurvivesUnloadAndReload(GameTestHelper helper) {
         EntityMaid maid = ownedMaid(helper);
         ItemStack craftingTable = new ItemStack(Items.CRAFTING_TABLE);
@@ -260,7 +260,7 @@ public final class AdvancementGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "advancement", templateNamespace = "minecraft", template = "empty")
     public static void rewardExperienceGoesToTheMaidExactlyOnce(GameTestHelper helper) {
         EntityMaid maid = ownedMaid(helper);
         LevelProgress before = levelApi().getProgress(maid);
@@ -291,7 +291,7 @@ public final class AdvancementGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "advancement", templateNamespace = "minecraft", template = "empty")
     public static void touhouLittleMaidAdvancementsStayWithThePlayer(GameTestHelper helper) {
         EntityMaid maid = ownedMaid(helper);
         LevelProgress before = levelApi().getProgress(maid);

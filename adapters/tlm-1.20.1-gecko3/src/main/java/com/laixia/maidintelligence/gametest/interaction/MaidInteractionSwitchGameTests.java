@@ -30,7 +30,7 @@ public final class MaidInteractionSwitchGameTests {
     private MaidInteractionSwitchGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "maidinteractionswitch", templateNamespace = "minecraft", template = "empty")
     public static void theSwitchGatesBothDefaultGestures(
             GameTestHelper helper
     ) {

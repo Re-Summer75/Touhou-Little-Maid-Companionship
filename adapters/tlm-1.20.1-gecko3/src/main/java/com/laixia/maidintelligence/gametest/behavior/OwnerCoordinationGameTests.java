@@ -21,7 +21,7 @@ public final class OwnerCoordinationGameTests {
     private OwnerCoordinationGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ownercoordination", templateNamespace = "minecraft", template = "empty")
     public static void twoMaidsElectOneBoatRequestResponder(
             GameTestHelper helper
     ) {

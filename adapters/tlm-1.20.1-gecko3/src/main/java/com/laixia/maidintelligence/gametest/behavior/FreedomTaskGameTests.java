@@ -32,7 +32,7 @@ public final class FreedomTaskGameTests {
     private FreedomTaskGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "freedomtask", templateNamespace = "minecraft", template = "empty")
     public static void freedomTaskIsRegistered(GameTestHelper helper) {
         helper.assertTrue(
                 TaskManager.findTask(FreedomMaidTask.UID).isPresent(),
@@ -45,7 +45,7 @@ public final class FreedomTaskGameTests {
      * The entire point. Anything returned here would be a second opinion about
      * where she should go, competing with the one the orchestrator holds.
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "freedomtask", templateNamespace = "minecraft", template = "empty")
     public static void freedomContributesNoCompetingBehaviour(
             GameTestHelper helper
     ) {
@@ -74,7 +74,7 @@ public final class FreedomTaskGameTests {
      * <p>进食开关留着，因为它在本体那侧还门控着"她到底能不能进食"这件事本身，
      * 与"由谁决定什么时候吃"是两回事。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "freedomtask", templateNamespace = "minecraft", template = "empty")
     public static void freedomLeavesNoJudgementToTheHost(
             GameTestHelper helper
     ) {
@@ -108,7 +108,7 @@ public final class FreedomTaskGameTests {
      * <p>不数行为条数：那既要一个通到 Brain 私有字段的 accessor，又会把本体每次
      * 增删行为变成我们的测试失败。这里问的是能力在不在，不是有几条。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "freedomtask", templateNamespace = "minecraft", template = "empty")
     public static void freedomIsBlankTheOtherModesAreUntouched(
             GameTestHelper helper
     ) {
@@ -166,7 +166,7 @@ public final class FreedomTaskGameTests {
     }
 
     /** Assigning it must actually take, and must be what she reports being on. */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "freedomtask", templateNamespace = "minecraft", template = "empty")
     public static void aMaidCanBeSetFree(GameTestHelper helper) {
         EntityMaid maid = CompanionScene.room(helper, 3, 2)
                 .maid(1, 2, 1);
@@ -186,7 +186,7 @@ public final class FreedomTaskGameTests {
      * help this would sit at the bottom past two dozen work tasks. Idle keeps
      * first place as the default a maid is tamed with.
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "freedomtask", templateNamespace = "minecraft", template = "empty")
     public static void freedomIsOfferedSecond(GameTestHelper helper) {
         /*
          * Never added to the level. The hidden-task filter only asks about her
@@ -220,7 +220,7 @@ public final class FreedomTaskGameTests {
      * on, which blocked every companion intent outright — she would stand at
      * home hungry with food at her feet. Being home is a place, not an errand.
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "freedomtask", templateNamespace = "minecraft", template = "empty")
     public static void beingHomeIsNotBeingBusy(GameTestHelper helper) {
         EntityMaid maid = CompanionScene.room(helper, 3, 2)
                 .maid(1, 2, 1);
@@ -237,7 +237,7 @@ public final class FreedomTaskGameTests {
     }
 
     /** But actually walking back is an errand, and does occupy her. */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "freedomtask", templateNamespace = "minecraft", template = "empty")
     public static void walkingHomeStillOccupiesHer(GameTestHelper helper) {
         EntityMaid maid = CompanionScene.room(helper, 3, 2)
                 .maid(1, 2, 1);

@@ -31,7 +31,7 @@ public final class IntentOrchestrationGameTests {
     private IntentOrchestrationGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "intentorchestration", templateNamespace = "minecraft", template = "empty")
     public static void combatCancelsCompanionMovement(
             GameTestHelper helper
     ) {
@@ -75,7 +75,7 @@ public final class IntentOrchestrationGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "intentorchestration", templateNamespace = "minecraft", template = "empty")
     public static void cancellationPreservesReplacementOwnerTarget(
             GameTestHelper helper
     ) {
@@ -120,7 +120,7 @@ public final class IntentOrchestrationGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "intentorchestration", templateNamespace = "minecraft", template = "empty")
     public static void signalsRemainIsolatedPerMaid(
             GameTestHelper helper
     ) {

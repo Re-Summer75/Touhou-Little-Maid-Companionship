@@ -240,7 +240,11 @@ band 30 的 0.51 永远赢 band 10 的 0.99——效用层在跨 band 时被结�
 | 走路时借空手顺路收 | `TlmEnRouteScoop` |
 | 够不够得着（含跳与站位） | `TlmLooseDrop` |
 | 立足点必须真实存在（活板门/门的分类口子） | `SafeFootingNodeEvaluator` + `SureFootedNavigation` |
-| 绕路还是跨越由 A* 距离裁决（三维跳跃连线：同层一到三格、上一格跨一到二、下一格跨一到三，定价只做平手） | 同上（`GAP_JUMP_MALUS` + `MAX_GAP_SPAN` + `UP_HOP_MAX_REACH`，推力配速、落地收腿、崖边收步在执行侧） |
+| 绕路还是跨越由 A* 距离裁决（三维跳跃连线：同层一到三格、上一格跨一到二、下一格跨一到三，定价只做平手） | 同上（`GAP_JUMP_MALUS` + `MAX_GAP_SPAN` + `UP_HOP_MAX_REACH`） |
+| 路径按段执行：逐节点收账（含路过销账）、滞空一律锁定、段间速度清账（原版 followThePath 的松散判到与斜切不再运行） | `SegmentedPathwalk`（走/登阶/下坡/跳跃四段）+ `LeapFlight`（滞空锁定与弧线合同）+ `EdgeGuard`(崖边问答、下坡入口) + 节点/死完路两只看门狗 |
+| 栖在图连不进去的位置要自己跳回图里（带路小跳 / 无路盲跳 / 死完路撬栖，正立位不碰） | `LipRescue`（三张网 + 死完路连击供词 `deadDoneMax`） |
+| 什么算地板、什么算墙、什么算板——立足的物理尺（矮板=路面、贴边竖片=可穿行可站入、盖格心的高碰撞=真墙），规划执行共用 | `FootingRule`（coversCenter / coveringTopAt / selfFloor / edgePlate） |
+| 直线落点被占就斜一点跳（侧移一格、同层、弧线采样验空且线下无立足）；高台尽头合法下崖（干落六格有到站背书、落水放行）；格心被占但贴边塞得下身位就贴边挤过（体素级身位箱测试） | `SafeFootingNodeEvaluator.diagonalLandings / dropOffLanding / squeezeLanding` + `Leaper`（跳跃/下崖/贴边三段与唯一起跳出口）+ `FootingRule.squeezePoint` |
 | 上一格的坎撞上之前就起跳、速度带过去（不加冲量，不跳过头） | `SureFootedNavigation.maybeJumpAStep`（战斗 `StepAhead` 的同一课，一个按路径判、一个按航向判） |
 
 下沉也包括**退货**：`OwnerLeash`（跟随时只在主人八格内挑清扫目标）曾在这张表上，

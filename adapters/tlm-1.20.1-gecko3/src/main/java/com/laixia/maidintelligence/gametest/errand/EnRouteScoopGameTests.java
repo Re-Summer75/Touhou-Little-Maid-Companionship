@@ -41,7 +41,7 @@ public final class EnRouteScoopGameTests {
     private EnRouteScoopGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "enroutescoop", templateNamespace = "minecraft", template = "empty")
     public static void walkingPastADropSheScoopsItWithoutStopping(
             GameTestHelper helper
     ) {
@@ -74,7 +74,7 @@ public final class EnRouteScoopGameTests {
      * 修法：脚被行程占着时闲看一个字不写，行程写下的注视目标（EntityTracker
      * 跟着目的地走）留在记忆里，正是"看着要去的地方"。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "enroutescoop", templateNamespace = "minecraft", template = "empty")
     public static void enRouteHerEyesStayOnTheRoad(GameTestHelper helper) {
         EntityMaid maid = maid(helper);
         TlmIdleGaze gaze = TlmIdleGaze.create();
@@ -97,7 +97,7 @@ public final class EnRouteScoopGameTests {
     }
 
     /** 不在路上就不借手：站着的时候这是清扫意图的事，不是顺手的事。 */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "enroutescoop", templateNamespace = "minecraft", template = "empty")
     public static void standingStillSheLeavesItForTheSweep(
             GameTestHelper helper
     ) {
@@ -115,7 +115,7 @@ public final class EnRouteScoopGameTests {
     }
 
     /** 打着架不借：那双手另有安排。 */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "enroutescoop", templateNamespace = "minecraft", template = "empty")
     public static void midFightHerHandsAreNotForBorrowing(
             GameTestHelper helper
     ) {

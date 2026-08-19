@@ -28,7 +28,7 @@ public final class HungryOwnerRequestGameTests {
     private HungryOwnerRequestGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "hungryownerrequest", templateNamespace = "minecraft", template = "empty")
     public static void hungryMaidApproachesAndRequestsOnArrival(
             GameTestHelper helper
     ) {
@@ -67,7 +67,7 @@ public final class HungryOwnerRequestGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "hungryownerrequest", templateNamespace = "minecraft", template = "empty")
     public static void hungerThresholdAndCommandedSitAreDataGuards(
             GameTestHelper helper
     ) {

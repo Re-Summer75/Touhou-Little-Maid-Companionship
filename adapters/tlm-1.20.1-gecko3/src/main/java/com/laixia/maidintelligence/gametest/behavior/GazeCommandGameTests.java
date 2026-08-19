@@ -47,7 +47,7 @@ public final class GazeCommandGameTests {
     private GazeCommandGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "gazecommand", templateNamespace = "minecraft", template = "empty")
     public static void arrivalOpensDataDrivenCommandWindow(
             GameTestHelper helper
     ) {
@@ -78,7 +78,7 @@ public final class GazeCommandGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "gazecommand", templateNamespace = "minecraft", template = "empty")
     public static void commandWindowFollowsForSixtyTicks(
             GameTestHelper helper
     ) {
@@ -152,7 +152,7 @@ public final class GazeCommandGameTests {
         });
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "gazecommand", templateNamespace = "minecraft", template = "empty")
     public static void activeCommandSeatAllowsOwnerTeleportOutsideHomeMode(
             GameTestHelper helper
     ) {
@@ -188,7 +188,7 @@ public final class GazeCommandGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "gazecommand", templateNamespace = "minecraft", template = "empty")
     public static void homeModeCommandSeatBlocksOwnerTeleport(
             GameTestHelper helper
     ) {
@@ -220,7 +220,7 @@ public final class GazeCommandGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "gazecommand", templateNamespace = "minecraft", template = "empty")
     public static void commandUsesTheOwnersReleasedSeat(
             GameTestHelper helper
     ) {
@@ -250,7 +250,7 @@ public final class GazeCommandGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "gazecommand", templateNamespace = "minecraft", template = "empty")
     public static void commandBoatReleasesWhenOwnerDismounts(
             GameTestHelper helper
     ) {

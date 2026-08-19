@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.gametest.behavior;
+package com.laixia.maidintelligence.gametest.ambient;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.domain.IdleGazePolicy;
@@ -85,7 +85,7 @@ public final class AmbientBehaviorGameTests {
      * <p>用没有主人、周围也没有活物的场景，好让抽签必然落在"看某个方向"那一支上
      * ——另外两支盯的是实体，实体本来就会自己动，测不出这条。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ambientbehavior", templateNamespace = "minecraft", template = "empty")
     public static void idlySheLooksAroundAndTheGlanceFollowsHer(
             GameTestHelper helper
     ) {
@@ -140,7 +140,7 @@ public final class AmbientBehaviorGameTests {
      * <p>断言方式：场上只有这一只、而且没有主人，所以"看活物"那一支只可能选中它。
      * 反复重挑四十次，一次都不该落在它身上。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ambientbehavior", templateNamespace = "minecraft", template = "empty")
     public static void sheDoesNotStareThroughAWall(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 6, 6);
         EntityMaid maid = scene.strayMaid(1, 2, 1);
@@ -187,7 +187,7 @@ public final class AmbientBehaviorGameTests {
      * <p>{@code WeaponStowPolicy} 早就写好、也有纯 JVM 验证，但**生产代码里一个调用
      * 都没有**，所以她一旦拔刀就再也不放下。这条钉的正是"接上了没有"。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ambientbehavior", templateNamespace = "minecraft", template = "empty")
     public static void quietForLongEnoughSheStowsTheSword(
             GameTestHelper helper
     ) {
@@ -220,7 +220,7 @@ public final class AmbientBehaviorGameTests {
     }
 
     /** 视野里有东西的时候不收：怪是成波来的，两波之间收刀要边挨打边拔。 */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ambientbehavior", templateNamespace = "minecraft", template = "empty")
     public static void withSomethingAboutSheKeepsItInHand(
             GameTestHelper helper
     ) {
@@ -253,7 +253,7 @@ public final class AmbientBehaviorGameTests {
      * <p>盾**不是**武器种类的一种——{@code classifyFor} 认不出它——所以少问一句的
      * 表现是刀收了、盾还挂在副手上，比两样都拿着更怪。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ambientbehavior", templateNamespace = "minecraft", template = "empty")
     public static void theShieldGoesAwayToo(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 4, 4);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -285,7 +285,7 @@ public final class AmbientBehaviorGameTests {
      * <p>一件掉在地上的武器等于她自己解除了自己的武装。背包满只是这一次收不起来，
      * 不是一个需要靠丢东西解决的问题——她照样能在需要时换武器，因为换装走的是交换。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ambientbehavior", templateNamespace = "minecraft", template = "empty")
     public static void aFullPackMeansSheKeepsHoldingIt(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 4, 4);
         EntityMaid maid = scene.maid(1, 2, 1);

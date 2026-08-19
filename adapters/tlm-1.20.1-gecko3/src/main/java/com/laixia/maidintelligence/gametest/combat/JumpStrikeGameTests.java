@@ -51,7 +51,7 @@ public final class JumpStrikeGameTests {
      *
      * <p>两条断言钉住判断的两侧：够不着的高处要跳，够得着的平地不许跳。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
+    @GameTest(batch = "jumpstrike", templateNamespace = "minecraft", template = "empty",
             timeoutTicks = 120)
     public static void sheJumpsForWhatHoversOverhead(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 5, 5);
@@ -88,7 +88,7 @@ public final class JumpStrikeGameTests {
      * <p>所以这一条钉的不是"她跳不跳"，是"这一刀落在什么时候"：往上走的时候不许
      * 出刀，开始下落之后必须出刀。两侧都断言，否则"永远不挥"也能过。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
+    @GameTest(batch = "jumpstrike", templateNamespace = "minecraft", template = "empty",
             timeoutTicks = 120)
     public static void sheDoesNotSwingOnTheWayUp(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 5, 5);
@@ -140,7 +140,7 @@ public final class JumpStrikeGameTests {
      * 那半个冷却里她还贴在触及之内，内沿挡掉的正是她每一次真实的机会。所以这里
      * 只断言外沿，并且明确钉住"贴身也照跳"。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
+    @GameTest(batch = "jumpstrike", templateNamespace = "minecraft", template = "empty",
             timeoutTicks = 120)
     public static void theLeapReachHasOnlyAnOuterEdge(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 9, 9);
@@ -175,7 +175,7 @@ public final class JumpStrikeGameTests {
      * <p>时间由关卡推进而不是手工 {@code maid.tick()}：实测手工调用不会推进
      * {@code tickCount}，而"还剩几 tick"整个建立在它上面。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
+    @GameTest(batch = "jumpstrike", templateNamespace = "minecraft", template = "empty",
             timeoutTicks = 160)
     public static void theLeapWindowIsTheDescent(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 5, 5);
@@ -257,7 +257,7 @@ public final class JumpStrikeGameTests {
      * <p>断言比的是同一副条件下的水平位移，而不是某个速度常数：常数会把原版的
      * 0.02 抄进断言里，那样这条测试只能证明常量被抄对了。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
+    @GameTest(batch = "jumpstrike", templateNamespace = "minecraft", template = "empty",
             timeoutTicks = 120)
     public static void sheStillSteersWhileOffTheGround(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 7, 7);
@@ -296,7 +296,7 @@ public final class JumpStrikeGameTests {
      * <p>不比较绝对伤害值：那会把攻击力、附魔、护甲一起写死进断言。比的是
      * 同一副装备、同一个目标，落地砍与下落砍之间的差。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
+    @GameTest(batch = "jumpstrike", templateNamespace = "minecraft", template = "empty",
             timeoutTicks = 120)
     public static void aFallingBlowLandsHarder(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 5, 5);

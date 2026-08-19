@@ -321,7 +321,7 @@ public final class RangedFireGameTests {
      * 要么箭已经出去（蓄力被兑现），要么蓄力还在（可以继续攒）。归零且没有
      * 箭出去，就是那个永远射不出的死循环。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "rangedfire", templateNamespace = "minecraft", template = "empty")
     public static void aDrawIsSpentNotBinned(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 5, 3);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -379,7 +379,7 @@ public final class RangedFireGameTests {
      * 没有——而两者走的是不同的分支。断言只看"她被派往哪里"：走不走得到是
      * 导航的事，"她被告知退到更远处"才是这里的命题。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "rangedfire", templateNamespace = "minecraft", template = "empty")
     public static void closedOnAtBowRangeSheGivesGround(
             GameTestHelper helper
     ) {

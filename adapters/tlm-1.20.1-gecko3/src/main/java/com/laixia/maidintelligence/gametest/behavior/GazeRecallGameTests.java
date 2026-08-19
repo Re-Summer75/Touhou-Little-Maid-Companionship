@@ -38,7 +38,7 @@ public final class GazeRecallGameTests {
     private GazeRecallGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "gazerecall", templateNamespace = "minecraft", template = "empty")
     public static void levelOneGazeRecallApproachesOwner(
             GameTestHelper helper
     ) {
@@ -66,7 +66,7 @@ public final class GazeRecallGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "gazerecall", templateNamespace = "minecraft", template = "empty")
     public static void gazeRecallRespectsFavorabilityAndCommandedSit(
             GameTestHelper helper
     ) {
@@ -103,7 +103,7 @@ public final class GazeRecallGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "gazerecall", templateNamespace = "minecraft", template = "empty")
     public static void gazeTargetingIgnoresBlockOcclusion(
             GameTestHelper helper
     ) {
@@ -139,7 +139,7 @@ public final class GazeRecallGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "gazerecall", templateNamespace = "minecraft", template = "empty")
     public static void intentRuntimeAdvancesOnConsecutiveBrainTicks(
             GameTestHelper helper
     ) {
@@ -223,7 +223,7 @@ public final class GazeRecallGameTests {
         });
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "gazerecall", templateNamespace = "minecraft", template = "empty")
     public static void gazeRecallDefersImportantActivities(
             GameTestHelper helper
     ) {

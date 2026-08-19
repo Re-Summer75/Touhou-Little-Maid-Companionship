@@ -52,7 +52,7 @@ public final class OwnerAwarenessGameTests {
 
     // Aim.
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ownerawareness", templateNamespace = "minecraft", template = "empty")
     public static void aimFindsTheMaidLookedAt(GameTestHelper helper) {
         Fixture fixture = fixture(helper);
         lookAt(fixture.owner(), fixture.maid());
@@ -71,7 +71,7 @@ public final class OwnerAwarenessGameTests {
      * Addressing someone is not the same as having line of sight to them, and
      * a maid one room over is still the maid being spoken to.
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ownerawareness", templateNamespace = "minecraft", template = "empty")
     public static void aimReachesThroughWalls(GameTestHelper helper) {
         Fixture fixture = fixture(helper);
         for (int y = 2; y <= 4; y++) {
@@ -91,7 +91,7 @@ public final class OwnerAwarenessGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ownerawareness", templateNamespace = "minecraft", template = "empty")
     public static void aimingElsewhereFindsNobody(GameTestHelper helper) {
         Fixture fixture = fixture(helper);
         lookAt(fixture.owner(), fixture.maid());
@@ -113,7 +113,7 @@ public final class OwnerAwarenessGameTests {
      * Pointing at one of several is about which one is being pointed at, not
      * which one happens to be closest to the pointer.
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ownerawareness", templateNamespace = "minecraft", template = "empty")
     public static void aimPrefersTheCentredMaidOverTheNearer(
             GameTestHelper helper
     ) {
@@ -134,7 +134,7 @@ public final class OwnerAwarenessGameTests {
 
     // Owner state.
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ownerawareness", templateNamespace = "minecraft", template = "empty")
     public static void heldFoodIsNoticed(GameTestHelper helper) {
         Fixture fixture = fixture(helper);
         Player owner = fixture.owner();
@@ -161,7 +161,7 @@ public final class OwnerAwarenessGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ownerawareness", templateNamespace = "minecraft", template = "empty")
     public static void ownerVitalsAreRead(GameTestHelper helper) {
         Fixture fixture = fixture(helper);
         Player owner = fixture.owner();
@@ -184,7 +184,7 @@ public final class OwnerAwarenessGameTests {
     }
 
     /** No owner is not the same as an owner with nothing going on. */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ownerawareness", templateNamespace = "minecraft", template = "empty")
     public static void noOwnerReadsAsUnknown(GameTestHelper helper) {
         TlmOwnerFactReader reader = new TlmOwnerFactReader();
         OwnerFacts facts = reader.read(
@@ -200,7 +200,7 @@ public final class OwnerAwarenessGameTests {
 
     // What is lying about.
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ownerawareness", templateNamespace = "minecraft", template = "empty")
     public static void thrownFoodBecomesVisible(GameTestHelper helper) {
         Fixture fixture = fixture(helper);
         EntityMaid maid = fixture.maid();
@@ -219,7 +219,7 @@ public final class OwnerAwarenessGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ownerawareness", templateNamespace = "minecraft", template = "empty")
     public static void inediblesAreNotAdvertisedAsFood(GameTestHelper helper) {
         Fixture fixture = fixture(helper);
         ItemEntity cobble = drop(helper, Items.COBBLESTONE, 2, 2, 1);
@@ -290,7 +290,7 @@ public final class OwnerAwarenessGameTests {
      * 检验点选在所有移动写入的唯一出口上——后撤、追击、差事、消遣都从这里
      * 过，所以规则只需要在这里成立一次。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ownerawareness", templateNamespace = "minecraft", template = "empty")
     public static void sheIsNeverSentPastTheLeash(GameTestHelper helper) {
         Fixture fixture = fixture(helper);
         Vec3 owner = fixture.owner().position();
@@ -329,7 +329,7 @@ public final class OwnerAwarenessGameTests {
      * 绳子绷紧的那一侧然后走两步就停。所以牵引绳要在逐扇区测距里一起算，
      * 这条钉住结果——她退到的地方必须仍在绳内。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ownerawareness", templateNamespace = "minecraft", template = "empty")
     public static void aRetreatStaysInsideTheLeash(GameTestHelper helper) {
         Fixture fixture = fixture(helper);
         EntityMaid maid = fixture.maid();

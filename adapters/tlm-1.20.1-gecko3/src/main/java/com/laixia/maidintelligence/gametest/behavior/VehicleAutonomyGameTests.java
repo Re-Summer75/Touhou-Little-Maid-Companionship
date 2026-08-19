@@ -39,7 +39,7 @@ public final class VehicleAutonomyGameTests {
     private VehicleAutonomyGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "vehicleautonomy", templateNamespace = "minecraft", template = "empty")
     public static void ordinaryBoatReleasesWhenOwnerLeaves(
             GameTestHelper helper
     ) {
@@ -57,7 +57,7 @@ public final class VehicleAutonomyGameTests {
     }
 
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "vehicleautonomy", templateNamespace = "minecraft", template = "empty")
     public static void commandBoatReleasesWhenOwnerLeavesInFollowMode(
             GameTestHelper helper
     ) {
@@ -84,7 +84,7 @@ public final class VehicleAutonomyGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "vehicleautonomy", templateNamespace = "minecraft", template = "empty")
     public static void homeModeKeepsCommandBoatWhenOwnerLeaves(
             GameTestHelper helper
     ) {
@@ -114,7 +114,7 @@ public final class VehicleAutonomyGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "vehicleautonomy", templateNamespace = "minecraft", template = "empty")
     public static void commandUsesNearbyPlayerCompatibleSeat(
             GameTestHelper helper
     ) {
@@ -145,7 +145,7 @@ public final class VehicleAutonomyGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "vehicleautonomy", templateNamespace = "minecraft", template = "empty")
     public static void commandUsesReleasedPlayerCompatibleSeat(
             GameTestHelper helper
     ) {
@@ -176,7 +176,7 @@ public final class VehicleAutonomyGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "vehicleautonomy", templateNamespace = "minecraft", template = "empty")
     public static void twoMaidsCannotOccupyOneReleasedSeat(
             GameTestHelper helper
     ) {

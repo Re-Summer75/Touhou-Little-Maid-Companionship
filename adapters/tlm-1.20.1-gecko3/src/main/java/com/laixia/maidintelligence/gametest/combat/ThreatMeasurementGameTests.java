@@ -18,6 +18,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.animal.Cow;
@@ -62,7 +65,62 @@ public final class ThreatMeasurementGameTests {
      * <p>断言用体型差异很大的两种生物对比,而不是押某个具体数值:数值会随版本和
      * 模组变,"大的比小的手长"不会。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    /**
+     * 追着的敌人**活着脱离了感知**，攻击记忆要跟着放——不放她就永远静止。
+     *
+     * <p>玩家稳定复现：敌人不是死在感知内、而是以别的方式离开感知半径，
+     * 之后她不再执行任何行为，直到手动更新状态。每件差事的资格判据都要求
+     * {@code ATTACK_TARGET} 为空，而旧清理只肯扔"尸体"——活着走丢的从没
+     * 人管。感知定义这一仗：脱离感知与死亡同款处理。
+     */
+    @GameTest(batch = "threat7", templateNamespace = "minecraft",
+            template = "empty", timeoutTicks = 400)
+    public static void aFoeWhoLeftHerSensesIsLetGoOf(GameTestHelper helper) {
+        CompanionScene scene = CompanionScene.room(helper, 7, 5);
+        EntityMaid maid = scene.maid(2, 2, 2);
+        maid.getAvailableBackpackInv().setStackInSlot(
+                0, new ItemStack(Items.IRON_SWORD)
+        );
+        Zombie foe = new Zombie(helper.getLevel());
+        foe.setPos(maid.getX() + 5.0D, maid.getY(), maid.getZ());
+        foe.setNoAi(true);
+        helper.getLevel().addFreshEntity(foe);
+
+        boolean[] engaged = new boolean[]{false};
+        for (int tick = 5; tick <= 80; tick += 5) {
+            helper.runAfterDelay(tick, () -> {
+                if (maid.getBrain()
+                        .getMemory(MemoryModuleType.ATTACK_TARGET)
+                        .isPresent()) {
+                    engaged[0] = true;
+                }
+            });
+        }
+        helper.runAfterDelay(90, () -> {
+            helper.assertTrue(
+                    engaged[0],
+                    "She never engaged, so the scene proves nothing"
+            );
+            // 活着离开感知：垂直挪出四十格（不横移，免得闯进邻座场地）。
+            foe.teleportTo(foe.getX(), foe.getY() + 40.0D, foe.getZ());
+            foe.setNoGravity(true);
+        });
+        helper.runAfterDelay(220, () -> {
+            helper.assertTrue(
+                    maid.getBrain()
+                            .getMemory(MemoryModuleType.ATTACK_TARGET)
+                            .isEmpty()
+                            && maid.getTarget() == null,
+                    "A foe who left her senses was never let go of — the"
+                            + " total standstill the player reproduces"
+            );
+            maid.discard();
+            foe.discard();
+            helper.succeed();
+        });
+    }
+
+    @GameTest(batch = "threat1", templateNamespace = "minecraft", template = "empty")
     public static void sheMeasuresEachFoeNotAStereotype(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 5, 5);
         EntityMaid maid = scene.maid(2, 2, 2);
@@ -117,7 +175,7 @@ public final class ThreatMeasurementGameTests {
      * <p>所以这条直接钉"看不看得见",而不是钉它下游的裁决:下游有十几个数一起
      * 决定结果,而这里错的是最上面那个。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "threat2", templateNamespace = "minecraft", template = "empty")
     public static void sheDoesNotCountWhatSheCannotSee(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 7, 5);
         EntityMaid maid = scene.maid(1, 2, 2);
@@ -179,7 +237,7 @@ public final class ThreatMeasurementGameTests {
      * <p>断言用"扫到没扫到"，不用"她去没去"：去不去是交战判据的事，这一条只
      * 问感知的形状对不对。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "threat3", templateNamespace = "minecraft", template = "empty")
     public static void aHostileByTheOwnerIsSeenFromBeyondHerOwnReach(
             GameTestHelper helper
     ) {
@@ -214,7 +272,7 @@ public final class ThreatMeasurementGameTests {
      * <p>褪去的那一半在 {@code verifyThreatReach} 里问，那是纯算术。这里问的是
      * **接上了没有**：事件筛得对不对、按物种记的那份读不读得回来。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "threat4", templateNamespace = "minecraft", template = "empty")
     public static void sheLearnsTheReachAFoeWillNotAdmitTo(
             GameTestHelper helper
     ) {
@@ -276,7 +334,7 @@ public final class ThreatMeasurementGameTests {
      * 造不出新物品。第一条断言本身也有价值——它确认这个属性**长在女仆身上**，
      * 否则模组给的加成会被静默丢掉，连游戏本身都不认。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "threat5", templateNamespace = "minecraft", template = "empty")
     public static void anythingThatLengthensHerArmMovesHerFeet(
             GameTestHelper helper
     ) {
@@ -330,7 +388,7 @@ public final class ThreatMeasurementGameTests {
      * 扫描器认不认得出这件事**：关系是从它自己的 {@code getTarget()} 读的，而那正是
      * "广播敌人的目标"这件事已经存在的形式——缺的从来不是信息，是花掉它的地方。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "threat6", templateNamespace = "minecraft", template = "empty")
     public static void aFoeBusyWithSomebodyElseIsNotShootingHer(
             GameTestHelper helper
     ) {

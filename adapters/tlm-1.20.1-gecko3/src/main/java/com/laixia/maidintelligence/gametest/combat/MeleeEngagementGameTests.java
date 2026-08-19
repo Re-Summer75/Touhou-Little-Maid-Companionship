@@ -108,7 +108,7 @@ public final class MeleeEngagementGameTests {
      * <p>所以断言的重点从"她有没有打"改成**"她有没有仍然在走"**：那才是前两版
      * 各自失守的地方。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "meleeengagement", templateNamespace = "minecraft", template = "empty")
     public static void losingSheLeavesUnlessPinned(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 7, 7);
         // 站在地板中间，身后有地方退。
@@ -150,7 +150,7 @@ public final class MeleeEngagementGameTests {
      * <p>断言拿原版近战节奏当上界：持剑的恢复必须快过它，因为剑的攻速本来就
      * 比这个基准快。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "meleeengagement", templateNamespace = "minecraft", template = "empty")
     public static void aBetterWeaponSwingsFasterNotSlower(
             GameTestHelper helper
     ) {
@@ -188,7 +188,7 @@ public final class MeleeEngagementGameTests {
      * <p>断言不押具体格数，只要两件事：停下的位置真的打得到，并且在射程容得下
      * 的时候不要缩到一格。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "meleeengagement", templateNamespace = "minecraft", template = "empty")
     public static void sheStopsAtReachNotAtTheSkin(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -289,7 +289,7 @@ public final class MeleeEngagementGameTests {
      * <p>真正的收益来自时间:她退出去,它走回来,那段路她不挨打,而这只要求她
      * 走得比它快。断言看的是"她被派去的地方比现在更远",不是某个具体距离。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "meleeengagement", templateNamespace = "minecraft", template = "empty")
     public static void duringRecoverySheStepsOutOfReach(
             GameTestHelper helper
     ) {
@@ -340,7 +340,7 @@ public final class MeleeEngagementGameTests {
      * 女仆这么干就是模组在攻击主人明确不许她碰的东西，所以每一个被波及的目标
      * 都要过一遍 {@code canAttack}。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "meleeengagement", templateNamespace = "minecraft", template = "empty")
     public static void aSwordCatchesTheOnesBeside(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 7, 7);
         EntityMaid maid = scene.maid(3, 2, 3);

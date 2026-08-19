@@ -67,7 +67,7 @@ public final class CombatApproachGameTests {
      * <p>这条断言只看写下的停止距离，不看她走到哪——走多久是导航的事，而"她被
      * 告知在八格外就算到了"是这里的命题。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatapproach", templateNamespace = "minecraft", template = "empty")
     public static void changingStanceChangesWhereSheStops(
             GameTestHelper helper
     ) {
@@ -97,7 +97,7 @@ public final class CombatApproachGameTests {
      * 回滚，所以每 tick 重写一个追击等于每 tick 取消自己。这条确认修正没有把
      * 去重一起弄丢。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatapproach", templateNamespace = "minecraft", template = "empty")
     public static void anUnchangedChaseIsNotRewritten(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 4, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -224,7 +224,7 @@ public final class CombatApproachGameTests {
      *
      * <p>断言看的是最终握着什么，而不是策略选了什么：选择本来就没错。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatapproach", templateNamespace = "minecraft", template = "empty")
     public static void sheDrawsTheBetterBladeNotTheOneAlreadyHeld(
             GameTestHelper helper
     ) {
@@ -257,7 +257,7 @@ public final class CombatApproachGameTests {
      * 那把恰好射不出去，她就会站在射程上永远拉一张空弓。现在分派看的是手里
      * 这一把本身能不能用，于是这种脱节在结构上不成立。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatapproach", templateNamespace = "minecraft", template = "empty")
     public static void sheNeverWorksAWeaponSheCannotFire(
             GameTestHelper helper
     ) {
@@ -312,7 +312,7 @@ public final class CombatApproachGameTests {
      * <p>断言看的是"她有没有把对方当成攻击目标"：让位的形态是完全不接手，而不
      * 是接手之后打得温柔一点。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatapproach", templateNamespace = "minecraft", template = "empty")
     public static void aBuiltInAttackTaskIsLeftAlone(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 5, 5);
         EntityMaid maid = scene.maid(2, 2, 2);
@@ -357,7 +357,7 @@ public final class CombatApproachGameTests {
      * <p>三段都要断言：安静时允许（否则可能是把拾取整个关掉了）、逼近时拒绝、
      * 远处看得见但过不来时仍然允许（否则山谷对面一只骷髅就能停掉全部家务）。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatapproach", templateNamespace = "minecraft", template = "empty")
     public static void pickupStandsDownWhenThreatened(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 5, 5);
         EntityMaid maid = scene.maid(2, 2, 2);

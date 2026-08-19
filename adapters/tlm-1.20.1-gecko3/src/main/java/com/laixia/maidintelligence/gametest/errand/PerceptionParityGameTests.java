@@ -37,7 +37,7 @@ public final class PerceptionParityGameTests {
     private PerceptionParityGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "perceptionparity", templateNamespace = "minecraft", template = "empty")
     public static void sheSeesADropAsFarAsSheSeesAFight(
             GameTestHelper helper
     ) {

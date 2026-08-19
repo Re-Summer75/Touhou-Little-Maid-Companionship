@@ -42,7 +42,7 @@ public final class PopulatedHouseholdGameTests {
      * Three maids, one chair, one steak. Nobody should end up doing two things,
      * and nobody should end up doing somebody else's.
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "populatedhousehold", templateNamespace = "minecraft", template = "empty")
     public static void aCrowdedRoomIsDividedUp(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid first = scene.maid(1, 2, 1);
@@ -90,7 +90,7 @@ public final class PopulatedHouseholdGameTests {
      * says yes to very nearly anything, and a maid offered the choice between a
      * chair and a dropped steak once sat down on the steak.
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "populatedhousehold", templateNamespace = "minecraft", template = "empty")
     public static void foodIsNotFurniture(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -112,7 +112,7 @@ public final class PopulatedHouseholdGameTests {
      * A boat is furniture too, and the errand that looks for somewhere to sit
      * has no reason to know the difference.
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "populatedhousehold", templateNamespace = "minecraft", template = "empty")
     public static void aBoatCountsAsSomewhereToSit(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -129,7 +129,7 @@ public final class PopulatedHouseholdGameTests {
     }
 
     /** And once she is in it, she is a passenger and errands stop. */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "populatedhousehold", templateNamespace = "minecraft", template = "empty")
     public static void aSeatedMaidRunsNoErrands(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -152,7 +152,7 @@ public final class PopulatedHouseholdGameTests {
      * arbitration the whole design leans on, so a maid holding a target must be
      * seen to refuse every one of them, not merely the one that was checked.
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "populatedhousehold", templateNamespace = "minecraft", template = "empty")
     public static void aFightingMaidIgnoresEverythingElse(
             GameTestHelper helper
     ) {
@@ -181,7 +181,7 @@ public final class PopulatedHouseholdGameTests {
     }
 
     /** Her sister's fight is not hers, and must not stop her going about. */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "populatedhousehold", templateNamespace = "minecraft", template = "empty")
     public static void oneMaidsFightDoesNotGroundTheOthers(
             GameTestHelper helper
     ) {
@@ -208,7 +208,7 @@ public final class PopulatedHouseholdGameTests {
      * Two maids, two chairs. Contention is meant to be per-chair, so both
      * should sit — a claim taken too coarsely would seat only one.
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "populatedhousehold", templateNamespace = "minecraft", template = "empty")
     public static void twoChairsSeatTwoMaids(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid first = scene.maid(1, 2, 1);
@@ -245,7 +245,7 @@ public final class PopulatedHouseholdGameTests {
      * A maid nobody owns has no owner to follow, keep company, or go home to,
      * and must say so rather than walking to the world origin.
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "populatedhousehold", templateNamespace = "minecraft", template = "empty")
     public static void anUnownedMaidHasNoErrandsAboutAnOwner(
             GameTestHelper helper
     ) {

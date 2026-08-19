@@ -40,7 +40,7 @@ public final class RoundTripGameTests {
 
     /** 节奏缺口桥上往返：一格、两格的缺口每趟都要双向各跳一遍。 */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            batch = "roundtrip", timeoutTicks = 470)
+            batch = "pathing", timeoutTicks = 470)
     public static void backAndForthAcrossTheRhythmGaps(
             GameTestHelper helper
     ) {
@@ -63,7 +63,7 @@ public final class RoundTripGameTests {
 
     /** 空中台阶上往返：上一格、下一格的斜边每趟双向各走一遍。 */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            batch = "roundtrip", timeoutTicks = 470)
+            batch = "pathing", timeoutTicks = 470)
     public static void backAndForthOverTheRaisedStone(GameTestHelper helper) {
         for (int x = 0; x <= 9; x++) {
             for (int z = 0; z <= 2; z++) {
@@ -95,7 +95,7 @@ public final class RoundTripGameTests {
      * 测不到出槽。
      */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            batch = "roundtrip", timeoutTicks = 470)
+            batch = "pathing", timeoutTicks = 470)
     public static void throughTheSunkenSlotBetweenBridges(
             GameTestHelper helper
     ) {
@@ -134,7 +134,7 @@ public final class RoundTripGameTests {
      * 就在半空被拽出侧沿。
      */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            batch = "roundtrip", timeoutTicks = 470)
+            batch = "pathing", timeoutTicks = 470)
     public static void upAndDownTheZigzagStairsSheStays(
             GameTestHelper helper
     ) {
@@ -183,6 +183,7 @@ public final class RoundTripGameTests {
         boolean[] headingUp = new boolean[]{true};
         int[] legs = new int[]{0};
         StringBuilder tape = new StringBuilder();
+        StallWatch stall = new StallWatch(maid);
         BlockPos top = new BlockPos(2, DECK + 5, 4);
         BlockPos bottom = new BlockPos(0, DECK + 1, 1);
 
@@ -204,6 +205,7 @@ public final class RoundTripGameTests {
                 if (maid.getY() < baseFeet - 1.5D) {
                     return;
                 }
+                stall.sample(at);
                 BlockPos goal = headingUp[0] ? top : bottom;
                 double gx = helper.absolutePos(goal).getX() + 0.5D;
                 double gz = helper.absolutePos(goal).getZ() + 0.5D;
@@ -232,11 +234,125 @@ public final class RoundTripGameTests {
             helper.assertTrue(
                     legs[0] >= 2,
                     "She only finished " + legs[0]
-                            + " stair legs — stuck; tape(rel)=" + tape
+                            + " stair legs — stuck; " + diaryOf(maid)
+                            + "; tape(rel)=" + tape
+            );
+            helper.assertTrue(
+                    stall.longest() <= StallWatch.TOLERATED_TICKS,
+                    "She spun in place on the stairs for " + stall.longest()
+                            + " ticks; " + diaryOf(maid)
+                            + "; tape(rel)=" + tape
             );
             maid.discard();
             helper.succeed();
         });
+    }
+
+    /**
+     * 浅地形上的玻璃行道：地面就在脚下一两格，行道带缺口、带拐角、带升高。
+     *
+     * <p>玩家实机截图的一比一（草地上铺的单排玻璃）。深渊场景里摔是主敌；
+     * 浅地形上摔不死人，主敌变成**原地旋转卡死**——刹停、重铺、加速的循环
+     * 或对角夹缝的爬跳弹回。断言趟数，失败附行车记录与读数带。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            batch = "pathing", timeoutTicks = 470)
+    public static void alongTheGlassRowsOverShallowGround(
+            GameTestHelper helper
+    ) {
+        for (int x = -1; x <= 10; x++) {
+            for (int z = -1; z <= 6; z++) {
+                helper.setBlock(new BlockPos(x, DECK, z), Blocks.STONE);
+            }
+        }
+        for (int x = 0; x <= 4; x++) {
+            helper.setBlock(new BlockPos(x, DECK + 1, 1), Blocks.GLASS);
+        }
+        // x=5 断一格：露出低一格的地面。
+        helper.setBlock(new BlockPos(6, DECK + 1, 1), Blocks.GLASS);
+        helper.setBlock(new BlockPos(7, DECK + 2, 1), Blocks.GLASS);
+        helper.setBlock(new BlockPos(8, DECK + 2, 1), Blocks.GLASS);
+        for (int z = 2; z <= 4; z++) {
+            helper.setBlock(new BlockPos(8, DECK + 2, z), Blocks.GLASS);
+        }
+        EntityMaid maid = new EntityMaid(helper.getLevel());
+        double offX = 0.4D
+                + helper.getLevel().getRandom().nextDouble() * 1.2D;
+        BlockPos base = helper.absolutePos(new BlockPos(0, DECK + 2, 1));
+        maid.setPos(base.getX() + offX, base.getY(), base.getZ() + 0.5D);
+        maid.setTame(true);
+        maid.setPickup(false);
+        maid.setTask(TaskManager.findTask(FreedomMaidTask.UID).orElseThrow());
+        maid.setHomeModeEnable(false);
+        helper.getLevel().addFreshEntity(maid);
+
+        double baseFeet = base.getY();
+        double[] lowest = new double[]{maid.getY()};
+        boolean[] headingOut = new boolean[]{true};
+        int[] legs = new int[]{0};
+        StringBuilder tape = new StringBuilder();
+        StallWatch stall = new StallWatch(maid);
+        BlockPos far = new BlockPos(8, DECK + 3, 4);
+        BlockPos home = new BlockPos(0, DECK + 2, 1);
+
+        for (int tick = 1; tick <= WATCHED_TICKS; tick++) {
+            int at = tick;
+            helper.runAfterDelay(tick, () -> {
+                lowest[0] = Math.min(lowest[0], maid.getY());
+                if (at % 5 == 0 && tape.length() < 900) {
+                    tape.append(String.format("%d:(%.1f,%.1f,%.1f) ",
+                            at,
+                            maid.getX()
+                                    - helper.absolutePos(BlockPos.ZERO).getX(),
+                            maid.getY()
+                                    - helper.absolutePos(BlockPos.ZERO).getY(),
+                            maid.getZ()
+                                    - helper.absolutePos(BlockPos.ZERO).getZ()
+                    ));
+                }
+                stall.sample(at);
+                BlockPos goal = headingOut[0] ? far : home;
+                double gx = helper.absolutePos(goal).getX() + 0.5D;
+                double gz = helper.absolutePos(goal).getZ() + 0.5D;
+                if (Math.hypot(maid.getX() - gx, maid.getZ() - gz) < 1.2D) {
+                    headingOut[0] = !headingOut[0];
+                    legs[0]++;
+                }
+                maid.getBrain().setMemory(
+                        MemoryModuleType.WALK_TARGET,
+                        new WalkTarget(new BlockPosTracker(
+                                helper.absolutePos(
+                                        headingOut[0] ? far : home)),
+                                0.7F, 0)
+                );
+            });
+        }
+
+        helper.runAfterDelay(WATCHED_TICKS, () -> {
+            helper.assertTrue(
+                    legs[0] >= 2,
+                    "She stalled on the glass rows: legs " + legs[0]
+                            + "; " + diaryOf(maid)
+                            + "; tape(rel)=" + tape
+            );
+            helper.assertTrue(
+                    stall.longest() <= StallWatch.TOLERATED_TICKS,
+                    "She spun in place on the glass rows for "
+                            + stall.longest() + " ticks; " + diaryOf(maid)
+                            + "; tape(rel)=" + tape
+            );
+            maid.discard();
+            helper.succeed();
+        });
+    }
+
+    /** 执行器的行车记录；导航不是我们的类型时给个占位。 */
+    private static String diaryOf(EntityMaid maid) {
+        return maid.getNavigation()
+                instanceof com.laixia.maidintelligence.feature.behavior.tlm
+                        .pathing.SureFootedNavigation sure
+                ? sure.pathwalkDiary()
+                : "diary=n/a";
     }
 
     /** 两侧护栏加高到视线高度，桥的两端敞着——掉头掉出去就是掉头的罪。 */
@@ -273,6 +389,7 @@ public final class RoundTripGameTests {
         boolean[] headingRight = new boolean[]{true};
         int[] legs = new int[]{0};
         StringBuilder tape = new StringBuilder();
+        StallWatch stall = new StallWatch(maid);
 
         double leftRel = 1.2D;
         double rightRel = 8.3D;
@@ -296,6 +413,7 @@ public final class RoundTripGameTests {
                 if (maid.getY() < deckFeet - 1.5D) {
                     return;
                 }
+                stall.sample(at);
                 if (headingRight[0] && relX >= rightRel) {
                     headingRight[0] = false;
                     legs[0]++;
@@ -326,10 +444,55 @@ public final class RoundTripGameTests {
             helper.assertTrue(
                     legs[0] >= 3,
                     "She only finished " + legs[0]
-                            + " legs — stuck somewhere; tape(rel)=" + tape
+                            + " legs — stuck somewhere; " + diaryOf(maid)
+                            + "; tape(rel)=" + tape
+            );
+            helper.assertTrue(
+                    stall.longest() <= StallWatch.TOLERATED_TICKS,
+                    "She spun in place for " + stall.longest()
+                            + " ticks (legs " + legs[0] + "); " + diaryOf(maid)
+                            + "; tape(rel)=" + tape
             );
             maid.discard();
             helper.succeed();
         });
+    }
+
+    /**
+     * 停滞表：连续多少 tick 没挪出半格。玩家报的"原地打转一段时间"不摔也
+     * 不永久卡死，趟数断言抓不住它——只有停滞窗超时才现形。
+     */
+    private static final class StallWatch {
+        /** 容忍的最长原地时段：掉头、起跳预备都远短于它。 */
+        static final int TOLERATED_TICKS = 100;
+
+        private final EntityMaid maid;
+        private double anchorX;
+        private double anchorZ;
+        private int anchorTick;
+        private int longest;
+
+        StallWatch(EntityMaid maid) {
+            this.maid = maid;
+            this.anchorX = maid.getX();
+            this.anchorZ = maid.getZ();
+        }
+
+        void sample(int tick) {
+            double moved = Math.hypot(
+                    maid.getX() - anchorX, maid.getZ() - anchorZ
+            );
+            if (moved > 0.6D) {
+                anchorX = maid.getX();
+                anchorZ = maid.getZ();
+                anchorTick = tick;
+                return;
+            }
+            longest = Math.max(longest, tick - anchorTick);
+        }
+
+        int longest() {
+            return longest;
+        }
     }
 }

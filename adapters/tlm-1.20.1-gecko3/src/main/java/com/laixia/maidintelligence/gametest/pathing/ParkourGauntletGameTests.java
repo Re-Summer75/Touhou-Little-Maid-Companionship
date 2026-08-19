@@ -12,9 +12,6 @@ import net.minecraft.world.entity.ai.behavior.BlockPosTracker;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.memory.WalkTarget;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.TrapDoorBlock;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
@@ -41,7 +38,7 @@ public final class ParkourGauntletGameTests {
 
     /** 每隔几格一个缺口：一格的、两格的，落地就得起下一跳，节奏不许断。 */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 280)
+            batch = "pathing", timeoutTicks = 280)
     public static void gapsEveryFewBlocksAreARhythmSheCanRun(
             GameTestHelper helper
     ) {
@@ -95,7 +92,7 @@ public final class ParkourGauntletGameTests {
      * tick，也防飞过落点）。
      */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 280)
+            batch = "pathing", timeoutTicks = 280)
     public static void aRaisedStoneMidwayIsAStepInTheAir(
             GameTestHelper helper
     ) {
@@ -150,7 +147,7 @@ public final class ParkourGauntletGameTests {
      * 上一跳的方向不许渗进下一跳。
      */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 280)
+            batch = "pathing", timeoutTicks = 280)
     public static void anLShapedRunTurnsHerBetweenLeaps(
             GameTestHelper helper
     ) {
@@ -234,7 +231,7 @@ public final class ParkourGauntletGameTests {
      * 不靠真助跑。
      */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 280)
+            batch = "pathing", timeoutTicks = 280)
     public static void aTwoGapHopUpIsWithinASprint(GameTestHelper helper) {
         twoGapHopScene(helper, 0);
     }
@@ -247,7 +244,7 @@ public final class ParkourGauntletGameTests {
      * 执行器把它当异常反复停路，她就冻在崖边。零助跑起跳必须成立。
      */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 280)
+            batch = "pathing", timeoutTicks = 280)
     public static void bornOnTheBrinkSheStillMakesTheHop(
             GameTestHelper helper
     ) {
@@ -290,169 +287,6 @@ public final class ParkourGauntletGameTests {
             helper.assertTrue(
                     farthest[0] >= farSide,
                     "She never made the two-gap hop up: x " + farthest[0]
-                            + "; tape(rel)=" + tape
-            );
-            maid.discard();
-            helper.succeed();
-        });
-    }
-
-    /**
-     * 站在顶半活板门上，贴着的高一格玻璃桥要上得去。
-     *
-     * <p>玩家实机的地形：倒扣活板门平台连着高一格的玻璃桥面，她站在门板顶上
-     * 就是不迈上去。门板顶是整数高度的合法立足面，往上一格是普通的抬脚——
-     * 这条钉住"从沉块顶面出发的上行衔接"。
-     */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 280)
-    public static void offTheTrapdoorOntoTheGlassSheGoes(
-            GameTestHelper helper
-    ) {
-        trapdoorToGlassScene(helper, false);
-    }
-
-    /**
-     * 瘦版实机地形：两格小门板台、一格宽无护栏的玻璃桥、高一格、悬空。
-     *
-     * <p>与三宽带护栏的排练场不同，这里每一侧都是深渊，起点台只有两格——
-     * 截图里玩家搭的就是这个。窄台上的起点格、无护栏下的崖边收步、一格宽
-     * 桥面上的节点接受，全在这一条里过堂。
-     */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 280)
-    public static void aSkinnyGlassRunOffATinyTrapdoorPerch(
-            GameTestHelper helper
-    ) {
-        for (int x = 0; x <= 9; x++) {
-            for (int z = 0; z <= 4; z++) {
-                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
-            }
-        }
-        BlockState lid = Blocks.OAK_TRAPDOOR.defaultBlockState()
-                .setValue(TrapDoorBlock.OPEN, false)
-                .setValue(TrapDoorBlock.HALF, Half.TOP);
-        // 两格门板台（z=2 一条线），贴着高一格的一格宽玻璃桥，全部悬空。
-        helper.setBlock(new BlockPos(0, DECK, 2), lid);
-        helper.setBlock(new BlockPos(1, DECK, 2), lid);
-        for (int x = 2; x <= 9; x++) {
-            helper.setBlock(new BlockPos(x, DECK + 1, 2), Blocks.GLASS);
-        }
-        EntityMaid maid = new EntityMaid(helper.getLevel());
-        maid.setPos(GameTestPositions.center(helper, 0, DECK + 1, 2));
-        maid.setTame(true);
-        maid.setPickup(false);
-        maid.setTask(TaskManager.findTask(FreedomMaidTask.UID).orElseThrow());
-        maid.setHomeModeEnable(false);
-        helper.getLevel().addFreshEntity(maid);
-
-        double startFeet = maid.getY();
-        double[] lowest = new double[]{startFeet};
-        double[] farthest = new double[]{maid.getX()};
-        StringBuilder tape = new StringBuilder();
-
-        for (int tick = 1; tick <= WATCHED_TICKS; tick++) {
-            int at = tick;
-            helper.runAfterDelay(tick, () -> {
-                lowest[0] = Math.min(lowest[0], maid.getY());
-                farthest[0] = Math.max(farthest[0], maid.getX());
-                if (at % 5 == 0 && tape.length() < 700) {
-                    tape.append(String.format("%d:(%.1f,%.1f,%.1f) ",
-                            at,
-                            maid.getX()
-                                    - helper.absolutePos(BlockPos.ZERO).getX(),
-                            maid.getY()
-                                    - helper.absolutePos(BlockPos.ZERO).getY(),
-                            maid.getZ()
-                                    - helper.absolutePos(BlockPos.ZERO).getZ()
-                    ));
-                }
-                if (maid.getY() < startFeet - 1.5D) {
-                    return;
-                }
-                maid.getBrain().setMemory(
-                        MemoryModuleType.WALK_TARGET,
-                        new WalkTarget(new BlockPosTracker(
-                                helper.absolutePos(new BlockPos(9, DECK + 2, 2))
-                        ), 0.7F, 0)
-                );
-            });
-        }
-
-        helper.runAfterDelay(WATCHED_TICKS, () -> {
-            helper.assertTrue(
-                    lowest[0] > startFeet - 1.5D,
-                    "She fell off the skinny run: lowest y " + lowest[0]
-                            + "; tape(rel)=" + tape
-            );
-            double farSide = helper.absolutePos(
-                    new BlockPos(8, DECK + 2, 2)).getX();
-            helper.assertTrue(
-                    farthest[0] >= farSide,
-                    "She froze on the tiny trapdoor perch: got to x "
-                            + farthest[0] + "; tape(rel)=" + tape
-            );
-            maid.discard();
-            helper.succeed();
-        });
-    }
-
-    /** 同上，但门板与玻璃之间还隔着一格缺口：上一格的跳跃衔接。 */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 280)
-    public static void offTheTrapdoorAcrossAGapOntoTheGlass(
-            GameTestHelper helper
-    ) {
-        trapdoorToGlassScene(helper, true);
-    }
-
-    /**
-     * 顶半活板门平台（x 0..2，板顶即 DECK+1 的脚面）接玻璃桥（走面 DECK+2）；
-     * {@code gapped} 为真时中间隔一格缺口。
-     */
-    private static void trapdoorToGlassScene(
-            GameTestHelper helper,
-            boolean gapped
-    ) {
-        for (int x = 0; x <= 9; x++) {
-            for (int z = 0; z <= 2; z++) {
-                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
-            }
-        }
-        BlockState lid = Blocks.OAK_TRAPDOOR.defaultBlockState()
-                .setValue(TrapDoorBlock.OPEN, false)
-                .setValue(TrapDoorBlock.HALF, Half.TOP);
-        int glassFrom = gapped ? 4 : 3;
-        for (int z = 0; z <= 2; z++) {
-            for (int x = 0; x <= 2; x++) {
-                helper.setBlock(new BlockPos(x, DECK, z), lid);
-            }
-            for (int x = glassFrom; x <= 9; x++) {
-                helper.setBlock(new BlockPos(x, DECK + 1, z), Blocks.GLASS);
-            }
-        }
-        rails(helper, 9, DECK + 4);
-        EntityMaid maid = walker(helper, 1, DECK + 1);
-        double startFeet = maid.getY();
-        double[] lowest = new double[]{startFeet};
-        double[] farthest = new double[]{maid.getX()};
-        StringBuilder tape = new StringBuilder();
-
-        drive(helper, maid, startFeet, lowest, farthest,
-                new BlockPos(9, DECK + 2, 1), tape);
-
-        helper.runAfterDelay(WATCHED_TICKS, () -> {
-            helper.assertTrue(
-                    lowest[0] > startFeet - 1.5D,
-                    "She fell between trapdoor and glass: lowest y "
-                            + lowest[0] + "; tape(rel)=" + tape
-            );
-            double farSide = helper.absolutePos(
-                    new BlockPos(8, DECK + 2, 1)).getX();
-            helper.assertTrue(
-                    farthest[0] >= farSide,
-                    "She never climbed from the trapdoor onto the glass: x "
-                            + farthest[0] + " (gapped=" + gapped + ")"
                             + "; tape(rel)=" + tape
             );
             maid.discard();

@@ -354,7 +354,7 @@ public final class CombatScenarioGameTests {
      * <p>断言看的是**蓄力有没有跨过遮挡继续涨**，不是看有没有射出箭：射不射得出去
      * 还取决于距离、弹药和目标死没死，而那些都不是这条规则。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
+    @GameTest(batch = "combatscenario", templateNamespace = "minecraft", template = "empty",
             timeoutTicks = 200)
     public static void aBlinkOfCoverDoesNotBinTheDraw(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 9, 9);
@@ -420,7 +420,7 @@ public final class CombatScenarioGameTests {
      *
      * <p>断言看距离不看伤害：伤害受运气影响，而"往里走"就是这个缺陷的定义。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
+    @GameTest(batch = "combatscenario", templateNamespace = "minecraft", template = "empty",
             timeoutTicks = 400)
     public static void mobbedWithAShieldSheStillBacksOff(
             GameTestHelper helper

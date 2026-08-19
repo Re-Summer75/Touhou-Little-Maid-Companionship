@@ -39,7 +39,7 @@ public final class AbilityGameTests {
     private AbilityGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ability", templateNamespace = "minecraft", template = "empty")
     public static void deployBoatConsumesOnceAfterSuccessfulSpawn(
             GameTestHelper helper
     ) {
@@ -88,7 +88,7 @@ public final class AbilityGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "ability", templateNamespace = "minecraft", template = "empty")
     public static void deployBoatReusesNearbyEmptyBoat(
             GameTestHelper helper
     ) {

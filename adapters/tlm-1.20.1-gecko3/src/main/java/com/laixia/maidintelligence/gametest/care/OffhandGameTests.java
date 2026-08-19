@@ -51,7 +51,7 @@ public final class OffhandGameTests {
     private OffhandGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "offhand", templateNamespace = "minecraft", template = "empty")
     public static void vacatingTheOffHandMovesItIntoThePack(
             GameTestHelper helper
     ) {
@@ -80,7 +80,7 @@ public final class OffhandGameTests {
      * <p>"腾不出手"是本模组唯一允许的失败方式。另一种写法是"塞不下就扔"，那正是
      * 本体的两个方法各自在做的事，也正是这一整组测试存在的理由。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "offhand", templateNamespace = "minecraft", template = "empty")
     public static void aFullPackMeansSheKeepsHoldingIt(GameTestHelper helper) {
         EntityMaid maid = spawnMaid(helper);
         fillPack(maid);
@@ -105,7 +105,7 @@ public final class OffhandGameTests {
      * 才归还。战斗每次换武器都会打断进食，于是那一格里的盾再也没人取——而下一次
      * "存"会把它扔在地上。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "offhand", templateNamespace = "minecraft", template = "empty")
     public static void whatAnInterruptedMealTookHostageComesBack(
             GameTestHelper helper
     ) {
@@ -134,7 +134,7 @@ public final class OffhandGameTests {
      * 是被打断过的常态。所以这一例故意把两边都摆成最坏：隐藏槽扣着一把剑，副手
      * 拿着盾，然后开饭。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "offhand", templateNamespace = "minecraft", template = "empty")
     public static void startingAMealNeverDropsWhatSheWasHolding(
             GameTestHelper helper
     ) {
@@ -163,7 +163,7 @@ public final class OffhandGameTests {
      * 多的背包（小 12、中 24、大 36）更容易长期处在塞满状态，所以这一条随背包
      * 变大而变重要，不是变次要。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "offhand", templateNamespace = "minecraft", template = "empty")
     public static void aFullPackStillLetsHerEatWhatIsInIt(
             GameTestHelper helper
     ) {
@@ -196,7 +196,7 @@ public final class OffhandGameTests {
      * <p>盾不可堆叠，取一件必定空出一格，所以"先取盾再腾手"总是成立——而
      * "先腾手再取盾"在满背包下永远拿不到盾。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "offhand", templateNamespace = "minecraft", template = "empty")
     public static void aFullPackStillLetsHerReachTheShield(
             GameTestHelper helper
     ) {
@@ -234,7 +234,7 @@ public final class OffhandGameTests {
      * <p>军械表只看主手和背包，所以"能不能拿到主手"等价于"它有没有出现在军械表
      * 里"。收回背包这一步就是让它出现。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "offhand", templateNamespace = "minecraft", template = "empty")
     public static void aWeaponParkedInTheOffHandBecomesOneSheCanDraw(
             GameTestHelper helper
     ) {
@@ -269,7 +269,7 @@ public final class OffhandGameTests {
      * <p>副手那个图腾是她少死一次的全部原因，而图腾在背包里对她毫无作用——原版
      * 只看两只手。把"副手归本模组管"读成"副手归本模组清空"就会净亏一条命。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "offhand", templateNamespace = "minecraft", template = "empty")
     public static void aTotemInTheOffHandIsLeftWhereSheNeedsIt(
             GameTestHelper helper
     ) {
@@ -293,7 +293,7 @@ public final class OffhandGameTests {
      * <p>走的是生产里的那个顺序：先 {@code unpark} 把武器收回背包，再让盾去要
      * 那一格。原先第二步见副手非空就直接放弃，于是一把插着的剑让她整局赤手承伤。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "offhand", templateNamespace = "minecraft", template = "empty")
     public static void anOccupiedOffHandNoLongerCostsHerTheShield(
             GameTestHelper helper
     ) {

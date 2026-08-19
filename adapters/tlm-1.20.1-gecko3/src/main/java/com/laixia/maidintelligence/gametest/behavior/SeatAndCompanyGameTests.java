@@ -47,7 +47,7 @@ public final class SeatAndCompanyGameTests {
     private SeatAndCompanyGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "seatandcompany", templateNamespace = "minecraft", template = "empty")
     public static void aFreeChairIsWalkedToward(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 6, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -65,7 +65,7 @@ public final class SeatAndCompanyGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "seatandcompany", templateNamespace = "minecraft", template = "empty")
     public static void aChairWithinReachIsSatOn(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -82,7 +82,7 @@ public final class SeatAndCompanyGameTests {
     }
 
     /** One chair holds one person, so the second maid must be turned away. */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "seatandcompany", templateNamespace = "minecraft", template = "empty")
     public static void twoMaidsDoNotShareOneChair(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid first = scene.maid(1, 2, 1);
@@ -113,7 +113,7 @@ public final class SeatAndCompanyGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "seatandcompany", templateNamespace = "minecraft", template = "empty")
     public static void nothingToSitOnFailsCleanly(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -139,7 +139,7 @@ public final class SeatAndCompanyGameTests {
      * other and the server died of a stack overflow rather than misbehaving
      * visibly.
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "seatandcompany", templateNamespace = "minecraft", template = "empty")
     public static void maidsDoNotSitOnEachOther(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid first = scene.maid(1, 2, 1);
@@ -161,7 +161,7 @@ public final class SeatAndCompanyGameTests {
      * The mirror of the chair rule, and the reason keeping company reserves
      * nothing: a person can be kept company by more than one maid.
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "seatandcompany", templateNamespace = "minecraft", template = "empty")
     public static void severalMaidsMayKeepOneOwnerCompany(
             GameTestHelper helper
     ) {
@@ -195,7 +195,7 @@ public final class SeatAndCompanyGameTests {
     }
 
     /** She goes to her own owner, and has no business with anyone else's. */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "seatandcompany", templateNamespace = "minecraft", template = "empty")
     public static void companyRequiresAnOwner(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid stray = scene.strayMaid(1, 2, 1);
@@ -226,7 +226,7 @@ public final class SeatAndCompanyGameTests {
      * 脚边那一小块时动作会当场报完成、根本不写移动目标，那读起来像"没接上"，其实
      * 是随机数。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "seatandcompany", templateNamespace = "minecraft", template = "empty")
     public static void strollingSendsHerSomewhereNearHerOwner(
             GameTestHelper helper
     ) {
@@ -295,7 +295,7 @@ public final class SeatAndCompanyGameTests {
     }
 
     /** 没有主人就没有"他附近"，这一条该干净地失败而不是把她派到别处。 */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "seatandcompany", templateNamespace = "minecraft", template = "empty")
     public static void strollingRequiresAnOwner(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid stray = scene.strayMaid(1, 2, 1);
@@ -326,7 +326,7 @@ public final class SeatAndCompanyGameTests {
      * <p>所以断言的是**玩家看得见的那件事**——取消之后另一件差事跑得起来，而不是
      * "某个记忆为空"。后者是这一次的实现，前者是这条规则。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "seatandcompany", templateNamespace = "minecraft", template = "empty")
     public static void afterAFightSheCanStillDoThings(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 6, 2)
                 .ownerAt(6, 2, 1);
@@ -378,7 +378,7 @@ public final class SeatAndCompanyGameTests {
      * <p>两档各取一格：警戒时游走（自娱）该停、陪着（陪伴）该照做；危险时连陪着
      * 也停。一刀切的实现过不了第一对断言。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "seatandcompany", templateNamespace = "minecraft", template = "empty")
     public static void dangerWithdrawsPermissionByClass(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 6, 6)
                 .ownerAt(6, 2, 1);

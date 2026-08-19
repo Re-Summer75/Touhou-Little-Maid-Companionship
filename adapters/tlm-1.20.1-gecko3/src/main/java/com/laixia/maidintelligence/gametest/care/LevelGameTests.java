@@ -19,7 +19,7 @@ public final class LevelGameTests {
     private LevelGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "level", templateNamespace = "minecraft", template = "empty")
     public static void levelDataSurvivesEntitySaveAndLoad(GameTestHelper helper) {
         EntityMaid maid = helper.spawn(InitEntities.MAID.get(), new BlockPos(1, 2, 1));
         levelApi().setProgress(maid, 8, 37);

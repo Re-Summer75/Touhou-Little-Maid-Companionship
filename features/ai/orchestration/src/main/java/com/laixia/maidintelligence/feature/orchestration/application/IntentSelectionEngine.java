@@ -4,7 +4,6 @@ import com.laixia.maidintelligence.feature.orchestration.api.IntentTrace;
 import com.laixia.maidintelligence.feature.orchestration.domain.IntentCatalog;
 import com.laixia.maidintelligence.feature.orchestration.domain.IntentDefinition;
 import com.laixia.maidintelligence.feature.orchestration.domain.OrchestrationId;
-import com.laixia.maidintelligence.feature.orchestration.domain.utility.UtilityAggregation;
 import com.laixia.maidintelligence.feature.orchestration.port.UtilityModifierPort;
 
 import java.util.ArrayList;
@@ -13,7 +12,6 @@ import java.util.function.ToLongFunction;
 
 final class IntentSelectionEngine<M> {
     private static final int MAX_TRACE_CANDIDATES = 8;
-    private static final double MAX_UTILITY_MODIFIER = 50.0D;
 
     /**
      * 见 {@link IntentDefinition#IMPERATIVE_INTERRUPT_PRIORITY}。
@@ -27,14 +25,14 @@ final class IntentSelectionEngine<M> {
             IntentDefinition.IMPERATIVE_INTERRUPT_PRIORITY;
 
     private final ToLongFunction<M> identity;
-    private final UtilityModifierPort<M> modifiers;
+    private final IntentScorer<M> scorer;
 
     IntentSelectionEngine(
             ToLongFunction<M> identity,
             UtilityModifierPort<M> modifiers
     ) {
         this.identity = identity;
-        this.modifiers = modifiers;
+        this.scorer = new IntentScorer<>(modifiers);
     }
 
     Selection select(
@@ -78,12 +76,12 @@ final class IntentSelectionEngine<M> {
             // `betterThan` 撤掉的东西：现在低 band 的候选完全可以以分数取胜，
             // 跳过它就是替它输掉。剪枝改由 `pruneFloor` 承担——不看 band，只看
             // "还能不能超过现胜者的分数"，对 PRODUCT 聚合这一样便宜。
-            double score = score(
+            double score = scorer.score(
                     subject,
                     intent,
                     state.facts,
                     gameTime,
-                    pruneFloor(winner, intent, continuation, retainTrace)
+                    scorer.pruneFloor(winner, intent, continuation, retainTrace)
             );
             String blocked = blockedReason(
                     intent,
@@ -307,108 +305,6 @@ final class IntentSelectionEngine<M> {
         return null;
     }
 
-    /**
-     * Scores one intent, optionally stopping as soon as it cannot reach
-     * {@code pruneFloor}.
-     *
-     * <p>A pruned return is an upper bound rather than the true score. That is
-     * only sound because the caller discards the trace whenever pruning is
-     * enabled, and because a value that failed to reach the floor cannot go on
-     * to win: both the incumbent comparison and the {@code minimum_score} gate
-     * reject an over-estimate exactly as they would reject the real number.
-     */
-    private double score(
-            M subject,
-            IntentCatalog.CompiledIntent intent,
-            double[] facts,
-            long gameTime,
-            double pruneFloor
-    ) {
-        IntentDefinition definition = intent.definition();
-        UtilityAggregation aggregation = definition.aggregation();
-        /*
-         * Resolved before the considerations, not after, so the bound below is
-         * exact instead of needing headroom for a modifier that has not been
-         * read yet. It does not consult the fact array, so the move cannot
-         * change what it returns.
-         */
-        double modifier = modifier(subject, intent, gameTime);
-        List<IntentCatalog.CompiledConsideration> considerations =
-                intent.considerations();
-        int count = considerations.size();
-        boolean prunable = aggregation.monotonicallyNonIncreasing()
-                && pruneFloor > Double.NEGATIVE_INFINITY;
-        double accumulated = definition.baseScore();
-        for (int index = 0; index < count; index++) {
-            IntentCatalog.CompiledConsideration consideration =
-                    considerations.get(index);
-            accumulated = aggregation.combine(
-                    accumulated,
-                    aggregation.term(
-                            consideration.consideration(),
-                            facts[consideration.factIndex()]
-                    )
-            );
-            if (prunable) {
-                // Every remaining term can only lower `accumulated`, and
-                // `finish` is non-decreasing in it, so this bounds the
-                // finished score from above.
-                double ceiling = aggregation.finish(accumulated, count)
-                        + modifier;
-                if (ceiling < pruneFloor) {
-                    return ceiling;
-                }
-            }
-        }
-        return aggregation.finish(accumulated, count) + modifier;
-    }
-
-    private double modifier(
-            M subject,
-            IntentCatalog.CompiledIntent intent,
-            long gameTime
-    ) {
-        double modifier;
-        try {
-            modifier = modifiers.modifier(subject, intent, gameTime);
-        } catch (RuntimeException ignored) {
-            modifier = 0.0D;
-        }
-        if (!Double.isFinite(modifier)) {
-            return 0.0D;
-        }
-        return Math.max(
-                -MAX_UTILITY_MODIFIER,
-                Math.min(MAX_UTILITY_MODIFIER, modifier)
-        );
-    }
-
-    /**
-     * The score an intent must be able to beat, or
-     * {@link Double#NEGATIVE_INFINITY} when it has to be scored in full.
-     *
-     * <p>排序交还给分数之后，这条下界对**所有** band 的候选都成立——不再有"高 band
-     * 不用比分"的豁免，也不再有被调用方整段跳过的低 band。
-     */
-    private double pruneFloor(
-            ScoredIntent winner,
-            IntentCatalog.CompiledIntent intent,
-            boolean continuation,
-            boolean retainTrace
-    ) {
-        if (retainTrace || continuation || winner == null) {
-            return Double.NEGATIVE_INFINITY;
-        }
-        // 强制档不剪：它们不按分数参赛（线上按等级），剪出来的上界值一旦流进
-        // 同档平手比较就是错的排序依据。强制档一共两三个意图，全额算得起。
-        if (intent.definition().interruptPriority()
-                >= IMPERATIVE_INTERRUPT_PRIORITY) {
-            return Double.NEGATIVE_INFINITY;
-        }
-        // Strict, because an exact tie is still resolved by priority and then
-        // intent id, and an over-estimate must never reach those comparisons.
-        return winner.score();
-    }
 
     private static boolean hasActiveSignal(
             IntentCatalog.CompiledIntent intent,

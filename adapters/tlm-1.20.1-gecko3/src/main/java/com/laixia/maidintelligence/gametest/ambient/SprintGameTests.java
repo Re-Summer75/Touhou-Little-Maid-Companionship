@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.gametest.behavior;
+package com.laixia.maidintelligence.gametest.ambient;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
@@ -41,7 +41,7 @@ public final class SprintGameTests {
      * 跑步动作；缺第四条，某天有人把它换回 {@code setSprinting} 不会有任何东西变红，
      * 而她会悄悄快三成。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
+    @GameTest(batch = "sprint", templateNamespace = "minecraft", template = "empty",
             timeoutTicks = 200)
     public static void movingFastSheRunsAndHerSpeedIsUntouched(
             GameTestHelper helper

@@ -415,10 +415,18 @@ public final class TlmCombatAction {
      * <p>而死锁那一侧不需要它：报出来的处境是"打完之后"，那时目标已经是尸体。仗还
      * 没完时目标活着，威胁压力也还在，战斗意图会照旧被选中——那不是"她什么都做不了"，
      * 那就是她在打。
+     *
+     * <p><b>"死了"之外还有一种"不再是这一仗的"：活着脱离了感知。</b>玩家稳定复现：
+     * 追踪中的敌人不是死在感知内、而是以别的方式离开感知半径，取消路径照跑、这里
+     * 却因为"它还活着"拒绝清理——记忆永远留着，她从此丧失一切差事资格，静止到被
+     * 手动唤醒。感知定义这一仗（她只知道感知内的世界）：距离超出感知半径的目标与
+     * 尸体同款处理。步骤超时误清活目标的旧回归不受影响——那时敌人就在身边，距离
+     * 判据把它留下。
      */
     private static void forgetADeadTarget(EntityMaid maid) {
         LivingEntity target = maid.getTarget();
-        if (target != null && target.isAlive() && !target.isRemoved()) {
+        if (target != null && target.isAlive() && !target.isRemoved()
+                && maid.distanceTo(target) <= PerceptionRange.BLOCKS) {
             return;
         }
         maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);

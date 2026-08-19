@@ -49,7 +49,7 @@ public final class CombatArsenalGameTests {
     /**
      * 空着手站着，武器在包里——本体只看主手，会认为她没有武器。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatarsenal", templateNamespace = "minecraft", template = "empty")
     public static void weaponsInThePackAreFound(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -77,7 +77,7 @@ public final class CombatArsenalGameTests {
      *
      * <p>两次扫描只差一组箭，结论必须相反——否则她会举着空弓走进战斗。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatarsenal", templateNamespace = "minecraft", template = "empty")
     public static void aBowWithoutArrowsIsNotUsable(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -100,7 +100,7 @@ public final class CombatArsenalGameTests {
     }
 
     /** 手上那把要被认出来是手上的，否则每次决策都会白换一次装。 */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatarsenal", templateNamespace = "minecraft", template = "empty")
     public static void theHeldWeaponIsReportedAsHeld(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -120,7 +120,7 @@ public final class CombatArsenalGameTests {
     }
 
     /** 面包不是武器，哪怕她很想吃。 */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatarsenal", templateNamespace = "minecraft", template = "empty")
     public static void foodIsNotAWeapon(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -144,7 +144,7 @@ public final class CombatArsenalGameTests {
      * <p>用一堆敌人做场景，因为这正是剑该赢的那一档：斧头一下重，剑一下打好
      * 几个。断言看的是最终握着什么——选择那一层本来就选对了。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatarsenal", templateNamespace = "minecraft", template = "empty")
     public static void aHeavierBladeInHandDoesNotVetoTheChoice(
             GameTestHelper helper
     ) {
@@ -192,7 +192,7 @@ public final class CombatArsenalGameTests {
      * 会静默卸掉自己的盾。实测：一颗苹果三十二 tick，随后两百六十八 tick 的
      * {@code offhand=empty}。装备这一步就是那条修复，不是便利功能。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatarsenal", templateNamespace = "minecraft", template = "empty")
     public static void aShieldInThePackReachesHerOffHand(
             GameTestHelper helper
     ) {
@@ -236,7 +236,7 @@ public final class CombatArsenalGameTests {
      * 的前置条件，而它同时也保证我们不会和本体争夺同一个槽位——本体自己也会往
      * 副手写（雪球任务、隐藏槽恢复），两边都无条件写就会每 tick 互相覆盖。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatarsenal", templateNamespace = "minecraft", template = "empty")
     public static void anOccupiedOffHandIsLeftAlone(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 6, 6);
         EntityMaid maid = scene.maid(3, 2, 3);
@@ -293,7 +293,7 @@ public final class CombatArsenalGameTests {
      * <p>断言看**走路目标**而不是"她有没有捡到"：捡起来那一下归宿主，寻路耗时
      * 归引擎，等它们会在慢机器上随机失败。这一条只问她有没有被派过去。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatarsenal", templateNamespace = "minecraft", template = "empty")
     public static void unarmedSheGoesForTheBladeOnTheGround(
             GameTestHelper helper
     ) {

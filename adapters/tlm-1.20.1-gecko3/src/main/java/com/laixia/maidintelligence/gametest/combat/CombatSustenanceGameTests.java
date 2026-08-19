@@ -53,7 +53,7 @@ public final class CombatSustenanceGameTests {
      * 手做了个吃的动作但物品还在包里"的实现也能通过——而那正是执行层最容易出的
      * 那类错。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatsustenance", templateNamespace = "minecraft", template = "empty")
     public static void dyingSheEatsWhatSheIsCarrying(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 5, 5);
         EntityMaid maid = scene.maid(2, 2, 2);
@@ -103,7 +103,7 @@ public final class CombatSustenanceGameTests {
      * 而这条规则管的只是"她想站哪儿"。基线用同一副处境下不嚼东西时的距离，所以
      * 断言不会把某个具体数字写死。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatsustenance", templateNamespace = "minecraft", template = "empty")
     public static void chewingSheKeepsOutOfReach(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 7, 7);
         EntityMaid maid = scene.maid(2, 2, 2);
@@ -159,7 +159,7 @@ public final class CombatSustenanceGameTests {
      * <p>吃完之后她还得接着打。手上那把如果在进食时被丢在地上，这个功能就是拿
      * 一次续命换一把武器，而背包是它唯一该去的地方。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatsustenance", templateNamespace = "minecraft", template = "empty")
     public static void herWeaponGoesIntoThePackNotOntoTheFloor(
             GameTestHelper helper
     ) {
@@ -208,7 +208,7 @@ public final class CombatSustenanceGameTests {
      * 一个"把有害食物直接当成不可食用"的实现也能通过，而那会让她饿死在一包腐肉
      * 边上。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatsustenance", templateNamespace = "minecraft", template = "empty")
     public static void sheKnowsTheMouthfulThatCostsHer(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 3);
         EntityMaid maid = scene.maid(1, 2, 1);

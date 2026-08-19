@@ -37,7 +37,7 @@ public final class ProximityErrandGameTests {
     private ProximityErrandGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "proximityerrand", templateNamespace = "minecraft", template = "empty")
     public static void aDistantOwnerIsWalkedToward(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 6, 2)
                 .ownerAt(6, 2, 1);
@@ -58,7 +58,7 @@ public final class ProximityErrandGameTests {
      * maid to set off hold the only one, stranding every other maid in the
      * household where she stood.
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "proximityerrand", templateNamespace = "minecraft", template = "empty")
     public static void everyMaidMayFollowTheSameOwner(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 6, 2)
                 .ownerAt(6, 2, 1);
@@ -82,7 +82,7 @@ public final class ProximityErrandGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "proximityerrand", templateNamespace = "minecraft", template = "empty")
     public static void arrivingAtTheOwnerFinishes(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2)
                 .ownerAt(2, 2, 1);
@@ -96,7 +96,7 @@ public final class ProximityErrandGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "proximityerrand", templateNamespace = "minecraft", template = "empty")
     public static void aStrayedMaidIsSentHome(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 6, 2);
         EntityMaid maid = scene.maid(6, 2, 1);
@@ -115,7 +115,7 @@ public final class ProximityErrandGameTests {
     }
 
     /** Having no home means nowhere to be sent, not the world origin. */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "proximityerrand", templateNamespace = "minecraft", template = "empty")
     public static void withoutAHomeThereIsNowhereToGo(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid maid = scene.maid(1, 2, 1);

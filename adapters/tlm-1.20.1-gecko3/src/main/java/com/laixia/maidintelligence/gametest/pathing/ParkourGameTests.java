@@ -41,21 +41,21 @@ public final class ParkourGameTests {
 
     /** 一格缺口：起手式。 */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 260)
+            batch = "pathing", timeoutTicks = 260)
     public static void aOneWideGapIsWorthAJump(GameTestHelper helper) {
         crossingScene(helper, x -> x == 4, z -> true, true);
     }
 
     /** 两格缺口：推力配速跨过去——修活板门摔落时它还是拒走线，现在是跳板。 */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 260)
+            batch = "pathing", timeoutTicks = 260)
     public static void aTwoWideGapIsJumpedWithALeap(GameTestHelper helper) {
         crossingScene(helper, x -> x == 4 || x == 5, z -> true, true);
     }
 
     /** 三格缺口：物理极限之内，仍然过。 */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 260)
+            batch = "pathing", timeoutTicks = 260)
     public static void aThreeWideGapIsStillWithinHerLegs(
             GameTestHelper helper
     ) {
@@ -64,7 +64,7 @@ public final class ParkourGameTests {
 
     /** 四格缺口：极限之外，拒走且不摔。 */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 260)
+            batch = "pathing", timeoutTicks = 260)
     public static void aFourWideGapIsWhereSheDrawsTheLine(
             GameTestHelper helper
     ) {
@@ -79,7 +79,7 @@ public final class ParkourGameTests {
      * 契约与断言一起反转，反转在明处。
      */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 260)
+            batch = "pathing", timeoutTicks = 260)
     public static void aStraightJumpBeatsTheDetour(GameTestHelper helper) {
         EntityMaid maid = deck(helper, x -> x == 4, z -> z <= 1);
         double deckFeet = maid.getY();
@@ -128,7 +128,7 @@ public final class ParkourGameTests {
      * 她平着推下缺口。起跳直写速度后，这条地形必须过。
      */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 260)
+            batch = "pathing", timeoutTicks = 260)
     public static void aStepUpRightBeforeTheGapStillLeaps(
             GameTestHelper helper
     ) {
@@ -227,7 +227,7 @@ public final class ParkourGameTests {
      * 悬崖就是跳过头了。
      */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 260)
+            batch = "pathing", timeoutTicks = 260)
     public static void anEarlyStepJumpDoesNotOvershootALedge(
             GameTestHelper helper
     ) {
@@ -309,7 +309,7 @@ public final class ParkourGameTests {
      * 上方的那一刻把走目标反转回起点——锁没锁住，读数见分晓。
      */
     @GameTest(templateNamespace = "minecraft", template = "empty",
-            timeoutTicks = 260)
+            batch = "pathing", timeoutTicks = 260)
     public static void aMidAirRetargetCannotBendTheLeap(
             GameTestHelper helper
     ) {
@@ -366,13 +366,31 @@ public final class ParkourGameTests {
         double deckFeet = maid.getY();
         double[] lowest = new double[]{deckFeet};
         double[] farthest = new double[]{maid.getX()};
+        StringBuilder tape = new StringBuilder();
 
+        for (int tick = 1; tick <= WATCHED_TICKS; tick++) {
+            int at = tick;
+            helper.runAfterDelay(tick, () -> {
+                if (at % 5 == 0 && tape.length() < 700) {
+                    tape.append(String.format("%d:(%.1f,%.1f,%.1f) ",
+                            at,
+                            maid.getX()
+                                    - helper.absolutePos(BlockPos.ZERO).getX(),
+                            maid.getY()
+                                    - helper.absolutePos(BlockPos.ZERO).getY(),
+                            maid.getZ()
+                                    - helper.absolutePos(BlockPos.ZERO).getZ()
+                    ));
+                }
+            });
+        }
         drive(helper, maid, deckFeet, lowest, farthest, null);
 
         helper.runAfterDelay(WATCHED_TICKS, () -> {
             helper.assertTrue(
                     lowest[0] > deckFeet - 1.5D,
                     "She fell: lowest y " + lowest[0] + " vs deck " + deckFeet
+                            + "; tape(rel)=" + tape
             );
             double farSide = helper.absolutePos(
                     new BlockPos(LENGTH - 1, DECK + 1, 1)).getX();
@@ -385,7 +403,8 @@ public final class ParkourGameTests {
             } else {
                 helper.assertTrue(
                         farthest[0] < farSide,
-                        "She somehow crossed a gap that is past her limit"
+                        "She somehow crossed a gap that is past her limit: x "
+                                + farthest[0] + "; tape(rel)=" + tape
                 );
             }
             maid.discard();

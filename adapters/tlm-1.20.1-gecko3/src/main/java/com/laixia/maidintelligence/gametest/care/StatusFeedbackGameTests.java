@@ -40,7 +40,7 @@ public final class StatusFeedbackGameTests {
     private StatusFeedbackGameTests() {
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "statusfeedback", templateNamespace = "minecraft", template = "empty")
     public static void statusDataSurvivesEntitySaveAndLoad(GameTestHelper helper) {
         EntityMaid maid = spawnMaid(helper);
         statusApi().setHunger(maid, 23);
@@ -61,7 +61,7 @@ public final class StatusFeedbackGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "statusfeedback", templateNamespace = "minecraft", template = "empty")
     public static void lowDurabilityToolUsesHealthyBackup(GameTestHelper helper) {
         EntityMaid maid = spawnMaid(helper);
         ItemStack worn = lowDurabilityPickaxe();
@@ -86,7 +86,7 @@ public final class StatusFeedbackGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "statusfeedback", templateNamespace = "minecraft", template = "empty")
     public static void lowDurabilityToolIsKeptWithoutBackup(GameTestHelper helper) {
         EntityMaid maid = spawnMaid(helper);
         ItemStack worn = lowDurabilityPickaxe();
@@ -105,7 +105,7 @@ public final class StatusFeedbackGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "statusfeedback", templateNamespace = "minecraft", template = "empty")
     public static void hungryMaidTakesOneMealFromNearbySnackCabinet(
             GameTestHelper helper
     ) {
@@ -166,7 +166,7 @@ public final class StatusFeedbackGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "statusfeedback", templateNamespace = "minecraft", template = "empty")
     public static void snackCabinetApproachTargetIsOwnedAndCancelled(
             GameTestHelper helper
     ) {
@@ -233,7 +233,7 @@ public final class StatusFeedbackGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "statusfeedback", templateNamespace = "minecraft", template = "empty")
     public static void twoMaidsCannotClaimTheLastSnackTogether(
             GameTestHelper helper
     ) {
@@ -304,7 +304,7 @@ public final class StatusFeedbackGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "statusfeedback", templateNamespace = "minecraft", template = "empty")
     public static void fullInventoryPickupShowsOneWarning(GameTestHelper helper) {
         EntityMaid maid = spawnMaid(helper);
         maid.setTame(true);
@@ -342,7 +342,7 @@ public final class StatusFeedbackGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty", timeoutTicks = 80)
+    @GameTest(batch = "statusfeedback", templateNamespace = "minecraft", template = "empty", timeoutTicks = 80)
     public static void hungerRegenerationContinuesWhileEatingAndRestartsAfterNewDamage(
             GameTestHelper helper
     ) {

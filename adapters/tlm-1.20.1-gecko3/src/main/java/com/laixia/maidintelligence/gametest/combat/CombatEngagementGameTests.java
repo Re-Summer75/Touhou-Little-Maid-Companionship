@@ -66,7 +66,7 @@ public final class CombatEngagementGameTests {
      * 记忆。于是记忆恒空、威胁压力恒为零、交战意图永不触发——她不是不肯打，
      * 是看不见任何可打的东西。所有喂记忆的测试都会绕过这一环，所以单独钉住。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatengagement", templateNamespace = "minecraft", template = "empty")
     public static void sheCanSeeBeyondHerOwnBody(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -86,7 +86,7 @@ public final class CombatEngagementGameTests {
         helper.succeed();
     }
 
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatengagement", templateNamespace = "minecraft", template = "empty")
     public static void aVisibleHostileStartsTheFight(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -132,7 +132,7 @@ public final class CombatEngagementGameTests {
      * <p>所以断言从"武器与惊慌互斥"改成"惊慌恒关，且空手时风险判定仍然让她
      * 离开"。后半句才是玩家真正在意的行为，前半句只是当时的实现手段。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatengagement", templateNamespace = "minecraft", template = "empty")
     public static void fleeingIsOursArmedOrNot(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -184,7 +184,7 @@ public final class CombatEngagementGameTests {
      * 于是根本不成其为战斗。能在这个距离上还击的，只有同样打得到这么远的
      * 东西，所以这条要验证的场景必须由它来搭。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatengagement", templateNamespace = "minecraft", template = "empty")
     public static void aBlockedShotSendsHerCloser(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 5, 2);
         EntityMaid maid = scene.maid(1, 2, 1);
@@ -244,7 +244,7 @@ public final class CombatEngagementGameTests {
      * <p>这条一度断言的是相反的事——"退得开就继续射"。那个设计让她几乎不
      * 拔刀，因为女仆基础移速 0.7 而僵尸 0.23，"退得开"对几乎所有怪都成立。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatengagement", templateNamespace = "minecraft", template = "empty")
     public static void pressedSheDrawsSteelNotTheBow(
             GameTestHelper helper
     ) {
@@ -291,7 +291,7 @@ public final class CombatEngagementGameTests {
      * 下去——比挨那一下糟得多，所以空掉的地面和墙一样算作退无可退。纯逻辑
      * 测试喂不进地形，这一条必须在真实世界里问。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatengagement", templateNamespace = "minecraft", template = "empty")
     public static void aLedgeBehindHerIsNotAnEscape(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 5, 5);
         // 站在地板靠 -x 的一侧，往那边退三格就出界了。
@@ -319,7 +319,7 @@ public final class CombatEngagementGameTests {
      *
      * <p>两个方向都要断言：只测一边的话，把判据写死成"永远不能退"也能通过。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatengagement", templateNamespace = "minecraft", template = "empty")
     public static void kitingNeedsTheLegsToDoIt(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 7, 7);
         // 站在地板中间，往哪边退都还有地，好把地形这个因素排除掉。
@@ -405,7 +405,7 @@ public final class CombatEngagementGameTests {
      *
      * <p>逐格走查还顺带管住了另一种情形：落脚点是空地，但中间隔着一堵墙。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatengagement", templateNamespace = "minecraft", template = "empty")
     public static void aRetreatChecksTheWholeDistance(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 7, 7);
         // 站在靠 +x 的一侧，威胁也在 +x，于是她的退路朝 -x，地板到 x=0 为止。
@@ -426,7 +426,7 @@ public final class CombatEngagementGameTests {
     }
 
     /** 空手时不该硬拼——风险裁决应当让她放弃交战。 */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "combatengagement", templateNamespace = "minecraft", template = "empty")
     public static void barehandedSheDoesNotCommit(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 3, 2);
         EntityMaid maid = scene.maid(1, 2, 1);

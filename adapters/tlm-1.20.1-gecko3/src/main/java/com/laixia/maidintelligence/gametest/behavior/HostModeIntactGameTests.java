@@ -47,7 +47,7 @@ public final class HostModeIntactGameTests {
      * <p>不喂记忆就测不到东西：可见实体记忆由传感器每 tick 重建，而夹具里没有
      * 走过完整的 tick 循环。喂进去之后，剩下的每一步都是本体自己的判断。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "hostmodeintact", templateNamespace = "minecraft", template = "empty")
     public static void cakeStillTemptsAHostModeMaid(GameTestHelper helper) {
         CompanionScene scene = CompanionScene.room(helper, 5, 5);
         EntityMaid maid = scene.hostModeMaid(2, 2, 2);
@@ -83,7 +83,7 @@ public final class HostModeIntactGameTests {
      * 注册而不是直接构造行为——手工 new 出来的对象与她的 brain 无关，跑不跑都
      * 说明不了问题。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty")
+    @GameTest(batch = "hostmodeintact", templateNamespace = "minecraft", template = "empty")
     public static void theSameCakeDoesNotDriveAFreeMaid(
             GameTestHelper helper
     ) {

@@ -5,9 +5,11 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.laixia.maidintelligence.feature.behavior.tlm.pathing.SureFootedNavigation;
 import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
 import com.laixia.maidintelligence.feature.orchestration.tlm.MaidIntentBehavior;
+import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmAttackMemoryJanitor;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmEnRouteScoop;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmIdleGaze;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmSprint;
+import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmStillnessBox;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmWeaponStow;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.guard.ProjectileDodge;
 import com.mojang.datafixers.util.Pair;
@@ -54,6 +56,9 @@ public final class BehaviorExtraBrain implements IExtraMaidBrain {
         // 寻路升级守卫：拿着裸的地面导航就换成会查立足点的那个。放在最前，
         // 因为这一 tick 里随后写下的任何移动目标都该用升级后的评估。
         SureFootedNavigation.upgrade(maid);
+        // 攻击记忆的门房：指着尸体/感知外的记忆当场清。放在意图之前，这一
+        // tick 的资格判据读到的才是干净的记忆。
+        janitor.tick(maid, gameTime);
         boatAutonomy.tick(maid, gameTime);
         gaze.tick(maid, gameTime);
         stow.tick(maid, gameTime);
@@ -65,12 +70,17 @@ public final class BehaviorExtraBrain implements IExtraMaidBrain {
         // 不与任何意图竞争，这正是"跟着走还能顺手捡"的那一半。
         scoop.tick(maid, gameTime);
         ProjectileDodge.consider(maid);
+        // 静止黑匣子：十秒纹丝不动就倒状态。只记录，不干预。
+        stillness.tick(maid, gameTime);
     }
 
     private final TlmIdleGaze gaze = TlmIdleGaze.create();
     private final TlmWeaponStow stow = TlmWeaponStow.create();
     private final TlmSprint sprint = TlmSprint.create();
     private final TlmEnRouteScoop scoop = TlmEnRouteScoop.create();
+    private final TlmStillnessBox stillness = TlmStillnessBox.create();
+    private final TlmAttackMemoryJanitor janitor =
+            TlmAttackMemoryJanitor.create();
 
     @Override
     public List<Pair<Integer, BehaviorControl<? super EntityMaid>>>
