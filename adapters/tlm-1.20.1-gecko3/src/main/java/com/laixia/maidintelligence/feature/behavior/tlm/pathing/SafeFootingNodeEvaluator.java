@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.feature.behavior.tlm.pathing;
 import com.github.tartaricacid.touhoulittlemaid.entity.ai.navigation.MaidNodeEvaluator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.pathfinder.BlockPathTypes;
 import net.minecraft.world.level.pathfinder.Node;
@@ -62,8 +63,77 @@ public class SafeFootingNodeEvaluator extends MaidNodeEvaluator {
      */
     static final int DROP_MAX = 6;
 
-    /** 下崖边的定价：折合多走几格路，让 A* 有楼梯先走楼梯。 */
-    private static final float DROP_OFF_MALUS = 3.0F;
+    /** 钻缝那一族（贴边挤过、贴角斜穿）：判据同源，单独一处。 */
+    private final TightEdges tight = new TightEdges(this);
+
+    /** 下崖那一族：判据同源，单独一处。 */
+    private final BrinkEdges brink = new BrinkEdges(this);
+
+    /**
+     * 最近一次搜索里，**起点那一格发出了几个邻居**。
+     *
+     * <p>"一节点、不可达"在原版 A* 里只有一个成因：起点一个邻居都没发出
+     * 来。而这个形状（advanced-out）今晚在四条红里出现过，隔离测同一格却
+     * 每次都铺得出路——三轮逐格诊断（栅栏圈 25 格、缺角对角线、梁上 8 格）
+     * 全绿。差别只能在她当时的状态里，可我为此猜过预算、猜过属性、猜过实
+     * 例，全错。
+     *
+     * <p>与其继续猜，把这个数直接量出来：是 0 就坐实"起点发不出边"，非 0
+     * 就说明残路另有成因。两条路当场分开，不用再赌。
+     */
+    private int startNeighbours = -1;
+
+    private Node searchStart;
+
+    /** 起点邻居数；还没搜过时为 -1。 */
+    public int startNeighbours() {
+        return startNeighbours;
+    }
+
+    /**
+     * 起点要落在**真正托着她脚的那一格**上。
+     *
+     * <p>原版落地时取 {@code floor(y + 0.5)}，这条规则默认地板要么在整数高
+     * 度、要么不高过半格——台阶（0.5）、下半活板门（0.1875）、实心方块都成
+     * 立。**栅栏和墙是一格半**，顶面落在 4.5 这种半格线上，前提当场就破了：
+     * 她站在栅栏顶上时 {@code floor(4.5 + 0.5) = 5}，可托着她的是 y=4 那一格
+     * （{@code getFloorLevel} 给的正是 3 + 1.5 = 4.5，与她脚下分毫不差）。
+     *
+     * <p>差这一格的后果不是"路差一点"，是**整条路从她头顶正上方的幽灵格起
+     * 步**：执行侧按自己那一格算出 dy=+1，于是每一 tick 都判成"要往上爬"，
+     * 登阶分支连爬四百二十七次也爬不进一个不存在的落脚点，人就钉死在栅栏顶
+     * 上（栅栏圈实测；同一刻的现场复铺给出六节点可达路，证明图本身是好的
+     * ——错的只有起点）。
+     *
+     * <p>判据不猜，只问一句：哪一格的地板高度**正好等于她脚下的高度**。两
+     * 种取法一致时照旧走原版，不一致时才以这一句为准。
+     */
+    @Override
+    public Node getStart() {
+        startNeighbours = -1;
+        Node vanilla = super.getStart();
+        searchStart = vanilla;
+        if (vanilla == null || !this.mob.onGround()) {
+            return vanilla;
+        }
+        int footing = Mth.floor(this.mob.getY());
+        if (footing == vanilla.y) {
+            return vanilla;
+        }
+        double feet = this.mob.getY();
+        if (Math.abs(getFloorLevel(vanilla.asBlockPos()) - feet) <= FOOTING_SLACK) {
+            return vanilla;
+        }
+        BlockPos mine = new BlockPos(vanilla.x, footing, vanilla.z);
+        if (Math.abs(getFloorLevel(mine) - feet) <= FOOTING_SLACK) {
+            searchStart = getStartNode(mine);
+            return searchStart;
+        }
+        return vanilla;
+    }
+
+    /** 判"这一格的地板正好托着她"的容差：一分格都不到。 */
+    private static final double FOOTING_SLACK = 0.05D;
 
     /**
      * 能跳多远跳多远，而且不止同层：沿每个方向扫过去，产出至多三种落点——最近
@@ -79,56 +149,36 @@ public class SafeFootingNodeEvaluator extends MaidNodeEvaluator {
     @Override
     public int getNeighbors(Node[] outputArray, Node node) {
         int count = super.getNeighbors(outputArray, node);
+        count = tight.cornerCuts(outputArray, count, node);
         for (Direction direction : Direction.Plane.HORIZONTAL) {
-            count = dropOffLanding(outputArray, count, node, direction);
+            count = brink.dropOffLanding(outputArray, count, node, direction);
         }
         // 起跳格自己的头顶两格要空：跳起来的那一下发生在自己的柱子里。
         if (!airy(this.level, node.x, node.y + 1, node.z)
                 || !airy(this.level, node.x, node.y + 2, node.z)) {
-            return count;
+            return census(node, count);
         }
         for (Direction direction : Direction.Plane.HORIZONTAL) {
             count = jumpLandings(outputArray, count, node, direction);
             count = diagonalLandings(outputArray, count, node, direction);
-            count = squeezeLanding(outputArray, count, node, direction);
+            count = tight.squeezeLanding(outputArray, count, node, direction);
+        }
+        return census(node, count);
+    }
+
+    /** 拆出去的边族要取节点：getNode 是跨包 protected，包内开一扇门。 */
+    Node nodeAt(int x, int y, int z) {
+        return this.getNode(x, y, z);
+    }
+
+    /** 起点那一格的邻居数留个底；别的格子照原样返回。 */
+    private int census(Node node, int count) {
+        if (node == searchStart) {
+            startNeighbours = count;
         }
         return count;
     }
 
-    /**
-     * 挤边跨越：正前一格格心被占（栅栏柱这类）但贴边塞得下身位、再往前一
-     * 格又是正经路面——连一条穿过被占格的两格边。玩家绕柱贴边走的就是这
-     * 条缝：柱只占中间四分之一，格级的图却把整格判死（体素化，玩家点名）。
-     * 塞不塞得下由 {@code FootingRule.squeezePoint} 对真实碰撞形状逐候选
-     * 点做身位箱测试，执行侧用同一个点走贴边折线。
-     */
-    private int squeezeLanding(
-            Node[] out,
-            int count,
-            Node node,
-            Direction direction
-    ) {
-        int mx = node.x + direction.getStepX();
-        int mz = node.z + direction.getStepZ();
-        BlockPos mid = new BlockPos(mx, node.y, mz);
-        if (!FootingRule.coversCenter(this.level, mid)
-                || walkableCell(mx, node.y, mz)
-                || FootingRule.squeezePoint(this.level, mid) == null) {
-            return count;
-        }
-        int fx = node.x + 2 * direction.getStepX();
-        int fz = node.z + 2 * direction.getStepZ();
-        if (walkableCell(fx, node.y, fz)
-                && this.getFloorLevel(new BlockPos(fx, node.y, fz))
-                        >= node.y - 0.6D
-                && airy(this.level, fx, node.y + 1, fz)) {
-            count = emitLanding(out, count, fx, node.y, fz);
-        }
-        // 被占格自己也是节点：贴边窄条站得住人，站上去还能接着起跳——
-        // 柱子在崖沿格时，挤边和跳跃必须能组合（玩家实测：柱在边缘就又
-        // 站桩了）。执行侧走它时瞄同一个贴边点。
-        return emitLanding(out, count, mx, node.y, mz);
-    }
 
     /**
      * 斜线跳跃：直线落点被占（栅栏、门框、缺角）时，人会斜一点跳到旁边那
@@ -198,66 +248,7 @@ public class SafeFootingNodeEvaluator extends MaidNodeEvaluator {
         return true;
     }
 
-    /**
-     * 下崖跟进的落点：外一格身位头位全空、脚下两格以上无立足（一格内是原版
-     * 台阶下行的地盘），往下扫到第一块盖得住格心的地板。干落六格以内、或
-     * 落进水里（水面下那格是水就算，深潭不限高度），都连成一条贵三格的边。
-     */
-    private int dropOffLanding(
-            Node[] out,
-            int count,
-            Node node,
-            Direction direction
-    ) {
-        int x = node.x + direction.getStepX();
-        int z = node.z + direction.getStepZ();
-        if (!airy(this.level, x, node.y, z)
-                || !airy(this.level, x, node.y + 1, z)) {
-            return count;
-        }
-        // 脚下一格还有立足的话是原版续走的台阶，不归这条边管。
-        if (FootingRule.coveringTopAt(this.level, new BlockPos(x, node.y - 1, z))
-                > Double.NEGATIVE_INFINITY) {
-            return count;
-        }
-        for (int depth = 2; depth <= DROP_MAX; depth++) {
-            int y = node.y - depth;
-            if (y <= this.level.getMinBuildHeight()) {
-                return count;
-            }
-            BlockPos floorPos = new BlockPos(x, y - 1, z);
-            if (this.level.getFluidState(floorPos).isSource()) {
-                return emitDropLanding(out, count, x, y, z);
-            }
-            double top = FootingRule.coveringTopAt(this.level, floorPos);
-            if (top > Double.NEGATIVE_INFINITY) {
-                // 地板要贴脚（半格内），沉得更深的等下一轮扫描去接。
-                return top >= y - 0.6D
-                        ? emitDropLanding(out, count, x, y, z)
-                        : count;
-            }
-        }
-        return count;
-    }
 
-    /** 下崖落点定型：可走、贵三格。落点自身的可走性照常验。 */
-    private int emitDropLanding(Node[] out, int count, int x, int y, int z) {
-        if (!walkableCell(x, y, z)
-                && !this.level.getFluidState(new BlockPos(x, y - 1, z))
-                        .isSource()) {
-            return count;
-        }
-        Node landing = this.getNode(x, y, z);
-        if (landing == null || landing.closed) {
-            return count;
-        }
-        landing.type = BlockPathTypes.WALKABLE;
-        landing.costMalus = Math.max(landing.costMalus, DROP_OFF_MALUS);
-        if (count < out.length) {
-            out[count++] = landing;
-        }
-        return count;
-    }
 
     /**
      * 这格是不是"能站人的路面"——跳跃扫描的认路尺。
@@ -267,7 +258,8 @@ public class SafeFootingNodeEvaluator extends MaidNodeEvaluator {
      * 线上放一片活板门（开关皆然）整条线就断，而台阶楼梯（枚举恰好 WALKABLE）
      * 没事。物理的尺只有一把：类型可走，或这格自己就是贴脚的矮地板。
      */
-    private boolean walkableCell(int x, int y, int z) {
+
+    boolean walkableCell(int x, int y, int z) {
         BlockPathTypes type = this.getBlockPathType(this.level, x, y, z);
         if (type == BlockPathTypes.WALKABLE
                 || type == BlockPathTypes.TRAPDOOR) {
@@ -307,6 +299,22 @@ public class SafeFootingNodeEvaluator extends MaidNodeEvaluator {
                         || !airy(this.level, x, node.y + 2, z)) {
                     return count;
                 }
+                // **沉得不深的，它自己就是落点。**关着的下半活板门盖在台阶
+                // 上时顶面只比走面低 0.81 格——那是一步小落差，不是要飞越
+                // 的坑，而"算不算同层落点"的门槛只有 0.6，正好把它漏在中间。
+                //
+                // 漏掉的后果不是"路差一点"：这条边**根本不存在**，于是她连
+                // 第一跳都不起（玩家实测：L 岛高的那一格顶上放一块关着的下
+                // 半活板门，她站在出发台上一动不动，路是 1 nodes/不可达）。
+                //
+                // 照旧继续往外扫：更远处若有真正的同层落点，两条边都交给
+                // A* 按总价挑——落在门板上还是飞越过去，由它定。
+                if (reach >= 2 && !tookTheDip
+                        && this.getFloorLevel(new BlockPos(x, node.y, z))
+                                >= node.y - 1.25D) {
+                    count = emitLanding(out, count, x, node.y, z);
+                    tookTheDip = true;
+                }
                 continue;
             }
             if (!airy(this.level, x, node.y, z)) {
@@ -316,6 +324,7 @@ public class SafeFootingNodeEvaluator extends MaidNodeEvaluator {
                 // 实测点名）。缝够身位、头上两格也空，就当弧线的一段继续；
                 // 缝里站得住还发一个贴边落点，孤柱格也能当落脚点。
                 if (FootingRule.tallAtCenter(this.level, hard)
+                        && tight.lonePost(hard, direction)
                         && airy(this.level, x, node.y + 1, z)
                         && airy(this.level, x, node.y + 2, z)) {
                     boolean alongX = direction.getStepX() != 0;
@@ -340,7 +349,34 @@ public class SafeFootingNodeEvaluator extends MaidNodeEvaluator {
                 // 两格缺口——上一格的落点（跨两格要满推力的加速跳）。落点地
                 // 板必须跳得上去：起跳弧顶一格二五，栅栏顶一格五就是够不着
                 // 的谎言边——实测她对着柱顶跳到看门狗咬。
-                if (reach >= 2 && reach <= UP_HOP_MAX_REACH
+                //
+                // 贴脸那一格（reach==1）向来交给原版的登阶，可**原版只认
+                // WALKABLE**：关着的活板门盖在台阶上时那一格是 TRAPDOOR，
+                // 登阶当场拒绝；而这一族又要求 reach>=2。两边都不管，这条
+                // 边根本不存在——玩家实测的 L 岛正是这样：去程跳得过去，回
+                // 程要从岛的低处迈上那块门板时她一动不动（note=nopath）。
+                // 只补原版不认的那一种，免得同一条边发两遍。
+                //
+                // 只认**真正的矮地板**（关着的下半活板门、地毯这类：自身碰
+                // 撞不高于半格且盖得住格心）。第一版放宽成"所有原版不认的可
+                // 走格"，当场打伤两条——悬吊门板那条里她照着往上跳，一头撞
+                // 在天花板上（t=268，rel y=14.01，天花板 14.00）。宽一分就
+                // 会连出她根本站不上去的边。
+                BlockPos lid = new BlockPos(x, node.y + 1, z);
+                boolean lowLid = reach == 1
+                        && getBlockPathType(this.level, x, node.y + 1, z)
+                                != BlockPathTypes.WALKABLE
+                        && FootingRule.selfFloor(this.level.getBlockState(lid)
+                                .getCollisionShape(this.level, lid));
+                // 反向的另一半：**起跳格自己是门板**时，原版也不往上迈——
+                // 从 TRAPDOOR 类型的格子它不出登阶边，而这一族又只在
+                // reach>=2 发边，两不管。实机黑匣子：她落上门板后规划器给
+                // 出"1 节点、不可达"的残桩，advanced-out 循环到看门狗——路
+                // 都没有，执行侧修得再对也轮不到。
+                boolean lidTakeoff = reach == 1
+                        && node.type == BlockPathTypes.TRAPDOOR;
+                if ((reach >= 2 || lowLid || lidTakeoff)
+                        && reach <= UP_HOP_MAX_REACH
                         && walkableCell(x, node.y + 1, z)
                         && airy(this.level, x, node.y + 2, z)
                         && this.getFloorLevel(new BlockPos(x, node.y + 1, z))
@@ -350,8 +386,23 @@ public class SafeFootingNodeEvaluator extends MaidNodeEvaluator {
                 return count;
             }
             // 可穿行：弧线的一段，头顶两格必须空，否则整条方向作废。
-            if (!airy(this.level, x, node.y + 1, z)
-                    || !airy(this.level, x, node.y + 2, z)) {
+            if (!airy(this.level, x, node.y + 1, z)) {
+                // 作废之前先问一句：挡住弧线的那东西，是不是一片**她跳得上
+                // 去的檐**？悬空的关门板、贴边台阶就是这种——脚下那一层空
+                // 着（檐下面就是虚空），扫描本该一路穿过去，而上一格恰好站
+                // 得住人。这条边从前**根本不存在**：撞墙才连上跳，而檐撞不
+                // 到，于是她眼里那儿没有路（玩家实测：门板嵌在两格柱的上一
+                // 格下半，理论上跳得上去，她却认为不可以）。
+                if (reach >= 2 && reach <= UP_HOP_MAX_REACH
+                        && walkableCell(x, node.y + 1, z)
+                        && airy(this.level, x, node.y + 2, z)
+                        && this.getFloorLevel(new BlockPos(x, node.y + 1, z))
+                                <= node.y + 1.25D) {
+                    count = emitLanding(out, count, x, node.y + 1, z);
+                }
+                return count;
+            }
+            if (!airy(this.level, x, node.y + 2, z)) {
                 return count;
             }
             // 弧下一层按高度分两种：顶面贴着走面（半格内）是**平路**——走路
@@ -375,8 +426,13 @@ public class SafeFootingNodeEvaluator extends MaidNodeEvaluator {
         return count;
     }
 
+    /** 钻缝那一族要读同一个世界快照。 */
+    BlockGetter world() {
+        return this.level;
+    }
+
     /** 把一个跳跃落点定型成可走节点塞进数组；塞不进或已关闭就原样返回。 */
-    private int emitLanding(Node[] out, int count, int x, int y, int z) {
+    int emitLanding(Node[] out, int count, int x, int y, int z) {
         Node landing = this.getNode(x, y, z);
         if (landing == null || landing.closed) {
             return count;
@@ -397,7 +453,7 @@ public class SafeFootingNodeEvaluator extends MaidNodeEvaluator {
      * 上立一片开门板整条线就断（玩家实测，与关门板同罪不同因）。物理的尺：
      * 类型是空气，或者格心无碰撞且无流体（栅栏柱盖住格心，仍是真墙）。
      */
-    private boolean airy(BlockGetter level, int x, int y, int z) {
+    boolean airy(BlockGetter level, int x, int y, int z) {
         if (this.getBlockPathType(level, x, y, z) == BlockPathTypes.OPEN) {
             return true;
         }
@@ -425,7 +481,12 @@ public class SafeFootingNodeEvaluator extends MaidNodeEvaluator {
         }
         return super.getFloorLevel(pos);
     }
-
+    /**
+     * 宿主的分类要改判，改判的规矩在 {@link CellClassifier}。
+     *
+     * <p>这里只做转接：分类是"跟宿主词汇打交道"，连边是几何，两件事分开
+     * 长各自的注释与钉子。
+     */
     @Override
     public BlockPathTypes getBlockPathType(
             BlockGetter level,
@@ -433,58 +494,7 @@ public class SafeFootingNodeEvaluator extends MaidNodeEvaluator {
             int y,
             int z
     ) {
-        BlockPathTypes type = super.getBlockPathType(level, x, y, z);
-        BlockPos pos = new BlockPos(x, y, z);
-        if (type == BlockPathTypes.TRAPDOOR
-                || type == BlockPathTypes.DOOR_OPEN) {
-            VoxelShape self = level.getBlockState(pos)
-                    .getCollisionShape(level, pos);
-            // 关着的下半活板门这类：自己就是地板。
-            if (!self.isEmpty()
-                    && self.max(Direction.Axis.Y) <= FootingRule.STANDABLE_TOP) {
-                return type;
-            }
-            // 关着的顶半活板门：贴着格子天花板高度的一整块平板——是墙体，
-            // 站的人站在上一格（那一格的可走性由晋升验收保留）。审成空气
-            // 她的脚就踩在"空气"的顶盖上，起点格不成立，人定在原地——
-            // 玩家实测报的就是这个。竖板（开着的门）底边在地上，不进这支。
-            if (!self.isEmpty()
-                    && self.min(Direction.Axis.Y) >= FootingRule.STANDABLE_TOP
-                    && FootingRule.coversCenter(self)) {
-                return BlockPathTypes.BLOCKED;
-            }
-            return standableBelow(level, pos) ? type : BlockPathTypes.OPEN;
-        }
-        // 宿主把"碰撞高于半格"的非门方块一律判 BLOCKED——对箱子这类盖住格
-        // 心的成立，对**贴边竖片**（开着的活板门）不成立：竖片占的是格边，
-        // 格心站得下人、身子从旁边过毫无阻碍。玩家实测：开门板立在落点格，
-        // 有站位却拒跳。竖片按脚下有无地板还原成可通行或空气。
-        if (type == BlockPathTypes.BLOCKED) {
-            VoxelShape self = level.getBlockState(pos)
-                    .getCollisionShape(level, pos);
-            if (FootingRule.edgePlate(self)) {
-                return standableBelow(level, pos)
-                        ? BlockPathTypes.TRAPDOOR
-                        : BlockPathTypes.OPEN;
-            }
-        }
-        // 第二个口子，也是实测里真正让她走进缺口的那一个：空气格的"地板检查"
-        // 只看下方格的**分类**——凡不是空气/水/岩浆就算地板，于是开着的活板门
-        // （分类 TRAPDOOR，实体只是贴边竖着的一片）把它上方的空气晋升成了
-        // WALKABLE，她在桥面高度径直走进缺口。轨迹读数：tick 10 时 x=3.5、
-        // y 仍在桥面——走的就是这一格。晋升出来的立足点必须验收。
-        if (type == BlockPathTypes.WALKABLE
-                && level.getBlockState(pos)
-                        .getCollisionShape(level, pos)
-                        .isEmpty()
-                && !standableBelow(level, pos)) {
-            return BlockPathTypes.OPEN;
-        }
-        return type;
-    }
-
-    /** 下方那格是不是真能站人。 */
-    private static boolean standableBelow(BlockGetter level, BlockPos pos) {
-        return FootingRule.coversCenter(level, pos.below());
+        return CellClassifier.reclassify(level, new BlockPos(x, y, z),
+                super.getBlockPathType(level, x, y, z));
     }
 }

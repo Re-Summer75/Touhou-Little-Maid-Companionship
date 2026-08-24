@@ -292,6 +292,13 @@ public final class JumpDojoGameTests {
             }
             foe.setPersistenceRequired();
             foe.setNoAi(pinned);
+            // 拴在自家场地。测试没有收尾 discard（超时红的路径根本不给收尾
+            // 机会），带 AI 的怪战后会**游荡串场**——区块被钉住不卸载，它就
+            // 永远活着，走进 16 格内哪只女仆的感知就搅谁的局。弩局实测：她
+            // 的靶子在 #6990 与串场进来的 #6646 之间来回切，箭全射给了别人
+            // 家的僵尸，本场靶子 200 tick 零伤害。游荡的落点选择尊重这条活
+            // 动半径，追击不受影响——它照样扑她，只是不再离家出走。
+            foe.restrictTo(foe.blockPosition(), 12);
             foe.setTarget(maid);
             helper.getLevel().addFreshEntity(foe);
             band.add(foe);

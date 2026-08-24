@@ -29,6 +29,9 @@ public final class PathwalkTrace {
     private final BlockPos zero;
     private final List<String> rows = new ArrayList<>();
 
+    /** 水的定位器只在第一次碰水时开一枪，别刷屏。 */
+    private boolean wetReported;
+
     private String previousNote = "";
     private String previousNext = "";
     private String previousWalk = "";
@@ -41,8 +44,11 @@ public final class PathwalkTrace {
     public PathwalkTrace(String name, BlockPos zero) {
         this.name = name;
         this.zero = zero;
+        // 场距测量：每条读数带自报结构原点。跨批次残骸（幽灵地板、漫进来
+        // 的水）要靠它定位——清场体积得按真实场距裁，清大了会抹掉同批邻居。
+        System.out.println("[arena] " + name + " zero=" + zero.toShortString());
         rows.add(String.join("\t",
-                "tick", "ev", "pos", "mv", "vel", "gnd",
+                "tick", "ev", "pos", "mv", "vel", "vy", "gnd",
                 "note", "nxt", "end", "reach", "prog", "walkTo"));
     }
 
@@ -63,6 +69,81 @@ public final class PathwalkTrace {
             movedSinceRow += maid.position().distanceTo(previousPosition);
         }
 
+        // 水的定位器。两次实测她在本场景根本没有水的高度上 isInWater() 为
+        // 真（踏石岛 rel y=10、悬吊门板 rel y=11~13），而全仓只有两处放水、
+        // 都在 rel y<=2；棋盘也量过（格距 36 / 行距 13+，场景最宽 30），邻
+        // 场够不着彼此。来源不明就别再猜——她一碰水当场把水块的**绝对坐标**
+        // 打出来，下一次出现直接定位是谁的水。
+        if (!wetReported && maid.isInWater()) {
+            wetReported = true;
+            StringBuilder wet = new StringBuilder();
+            BlockPos feet = maid.blockPosition();
+            for (int dx = -3; dx <= 3; dx++) {
+                for (int dy = -2; dy <= 2; dy++) {
+                    for (int dz = -3; dz <= 3; dz++) {
+                        BlockPos at = feet.offset(dx, dy, dz);
+                        var fluid = maid.level().getFluidState(at);
+                        if (!fluid.isEmpty()) {
+                            // 方块名 + 是不是源。三种嫌疑长一个样：真水源、
+                            // 流下来的水、**含水方块**（含水的活板门照样让
+                            // getFluidState 非空）——只报坐标分不开。
+                            wet.append(" ").append(at.toShortString())
+                                    .append("=")
+                                    .append(maid.level().getBlockState(at)
+                                            .getBlock().getName().getString())
+                                    .append(fluid.isSource() ? "(源)" : "(流)");
+                        }
+                    }
+                }
+            }
+            // 探顶：沿她头顶正上方那一列往上走到水的尽头，报出最高的水格
+            // 和它上面那一格是什么。两轮实测水都是**从上方浇下来的**（缺角
+            // 圈里竖着叠了三格的落水柱），源头在 ±2 的扫描窗之外——横着扫
+            // 十次也够不着，竖着一杆子就到。
+            StringBuilder crown = new StringBuilder();
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    BlockPos column = feet.offset(dx, 0, dz);
+                    if (maid.level().getFluidState(column).isEmpty()) {
+                        continue;
+                    }
+                    BlockPos top = column;
+                    while (!maid.level().getFluidState(top.above()).isEmpty()) {
+                        top = top.above();
+                    }
+                    crown.append(" 顶=").append(top.toShortString())
+                            .append(" 其上=")
+                            .append(maid.level().getBlockState(top.above())
+                                    .getBlock().getName().getString());
+                    // 从柱顶横向找**真正的源**：落水柱的顶与源同高、相邻。
+                    // 报出源坐在什么上面——源不会悬空，垫着它的那块方块就
+                    // 是凶手的地皮（探顶实测：柱顶 y=-32、其上是空气，比一
+                    // 切场景都高 28 格，光有高度定不了案）。
+                    for (int sx = -2; sx <= 2 && crown.indexOf("源=") < 0;
+                            sx++) {
+                        for (int sz = -2; sz <= 2; sz++) {
+                            BlockPos well = top.offset(sx, 0, sz);
+                            if (maid.level().getFluidState(well).isSource()) {
+                                crown.append(" 源=")
+                                        .append(well.toShortString())
+                                        .append(" 源下=")
+                                        .append(maid.level()
+                                                .getBlockState(well.below())
+                                                .getBlock().getName()
+                                                .getString());
+                                break;
+                            }
+                        }
+                    }
+                    dx = 2;
+                    break;
+                }
+            }
+            System.out.println("[wet] " + name + " t=" + tick
+                    + " 她在 " + maid.position() + " 附近的水(绝对):"
+                    + (wet.length() == 0 ? " 扫不到？！" : wet.toString())
+                    + crown);
+        }
         String event = eventFor(note, next, walk, grounded, hasPath);
         boolean heartbeat = tick - lastRow >= HEARTBEAT_TICKS;
         previousNote = note;
@@ -85,7 +166,16 @@ public final class PathwalkTrace {
                         maid.getZ() - zero.getZ()),
                 String.format("%.1f", movedSinceRow),
                 String.format("%.2f", Math.hypot(velocity.x, velocity.z)),
-                grounded ? "y" : "AIR",
+                // 竖直分量单列一格。水平速度说不出"谁给了她一记冲量"，而
+                // 起跳是个一眼认得出的数（+0.42）：倒 T 实测她在本该轻轻迈
+                // 下一格的段里升了 1.3 格，光看水平列查不出是谁抛的。
+                String.format("%+.2f", velocity.y),
+                // 泡在水里也要报。滞空与泡水在原版里是两种完全不同的
+                // 处境：执行器对无锁滞空一概不管，可**泡水时它照常接管**
+                // （守卫是 !onGround && !isInWater）。实测撞见过恒定 +0.02
+                // 的上浮加上每 tick 触发的唇沿自救，人被送到 y=25——只看
+                // AIR 分不出那是自由落体还是在水里往上飘。
+                grounded ? "y" : (maid.isInWater() ? "WATER" : "AIR"),
                 note,
                 next,
                 path == null ? "-" : rel(path.getEndNode().asBlockPos()),
@@ -95,6 +185,13 @@ public final class PathwalkTrace {
                         : path.getNextNodeIndex() + "/" + path.getNodeCount(),
                 walk
         ));
+        // 新路一出现就把**整条**印出来。终点和节点数说不出"这条路长什么
+        // 样"，而实机里出事的正是那种"看着有路、其实只到脚下"的残桩：终点
+        // 列显示 4,3,4、reach=NO，可它到底是重铺出来的两节点，还是好路被截
+        // 断的头两节，光看那一列永远分不出——两种病的修法完全不同。
+        if ("PATH".equals(event)) {
+            rows.add("    路：" + describe(path, zero));
+        }
         movedSinceRow = 0.0D;
         lastRow = tick;
     }
@@ -107,6 +204,17 @@ public final class PathwalkTrace {
             out.append(row).append('\n');
         }
         System.out.println(out);
+    }
+
+    /**
+     * 往表里插一段自由文本（俯视快照这类），插在当前位置以保时间顺序。
+     *
+     * <p>坐标行回答"她去了哪儿"，可"那儿长什么样"要靠人脑把一串数字还原成
+     * 地形——我在这上面栽过好几次。图和坐标印在同一条时间线上，形状对不对
+     * 一眼就看出来。
+     */
+    public void aside(String block) {
+        rows.add(block);
     }
 
     /** 一条路的完整证词：能否到站 + 逐节点相对坐标。探图用。 */

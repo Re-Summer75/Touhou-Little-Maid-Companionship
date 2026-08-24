@@ -8,6 +8,8 @@ import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmIdleGaze;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient
         .TlmWeaponStow;
+import com.laixia.maidintelligence.feature.orchestration.tlm.combat.guard
+        .ProjectileDodge;
 import com.laixia.maidintelligence.gametest.support.CompanionScene;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.core.BlockPos;
@@ -359,11 +361,20 @@ public final class AmbientBehaviorGameTests {
         arrow.setDeltaMovement(0.0D, 0.0D, ARROW_SPEED);
         helper.getLevel().addFreshEntity(arrow);
 
+        // 量的是**飞行途中让开的最大距离**，不是尘埃落定后她站在哪儿。
+        //
+        // 第一版只在第 28 tick 量一次，而那已经是箭飞过去十七 tick 之后：闪避
+        // 让够了就主动收势（这是对的，不然她会一路横穿房间），收势之后她照常
+        // 回去做自己的事，于是横移量又缩回来。九轮里红五轮，横移量稳定在
+        // 0.352 格——那不是她没躲，是我在她躲完又走回来之后才去量。闪避供词
+        // 当场对质：看见@t=1、预警 10 tick、朝向 -90°、让出 1.046/0.85 格、
+        // 收势=让够了。判据、执行、收势三段全对，错的只有量尺的时刻。
+        double[] widest = new double[]{0.0D};
         helper.startSequence()
-                .thenExecuteFor(28, () -> {
-                })
+                .thenExecuteFor(28, () -> widest[0] = Math.max(
+                        widest[0], Math.abs(maid.getX() - lineX)))
                 .thenExecute(() -> {
-                    double aside = Math.abs(maid.getX() - lineX);
+                    double aside = widest[0];
                     // 先确认这一箭真的飞过来了：不飞的话"没掉血"是白给的。
                     helper.assertTrue(
                             !arrow.isAlive()
@@ -377,9 +388,14 @@ public final class AmbientBehaviorGameTests {
                                     + "，出生 z=" + (maid.getZ() - SHOT_RANGE)
                                     + "）"
                     );
+                    // 供词跟着断言走。"只横移了 0.352 格"分不出三种病：没
+                    // 看见（预警窗口不够，那是设计内的）、看见了没落到脚上
+                    // （每 tick 被别的写入者抢走）、落到脚上却让不动（贴墙、
+                    // 速度被按住）。九轮红五轮，我盯着那个数字讲不出是哪一种。
                     helper.assertTrue(
                             aside >= CLEARED_BODY,
-                            "她一直站在弹道上，只横移了 " + aside + " 格"
+                            "她一直站在弹道上，只横移了 " + aside + " 格；"
+                                    + ProjectileDodge.diary(maid)
                     );
                     // 上界和下界一样要紧。第一版按飞行时间保持，她以满速横移了
                     // 八格冲出房间——"躲开了"却把自己送到了别处，而只看下界的

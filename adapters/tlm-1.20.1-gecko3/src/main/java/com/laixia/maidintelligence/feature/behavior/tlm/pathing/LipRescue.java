@@ -51,6 +51,17 @@ final class LipRescue {
 
     /** 真唇沿：脚下三格内什么都盖不住格心。只查两格会把台阶过渡帧误判进来。 */
     boolean standingOnALip(BlockPos feetCell) {
+        // **泡在水里不是站在唇沿上。**"脚下三格没支撑"这句话在水中恒真，
+        // 可她那时根本不是站着，是在游——于是盲跳每 tick 都触发，而浮力
+        // 又一直把她往上托，人就这么"游"上了天：实测她从悬空门板摔进水
+        // 里之后一路浮到 y=13.7 撞在天花板上（note=lip-blind、gnd=WATER、
+        // 竖直速度恒为 +0.02），倒 T 那条更是浮到了 y=25。
+        //
+        // 执行器的早退门槛写的是 !onGround && !isInWater——泡水时它照常接
+        // 管，本意是浅水里走路照走；可自救这一支只对"站着"成立。
+        if (mob.isInWater()) {
+            return false;
+        }
         return !FootingRule.coversCenter(mob.level(), feetCell)
                 && !FootingRule.coversCenter(
                         mob.level(), feetCell.below())

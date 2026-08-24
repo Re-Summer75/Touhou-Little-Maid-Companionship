@@ -52,6 +52,51 @@ public final class ProjectileDodge {
 
     private static final Map<EntityMaid, Sidestep> STEPS = new WeakHashMap<>();
 
+    /**
+     * 这一次闪避的供词：看见了没有、落到脚上几 tick、让出去多少。
+     *
+     * <p>"她没让开"是三种完全不同的病共用的一句话——没看见（预警窗口不够、
+     * 或者根本没扫描）、看见了但没落到脚上（每 tick 都被别的写入者抢走）、
+     * 落到脚上了却让不动（贴着墙、或者速度被谁按住）。三者的修法南辕北辙，
+     * 而断言只报得出一个横移距离。实测的长射那条红了九轮里的五轮，横移量
+     * 稳定在 0.352 格——五位有效数字相同说明那是一段确定性运动，可到底是
+     * 哪一种，光凭这个数字我讲不出。
+     *
+     * <p>只在真有一支箭要让的时候才记，平时不分配。
+     */
+    private static final Map<EntityMaid, Ledger> LEDGERS = new WeakHashMap<>();
+
+    /** 闪避的行车记录，测试断言她没让开时当供词打出来。 */
+    public static String diary(EntityMaid maid) {
+        Ledger ledger = LEDGERS.get(maid);
+        return ledger == null
+                ? "dodge=从未看见一支该让的箭"
+                : ledger.toString();
+    }
+
+    /** 一次闪避从看见到收势的全过程。 */
+    private static final class Ledger {
+        private int armedAt;
+        private double warning;
+        private float bearing;
+        private int until;
+        private int applied;
+        private double cleared;
+        private double needed;
+        private float pace;
+        private String left = "还在让";
+
+        @Override
+        public String toString() {
+            return String.format(
+                    "dodge 看见@t=%d 预警=%.1ft 朝向=%.0f° 让到t=%d；"
+                            + "落到脚上 %d tick，让出 %.3f/%.2f 格，"
+                            + "步速 %.3f；收势=%s",
+                    armedAt, warning, bearing, until,
+                    applied, cleared, needed, pace, left);
+        }
+    }
+
     private ProjectileDodge() {
     }
 
@@ -97,19 +142,24 @@ public final class ProjectileDodge {
         }
         Vec3 offset = maid.position().subtract(soonest.position());
         Vec3 flight = soonest.getDeltaMovement();
+        float bearing = policy.sidestepBearing(
+                offset.x, offset.z,
+                flight.x, flight.z,
+                soonestTicks,
+                maid.getRandom().nextBoolean()
+        );
+        int until = maid.tickCount
+                + (int) Math.ceil(soonestTicks)
+                + DodgePolicy.LEAN_PAST_IMPACT_TICKS;
         STEPS.put(maid, new Sidestep(
-                policy.sidestepBearing(
-                        offset.x, offset.z,
-                        flight.x, flight.z,
-                        soonestTicks,
-                        maid.getRandom().nextBoolean()
-                ),
-                maid.getX(),
-                maid.getZ(),
-                maid.tickCount
-                        + (int) Math.ceil(soonestTicks)
-                        + DodgePolicy.LEAN_PAST_IMPACT_TICKS
+                bearing, maid.getX(), maid.getZ(), until
         ));
+        Ledger ledger = new Ledger();
+        ledger.armedAt = maid.tickCount;
+        ledger.warning = soonestTicks;
+        ledger.bearing = bearing;
+        ledger.until = until;
+        LEDGERS.put(maid, ledger);
     }
 
     /**
@@ -125,21 +175,39 @@ public final class ProjectileDodge {
             EntityMaid maid, float travelYaw, boolean travelling
     ) {
         Sidestep step = STEPS.get(maid);
+        Ledger ledger = LEDGERS.get(maid);
         if (step == null || maid.tickCount >= step.until()) {
+            if (ledger != null && step != null) {
+                ledger.left = "时间到";
+            }
             STEPS.remove(maid);
             return false;
         }
         DodgePolicy policy = DodgePolicy.INSTANCE;
-        if (cleared(maid, step) >= policy.clearanceNeeded(
-                maid.getBbWidth() / 2.0D
-        )) {
+        double cleared = cleared(maid, step);
+        double needed = policy.clearanceNeeded(maid.getBbWidth() / 2.0D);
+        if (ledger != null) {
+            ledger.cleared = cleared;
+            ledger.needed = needed;
+        }
+        if (cleared >= needed) {
             // 让够了。再让下去她会一路横穿房间——量过一次，八格。
+            if (ledger != null) {
+                ledger.left = "让够了";
+            }
             STEPS.remove(maid);
             return false;
         }
         float pace = pace(maid);
         if (!(pace > 0.0F)) {
+            if (ledger != null) {
+                ledger.left = "步速为零";
+            }
             return false;
+        }
+        if (ledger != null) {
+            ledger.applied++;
+            ledger.pace = pace;
         }
         float bearing = travelling
                 ? policy.lean(travelYaw, step.bearing())

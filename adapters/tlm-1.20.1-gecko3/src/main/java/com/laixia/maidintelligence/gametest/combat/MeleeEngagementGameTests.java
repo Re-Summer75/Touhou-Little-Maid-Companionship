@@ -241,6 +241,9 @@ public final class MeleeEngagementGameTests {
         Zombie attacker = new Zombie(helper.getLevel());
         attacker.setPos(maid.getX() + 3.0D, maid.getY(), maid.getZ());
         helper.getLevel().addFreshEntity(attacker);
+        // 拴在自家场地：没有收尾 discard 的活怪战后会游荡串场（缘由与实测
+        // 见 JumpDojoGameTests 同款注释）。追击不受影响。
+        attacker.restrictTo(attacker.blockPosition(), 12);
         attacker.setTarget(maid);
 
         StringBuilder trace = new StringBuilder();

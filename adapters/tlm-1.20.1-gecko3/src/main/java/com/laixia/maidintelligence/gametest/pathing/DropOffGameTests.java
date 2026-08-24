@@ -138,6 +138,18 @@ public final class DropOffGameTests {
         double[] lowest = new double[]{maid.getY()};
         BlockPos zero = helper.absolutePos(BlockPos.ZERO);
         PathwalkTrace trace = new PathwalkTrace("sheer cliff", zero);
+        // 崖下这一列必须是空的，否则这条测的就不是"九格深崖"。
+        //
+        // 实测她掉到 y=6 就落地了，还沿着 y=6 走了两格——可这条夹具只砌了
+        // y=1 的地面和 y=10 的玻璃檐，y=5 那层地板不是它砌的。同一个批次里
+        // 五十一条测试的结构挨在一起，而这些场景写方块时都远远超出自己声明
+        // 的模板范围（这条就写到 x=8），谁后写谁赢。若真是隔壁写进来的，红
+        // 的是这条、错的却是别处，而供词里一个字都不会提到它。
+        //
+        // 建好之后量一次、判决前再量一次：一开始就有，是结构挨得太近；跑到
+        // 一半才出现，是隔壁在运行中写进来的。两种都要修，但修法不同。
+        String[] below = new String[]{"", ""};
+        below[0] = cliffColumn(helper);
         for (int tick = 1; tick <= 260; tick++) {
             int at = tick;
             helper.runAfterDelay(tick, () -> {
@@ -152,10 +164,19 @@ public final class DropOffGameTests {
         }
         helper.runAfterDelay(280, () -> {
             trace.dump();
+            below[1] = cliffColumn(helper);
+            // 过了也印。这一列是**场景成不成立**的前提，而它曾经被别的东西
+            // 写过一次（实测她掉到 y=6 就落地、还沿 y=6 走了两格，可这条夹
+            // 具只砌 y=1 和 y=10）。只在红的时候印，等于把"前提成不成立"押
+            // 在"这一轮恰好出事"上——那正是今晚反复吃亏的那种赌法。
+            System.out.println("=== pen route: cliff column ===\n  建好时="
+                    + below[0] + "\n  判决时=" + below[1]);
             helper.assertTrue(
                     lowest[0] > zero.getY() + 9.0D,
                     "She went over the sheer cliff: lowest y "
                             + (lowest[0] - zero.getY()) + "; " + diaryOf(maid)
+                            + "; 崖下建好时=" + below[0]
+                            + "; 判决时=" + below[1]
             );
             maid.discard();
             helper.succeed();
@@ -222,5 +243,22 @@ public final class DropOffGameTests {
                         .pathing.SureFootedNavigation sure
                 ? sure.pathwalkDiary()
                 : "diary=n/a";
+    }
+
+    /** 崖下那一列（x 0..8，y 2..9，z 1）此刻有什么，非空的都报出来。 */
+    private static String cliffColumn(GameTestHelper helper) {
+        StringBuilder found = new StringBuilder();
+        for (int y = 2; y <= 9; y++) {
+            for (int x = 0; x <= 8; x++) {
+                BlockPos at = new BlockPos(x, y, 1);
+                if (!helper.getBlockState(at).isAir()) {
+                    found.append(' ').append(x).append(',').append(y)
+                            .append('=')
+                            .append(helper.getBlockState(at).getBlock()
+                                    .getName().getString());
+                }
+            }
+        }
+        return found.length() == 0 ? "空" : found.toString();
     }
 }

@@ -12,14 +12,20 @@ import net.minecraft.world.phys.Vec3;
  * 来）、落地把余速收到走路量级（带着跳劲冲线就是从桥尾另一头冲下去）。
  */
 final class LeapFlight {
-    /** 滞空每 tick 的自然衰减（原版空气阻力），弧线合同按它算。 */
-    private static final double AIR_DRAG = 0.91D;
+    /** 滞空每 tick 的自然衰减（原版空气阻力），弧线合同按它算。
+     *  包内共享：{@code Leaper} 的起跳配速解的是同一条弧线。 */
+    static final double AIR_DRAG = 0.91D;
 
     /** 起跳后一直没离地就放弃锁定的时限（卡在什么东西上了）。 */
     private static final int GIVE_UP_TICKS = 30;
 
-    /** 落地那一 tick 把水平余速收到这个量级——跳是跳，走是走。 */
-    private static final double LANDING_TROT = 0.15D;
+    /** 锁定后尚未离地那几 tick 的步速：够她挪到沿边，不够她冲出落点。 */
+    private static final double CREEP_PACE = 0.3D;
+
+    /** 落地那一 tick 把水平余速收到这个量级——跳是跳，走是走。
+     *  必须低于崖边看护的介入线（0.15）：从前正卡在线上，落地残速带着
+     *  她滑过一格宽拐角，看护睁眼时人已经在沿外（竖向 L 下跳实测摔点）。 */
+    private static final double LANDING_TROT = 0.10D;
 
     private final Mob mob;
     private final SureFootedNavigation nav;
@@ -62,6 +68,34 @@ final class LeapFlight {
         if (!mob.onGround() && !mob.isInWater()) {
             aloft = true;
             restoreTheArc();
+            // 下行到柱即坠：已经飘到落柱正上方就不再往前带——弧线合同只
+            // 补不削，而每 tick 的空中转向又让移动控制持续加速，十几 tick
+            // 能把落地速度堆到走路量级；一格宽拐角上这份冲劲就是滑出侧沿
+            // 的那一下（竖向 L 从高臂跳下的实测摔点，落点是半砖时更甚）。
+            // 停灯、削过冲；但阻尼留底（0.08）——刹到零会把唇沿自救的小
+            // 跳半路杀死，落回原唇再跳、循环成机枪（之字梯 184 连跳实测）。
+            //
+            // **半格这道门槛不能再放宽。**放到 0.2 试过一轮：刹车提前到滞空
+            // 中段就介入，机枪当场回来（玻璃行往返 284 连跳）。孤台落点的过
+            // 冲另有去处——{@code Leaper} 收瞄点，不动这里的推力。
+            if (aim.y < mob.getY() - 0.5D
+                    && Math.hypot(aim.x - mob.getX(), aim.z - mob.getZ())
+                            < 0.4D) {
+                Vec3 falling = mob.getDeltaMovement();
+                double flat = Math.hypot(falling.x, falling.z);
+                if (flat > 0.08D) {
+                    double keep = Math.max(0.08D, flat * 0.5D);
+                    mob.setDeltaMovement(
+                            falling.x / flat * keep,
+                            falling.y,
+                            falling.z / flat * keep
+                    );
+                }
+                mob.getMoveControl().setWantedPosition(
+                        mob.getX(), aim.y, mob.getZ(), 0.0D
+                );
+                return;
+            }
         } else if (aloft || mob.tickCount - since > GIVE_UP_TICKS) {
             Vec3 landed = mob.getDeltaMovement();
             double trot = Math.hypot(landed.x, landed.z);
@@ -75,8 +109,19 @@ final class LeapFlight {
             aim = null;
             return;
         }
+        // 还没离地的那几 tick：移动控制也得跟着慢。
+        //
+        // 普通跳跃感觉不到这一条——起跳那一刻就离地，地面相只有一 tick。
+        // 可**下台阶这类锁是从地面上开始的**：她要先走到沿边才腾空，而这
+        // 段路若按 nav.pace() 全速推，她在离地前就被推到了走速，带着那份
+        // 速度飞过短落点（倒 T 实测：落在竖笔顶上时 0.05，三 tick 后 0.28，
+        // 冲出横杠东沿两格半）。
+        //
+        // 顺带记一条更普遍的：**写速度收不住她**——收步、收腿、崖边刹停
+        // 都是每 tick 写一次 deltaMovement，而移动控制紧接着又按全速把她推
+        // 回去。要她慢，就得把控制器的步速一起降下来。
         mob.getMoveControl().setWantedPosition(
-                aim.x, aim.y, aim.z, nav.pace()
+                aim.x, aim.y, aim.z, aloft ? nav.pace() : CREEP_PACE
         );
     }
 

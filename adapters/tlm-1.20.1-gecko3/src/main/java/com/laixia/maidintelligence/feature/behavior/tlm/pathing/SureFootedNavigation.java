@@ -140,6 +140,13 @@ public final class SureFootedNavigation extends MaidPathNavigation {
         return this.speedModifier;
     }
 
+    /** 最近一次搜索里起点发出的邻居数（-1 表示还没搜过）。 */
+    public int startNeighbours() {
+        return this.nodeEvaluator instanceof SafeFootingNodeEvaluator safe
+                ? safe.startNeighbours()
+                : -1;
+    }
+
     /** 执行器的行车记录，测试断言卡住时当供词打出来。 */
     public String pathwalkDiary() {
         return pathwalk.diary();
@@ -158,8 +165,22 @@ public final class SureFootedNavigation extends MaidPathNavigation {
      */
     public static void upgrade(EntityMaid maid) {
         PathNavigation current = maid.getNavigation();
-        if (current != null
-                && current.getClass() == MaidPathNavigation.class) {
+        if (current == null || current instanceof SureFootedNavigation) {
+            return;
+        }
+        if (current.getClass() == MaidPathNavigation.class) {
+            maid.setNavigation(new SureFootedNavigation(maid, maid.level()));
+            return;
+        }
+        // 换过去的不止一套。宿主游泳时会装上水下寻路，而**那一套不查立足
+        // 点**；上岸之后它并不总换回来，于是她拿着一把只认水的尺在陆地上
+        // 走，走到沿边就下去了（实测供词：活板门檐第四趟摔下去，
+        // diary=n/a(导航是 MaidUnderWaterPathNavigation)——那不是没有供词，
+        // 是导航压根不是我们的）。
+        //
+        // 判据只读**世界的事实**：脚踩着地、身上没水，那就是走路，走路归
+        // 我们管。还在水里的时候不抢——那种时候水下那套本来就是对的。
+        if (!maid.isInWater() && maid.onGround()) {
             maid.setNavigation(new SureFootedNavigation(maid, maid.level()));
         }
     }

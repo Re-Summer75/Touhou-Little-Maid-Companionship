@@ -221,4 +221,115 @@ public final class CornerworkGameTests {
             helper.succeed();
         });
     }
+
+    /**
+     * 高落差竖向 L：从两格高的高臂跳下一格宽拐角，紧接九十度拐弯。
+     *
+     * <p>实测最容易摔的形态：下行滞空攒出来的横速带着她滑过拐角、掉进
+     * 拐角外一格的空中。落地收腿的档位从前不多不少卡在崖边看护的介入线
+     * 上，看护睁眼时人已经在沿外。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            batch = "pathing", timeoutTicks = 280)
+    public static void downTheTallVerticalLSheHoldsTheCorner(
+            GameTestHelper helper
+    ) {
+        tallVerticalL(helper, Blocks.STONE.defaultBlockState());
+    }
+
+    /** 同一形态，拐角是半砖——不完整的落点让滑出更容易，实测更严重。 */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            batch = "pathing", timeoutTicks = 280)
+    public static void downOntoASlabCornerSheStillHolds(
+            GameTestHelper helper
+    ) {
+        tallVerticalL(helper, Blocks.STONE_SLAB.defaultBlockState());
+    }
+
+    private static void tallVerticalL(
+            GameTestHelper helper,
+            net.minecraft.world.level.block.state.BlockState corner
+    ) {
+        for (int x = -1; x <= 8; x++) {
+            for (int z = -1; z <= 8; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
+            }
+        }
+        // 高臂：一格宽向南，走面 DECK+3，臂端与拐角贴邻（落差二、跨一）。
+        for (int z = 2; z <= 6; z++) {
+            helper.setBlock(new BlockPos(3, DECK + 2, z), Blocks.STONE);
+        }
+        // 拐角与低臂：走面 DECK+1（拐角可换半砖），向西一格宽。两侧全悬空。
+        helper.setBlock(new BlockPos(3, DECK, 1), corner);
+        for (int x = 0; x <= 2; x++) {
+            helper.setBlock(new BlockPos(x, DECK, 1), Blocks.STONE);
+        }
+        for (int y = 2; y <= 3; y++) {
+            for (int x = -1; x <= 8; x++) {
+                helper.setBlock(new BlockPos(x, y, -1), Blocks.STONE);
+                helper.setBlock(new BlockPos(x, y, 8), Blocks.STONE);
+            }
+            for (int z = -1; z <= 8; z++) {
+                helper.setBlock(new BlockPos(-1, y, z), Blocks.STONE);
+                helper.setBlock(new BlockPos(8, y, z), Blocks.STONE);
+            }
+        }
+        EntityMaid maid = new EntityMaid(helper.getLevel());
+        maid.setPos(GameTestPositions.center(helper, 3, DECK + 3, 5));
+        maid.setTame(true);
+        maid.setPickup(false);
+        maid.setTask(TaskManager.findTask(FreedomMaidTask.UID).orElseThrow());
+        maid.setHomeModeEnable(false);
+        helper.getLevel().addFreshEntity(maid);
+
+        double cornerFeet = helper.absolutePos(
+                new BlockPos(3, DECK + 1, 1)).getY();
+        double[] lowest = new double[]{maid.getY()};
+        StringBuilder tape = new StringBuilder();
+
+        for (int tick = 1; tick <= WATCHED_TICKS; tick++) {
+            int at = tick;
+            helper.runAfterDelay(tick, () -> {
+                lowest[0] = Math.min(lowest[0], maid.getY());
+                if (at % 5 == 0 && tape.length() < 700) {
+                    tape.append(String.format("%d:(%.1f,%.1f,%.1f) ",
+                            at,
+                            maid.getX()
+                                    - helper.absolutePos(BlockPos.ZERO).getX(),
+                            maid.getY()
+                                    - helper.absolutePos(BlockPos.ZERO).getY(),
+                            maid.getZ()
+                                    - helper.absolutePos(BlockPos.ZERO).getZ()
+                    ));
+                }
+                if (maid.getY() < cornerFeet - 1.2D) {
+                    return;
+                }
+                maid.getBrain().setMemory(
+                        MemoryModuleType.WALK_TARGET,
+                        new WalkTarget(new BlockPosTracker(
+                                helper.absolutePos(new BlockPos(0, DECK + 1, 1))
+                        ), 0.7F, 0)
+                );
+            });
+        }
+
+        helper.runAfterDelay(WATCHED_TICKS, () -> {
+            helper.assertTrue(
+                    lowest[0] > cornerFeet - 1.2D,
+                    "The tall-L descent slid her off the corner: lowest y "
+                            + lowest[0] + " vs corner " + cornerFeet
+                            + "; tape(rel)=" + tape
+            );
+            double pastTheTurn = helper.absolutePos(
+                    new BlockPos(1, DECK + 1, 1)).getX() + 1.0D;
+            helper.assertTrue(
+                    maid.getX() <= pastTheTurn,
+                    "She never rounded the tall-L corner: x " + maid.getX()
+                            + "; tape(rel)=" + tape
+            );
+            maid.discard();
+            helper.succeed();
+        });
+    }
 }

@@ -120,6 +120,96 @@ public final class GlassRunGameTests {
     }
 
     /**
+     * 桥中段一格长的凸台：登上去下一步就是下沿——过冲余量与带速登阶在这
+     * 里都是把她送出沿的劲（实机玻璃桥凸段侧滑的一比一）。来回各过一遍：
+     * 去程带速上凸台，回程从高处跳下接平桥。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            batch = "pathing", timeoutTicks = 470)
+    public static void overTheOneBlockBumpSheKeepsHerFeet(
+            GameTestHelper helper
+    ) {
+        for (int x = 0; x <= 9; x++) {
+            for (int z = 0; z <= 4; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
+            }
+        }
+        // 一格宽玻璃桥，中段 x5 高一格的孤凸台，全悬空。
+        for (int x = 0; x <= 9; x++) {
+            if (x == 5) {
+                continue;
+            }
+            helper.setBlock(new BlockPos(x, DECK + 1, 2), Blocks.GLASS);
+        }
+        helper.setBlock(new BlockPos(5, DECK + 2, 2), Blocks.GLASS);
+
+        EntityMaid maid = new EntityMaid(helper.getLevel());
+        maid.setPos(GameTestPositions.center(helper, 1, DECK + 2, 2));
+        maid.setTame(true);
+        maid.setPickup(false);
+        maid.setTask(TaskManager.findTask(FreedomMaidTask.UID).orElseThrow());
+        maid.setHomeModeEnable(false);
+        helper.getLevel().addFreshEntity(maid);
+
+        double bridgeFeet = maid.getY();
+        double[] lowest = new double[]{bridgeFeet};
+        boolean[] headedEast = new boolean[]{true};
+        int[] legs = new int[]{0};
+        StringBuilder tape = new StringBuilder();
+        BlockPos east = new BlockPos(8, DECK + 2, 2);
+        BlockPos west = new BlockPos(1, DECK + 2, 2);
+
+        for (int tick = 1; tick <= 400; tick++) {
+            int at = tick;
+            helper.runAfterDelay(tick, () -> {
+                lowest[0] = Math.min(lowest[0], maid.getY());
+                if (at % 10 == 0 && tape.length() < 600) {
+                    tape.append(String.format("%d:(%.1f,%.1f,%.1f) ",
+                            at,
+                            maid.getX()
+                                    - helper.absolutePos(BlockPos.ZERO).getX(),
+                            maid.getY()
+                                    - helper.absolutePos(BlockPos.ZERO).getY(),
+                            maid.getZ()
+                                    - helper.absolutePos(BlockPos.ZERO).getZ()
+                    ));
+                }
+                if (maid.getY() < bridgeFeet - 1.5D) {
+                    return;
+                }
+                BlockPos goal = headedEast[0] ? east : west;
+                double gx = helper.absolutePos(goal).getX() + 0.5D;
+                double gz = helper.absolutePos(goal).getZ() + 0.5D;
+                if (Math.hypot(maid.getX() - gx, maid.getZ() - gz) < 1.2D) {
+                    headedEast[0] = !headedEast[0];
+                    legs[0]++;
+                }
+                maid.getBrain().setMemory(
+                        MemoryModuleType.WALK_TARGET,
+                        new WalkTarget(new BlockPosTracker(helper.absolutePos(
+                                headedEast[0] ? east : west)), 0.7F, 0)
+                );
+            });
+        }
+
+        helper.runAfterDelay(430, () -> {
+            helper.assertTrue(
+                    lowest[0] > bridgeFeet - 1.5D,
+                    "The one-block bump slid her off (legs " + legs[0]
+                            + "): lowest y " + lowest[0]
+                            + "; tape(rel)=" + tape
+            );
+            helper.assertTrue(
+                    legs[0] >= 2,
+                    "She only finished " + legs[0]
+                            + " legs over the bump — stuck; tape(rel)=" + tape
+            );
+            maid.discard();
+            helper.succeed();
+        });
+    }
+
+    /**
      * 顶半活板门平台（x 0..2，板顶即 DECK+1 的脚面）接玻璃桥（走面 DECK+2）；
      * {@code gapped} 为真时中间隔一格缺口。
      */

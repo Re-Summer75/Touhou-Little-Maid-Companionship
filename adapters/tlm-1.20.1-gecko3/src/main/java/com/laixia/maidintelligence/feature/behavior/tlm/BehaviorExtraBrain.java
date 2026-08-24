@@ -7,8 +7,10 @@ import com.laixia.maidintelligence.feature.orchestration.api.MaidIntentApi;
 import com.laixia.maidintelligence.feature.orchestration.tlm.MaidIntentBehavior;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmAttackMemoryJanitor;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmEnRouteScoop;
+import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmFallBlackBox;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmIdleGaze;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmSprint;
+import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmPathReveal;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmStillnessBox;
 import com.laixia.maidintelligence.feature.orchestration.tlm.ambient.TlmWeaponStow;
 import com.laixia.maidintelligence.feature.orchestration.tlm.combat.guard.ProjectileDodge;
@@ -36,6 +38,58 @@ public final class BehaviorExtraBrain implements IExtraMaidBrain {
                 boatAutonomy,
                 "boatAutonomy"
         );
+        steering = this.intents;
+    }
+
+    /**
+     * 真正在驱动她的那一个编排器——**供词专用**。
+     *
+     * <p>不是多余的：注册表里那一个未必是附加脑手里这一个。实测撞见过——同
+     * 一条测试、同一份代码，一轮的供词是完整轨迹，另一轮却是原样的 idle()，
+     * 而附加脑的出勤计数显示它跑了五百多次。查注册表等于碰运气，而据此下的
+     * 结论（"意图层对她一无所知"）把真凶所在的整个层都排除掉了。
+     *
+     * <p>写在这里，供词就永远问的是掌舵的那一个。
+     */
+    private static MaidIntentApi<EntityMaid> steering;
+
+    /** 掌舵的那个编排器；组装完成之前为 null。 */
+    public static MaidIntentApi<EntityMaid> steeringIntents() {
+        return steering;
+    }
+
+    /**
+     * 这只女仆的附加脑跑过多少次、最后一次是哪一 tick。
+     *
+     * <p>为了了断一个死结：实测供词里，执行器证明附加脑**跑过**（升级导航
+     * 是它的第一行，而且全仓只有那一处），可紧邻下一行的意图层对她**一无所
+     * 知**（inspect 返回原样的 idle()），中间没有任何异常。两件事不可能同时
+     * 为真——除非它们跑在**不同的实例**上，或者那一行根本没被执行到。
+     *
+     * <p>数字能分开这两种：跑了九百次而编排器一无所知，那是实例的问题（不
+     * 是她的病）；只跑了一两次，那是附加脑很早就停了，该往准入条件查。猜了
+     * 三轮都没结论，改成数。
+     */
+    private static final java.util.Map<EntityMaid, long[]> AMBIENT_RUNS =
+            new java.util.WeakHashMap<>();
+
+    /** 记三个数：跑过几次、第一次、最后一次。 */
+    private static final int RUNS = 0;
+    private static final int FIRST = 1;
+    private static final int LAST = 2;
+
+    /** 附加脑对这只女仆的出勤记录，测试卡住时当供词打出来。 */
+    public static String ambientDiary(EntityMaid maid) {
+        long[] seen = AMBIENT_RUNS.get(maid);
+        if (seen == null) {
+            return "附加脑=从没跑过";
+        }
+        // 首末两端一起报。同样是"跑了 135 次"，散布在九百 tick 里（每 tick
+        // 被什么挡掉）和集中在最后 135 tick 里（很晚才启动）是两种病，只报
+        // 次数分不出来。
+        return "附加脑=跑了" + seen[RUNS] + "次，t=" + seen[FIRST]
+                + "…" + seen[LAST] + "（跨度"
+                + (seen[LAST] - seen[FIRST] + 1) + "）";
     }
 
     /**
@@ -53,6 +107,10 @@ public final class BehaviorExtraBrain implements IExtraMaidBrain {
      * 她的脚，但只占到落点为止，而且是安全那一档，本来就压得过任何别的事。
      */
     private void ambient(EntityMaid maid, long gameTime) {
+        long[] seen = AMBIENT_RUNS.computeIfAbsent(
+                maid, m -> new long[]{0L, gameTime, gameTime});
+        seen[RUNS]++;
+        seen[LAST] = gameTime;
         // 寻路升级守卫：拿着裸的地面导航就换成会查立足点的那个。放在最前，
         // 因为这一 tick 里随后写下的任何移动目标都该用升级后的评估。
         SureFootedNavigation.upgrade(maid);
@@ -72,6 +130,10 @@ public final class BehaviorExtraBrain implements IExtraMaidBrain {
         ProjectileDodge.consider(maid);
         // 静止黑匣子：十秒纹丝不动就倒状态。只记录，不干预。
         stillness.tick(maid, gameTime);
+        // 摔落黑匣子：跌出行走面就把之前六十 tick 的读数带倒进日志。只记录，不干预。
+        fallBox.tick(maid, gameTime);
+        // 手持灵魂透镜时把她眼里的路画出来（只在有人看时才发粒子）。
+        pathReveal.tick(maid, gameTime);
     }
 
     private final TlmIdleGaze gaze = TlmIdleGaze.create();
@@ -79,6 +141,8 @@ public final class BehaviorExtraBrain implements IExtraMaidBrain {
     private final TlmSprint sprint = TlmSprint.create();
     private final TlmEnRouteScoop scoop = TlmEnRouteScoop.create();
     private final TlmStillnessBox stillness = TlmStillnessBox.create();
+    private final TlmFallBlackBox fallBox = TlmFallBlackBox.create();
+    private final TlmPathReveal pathReveal = TlmPathReveal.create();
     private final TlmAttackMemoryJanitor janitor =
             TlmAttackMemoryJanitor.create();
 

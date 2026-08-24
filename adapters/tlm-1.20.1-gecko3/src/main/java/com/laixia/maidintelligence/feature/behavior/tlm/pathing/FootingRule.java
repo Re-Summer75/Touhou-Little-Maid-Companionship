@@ -16,7 +16,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * 跳线重验）必须用同一把尺——两侧对"什么算地板"答案不一，她就会被推进
  * 缺口或者被自己的安全机构钉死。
  */
-final class FootingRule {
+public final class FootingRule {
     /** 自身碰撞顶面不高于这个值才算"站得住自己"。半格：台阶的高度。 */
     static final double STANDABLE_TOP = 0.5D;
 
@@ -31,7 +31,7 @@ final class FootingRule {
      * 在格子中心时脚下什么都没有——刷怪塔骗的就是这一步。用包围盒判断，
      * 接受楼梯这类 L 形的近似。
      */
-    static boolean coversCenter(BlockGetter level, BlockPos pos) {
+    public static boolean coversCenter(BlockGetter level, BlockPos pos) {
         return coversCenter(level.getBlockState(pos)
                 .getCollisionShape(level, pos));
     }
@@ -56,7 +56,7 @@ final class FootingRule {
      * 有"，关着的门板沉在缺口里就把跳跃线整个掐死：不能飞（规划不连线）也
      * 不能走（孤板连不成路），她两头不是——玩家实测：关着不跳、开了反而能跳。
      */
-    static double coveringTopAt(BlockGetter level, BlockPos pos) {
+    public static double coveringTopAt(BlockGetter level, BlockPos pos) {
         VoxelShape shape = level.getBlockState(pos)
                 .getCollisionShape(level, pos);
         if (!coversCenter(shape)) {
@@ -73,6 +73,50 @@ final class FootingRule {
         return !shape.isEmpty()
                 && shape.max(Direction.Axis.Y) <= STANDABLE_TOP
                 && coversCenter(shape);
+    }
+
+    /**
+     * 站在 {@code (x, feetY, z)} 这一点上，托着她的东西顶面有多高；没有则
+     * 负无穷。
+     *
+     * <p>**"脚下半格那一格"是错的问法。**站在普通方块上脚面是整数，减半格
+     * 正好落到脚下那一格；可站在**下半活板门、地毯**这类矮地板上时脚面是
+     * 小数（门板 0.1875），减半格会掉到门板**下面**那一格去——那儿通常是
+     * 虚空。于是探针在檐的正中间就报"前面是悬崖"，她当场起跳，起跳点与瞄
+     * 点全错，外观是"站在门板上必然转身往侧边跳下去"（玩家实测，逐次必现）。
+     *
+     * <p>所以两支都要问：这一格自己是不是矮地板（脚面因此才是小数），或者
+     * 下面那一格顶不顶得住。台阶（半格）两种问法都对，所以这个错一直没被
+     * 台阶暴露出来。
+     */
+    static double footingUnder(
+            BlockGetter level,
+            double x,
+            double feetY,
+            double z
+    ) {
+        BlockPos self = BlockPos.containing(x, feetY + 0.05D, z);
+        VoxelShape shape = level.getBlockState(self)
+                .getCollisionShape(level, self);
+        if (selfFloor(shape)) {
+            return self.getY() + shape.max(Direction.Axis.Y);
+        }
+        return coveringTopAt(level,
+                BlockPos.containing(x, feetY - 0.5D, z));
+    }
+
+    /**
+     * 这一格站得住人：脚下有盖住格心的地板，**或者它自己就是矮地板**。
+     *
+     * <p>第二支不能省。悬空的关门板、地毯这类"自己就是地板"的格子脚下往往
+     * 是虚空——只问脚下那格就会把它们全判成不能落脚，而图层认它们、执行侧
+     * 不认，边连出来却没人敢跳（玩家实测：门板嵌在上一格的下半，理论上跳得
+     * 上去，她却认为不可以）。规划与执行必须同一把尺。
+     */
+    static boolean standable(BlockGetter level, BlockPos pos) {
+        return coversCenter(level, pos.below())
+                || selfFloor(level.getBlockState(pos)
+                        .getCollisionShape(level, pos));
     }
 
     /**
@@ -173,7 +217,76 @@ final class FootingRule {
         return best;
     }
 
-    /** 身位箱（0.62 宽两格高）与本格及八邻的真实碰撞逐块相交测试。 */
+    /**
+     * 从这儿走到那儿，身子过不过得去——沿直线按真实碰撞形状扫几个身位。
+     *
+     * <p>格级的图答不了这个问题：开着的活板门、开着的门都是**贴边的整格高
+     * 竖片**，格心空着、脚下有地板，图上读出来是"能站能进"，可她的身子从那
+     * 一面横穿过不去。玩家实测就是被这么钉住的（读数带：顶在门板西面 4.70
+     * 处，note=walk，看门狗连咬）。
+     *
+     * <p>下沿是要害。**合法的地板本身会占掉格底那一层**——关着的下半门板
+     * 占 0..0.19、台阶占 0..0.5——身位箱贴着格底起算的话，"走到门板上"会被
+     * 读成"身子过不去"，门槛跳当场变成到处乱开的机枪（实测：悬空门板线 5
+     * 连跳、V 形唇沿被甩飞）。所以下沿由调用方按问题给：问"平着过得去吗"
+     * 传 {@link #STANDABLE_TOP} 之上一点，问"抬一格过得去吗"传一格之上一点。
+     *
+     * @param bottomY 身位箱下沿的绝对高度
+     */
+    static boolean walkLineClear(
+            BlockGetter level,
+            double fromX,
+            double fromZ,
+            double toX,
+            double toZ,
+            double bottomY
+    ) {
+        int steps = 6;
+        for (int i = 1; i <= steps; i++) {
+            double t = i / (double) steps;
+            if (!bodyFitsAt(level,
+                    fromX + (toX - fromX) * t,
+                    bottomY,
+                    fromZ + (toZ - fromZ) * t)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** 指定下沿的身位箱对真实碰撞形状的相交测试。 */
+    private static boolean bodyFitsAt(
+            BlockGetter level,
+            double px,
+            double bottomY,
+            double pz
+    ) {
+        AABB body = new AABB(
+                px - SQUEEZE_HALF, bottomY, pz - SQUEEZE_HALF,
+                px + SQUEEZE_HALF, bottomY + 1.9D, pz + SQUEEZE_HALF
+        );
+        BlockPos cell = new BlockPos((int) Math.floor(px),
+                (int) Math.floor(bottomY), (int) Math.floor(pz));
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                for (int dy = -1; dy <= 2; dy++) {
+                    BlockPos at = cell.offset(dx, dy, dz);
+                    VoxelShape shape = level.getBlockState(at)
+                            .getCollisionShape(level, at);
+                    if (shape.isEmpty()) {
+                        continue;
+                    }
+                    for (AABB box : shape.toAabbs()) {
+                        if (box.move(at).intersects(body)) {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
     private static boolean bodyFits(
             BlockGetter level,
             BlockPos cell,
@@ -186,7 +299,7 @@ final class FootingRule {
         );
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
-                for (int dy = 0; dy <= 1; dy++) {
+                for (int dy = -1; dy <= 1; dy++) {
                     BlockPos at = cell.offset(dx, dy, dz);
                     VoxelShape shape = level.getBlockState(at)
                             .getCollisionShape(level, at);
@@ -208,7 +321,7 @@ final class FootingRule {
      * 格心被**站不上去的高碰撞**占着（柱、墙）——矮板是踩上去的，不算。
      * 这种格走不到格心，只有贴边窄带可站可过。
      */
-    static boolean tallAtCenter(BlockGetter level, BlockPos cell) {
+    public static boolean tallAtCenter(BlockGetter level, BlockPos cell) {
         VoxelShape shape = level.getBlockState(cell)
                 .getCollisionShape(level, cell);
         return coversCenter(shape)

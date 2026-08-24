@@ -219,16 +219,9 @@ public final class RangedFireGameTests {
         helper.succeed();
     }
 
-    /**
-     * 走完整条生产链路，看弩到底射不射得出去。
-     *
-     * <p>其它战斗测试都是手动调 execute，等于跳过了传感器、事实、意图与计划
-     * 状态机——玩家看到的"高频抽搐"恰恰可能就出在被跳过的那几步里。这里放一
-     * 只真实僵尸（关掉 AI，免得它自己动起来波及邻座），由编排器驱动动作。
-     *
-     * <p>断言是世界里出现了箭。失败时把每 tick 的手部状态打出来：抽搐是一种
-     * 时间上的形态，只报一个布尔值看不出它。
-     */
+    /** 走完整条生产链路（真僵尸、编排器驱动）：其它战斗测试手动调 execute，
+     *  跳过了传感器/事实/意图/计划状态机，而"高频抽搐"可能正出在那几步。
+     *  断言是世界里出现了箭；失败时倒出逐 tick 手部状态——抽搐是时间形态。 */
     @GameTest(
             templateNamespace = "minecraft",
             template = "empty",
@@ -257,10 +250,9 @@ public final class RangedFireGameTests {
         CompanionScene.placeInert(helper, zombie);
 
         StringBuilder trace = new StringBuilder();
-        // 除手部状态外还记"她打的是谁（用实体 id，邻座夹具的僵尸也叫僵尸）、两只
-        // 手里各是什么"，只记变化。这条曾偶发地红，而只有手部状态的轨迹分不开三
-        // 种坏法——被邻座的怪引走、换装吃掉蓄力、别的东西替她松手——画出来一模
-        // 一样。不记 isCharged：装填与击发在同一次调用里完成，采样必然是 false。
+        // 除手部状态外还记"她打的是谁、两只手里各是什么"，只记变化：手部轨迹
+        // 分不开三种坏法（邻座引走、换装吃蓄力、别人松手），画出来一模一样。
+        // 不记 isCharged：装填与击发同一调用完成，采样必然 false。
         String[] seen = {""};
         helper.startSequence()
                 .thenExecuteFor(200, () -> {
@@ -271,7 +263,9 @@ public final class RangedFireGameTests {
                         return;
                     }
                     LivingEntity victim = maid.getTarget();
-                    String now = (victim == null ? "-" : "#" + victim.getId())
+                    // 靶子带距离：换靶合法（都在感知内）与串场（30 格外）一列分开。
+                    String now = (victim == null ? "-" : "#" + victim.getId()
+                                    + "@" + (int) maid.distanceTo(victim))
                             + "|" + maid.getMainHandItem().getItem()
                             + "/" + maid.getOffhandItem().getItem();
                     if (!now.equals(seen[0])) {
