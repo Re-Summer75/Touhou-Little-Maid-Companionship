@@ -368,14 +368,28 @@ public final class StrideWalker {
             // 力封顶下必然短（末地烛中继实测：全场唯一一次起跳 span 2.68
             // 、v 已封顶 0.50，摔进缺口）。沿着跳向一路问支撑到哪为止，
             // 那才是真沿。
+            // 沿口 ＝ 支撑到头 **或** 身位过不去，谁先到算谁。
+            //
+            // 只问支撑会把她推进障碍：立着的门板是一整格高的竖片，脚下
+            // 那条梁却是连着的，探沿于是一路探出两米八，把她按在门板上
+            // 反复"贴沿"，起跳永远轮不到（玩家两次指认的 upright lid 全
+            // 族，供词 note 恒为 approach t2.80，人停在门板前一格）。跳
+            // 的沿口本来就在障碍跟前，不在支撑尽头。
             double toBrink = 0.0D;
             for (double d = 0.4D; d <= 3.0D; d += 0.4D) {
+                double px = mob.getX() + ax * d;
+                double pz = mob.getZ() + az * d;
                 Anchor ahead = AnchorResolver.resolve(mob.level(),
                         net.minecraft.core.BlockPos.containing(
-                                mob.getX() + ax * d, mob.getY() + 0.1D,
-                                mob.getZ() + az * d));
+                                px, mob.getY() + 0.1D, pz));
                 if (ahead == null || ahead.breadth() < 0.4D
                         || Math.abs(ahead.at().y - mob.getY()) > 0.3D) {
+                    break;
+                }
+                if (!com.laixia.maidintelligence.feature.behavior.tlm.pathing
+                        .sweep.SweptMotion.bodyClear(mob.level(),
+                                new Vec3(px, mob.getY(), pz),
+                                mob.getBbWidth(), mob.getBbHeight())) {
                     break;
                 }
                 toBrink = d;

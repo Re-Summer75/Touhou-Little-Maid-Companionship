@@ -98,6 +98,8 @@ final class BridgePatrol {
     /** 自由模式的女仆，站在给定的绝对坐标上。 */
     static EntityMaid maidAt(GameTestHelper helper, double x, double y,
             double z) {
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids
+                .sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(x, y, z);
         maid.setTame(true);

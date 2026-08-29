@@ -70,6 +70,7 @@ public final class TroughRunGameTests {
                 helper.setBlock(new BlockPos(8, y, z), Blocks.STONE);
             }
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, 0, DECK + 2, 1));
         maid.setTame(true);
@@ -168,6 +169,7 @@ public final class TroughRunGameTests {
                 helper.setBlock(new BlockPos(8, y, z), Blocks.STONE);
             }
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, 0, DECK + 2, 1));
         maid.setTame(true);
@@ -263,6 +265,7 @@ public final class TroughRunGameTests {
                 helper.setBlock(new BlockPos(8, y, z), Blocks.STONE);
             }
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         double offZ = 0.3D
                 + helper.getLevel().getRandom().nextDouble() * 0.4D;
@@ -375,6 +378,7 @@ public final class TroughRunGameTests {
                 helper.setBlock(new BlockPos(8, y, z), Blocks.STONE);
             }
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, 0, DECK + 2, 1));
         maid.setTame(true);

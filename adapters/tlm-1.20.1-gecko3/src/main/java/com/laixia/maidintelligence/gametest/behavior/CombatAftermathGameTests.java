@@ -58,6 +58,7 @@ public final class CombatAftermathGameTests {
         owner.setPos(zero.getX() + 10.5D, zero.getY() + 2.0D,
                 zero.getZ() + 4.5D);
 
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
             public LivingEntity getOwner() {

@@ -155,6 +155,7 @@ public final class EnRouteScoopGameTests {
                 helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
             }
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, 2, 2, 1));
         maid.setTame(true);

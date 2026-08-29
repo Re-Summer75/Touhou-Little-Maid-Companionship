@@ -195,6 +195,7 @@ public final class FreedomTaskGameTests {
          * test rooms away, the same neighbour interference the zombie fixture
          * already has to sidestep.
          */
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         List<IMaidTask> offered = TaskManager.getNotHiddenTaskList(maid);
 

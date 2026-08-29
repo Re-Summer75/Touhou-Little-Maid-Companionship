@@ -136,6 +136,7 @@ public final class SunkenLidGameTests {
                 helper.setBlock(new BlockPos(x, DECK, z), Blocks.STONE);
             }
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         // 从一格高落到门板上：出生即被困在沉地板里，起点必须自己成立。
         maid.setPos(GameTestPositions.center(helper, 1, DECK + 1, 1));
@@ -208,6 +209,7 @@ public final class SunkenLidGameTests {
             helper.setBlock(new BlockPos(-1, DECK + 1, z), Blocks.STONE);
             helper.setBlock(new BlockPos(-1, DECK + 2, z), Blocks.STONE);
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, 0, DECK + 1, 1));
         maid.setTame(true);
@@ -278,6 +280,7 @@ public final class SunkenLidGameTests {
             helper.setBlock(new BlockPos(-1, DECK + 1, z), Blocks.STONE);
             helper.setBlock(new BlockPos(-1, DECK + 2, z), Blocks.STONE);
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, 0, DECK + 1, 1));
         maid.setTame(true);

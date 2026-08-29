@@ -85,6 +85,7 @@ public final class GlassRunGameTests {
         for (int x = 2; x <= 9; x++) {
             helper.setBlock(new BlockPos(x, DECK + 1, 2), Blocks.GLASS);
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, 0, DECK + 1, 2));
         maid.setTame(true);
@@ -143,6 +144,7 @@ public final class GlassRunGameTests {
         }
         helper.setBlock(new BlockPos(5, DECK + 2, 2), Blocks.GLASS);
 
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, 1, DECK + 2, 2));
         maid.setTame(true);
@@ -245,6 +247,7 @@ public final class GlassRunGameTests {
                 helper.setBlock(new BlockPos(-1, y, z), Blocks.STONE);
             }
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, 1, DECK + 1, 1));
         maid.setTame(true);

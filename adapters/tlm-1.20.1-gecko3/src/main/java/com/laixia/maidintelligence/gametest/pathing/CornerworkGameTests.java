@@ -69,6 +69,7 @@ public final class CornerworkGameTests {
                 helper.setBlock(new BlockPos(8, y, z), Blocks.STONE);
             }
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, 0, DECK + 1, 1));
         maid.setTame(true);
@@ -165,6 +166,7 @@ public final class CornerworkGameTests {
                 helper.setBlock(new BlockPos(8, y, z), Blocks.STONE);
             }
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, 0, DECK + 1, 1));
         maid.setTame(true);
@@ -274,6 +276,7 @@ public final class CornerworkGameTests {
                 helper.setBlock(new BlockPos(8, y, z), Blocks.STONE);
             }
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, 3, DECK + 3, 5));
         maid.setTame(true);

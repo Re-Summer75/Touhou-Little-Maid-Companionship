@@ -261,6 +261,7 @@ public final class VehicleAutonomyGameTests {
             GameTestHelper helper,
             Player owner
     ) {
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
             public LivingEntity getOwner() {
@@ -276,6 +277,7 @@ public final class VehicleAutonomyGameTests {
             Player owner,
             TaskAttack attackTask
     ) {
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
             public LivingEntity getOwner() {

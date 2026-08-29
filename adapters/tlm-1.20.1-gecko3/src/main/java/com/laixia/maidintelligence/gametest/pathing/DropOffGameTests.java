@@ -189,6 +189,7 @@ public final class DropOffGameTests {
             double y,
             double z
     ) {
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         BlockPos zero = helper.absolutePos(BlockPos.ZERO);
         maid.setPos(zero.getX() + x, zero.getY() + y, zero.getZ() + z);

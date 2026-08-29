@@ -386,6 +386,7 @@ public final class OwnerAwarenessGameTests {
             int y,
             int z
     ) {
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
             public LivingEntity getOwner() {

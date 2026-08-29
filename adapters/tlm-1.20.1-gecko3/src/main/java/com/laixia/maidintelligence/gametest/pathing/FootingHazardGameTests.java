@@ -281,6 +281,7 @@ public final class FootingHazardGameTests {
                 helper.setBlock(new BlockPos(4, DECK, z), east);
             }
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, 0, DECK + 1, 1));
         maid.setTame(true);

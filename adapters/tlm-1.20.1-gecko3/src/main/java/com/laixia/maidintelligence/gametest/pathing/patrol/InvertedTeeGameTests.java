@@ -106,6 +106,7 @@ public final class InvertedTeeGameTests {
         double ownerY = zero.getY() + DECK + (offStructure ? 3.0D : 1.0D);
         owner.setPos(ownerX, ownerY, zero.getZ() + 2.5D);
 
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
             public LivingEntity getOwner() {

@@ -415,6 +415,7 @@ public final class GazeCommandGameTests {
         fillFloor(helper, 0, 7, 0, 3);
         Player owner = helper.makeMockPlayer();
         owner.setPos(position(helper, 4, 1));
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
             public LivingEntity getOwner() {

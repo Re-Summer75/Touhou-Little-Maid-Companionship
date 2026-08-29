@@ -282,6 +282,7 @@ public final class GazeRecallGameTests {
         }
         Player owner = helper.makeMockPlayer();
         owner.setPos(GameTestPositions.center(helper, 4, 2, 1));
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
             public LivingEntity getOwner() {

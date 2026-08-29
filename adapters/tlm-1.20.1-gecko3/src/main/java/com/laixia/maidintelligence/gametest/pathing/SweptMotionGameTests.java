@@ -59,6 +59,7 @@ public final class SweptMotionGameTests {
                 zero.getZ() + 2.5D);
         Vec3 launch = new Vec3(0.30D, 0.42D, 0.0D);
 
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(start.x, start.y, start.z);
         maid.setTame(true);

@@ -401,6 +401,7 @@ public final class PenRouteGameTests {
 
     private static EntityMaid penned(GameTestHelper helper, int x, int z) {
         BlockPos zero = helper.absolutePos(BlockPos.ZERO);
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(zero.getX() + x + 0.5D, zero.getY() + DECK + 1.0D,
                 zero.getZ() + z + 0.5D);

@@ -126,6 +126,7 @@ public final class ColdStartGameTests {
         helper.setBlock(new BlockPos(1, deck + 1, 1),
                 Blocks.OAK_TRAPDOOR.defaultBlockState());
 
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         BlockPos zero = helper.absolutePos(BlockPos.ZERO);
         maid.setPos(zero.getX() + 1.5D, zero.getY() + deck + 1.3D,
@@ -203,6 +204,7 @@ public final class ColdStartGameTests {
             double startY,
             double startZ
     ) {
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         BlockPos zero = helper.absolutePos(BlockPos.ZERO);
         maid.setPos(zero.getX() + startX, zero.getY() + startY,
@@ -213,6 +215,7 @@ public final class ColdStartGameTests {
         maid.setHomeModeEnable(false);
         helper.getLevel().addFreshEntity(maid);
 
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid body = new EntityMaid(helper.getLevel());
         BlockPos farCell = helper.absolutePos(new BlockPos(7, DECK + 1, 1));
         body.setPos(farCell.getX() + 0.5D, farCell.getY(),
@@ -279,6 +282,7 @@ public final class ColdStartGameTests {
             double startY,
             double startZ
     ) {
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         BlockPos zero = helper.absolutePos(BlockPos.ZERO);
         maid.setPos(zero.getX() + startX, zero.getY() + startY,
@@ -354,6 +358,7 @@ public final class ColdStartGameTests {
             GameTestHelper helper
     ) {
         buildZigzag(helper);
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         BlockPos zero = helper.absolutePos(BlockPos.ZERO);
         maid.setPos(zero.getX() + 0.6D, zero.getY() + DECK + 1.0D,

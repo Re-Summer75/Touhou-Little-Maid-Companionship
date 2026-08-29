@@ -311,6 +311,7 @@ public final class ParkourGauntletGameTests {
 
     /** 站在起点的自由模式女仆，拾物关闭。 */
     private static EntityMaid walker(GameTestHelper helper, int x, int feetY) {
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, x, feetY, 1));
         maid.setTame(true);

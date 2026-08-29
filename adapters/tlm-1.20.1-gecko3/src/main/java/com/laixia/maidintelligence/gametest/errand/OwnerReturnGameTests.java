@@ -64,6 +64,7 @@ public final class OwnerReturnGameTests {
         Player owner = helper.makeMockPlayer();
         owner.setPos(GameTestPositions.center(helper, 6, 2, 1));
         TaskAttack task = new TaskAttack();
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
             public LivingEntity getOwner() {

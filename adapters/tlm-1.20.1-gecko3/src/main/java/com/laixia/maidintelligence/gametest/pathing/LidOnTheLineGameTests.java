@@ -163,6 +163,7 @@ public final class LidOnTheLineGameTests {
 
     /** 从西台驱动到东台深处，跨线算到；全程读数带，失败附日记。 */
     private static void runTheLine(GameTestHelper helper, String name) {
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         BlockPos zero = helper.absolutePos(BlockPos.ZERO);
         maid.setPos(zero.getX() + 1.5D, zero.getY() + DECK + 1.0D,

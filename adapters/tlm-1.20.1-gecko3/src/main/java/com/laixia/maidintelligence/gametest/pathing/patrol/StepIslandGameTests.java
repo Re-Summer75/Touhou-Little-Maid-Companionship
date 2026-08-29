@@ -384,6 +384,7 @@ public final class StepIslandGameTests {
         double topY = zero.getY() + DECK + 4.0D;
         Player owner = helper.makeMockPlayer();
         owner.setPos(zero.getX() + 13.5D, topY, zero.getZ() + 2.5D);
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
             public LivingEntity getOwner() {

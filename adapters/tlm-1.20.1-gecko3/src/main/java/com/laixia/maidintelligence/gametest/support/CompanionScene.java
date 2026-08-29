@@ -153,6 +153,7 @@ public final class CompanionScene {
      * whose symptoms surface much later and nowhere near here.
      */
     public EntityMaid maid(int x, int y, int z) {
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
             public LivingEntity getOwner() {

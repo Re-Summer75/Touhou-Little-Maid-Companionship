@@ -79,6 +79,7 @@ public final class OwnerCoordinationGameTests {
             Player owner,
             BlockPos position
     ) {
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
             public LivingEntity getOwner() {

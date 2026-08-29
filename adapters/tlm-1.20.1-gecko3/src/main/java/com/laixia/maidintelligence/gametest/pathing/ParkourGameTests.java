@@ -159,6 +159,7 @@ public final class ParkourGameTests {
                 helper.setBlock(new BlockPos(-1, y, z), Blocks.STONE);
             }
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, 0, low + 1, 1));
         maid.setTame(true);
@@ -254,6 +255,7 @@ public final class ParkourGameTests {
             helper.setBlock(new BlockPos(-1, DECK + 1, z), Blocks.STONE);
             helper.setBlock(new BlockPos(-1, DECK + 2, z), Blocks.STONE);
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, 0, DECK + 1, 1));
         maid.setTame(true);
@@ -471,6 +473,7 @@ public final class ParkourGameTests {
             helper.setBlock(new BlockPos(-1, DECK + 1, z), Blocks.STONE);
             helper.setBlock(new BlockPos(-1, DECK + 2, z), Blocks.STONE);
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, 0, DECK + 1, 1));
         maid.setTame(true);

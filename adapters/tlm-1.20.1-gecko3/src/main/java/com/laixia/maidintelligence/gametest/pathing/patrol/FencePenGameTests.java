@@ -260,6 +260,7 @@ public final class FencePenGameTests {
         Vec3 heart = at(helper, 7.5D, 7.5D);
         Player owner = helper.makeMockPlayer();
         owner.setPos(heart.x, heart.y, heart.z);
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
             public LivingEntity getOwner() {

@@ -239,6 +239,7 @@ public final class PickupReachGameTests {
                 }
             }
         }
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel());
         maid.setPos(GameTestPositions.center(helper, x, y, z));
         maid.setTame(true);

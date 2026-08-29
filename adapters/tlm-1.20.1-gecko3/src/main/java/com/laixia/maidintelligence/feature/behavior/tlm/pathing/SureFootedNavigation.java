@@ -380,9 +380,46 @@ public final class SureFootedNavigation extends MaidPathNavigation {
                     + "t lastPlan=" + (this.tick - lastPlanTick)
                     + "t lastFail=" + (this.tick - lastFailTick)
                     + "t lastGoal=(" + String.format("%.1f,%.1f,%.1f",
-                            lastGoalX, lastGoalY, lastGoalZ) + ")";
+                            lastGoalX, lastGoalY, lastGoalZ) + ")"
+                    // 卡死现场的三件套：飞行锁还在不在（锁着就不走路）、
+                    // 脚下解不解得出锚（解不出就无从起步）、当场重铺能不
+                    // 能出路（能出却没在走，问题就在执行侧）。
+                    + " lock=" + pathwalk.flight().locked()
+                    + " underfoot=" + describeAnchor(anchorNearby())
+                    + " replan=" + describeReplan();
         }
         return pathwalk.diary();
+    }
+
+    /** 供词用：把锚点写成一行，没有就说没有。 */
+    private static String describeAnchor(
+            com.laixia.maidintelligence.feature.behavior.tlm.pathing.voxel
+                    .Anchor anchor) {
+        return anchor == null ? "none"
+                : String.format("(%.2f,%.2f,%.2f)b%.2f%s",
+                        anchor.at().x, anchor.at().y, anchor.at().z,
+                        anchor.breadth(), anchor.kind());
+    }
+
+    /** 供词用：当场按上一次的目标重铺一遍，看图给不给得出路。 */
+    private String describeReplan() {
+        var start = anchorNearby();
+        if (start == null) {
+            return "no-start";
+        }
+        var web = new com.laixia.maidintelligence.feature.behavior.tlm
+                .pathing.voxel.StrideWeb(this.level,
+                        this.mob.getBbWidth(), this.mob.getBbHeight(),
+                        edgeVeto);
+        var probe = com.laixia.maidintelligence.feature.behavior.tlm
+                .pathing.voxel.VoxelAstar.find(web, start,
+                        new net.minecraft.world.phys.Vec3(
+                                lastGoalX, lastGoalY, lastGoalZ), 0.45D);
+        if (probe == null) {
+            return "null";
+        }
+        return probe.length() + "step"
+                + (probe.reaches() ? "-reach" : "-frontier");
     }
 
     /** 执行器这一 tick 走的分支，读数带逐行印它。 */

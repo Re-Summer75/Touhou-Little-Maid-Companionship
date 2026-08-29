@@ -168,6 +168,7 @@ public final class IntentOrchestrationGameTests {
         }
         Player owner = helper.makeMockPlayer();
         owner.setPos(GameTestPositions.center(helper, ownerX, 2, 1));
+        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
         EntityMaid maid = new EntityMaid(helper.getLevel()) {
             @Override
             public LivingEntity getOwner() {
