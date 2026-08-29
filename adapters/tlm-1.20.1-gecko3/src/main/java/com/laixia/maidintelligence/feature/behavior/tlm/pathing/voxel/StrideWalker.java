@@ -297,6 +297,10 @@ public final class StrideWalker {
                 }
             }
         }
+        // 试过"下一步没落脚就不迈"：一轮里触发两万四千次、红从七涨到
+        // 二十八，她在各处沿口停死——按格解析的落脚判定在格界、窄面、
+        // 台沿这些地方本就常答"没有"，拿它当每 tick 的通行证太苛。细柱
+        // 那两红（走出台沿）得换个更准的问法，不是在这里加闸。
         Vec3 motion = mob.getDeltaMovement();
         mob.setDeltaMovement(vx, motion.y, vz);
     }
