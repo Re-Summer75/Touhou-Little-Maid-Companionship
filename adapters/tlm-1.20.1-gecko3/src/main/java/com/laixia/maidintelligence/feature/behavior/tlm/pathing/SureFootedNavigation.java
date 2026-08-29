@@ -250,6 +250,18 @@ public final class SureFootedNavigation extends MaidPathNavigation {
                         // 锚落在这半格内，那就走诚实前沿，仍旧到得了近旁。
                         new net.minecraft.world.phys.Vec3(x, y, z), 0.45D);
         if (path == null) {
+            // 锚点图给不出路时，问一次**多边形层**：可走区域是面、门是
+            // 面的共享边界，柱旁那条 0.075 的中心可行域在它眼里是一块正
+            // 经的地——挤缝这一族（窄道柱、柱旁车道、崖沿柱）正是死在
+            // "点锚看不见那条缝"上。它只答纯走路；要跳的仍归合同边。
+            var lane = com.laixia.maidintelligence.feature.behavior
+                    .tlm.pathing.mesh.MeshWalk.plan(this.level, this.mob,
+                            new net.minecraft.world.phys.Vec3(x, y, z));
+            if (lane != null) {
+                strideWalker.follow(lane);
+                this.path = shadowOf(lane);
+                return true;
+            }
             strideWalker.follow(null);
             lastFailTick = this.tick;
             return false;
@@ -290,7 +302,6 @@ public final class SureFootedNavigation extends MaidPathNavigation {
         }
         if (path == null) {
             strideWalker.follow(null);
-            lastFailTick = this.tick;
             return false;
         }
         BlockPos target = path.getTarget();
@@ -384,6 +395,8 @@ public final class SureFootedNavigation extends MaidPathNavigation {
                     // 卡死现场的三件套：飞行锁还在不在（锁着就不走路）、
                     // 脚下解不解得出锚（解不出就无从起步）、当场重铺能不
                     // 能出路（能出却没在走，问题就在执行侧）。
+                    + " at=" + String.format("(%.2f,%.2f)",
+                            this.mob.getX(), this.mob.getZ())
                     + " lock=" + pathwalk.flight().locked()
                     + " underfoot=" + describeAnchor(anchorNearby())
                     + " replan=" + describeReplan();

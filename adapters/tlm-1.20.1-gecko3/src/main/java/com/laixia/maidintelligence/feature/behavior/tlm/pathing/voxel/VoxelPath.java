@@ -14,6 +14,13 @@ public final class VoxelPath {
     private final List<Anchor> anchors;
     private final List<Stride> strides;
     private final boolean reaches;
+
+    /** 这条路是不是**面内约束**的（多边形层给的）。面内的路已由几何保
+     *  证不出界，执行侧不必再逐步预演"会不会掉"——车道上她本就有半个
+     *  身子悬在道外，每步都判会掉，人就只能按最慢档爬（挤缝实测：路铺
+     *  对了却走不完时限）。 */
+    private final boolean constrained;
+
     private int cursor;
 
     /**
@@ -24,10 +31,21 @@ public final class VoxelPath {
      */
     public VoxelPath(List<Anchor> anchors, List<Stride> strides,
             boolean reaches) {
+        this(anchors, strides, reaches, false);
+    }
+
+    public VoxelPath(List<Anchor> anchors, List<Stride> strides,
+            boolean reaches, boolean constrained) {
         this.anchors = List.copyOf(anchors);
         this.strides = List.copyOf(strides);
         this.reaches = reaches;
+        this.constrained = constrained;
         this.cursor = 1;
+    }
+
+    /** 面内约束（多边形层给的路）。 */
+    public boolean constrained() {
+        return constrained;
     }
 
     /** 还有没走完的站。 */

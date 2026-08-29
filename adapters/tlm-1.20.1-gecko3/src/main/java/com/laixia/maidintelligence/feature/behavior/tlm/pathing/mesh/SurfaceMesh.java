@@ -23,14 +23,15 @@ public final class SurfaceMesh {
 
     private final List<Surface> pads = new ArrayList<>();
     private final Map<Integer, List<Link>> links = new HashMap<>();
-    private final double bodyWidth;
+    /** 门的最小长度：只挡浮点噪声。净空已在雕刻时算过，不在这里再卡
+     *  一次身位宽——那会把柱旁那条真路的门整段否掉。 */
+    private static final double PORTAL_SLACK = 1.0E-4D;
 
     /** 一条通行关系：去哪块面、从哪道门过去。 */
     public record Link(int to, Surface.Portal portal) {
     }
 
-    private SurfaceMesh(double bodyWidth) {
-        this.bodyWidth = bodyWidth;
+    private SurfaceMesh() {
     }
 
     /**
@@ -40,7 +41,7 @@ public final class SurfaceMesh {
      */
     public static SurfaceMesh around(BlockGetter level, BlockPos around,
             int reach, int band, double width, double height) {
-        SurfaceMesh mesh = new SurfaceMesh(width);
+        SurfaceMesh mesh = new SurfaceMesh();
         for (int dx = -reach; dx <= reach; dx++) {
             for (int dz = -reach; dz <= reach; dz++) {
                 for (int dy = -band; dy <= band; dy++) {
@@ -58,7 +59,7 @@ public final class SurfaceMesh {
         for (int i = 0; i < pads.size(); i++) {
             for (int j = i + 1; j < pads.size(); j++) {
                 Surface.Portal gate = pads.get(i)
-                        .portalTo(pads.get(j), bodyWidth);
+                        .portalTo(pads.get(j), PORTAL_SLACK);
                 if (gate == null) {
                     continue;
                 }

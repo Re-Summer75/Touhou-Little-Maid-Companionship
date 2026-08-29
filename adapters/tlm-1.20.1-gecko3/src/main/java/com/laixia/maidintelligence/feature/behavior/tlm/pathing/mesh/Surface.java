@@ -60,9 +60,18 @@ public record Surface(double minX, double minZ, double maxX, double maxZ,
         return Math.hypot(dx, dz);
     }
 
-    /** 两块面之间的**门**：共享边界上真正走得过去的那一段（长度够身
-     *  位宽才算）。返回 null 表示不相邻或缝太窄。 */
-    public Portal portalTo(Surface other, double bodyWidth) {
+    /**
+     * 两块面之间的**门**：共享边界上能过去的那一段。
+     *
+     * <p>**别再拿身位宽去卡这道门**——净空在雕刻时就已经算进去了（障
+     * 碍外扩半个身位，剩下的矩形是她中心的可行域）。柱旁那条 0.075 的
+     * 带子与邻带的共享边同样只有 0.075，按身位宽卡就把门全否掉，缝在
+     * 图上又断了（绕柱钉当场红：雕出十三块面，却一条路都连不出来）。
+     * 门只要不退化成一个点就通。
+     *
+     * @param slack 门的最小长度，只用来挡浮点噪声
+     */
+    public Portal portalTo(Surface other, double slack) {
         if (Math.abs(other.top - top) > 0.6D) {
             return null;
         }
@@ -74,11 +83,11 @@ public record Surface(double minX, double minZ, double maxX, double maxZ,
                 || Math.abs(minX - other.maxX) < 1.0E-6D;
         boolean touchZ = Math.abs(other.minZ - maxZ) < 1.0E-6D
                 || Math.abs(minZ - other.maxZ) < 1.0E-6D;
-        if (touchX && hiZ - loZ >= bodyWidth - 1.0E-6D) {
+        if (touchX && hiZ - loZ >= slack) {
             double x = Math.abs(other.minX - maxX) < 1.0E-6D ? maxX : minX;
             return new Portal(x, loZ, x, hiZ);
         }
-        if (touchZ && hiX - loX >= bodyWidth - 1.0E-6D) {
+        if (touchZ && hiX - loX >= slack) {
             double z = Math.abs(other.minZ - maxZ) < 1.0E-6D ? maxZ : minZ;
             return new Portal(loX, z, hiX, z);
         }

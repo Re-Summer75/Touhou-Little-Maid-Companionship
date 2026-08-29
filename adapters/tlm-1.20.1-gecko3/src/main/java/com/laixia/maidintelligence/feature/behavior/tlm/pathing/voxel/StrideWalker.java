@@ -250,6 +250,15 @@ public final class StrideWalker {
         // 明场景"）。杆桥转角上她自然会慢下来，因为快了真的会掉。
         double want = Math.min(Math.min(WALK_SPEED, flat * 0.5D),
                 cornerLimit(flat));
+        // 面内约束的路不必再预演：几何已担保不出界，而车道上她本就半
+        // 个身子悬在道外，逐步预演每步都说"会掉"，人只能按最慢档爬。
+        if (path != null && path.constrained()) {
+            faceToward(toX, toZ);
+            Vec3 keep = mob.getDeltaMovement();
+            mob.setDeltaMovement(toX / flat * want, keep.y,
+                    toZ / flat * want);
+            return;
+        }
         double allowed = allowedDrop();
         double speed = 0.0D;
         for (double trial : new double[]{want, want * 0.5D, want * 0.25D}) {

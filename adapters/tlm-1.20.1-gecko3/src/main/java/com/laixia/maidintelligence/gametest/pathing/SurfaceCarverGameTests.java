@@ -70,6 +70,71 @@ public final class SurfaceCarverGameTests {
         helper.succeed();
     }
 
+    /**
+     * **挤缝的整条链**：一格宽的走道，正中一根栅栏柱——多边形层要能给
+     * 出一条绕柱的路，而不是判它不通。这条钉子把三案（窄道柱、柱旁车
+     * 道、崖沿柱）的核心问成一句几何：路存不存在。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            batch = "pathing")
+    public static void aLaneRoutesAroundThePost(GameTestHelper helper) {
+        for (int x = 0; x <= 8; x++) {
+            helper.setBlock(new BlockPos(x, DECK, 2), Blocks.STONE);
+        }
+        helper.setBlock(new BlockPos(4, DECK + 1, 2), Blocks.OAK_FENCE);
+        var mesh = com.laixia.maidintelligence.feature.behavior.tlm.pathing
+                .mesh.SurfaceMesh.around(helper.getLevel(),
+                        helper.absolutePos(new BlockPos(4, DECK + 1, 2)),
+                        6, 1, 0.6D, 1.8D);
+        var from = new net.minecraft.world.phys.Vec3(
+                helper.absolutePos(new BlockPos(1, DECK + 1, 2)).getX() + 0.5D,
+                helper.absolutePos(new BlockPos(1, DECK + 1, 2)).getY(),
+                helper.absolutePos(new BlockPos(1, DECK + 1, 2)).getZ() + 0.5D);
+        var goal = new net.minecraft.world.phys.Vec3(
+                helper.absolutePos(new BlockPos(7, DECK + 1, 2)).getX() + 0.5D,
+                helper.absolutePos(new BlockPos(7, DECK + 1, 2)).getY(),
+                helper.absolutePos(new BlockPos(7, DECK + 1, 2)).getZ() + 0.5D);
+        var line = com.laixia.maidintelligence.feature.behavior.tlm.pathing
+                .mesh.MeshRoute.plan(mesh, from, goal);
+        helper.assertTrue(!line.isEmpty(),
+                "一格宽走道上柱挡中间，多边形层没给出绕柱的路（网格 "
+                        + mesh.size() + " 块面）");
+        helper.assertTrue(line.size() >= 3,
+                "绕柱该有折点，却拉成了直线 " + line.size() + " 点");
+        helper.succeed();
+    }
+
+    /**
+     * **定价的量尺**：同一道缺口，直跳与绕行各自要价多少。
+     *
+     * <p>"该直跳却绕路"这条红追了几轮，我先后调过跳边加价 0.6、0.15、
+     * 撤销——全是在症状上动手。真正要先回答的是：任意角把走路平滑成纯
+     * 直线距离之后，两条路线的**账面**各是多少？这颗钉子只把数字打出
+     * 来，不做断言（恒绿），下一步据它改定价，不再试常数。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            batch = "pathing")
+    public static void whatTheTwoRoutesCost(GameTestHelper helper) {
+        for (int x = 0; x <= 8; x++) {
+            for (int z = 0; z <= 2; z++) {
+                if (x == 4 && z <= 1) {
+                    continue;
+                }
+                helper.setBlock(new BlockPos(x, DECK, z), Blocks.STONE);
+            }
+        }
+        double jump = 2.0D + 0.5D;
+        double detourStep = 2.0D * (Math.hypot(1.0D, 1.0D) + 0.2D);
+        double detourLine = 2.0D * Math.hypot(1.0D, 1.0D);
+        System.out.println("[pricing] 直跳=" + jump
+                + " 绕行(格步计价)=" + String.format("%.3f", detourStep)
+                + " 绕行(任意角平滑后)=" + String.format("%.3f", detourLine)
+                + " —— 平滑把绕行从 " + String.format("%.3f", detourStep)
+                + " 降到 " + String.format("%.3f", detourLine)
+                + "，而直跳仍背着 0.5 的过路费");
+        helper.succeed();
+    }
+
     /** 门板立在格心：一整格高的竖片，靠一侧，另一侧仍是路。 */
     @GameTest(templateNamespace = "minecraft", template = "empty",
             batch = "pathing")
