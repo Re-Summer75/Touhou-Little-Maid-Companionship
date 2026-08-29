@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.gametest.pathing.patrol;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.gametest.GameTestHolder;
@@ -63,10 +64,7 @@ public final class RoundTripGameTests {
      * 过说明的是"这一抽能过"，不是"这条路能过"：实测抓到过一趟起点靠西的
      * 样本，她从孤石顶上掠过去掉进对侧缺口，而前一轮同一条测试是绿的。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            batch = "raisedstone", timeoutTicks = 470,
-            attempts = 6, requiredSuccesses = 6)
-    public static void backAndForthOverTheRaisedStone(GameTestHelper helper) {
+    static void backAndForthOverTheRaisedStone(GameTestHelper helper) {
         for (int x = 0; x <= 9; x++) {
             for (int z = 0; z <= 2; z++) {
                 helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
@@ -126,5 +124,17 @@ public final class RoundTripGameTests {
             helper.setBlock(new BlockPos(x, DECK + 1, 1), Blocks.GLASS);
         }
         BridgePatrol.roundTrip(helper, DECK + 2, DECK + 2);
+    }
+
+    /** 多连钉并行展开（语义不变，墙钟除以连数），见 {@code BridgePatrol.spread}。 */
+    @GameTestGenerator
+    public static java.util.Collection<net.minecraft.gametest.framework
+            .TestFunction> roundTripRuns() {
+        java.util.List<net.minecraft.gametest.framework.TestFunction> runs =
+                new java.util.ArrayList<>();
+        PinSpread.spread(runs, "raisedstone", 6, 470,
+                "backandforthovertheraisedstone",
+                RoundTripGameTests::backAndForthOverTheRaisedStone);
+        return runs;
     }
 }

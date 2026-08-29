@@ -11,6 +11,7 @@ import com.laixia.maidintelligence.feature.orchestration.tlm.errand
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand.Errand;
 import com.laixia.maidintelligence.feature.orchestration.tlm.errand
         .MaintainProximityErrand;
+import com.laixia.maidintelligence.feature.behavior.tlm.pathing.FootingRule;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.LivingEntity;
@@ -163,6 +164,16 @@ public final class LingerNearOwnerErrand {
                         owner.getZ() + policy.offsetZ(bearing, reach)
                 )
         );
+        // 高度图会把**细柱的顶**当成地面（末地烛是 MOTION_BLOCKING）：抽
+        // 中柱列时落点解析到柱顶，她就被自己的散步指路上了烛顶——到站发
+        // 呆、下一趟下来、再抽中再上去，玩家看到的是她在烛尖上循环打转
+        // （实测：台上两根烛，中签率高得像必然）。散步不落柱尖：脚下那格
+        // 是细柱的换成回他身边，那本来就是同一次抽签的另一支。
+        if (FootingRule.slimPillar(maid.level()
+                .getBlockState(ground.below())
+                .getCollisionShape(maid.level(), ground.below()))) {
+            return new EntityApproachTarget(owner);
+        }
         ApproachTarget spot = new BlockApproachTarget(ground);
         return spotStillNearOwner(maid, spot)
                 ? spot

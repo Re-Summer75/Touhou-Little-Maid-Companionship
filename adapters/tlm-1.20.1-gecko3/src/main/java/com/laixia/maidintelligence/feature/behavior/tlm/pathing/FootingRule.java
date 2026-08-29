@@ -2,6 +2,7 @@ package com.laixia.maidintelligence.feature.behavior.tlm.pathing;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -37,7 +38,7 @@ public final class FootingRule {
     }
 
     /** 同一把尺的形状版：碰撞的包围盒在水平面上盖不盖得住格子中心。 */
-    static boolean coversCenter(VoxelShape shape) {
+    public static boolean coversCenter(VoxelShape shape) {
         if (shape.isEmpty()) {
             return false;
         }
@@ -63,6 +64,54 @@ public final class FootingRule {
             return Double.NEGATIVE_INFINITY;
         }
         return pos.getY() + shape.max(Direction.Axis.Y);
+    }
+
+    /**
+     * 格心一根**细高柱**（滴水石锥、末地烛、避雷针这类）：碰撞盖住格心、
+     * 顶面高过半格、水平却不满格。宽度门槛取 0.8：床（1.0）、箱子
+     * （0.875）是满面的台子，不进这类。
+     *
+     * <p>**这不再是禁令，只是"窄"的事实**。第一版拿它当三道闸（分类判死、
+     * 晋升拒绝、唇沿盲跳），玩家实测判过头：跑酷图里柱顶就是要踩的中继，
+     * "有不完整方块不代表不可以站或过"。她当年摔不是站不住——柱顶
+     * onGround 物理成立——是图不认站位、自救在柱旁乱舞把她蹭下去。现在
+     * 站位交给 {@link #perchTop} 认、落不落得上交给扫掠仿真终审，这把尺
+     * 只剩仿真侧标注"窄立足"（{@code SweptMotion} 的 PERCHED）一个用途。
+     */
+    public static boolean slimPillar(VoxelShape shape) {
+        if (shape.isEmpty()
+                || !coversCenter(shape)
+                || shape.max(Direction.Axis.Y) <= STANDABLE_TOP) {
+            return false;
+        }
+        double wide = Math.max(
+                shape.max(Direction.Axis.X) - shape.min(Direction.Axis.X),
+                shape.max(Direction.Axis.Z) - shape.min(Direction.Axis.Z));
+        return wide < 0.8D;
+    }
+
+    /**
+     * 这一格的碰撞是**要跳才上得去、但站得住人的高台面**：盖住格心、顶面
+     * 高过半格、不超过一格二（跳弧顶一格二五之内）。石锥 0.69、末地烛
+     * 1.0、床 0.56、箱子 0.875 都是；栅栏与墙（1.5）跳不上去，不算。
+     *
+     * <p>与 {@link #selfFloor}（顶不高于半格的矮地板，走着就能上）合起来
+     * 盖满"这格自己能托住脚"的全谱——物理的尺，不是方块名的枚举。**满格
+     * 方块除外**：石头羊毛的碰撞同样"盖住格心、顶面 1.0"，可那是墙体不是
+     * 台面——第一版漏了这条，全图的实心格被改判可走，A* 当场在墙里铺路
+     * （一轮十四红，碑）。
+     *
+     * <p>上限**严格小于一格**：顶恰在一格整的柱（末地烛），站顶的人脚踩
+     * y=1.0、按方块归属已在柱的**上格**里——那份立足由上格的晋升表达
+     * （{@code CellClassifier.standableBelow} 的例外），柱格自己不当台
+     * 面。归属律一句话：顶不到一格，节点在柱格；顶到一格，节点在上格。
+     */
+    static boolean perchTop(VoxelShape shape) {
+        return !shape.isEmpty()
+                && !Block.isShapeFullBlock(shape)
+                && coversCenter(shape)
+                && shape.max(Direction.Axis.Y) > STANDABLE_TOP
+                && shape.max(Direction.Axis.Y) < 1.0D;
     }
 
     /**
@@ -126,6 +175,47 @@ public final class FootingRule {
      */
     static boolean edgePlate(VoxelShape shape) {
         return !shape.isEmpty() && !coversCenter(shape);
+    }
+
+    /**
+     * 托着站在此格的人的支撑，水平方向的**短边**有多宽：横放末地烛的杆
+     * 面 0.25、下半门板 1.0、满块 1.0；本格自身有可站矮碰撞（顶不高于一
+     * 格）用自己的，否则用脚下那格的。没有支撑给 1.0——悬空归别的判官
+     * 管，这把尺只回答"面有多窄"。
+     *
+     * <p>它存在的理由：到位判据、切角松量这些数都是按 0.6 以上的走面校
+     * 准的，在四分之一格的杆面上同样的松量就是切进虚空的斜线（玩家实测
+     * 点名：慢速在烛桥转角走出四十五度、从旁边掉下去；奔跑反而靠惯性压
+     * 着杆过）。
+     */
+    public static double supportBreadth(BlockGetter level, BlockPos pos,
+            double feetY, double slack) {
+        VoxelShape self = level.getBlockState(pos)
+                .getCollisionShape(level, pos);
+        // **顶面贴脚的才是她的支撑。**格内有个细碰撞不等于她站在细物上
+        // ——竖烛立在站位块顶时她站的是块、烛只是身旁的柱；按"格内有矮
+        // 碰撞就取其窄度"判，判到半径被错收到贴边站位够不着的程度（烛旁
+        // 中转钉实测：距格心 0.19 对收紧后的 0.175，三百二十五次小跳原地
+        // 空转）。
+        if (!self.isEmpty() && coversCenter(self)
+                && Math.abs(pos.getY() + self.max(Direction.Axis.Y) - feetY)
+                        <= slack) {
+            return Math.min(
+                    self.max(Direction.Axis.X) - self.min(Direction.Axis.X),
+                    self.max(Direction.Axis.Z) - self.min(Direction.Axis.Z));
+        }
+        VoxelShape below = level.getBlockState(pos.below())
+                .getCollisionShape(level, pos.below());
+        if (!below.isEmpty() && coversCenter(below)
+                && Math.abs(pos.below().getY()
+                        + below.max(Direction.Axis.Y) - feetY) <= slack) {
+            return Math.min(
+                    below.max(Direction.Axis.X)
+                            - below.min(Direction.Axis.X),
+                    below.max(Direction.Axis.Z)
+                            - below.min(Direction.Axis.Z));
+        }
+        return 1.0D;
     }
 
     /** 挤边身位的半宽：她的包围盒正好 0.6。 */
@@ -233,7 +323,7 @@ public final class FootingRule {
      *
      * @param bottomY 身位箱下沿的绝对高度
      */
-    static boolean walkLineClear(
+    public static boolean walkLineClear(
             BlockGetter level,
             double fromX,
             double fromZ,
@@ -241,7 +331,13 @@ public final class FootingRule {
             double toZ,
             double bottomY
     ) {
-        int steps = 6;
+        // 采样按**距离**给，不是固定段数：定长六段在一格步上够密（间距
+        // 0.17），到了任意角的长直线上就成了筛子——七格四的线间距 1.23
+        // 格，0.25 宽的栅栏柱整根从缝里漏过去，图连出一条穿墙的直线（栅
+        // 栏圈实测：她接到黄线就自我作废，note 卡在 stale）。四分之一格
+        // 一采，比身位箱窄得多，漏不掉东西。
+        double span = Math.hypot(toX - fromX, toZ - fromZ);
+        int steps = Math.max(6, (int) Math.ceil(span / 0.25D));
         for (int i = 1; i <= steps; i++) {
             double t = i / (double) steps;
             if (!bodyFitsAt(level,
@@ -317,9 +413,18 @@ public final class FootingRule {
         return true;
     }
 
+    /** 跳弧顶（一格二五）之下、跳得上去的台面上限。 */
+    static final double PERCH_TOP = 1.2D;
+
     /**
-     * 格心被**站不上去的高碰撞**占着（柱、墙）——矮板是踩上去的，不算。
-     * 这种格走不到格心，只有贴边窄带可站可过。
+     * 格心被**走不过去的高碰撞**占着（柱、墙、烛）——这种格走不到格心，
+     * 穿行要走贴边窄带（挤缝、车道那一族的入口判据）。
+     *
+     * <p>门槛是**走**的极限（半格），不是跳的极限：末地烛（1.0）既是跳
+     * 得上的台面（{@link #perchTop}）**又是**要贴边绕的柱——一格两种真
+     * 实，两把尺并存，谁也不吞谁。曾把这里抬到 1.2 想"可跳上的都不算
+     * 柱"，挤缝穿行当场对烛失灵；瞄点的取舍另有一把尺（{@code aimPoint}
+     * 只对跳不上去的真柱找贴边）。
      */
     public static boolean tallAtCenter(BlockGetter level, BlockPos cell) {
         VoxelShape shape = level.getBlockState(cell)
@@ -329,18 +434,35 @@ public final class FootingRule {
     }
 
     /**
-     * 走向一个格子该瞄哪：默认瞄格心；只有格心被高物占着而贴边又塞得下
-     * 身位时，才瞄贴边点。找不到贴边点也退回格心——瞄点只是优化，可走性
-     * 另有判官。规划把被占格连成节点、执行走它、到位判定收账，三处同一个点。
+     * 走向一个格子该瞄哪：默认瞄格心；只有格心被**跳也上不去的**高物
+     * （栅栏柱这类，高过 {@link #PERCH_TOP}）占着而贴边又塞得下身位时，
+     * 才瞄贴边点。跳得上的台面（石锥顶、烛顶）瞄格心——那是要踩上去的
+     * 立足，对着它找贴边窄带会让挤缝逻辑把她从中继柱旁蹭下去（正向钉
+     * Leg2 实测 note=squeeze 侧摔）。找不到贴边点也退回格心——瞄点只是
+     * 优化，可走性另有判官。
      */
     static Vec3 aimPoint(BlockGetter level, BlockPos cell) {
-        if (tallAtCenter(level, cell)) {
+        if (unclimbableAtCenter(level, cell)) {
             Vec3 strip = squeezePoint(level, cell);
             if (strip != null) {
                 return strip;
             }
         }
         return new Vec3(cell.getX() + 0.5D, cell.getY(), cell.getZ() + 0.5D);
+    }
+
+    /**
+     * 格心被**跳也上不去的高碰撞**占着（栅栏柱、墙）——挤缝、车道、贴边
+     * 瞄点那一族的入口判据。跳得上的台面（石锥 0.69、烛顶 1.0）不算：那
+     * 是要踩上去的立足，挤缝逻辑对它做的每一次"贴边侧移"都是把她从柱顶
+     * 往缝里推（中继钉十连实测：两成的回程被走段挤缝推出侧沿）。
+     */
+    public static boolean unclimbableAtCenter(BlockGetter level,
+            BlockPos cell) {
+        VoxelShape shape = level.getBlockState(cell)
+                .getCollisionShape(level, cell);
+        return coversCenter(shape)
+                && shape.max(Direction.Axis.Y) > PERCH_TOP;
     }
 
     /** 贴边点脚下要有承托：点所在的柱子里，下一格顶面得贴着脚。 */

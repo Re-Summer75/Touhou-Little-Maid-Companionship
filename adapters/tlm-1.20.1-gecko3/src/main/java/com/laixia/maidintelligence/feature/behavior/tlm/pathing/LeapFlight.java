@@ -1,5 +1,6 @@
 package com.laixia.maidintelligence.feature.behavior.tlm.pathing;
 
+import com.laixia.maidintelligence.feature.behavior.domain.motion.BallisticArc;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.phys.Vec3;
@@ -11,10 +12,12 @@ import net.minecraft.world.phys.Vec3;
  * 不动这一跳）、按弧线合同对账（起跳 tick 的地面摩擦吞一半冲量，谁偷都补回
  * 来）、落地把余速收到走路量级（带着跳劲冲线就是从桥尾另一头冲下去）。
  */
-final class LeapFlight {
+public final class LeapFlight {
     /** 滞空每 tick 的自然衰减（原版空气阻力），弧线合同按它算。
-     *  包内共享：{@code Leaper} 的起跳配速解的是同一条弧线。 */
-    static final double AIR_DRAG = 0.91D;
+     *  包内共享：{@code Leaper} 的起跳配速解的是同一条弧线；数值本身
+     *  以 {@code BallisticArc} 为唯一来源——图、执行、扫掠仿真三处必须
+     *  同一套物理，否则"图连了边执行走不过"的两张皮就会回来。 */
+    static final double AIR_DRAG = BallisticArc.HORIZONTAL_DRAG;
 
     /** 起跳后一直没离地就放弃锁定的时限（卡在什么东西上了）。 */
     private static final int GIVE_UP_TICKS = 30;
@@ -38,23 +41,23 @@ final class LeapFlight {
     private boolean aloft;
     private int since;
 
-    LeapFlight(Mob mob, SureFootedNavigation nav) {
+    public LeapFlight(Mob mob, SureFootedNavigation nav) {
         this.mob = mob;
         this.nav = nav;
     }
 
-    boolean locked() {
+    public boolean locked() {
         return aim != null;
     }
 
     /** 上落点锁：滞空转向从此只认这一个点，落地才解。 */
-    void lock(BlockPos landing, double speed, double dirX, double dirZ) {
+    public void lock(BlockPos landing, double speed, double dirX, double dirZ) {
         lock(new Vec3(landing.getX() + 0.5D, landing.getY(),
                 landing.getZ() + 0.5D), speed, dirX, dirZ);
     }
 
     /** 亚格瞄点版：穿缝的跳落在车道坐标上，不落格心。 */
-    void lock(Vec3 landing, double speed, double dirX, double dirZ) {
+    public void lock(Vec3 landing, double speed, double dirX, double dirZ) {
         this.aim = landing;
         this.speed = speed;
         this.dirX = dirX;
@@ -64,7 +67,24 @@ final class LeapFlight {
     }
 
     /** 滞空期间落点锁死；落地（或落水——水接住也算到）收腿后解锁。 */
-    void steer() {
+    public void steer() {
+        // **没起飞的锁到点就撤，而且要第一个判**：迈步被挡、人根本没离
+        // 地时，若锁的落点恰在脚下近处，下面的下行刹车分支会每 tick 提
+        // 前返回，超时解锁永远轮不到——锁死整场（栅栏圈实测：note=flight
+        // 挂九百四十 tick，路都清了锁还在）。
+        if (!aloft && mob.onGround()
+                && mob.tickCount - since > GIVE_UP_TICKS) {
+            aim = null;
+            return;
+        }
+        // **滞空侧也要有超时**：卡骑在栏杆上、嵌在栅栏拐角里的姿态
+        // onGround 恒假，上面的地面超时永远不触发，下行刹车分支每 tick
+        // 提前返回——锁挂整场（栅栏圈实测 note=flight 九百四十 tick）。
+        // 最长的弧线合同二十来 tick，滞空翻三倍还没落就不是在飞。
+        if (mob.tickCount - since > GIVE_UP_TICKS * 2) {
+            aim = null;
+            return;
+        }
         if (!mob.onGround() && !mob.isInWater()) {
             aloft = true;
             restoreTheArc();

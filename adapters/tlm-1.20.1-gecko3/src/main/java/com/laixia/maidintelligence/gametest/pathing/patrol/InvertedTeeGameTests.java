@@ -7,6 +7,7 @@ import com.laixia.maidintelligence.gametest.support.PathwalkTrace;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.behavior.EntityTracker;
@@ -49,40 +50,28 @@ public final class InvertedTeeGameTests {
     }
 
     /** 缺口两格、主人站在横杠东端：玩家说这个不出问题。 */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            batch = "invertedtee", timeoutTicks = 560,
-            attempts = 4, requiredSuccesses = 4)
-    public static void overTheTeeBeyondATwoGapWithHimOnTheBar(
+    static void overTheTeeBeyondATwoGapWithHimOnTheBar(
             GameTestHelper helper
     ) {
         teeRun(helper, 2, false, "tee gap2 on-bar");
     }
 
     /** 缺口三格、主人站在横杠东端。 */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            batch = "invertedtee", timeoutTicks = 560,
-            attempts = 4, requiredSuccesses = 4)
-    public static void overTheTeeBeyondAThreeGapWithHimOnTheBar(
+    static void overTheTeeBeyondAThreeGapWithHimOnTheBar(
             GameTestHelper helper
     ) {
         teeRun(helper, 3, false, "tee gap3 on-bar");
     }
 
     /** 缺口两格、主人在结构外的半空——她够不着他，只能贴到最近的点。 */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            batch = "invertedtee", timeoutTicks = 560,
-            attempts = 4, requiredSuccesses = 4)
-    public static void overTheTeeBeyondATwoGapWithHimOffTheStructure(
+    static void overTheTeeBeyondATwoGapWithHimOffTheStructure(
             GameTestHelper helper
     ) {
         teeRun(helper, 2, true, "tee gap2 off-structure");
     }
 
     /** 缺口三格、主人在结构外：玩家实机的那一格，预期这里复现"必掉"。 */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            batch = "invertedtee", timeoutTicks = 560,
-            attempts = 4, requiredSuccesses = 4)
-    public static void overTheTeeBeyondAThreeGapWithHimOffTheStructure(
+    static void overTheTeeBeyondAThreeGapWithHimOffTheStructure(
             GameTestHelper helper
     ) {
         teeRun(helper, 3, true, "tee gap3 off-structure");
@@ -173,5 +162,26 @@ public final class InvertedTeeGameTests {
                             + String.format("%.2f", reached) + "）；" + diary);
             helper.succeed();
         });
+    }
+
+    /** 多连钉并行展开（语义不变，墙钟除以连数），见 {@code BridgePatrol.spread}。 */
+    @GameTestGenerator
+    public static java.util.Collection<net.minecraft.gametest.framework
+            .TestFunction> invertedTeeRuns() {
+        java.util.List<net.minecraft.gametest.framework.TestFunction> runs =
+                new java.util.ArrayList<>();
+        PinSpread.spread(runs, "invertedtee", 4, 560,
+                "overtheteebeyondatwogapwithhimonthebar",
+                InvertedTeeGameTests::overTheTeeBeyondATwoGapWithHimOnTheBar);
+        PinSpread.spread(runs, "invertedtee", 4, 560,
+                "overtheteebeyondathreegapwithhimonthebar",
+                InvertedTeeGameTests::overTheTeeBeyondAThreeGapWithHimOnTheBar);
+        PinSpread.spread(runs, "invertedtee", 4, 560,
+                "overtheteebeyondatwogapwithhimoffthestructure",
+                InvertedTeeGameTests::overTheTeeBeyondATwoGapWithHimOffTheStructure);
+        PinSpread.spread(runs, "invertedtee", 4, 560,
+                "overtheteebeyondathreegapwithhimoffthestructure",
+                InvertedTeeGameTests::overTheTeeBeyondAThreeGapWithHimOffTheStructure);
+        return runs;
     }
 }

@@ -54,6 +54,12 @@ public final class PathwalkTrace {
 
     /** 记这一 tick；没变化且心跳未到就什么都不写。 */
     public void sample(long tick, EntityMaid maid) {
+        // 实时面板顺手喂一帧：无头测试的位置与动作供词开一扇实时的窗。
+        com.laixia.maidintelligence.gametest.support.live.LiveBoard.post(
+                name, zero, maid,
+                maid.getNavigation() instanceof com.laixia.maidintelligence
+                        .feature.behavior.tlm.pathing.SureFootedNavigation
+                        sure ? sure.pathwalkNote() : "-");
         PathNavigation nav = maid.getNavigation();
         Path path = nav.getPath();
         String note = nav instanceof SureFootedNavigation sure

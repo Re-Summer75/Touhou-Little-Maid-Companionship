@@ -68,6 +68,11 @@ final class SegmentedPathwalk {
         this.leaper = new Leaper(mob, nav, this.flight, this.lane);
     }
 
+    /** 新执行器要共用同一把飞行锁（滞空归属唯一）。 */
+    LeapFlight flight() {
+        return flight;
+    }
+
     /** 崖边看护的统一入口，顺手记账。 */
     private void watchHerStep(boolean hasPath) {
         if (guard.watch(hasPath)) {
@@ -167,11 +172,15 @@ final class SegmentedPathwalk {
             note = "climb";
             climbs++;
             climbSegment(node, here, toX, toZ, flat);
-        } else if (FootingRule.tallAtCenter(mob.level(), here)
+        } else if (FootingRule.unclimbableAtCenter(mob.level(), here)
                 && lane.holdTheLane(here,
                         Integer.signum(dx), Integer.signum(dz))) {
-            // 身在被占格（贴边窄带上，柱在身边）：先沿车道出格——普通走段
-            // 瞄格心直线，正对柱面，进了格就推不动（窄道柱读数带实测 t13）。
+            // 身在被占格的**贴边窄带**上（跳不上去的柱在身边）：先沿车道
+            // 出格——普通走段瞄格心直线，正对柱面，进了格就推不动（窄道
+            // 柱读数带实测 t13）。判据是"跳也上不去"（>1.2），不是"高过
+            // 半格"：石锥、烛这类可踩台面她是站在顶上赶路的，挤缝的每一
+            // 次侧移都是把她从柱顶往缝里推（第一版用脚高豁免，被石锥的随
+            // 机偏移浮点漏掉——十连并行实测两成回程被推出侧沿）。
             note = "squeeze";
         } else if (lane.holdTheNarrowWalk(here, node, dx, dz)) {
             // 一格宽的梁上偏出了车道：先回中线。移动控制朝她的朝向推，而掉
@@ -182,6 +191,18 @@ final class SegmentedPathwalk {
             // 图上能走、身子过不去，走过去就是顶着它站到看门狗咬。
             note = "sill-hop";
             hops++;
+        } else if (dy >= -1 && dy <= 0 && span >= 1 && span <= 3
+                && flat >= 0.35D && flat <= 3.5D && mob.onGround()
+                && FootingRule.slimPillar(mob.level()
+                        .getBlockState(here.below())
+                        .getCollisionShape(mob.level(), here.below()))) {
+            // 站在细柱顶上（末地烛、石锥）：四面都是崖边看护眼里的沿，
+            // 走段每一步都被刹回来，人就地打转（实机：站烛顶 descend 旋
+            // 转不下来）。离柱只有一种走法——带锁小跳，跟唇沿带路小跳同
+            // 一记：短弧、落点锁、落地收速。
+            note = "perch-hop";
+            hops++;
+            rescue.hopOffTheLip(node, dy, toX, toZ, flat);
         } else if (dy == -1 && span == 1 && leaper.stepDownOntoAShortLanding(
                 node, dx, dz, toX, toZ, flat)) {
             // 下一格，可落点只有一格长：锁住走。不锁的话那半秒滞空里她带着
@@ -248,11 +269,25 @@ final class SegmentedPathwalk {
             double toZ = aim.z - mob.getZ();
             double flat = Math.hypot(toX, toZ);
             boolean atLevel = Math.abs(mob.getY() - node.getY()) < 1.0D;
-            if (flat <= NODE_TOLERANCE && atLevel) {
+            // 到位判据随**支撑窄度**收紧：0.35 的松量在 0.6 以上的走面
+            // 是安全切角，在四分之一格的杆面上就是四十五度切进虚空的斜
+            // 线（玩家实测：慢速在烛桥转角必掉，奔跑靠惯性压杆反而过）。
+            // 杆面上要几乎踩到格心才算到，转弯就发生在杆的交点上。
+            double breadth = Math.min(
+                    FootingRule.supportBreadth(mob.level(),
+                            mob.blockPosition(), mob.getY(), 0.15D),
+                    FootingRule.supportBreadth(mob.level(), node,
+                            node.getY(), 0.75D));
+            double tolerance = breadth < 0.5D
+                    ? Math.min(NODE_TOLERANCE, breadth / 2.0D + 0.05D)
+                    : NODE_TOLERANCE;
+            if (flat <= tolerance && atLevel) {
                 path.advance();
                 continue;
             }
-            if (atLevel && flat <= 1.2D
+            // "已路过"的宽松销账只配宽走面：窄杆上它就是提前一格转弯的
+            // 授权书，斜线的另一半正是它签的。
+            if (breadth >= 0.5D && atLevel && flat <= 1.2D
                     && path.getNextNodeIndex() + 1 < path.getNodeCount()) {
                 Node after = path.getNode(path.getNextNodeIndex() + 1);
                 double aheadX = after.x - node.getX();
@@ -296,6 +331,19 @@ final class SegmentedPathwalk {
     /** 走段：目标是节点的瞄点——格心，或被高柱占的格的贴边点（同一把尺）。 */
     private void walkTowards(BlockPos node) {
         Vec3 aim = FootingRule.aimPoint(mob.level(), node);
+        // **贴身死区**：目标已在两分格内就什么都不写。原版移动控制的
+        // MOVE_TO 每 tick 无条件朝目标拧朝向，贴身距离内方向角是病态的
+        // ——差半毫米 atan2 就翻一百八十度，谁在贴身距离里持续写目标谁
+        // 就把她拧成陀螺（玩家点名：原版寻路在平地也这么转）。它的另一
+        // 半性质是仁慈的：每 tick 自动回落 WAIT，没人写就静止——死区不
+        // 是"写一个停"，是**不写**。两分格小于到位判据（0.35），正常赶
+        // 路永远进不了死区，只有终点贴身那几 tick 会安静下来。
+        // 死区必须**小于最紧的判到圈**（窄杆上判到收到 0.175）：曾取
+        // 0.2，她在烛顶走到 0.2 先被死区停住、永远进不了 0.175 的判到
+        // 圈，卡在两数之间的缝里（中继钉实测 stall 在距格心 0.20 处）。
+        if (Math.hypot(aim.x - mob.getX(), aim.z - mob.getZ()) < 0.12D) {
+            return;
+        }
         mob.getMoveControl().setWantedPosition(
                 aim.x, node.getY(), aim.z, nav.pace()
         );

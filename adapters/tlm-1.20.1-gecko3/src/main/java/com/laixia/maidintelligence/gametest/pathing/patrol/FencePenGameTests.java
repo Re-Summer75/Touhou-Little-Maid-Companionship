@@ -7,6 +7,7 @@ import com.laixia.maidintelligence.gametest.support.PathwalkTrace;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.behavior.EntityTracker;
@@ -40,11 +41,11 @@ public final class FencePenGameTests {
     }
 
     /** 开口在她背后那一面：直着走撞墙，得整个绕过去。 */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            batch = "fencepen", timeoutTicks = 960,
-            attempts = 4, requiredSuccesses = 4)
-    public static void outOfTheFencePenSheFindsTheGap(GameTestHelper helper) {
-        for (int x = 0; x <= 14; x++) {
+    static void outOfTheFencePenSheFindsTheGap(GameTestHelper helper) {
+        // 西沿多铺两列：她出西口绕外围回东时贴着场西走，原来只有两格余
+        // 地，偶发一步踏出场沿掉下去（rel −0.6 的 dropoff 摔，三十八轮里
+        // 闪过三回）。绕行的地就该够绕。
+        for (int x = -2; x <= 14; x++) {
             for (int z = 0; z <= 12; z++) {
                 helper.setBlock(new BlockPos(x, DECK, z), Blocks.STONE);
             }
@@ -85,10 +86,7 @@ public final class FencePenGameTests {
      * <p>（我一度把这道题判成无解并改掉了场景，理由是"对角空隙只有 0.53
      * 格"——那个数算错了：斜穿不从格心走。记在这里。）
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            batch = "fencepen", timeoutTicks = 960,
-            attempts = 4, requiredSuccesses = 4)
-    public static void outOfAWidePenSheCutsTheCornerGap(
+    static void outOfAWidePenSheCutsTheCornerGap(
             GameTestHelper helper
     ) {
         for (int x = -2; x <= 16; x++) {
@@ -122,10 +120,7 @@ public final class FencePenGameTests {
      * 看着。落点降一层之后，她要先走到角点、再落下去，所以落点头顶那一格
      * 也得让身子过得去。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            batch = "fencepen", timeoutTicks = 960,
-            attempts = 4, requiredSuccesses = 4)
-    public static void outOfAPenWhoseCornerGapDropsAStep(
+    static void outOfAPenWhoseCornerGapDropsAStep(
             GameTestHelper helper
     ) {
         // 圈内与东南半边在 DECK；西北角外整片矮一格。
@@ -160,18 +155,32 @@ public final class FencePenGameTests {
      * 反向：从矮的那片地**斜着上一格进圈**（玩家实测："出来可以，但进去
      * 就不行"）。出得来就得进得去——坎这种地形两边都要走。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            batch = "fencepen", timeoutTicks = 960,
-            attempts = 4, requiredSuccesses = 4)
-    public static void intoAPenWhoseCornerGapStepsUp(
+    static void intoAPenWhoseCornerGapStepsUp(
             GameTestHelper helper
     ) {
+        // 场地 z 只许铺 0..12：棋盘的 z 步长是十三，写到 z16 就是把方块
+        // 写进**邻场的领地**——本场的 z16 屏障墙恰好横贯 z+13 邻场的
+        // rel z3 线，把那场栅栏圈唯一的缺角门槛封死（缺角钉 run2/3 稳定
+        // 红、run1/4 绿，红绿只由棋盘上谁的邻位有人决定；追了预算、对角
+        // 登阶两条歧路才用方块名矩阵拍到 Barrier 的脸）。
         for (int x = -2; x <= 16; x++) {
-            for (int z = -2; z <= 16; z++) {
+            for (int z = 0; z <= 12; z++) {
                 boolean outsideNorthWest = x < 3 || z < 3;
                 helper.setBlock(new BlockPos(x,
                         outsideNorthWest ? DECK - 1 : DECK, z),
                         Blocks.STONE);
+                // 场沿围一圈两高的屏障。真实地形在场外延绵不断，这里却是
+                // 铺地的尽头——旧的测试世界是正常地形，场腔外的岩壁恰好替
+                // 场景堵住了这条边；换成平坦虚空后她真的从西沿掉了下去
+                // （drops=1），摔在低两格的世界地表上再也爬不回来，考题
+                // 就变味了。围墙不是限制她，是补回"这块地没有尽头"。
+                boolean rim = x == -2 || x == 16 || z == 0 || z == 12;
+                if (rim) {
+                    helper.setBlock(new BlockPos(x, DECK + 1, z),
+                            Blocks.BARRIER);
+                    helper.setBlock(new BlockPos(x, DECK + 2, z),
+                            Blocks.BARRIER);
+                }
             }
         }
         for (int x = 3; x <= 11; x++) {
@@ -195,10 +204,7 @@ public final class FencePenGameTests {
     }
 
     /** 缺角与圈内同高（整块平台，圈外矮）：原版自己连得上，这条该绿。 */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            batch = "fencepen", timeoutTicks = 960,
-            attempts = 3, requiredSuccesses = 3)
-    public static void intoACornerGapLevelWithThePen(
+    static void intoACornerGapLevelWithThePen(
             GameTestHelper helper
     ) {
         intoTheCornerGap(helper, false, "corner level with pen");
@@ -219,10 +225,7 @@ public final class FencePenGameTests {
      * <p>判据也换了：必须**进到圈内**。绕到栅栏外面贴着主人站，离圈心的距
      * 离一样近——按距离判，失败的样子会被判成通过。
      */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            batch = "fencepen", timeoutTicks = 960,
-            attempts = 3, requiredSuccesses = 3)
-    public static void intoACornerGapNotchedDownToTheOutside(
+    static void intoACornerGapNotchedDownToTheOutside(
             GameTestHelper helper
     ) {
         intoTheCornerGap(helper, true, "corner notched down");
@@ -318,5 +321,32 @@ public final class FencePenGameTests {
         BlockPos zero = helper.absolutePos(BlockPos.ZERO);
         return new Vec3(zero.getX() + x, zero.getY() + DECK + 1.0D,
                 zero.getZ() + z);
+    }
+
+    /** 多连钉并行展开（语义不变，墙钟除以连数），见 {@code BridgePatrol.spread}。 */
+    @GameTestGenerator
+    public static java.util.Collection<net.minecraft.gametest.framework
+            .TestFunction> fencePenRuns() {
+        java.util.List<net.minecraft.gametest.framework.TestFunction> runs =
+                new java.util.ArrayList<>();
+        PinSpread.spread(runs, "fencepen", 4, 960,
+                "outofthefencepenshefindsthegap",
+                FencePenGameTests::outOfTheFencePenSheFindsTheGap);
+        PinSpread.spread(runs, "fencepen", 4, 960,
+                "outofawidepenshecutsthecornergap",
+                FencePenGameTests::outOfAWidePenSheCutsTheCornerGap);
+        PinSpread.spread(runs, "fencepen", 4, 960,
+                "outofapenwhosecornergapdropsastep",
+                FencePenGameTests::outOfAPenWhoseCornerGapDropsAStep);
+        PinSpread.spread(runs, "fencepen", 4, 960,
+                "intoapenwhosecornergapstepsup",
+                FencePenGameTests::intoAPenWhoseCornerGapStepsUp);
+        PinSpread.spread(runs, "fencepen", 3, 960,
+                "intoacornergaplevelwiththepen",
+                FencePenGameTests::intoACornerGapLevelWithThePen);
+        PinSpread.spread(runs, "fencepen", 3, 960,
+                "intoacornergapnotcheddowntotheoutside",
+                FencePenGameTests::intoACornerGapNotchedDownToTheOutside);
+        return runs;
     }
 }

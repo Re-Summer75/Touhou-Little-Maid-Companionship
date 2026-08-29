@@ -420,6 +420,41 @@ def cleanGameTestWorld = tasks.register('cleanGameTestWorld', Delete) {
     delete new File(gameTestRunDir, 'world')
 }
 
+// 测试世界必须是无结构的平坦世界。默认的 normal 世界把棋盘放进深板岩层
+// 的洞穴带——繁茂洞穴与含水层贴着场腔外壁，种子随机决定哪一轮漏水进场
+// （"幽灵高水"：她在没放过水的场里 isInWater，猎源仪追到 y=-32 的洞穴水
+// 柱、顶上是苔藓块才定的案）。世界每轮删档重建，这份 properties 就是唯
+// 一的闸；它不进 git，所以在这里固化。
+def prepareGameTestServerProperties = tasks.register(
+        'prepareGameTestServerProperties'
+) {
+    doLast {
+        def props = new File(gameTestRunDir, 'server.properties')
+        def wanted = [
+                'level-type'         : 'minecraft\\:flat',
+                'generator-settings' : '{}',
+                'generate-structures': 'false',
+        ]
+        def lines = props.exists() ? props.readLines('UTF-8') : []
+        def seen = [] as Set
+        lines = lines.collect { line ->
+            def key = wanted.keySet().find { line.startsWith(it + '=') }
+            if (key == null) {
+                return line
+            }
+            seen << key
+            return key + '=' + wanted[key]
+        }
+        wanted.each { key, value ->
+            if (!seen.contains(key)) {
+                lines << key + '=' + value
+            }
+        }
+        props.parentFile.mkdirs()
+        props.write(lines.join('\n') + '\n', 'UTF-8')
+    }
+}
+
 def prepareGameTestStructures = tasks.register(
         'prepareGameTestStructures',
         Copy
@@ -430,7 +465,8 @@ def prepareGameTestStructures = tasks.register(
 
 tasks.configureEach {
     if (name == 'runGameTestServer') {
-        dependsOn cleanGameTestWorld, prepareGameTestStructures
+        dependsOn cleanGameTestWorld, prepareGameTestStructures,
+                prepareGameTestServerProperties
     }
 }
 

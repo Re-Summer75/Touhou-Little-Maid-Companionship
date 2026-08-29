@@ -1,5 +1,6 @@
 package com.laixia.maidintelligence.feature.behavior.tlm.pathing;
 
+import com.laixia.maidintelligence.feature.behavior.tlm.pathing.sweep.LeapContract;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
@@ -18,23 +19,10 @@ final class Leaper {
     /** 调用方该转走路段的哨兵返回值。 */
     static final String WALK = "walk-instead";
 
-    /** 起跳竖直速度：原版 jumpFromGround 的数。不走 JumpControl——noJumpDelay
-     *  会吞掉落地十 tick 内第二跳的竖直分量，只剩水平推力等于平推下缺口。
-     *  包内共享：{@code LipRescue} 的小跳同一个数。 */
-    static final double JUMP_RISE = 0.42D;
-
-    /** 同层起跳的滞空时长（tick）：起跳 0.42、重力 0.08 的弹道回到同一高度。 */
-    private static final double AIRBORNE_TICKS = 11.3D;
-
-    /** 落一格的滞空时长：同一条弹道再落一格。 */
-    private static final double DESCENT_TICKS = 13.4D;
-
-    /** 上一格的滞空时长：取上升段那一档——落点要在弧顶前够着，不是等它掉
-     *  回来（弧顶在第五 tick、一格二五，从下面数第三 tick 就过了一格）。 */
-    private static final double ASCENT_TICKS = 7.5D;
-
-    /** 配速余量：起跳晚一 tick、助跑差半格这类时序抖动的零头。 */
-    private static final double LEAP_MARGIN = 1.05D;
+    /** 起跳竖直速度；数在 {@code LeapContract}，包内旧引用走这个转发。
+     *  不走 JumpControl——noJumpDelay 会吞掉落地十 tick 内第二跳的竖直分
+     *  量，只剩水平推力等于平推下缺口。 */
+    static final double JUMP_RISE = LeapContract.JUMP_RISE;
 
     /**
      * 门槛跳的前速。
@@ -44,10 +32,6 @@ final class Leaper {
      * 距离老实配速（约 0.14）在那五 tick 里只能挪半格，够不着门板另一侧。
      */
     private static final double SILL_PUSH = 0.30D;
-
-    /** 推力上限：贴边起跳的满冲刺玩家量级。跨三格缺口按真实弹道要 0.58，
-     *  够不着就是够不着——封在这里，落点近沿仍在射程内（0.5 能走三格六）。 */
-    private static final double MAX_LEAP_SPEED = 0.50D;
 
     private final Mob mob;
     private final SureFootedNavigation nav;
@@ -173,7 +157,7 @@ final class Leaper {
             // 对柱面，推九十 tick 也推不动（读数带实测）。侧向锁进车道、
             // 沿行进轴推进，过了柱崖边探针自然放行起跳。
             BlockPos hereCell = mob.blockPosition();
-            if (FootingRule.coversCenter(mob.level(), hereCell)
+            if (FootingRule.unclimbableAtCenter(mob.level(), hereCell)
                     && lane.holdTheLane(hereCell, dx, dz)) {
                 return "squeeze";
             }
@@ -208,21 +192,15 @@ final class Leaper {
         double tx = aimLanding.x - mob.getX();
         double tz = aimLanding.z - mob.getZ();
         double tf = Math.max(0.3D, Math.hypot(tx, tz));
-        // 起跳配速：解真实弹道（见 paceFor），滞空时长按落差取，推力按瞄点
-        // 给足。
+        // 起跳配速：解真实弹道（{@code LeapContract.paceFor}），滞空时长按
+        // 落差取，推力按瞄点给足。
         //
         // 这里曾按"落点再往前没有地板就收推力"削过一刀（孤台过冲即坠的直
         // 觉）。**那是替系统性欠冲背了黑锅**：线性配速下她本来就贴着落点近
         // 沿落地，再削就是欠冲进缝——step-island 的第一跳被削到 0.2 下限，
         // 十三 tick 只走一格七，悬在 3.7 坠落，孤柱西沿在 4.0。孤台该收的
         // 是瞄点（上面那段），推力这一端不克扣。
-        double leap = Math.min(
-                MAX_LEAP_SPEED,
-                Math.max(0.2D, LEAP_MARGIN * paceFor(tf,
-                        dy == 1 ? ASCENT_TICKS
-                                : dy == -1 ? DESCENT_TICKS
-                                : AIRBORNE_TICKS))
-        );
+        double leap = LeapContract.launchSpeed(tf, dy);
         takeoff(tx / tf * leap, tz / tf * leap,
                 aimLanding, leap, tx / tf, tz / tf);
         return "leap";
@@ -276,31 +254,12 @@ final class Leaper {
         double lane = Math.max(flat, 1.0E-3D);
         double push = flat < 0.05D
                 ? 0.0D
-                : Math.max(0.12D, Math.min(0.18D, flat / 12.0D));
+                : LeapContract.dropPushFor(flat);
         Vec3 motion = mob.getDeltaMovement();
         mob.setDeltaMovement(toX / lane * push, motion.y, toZ / lane * push);
         flight.lock(node, push, toX / lane, toZ / lane);
         drops++;
         return "dropoff";
-    }
-
-    /**
-     * 要在 {@code ticks} tick 内飞过 {@code distance} 格，起跳该有多快。
-     *
-     * <p>**空气阻力是复利，不是折扣**：滞空第 t tick 的水平速度是初速乘
-     * 0.91 的 t 次方（{@code LeapFlight} 的弧线合同就按它对账），走过的路
-     * 是那串等比数列的和 <code>v(1-0.91^t)/0.09</code>，不是 v·t。按 v·t
-     * 配速就系统性欠冲：同层短一成七、落一格短两成六、上一格短两成五。
-     *
-     * <p>那份欠冲从前由几个"过冲余量"常数（1.25、1.35）遮着，而余量遮不
-     * 住的部分一直在实机里现形——她贴着落点**近沿**落地，脚滑的余地全在
-     * 那半格里，落点越短越险。玩家三次报的"跑酷太容易摔跤"就是它；读数
-     * 带 t35 把它按住：初速 0.20，十三 tick 只走一格七，人悬在 3.7，孤柱
-     * 西沿在 4.0。
-     */
-    private static double paceFor(double distance, double ticks) {
-        return distance * (1.0D - LeapFlight.AIR_DRAG)
-                / (1.0D - Math.pow(LeapFlight.AIR_DRAG, ticks));
     }
 
     /**

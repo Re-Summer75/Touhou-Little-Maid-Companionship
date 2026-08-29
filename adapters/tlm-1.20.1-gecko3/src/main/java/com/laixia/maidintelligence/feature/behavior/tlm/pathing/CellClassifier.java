@@ -76,12 +76,44 @@ final class CellClassifier {
                 && !standableBelow(level, pos)) {
             return BlockPathTypes.OPEN;
         }
+        // 第三个口子：**高台面格**（末地烛、避雷针这类）被宿主一律判
+        // BLOCKED——碰撞高过半格就算墙。可柱顶、床面、箱盖都站得住人，
+        // 只是要跳上去；跑酷图里柱顶就是要踩的中继（玩家实测点名："有不
+        // 完整方块不代表不可以站或过"）。按碰撞形状整类还原成可走——她
+        // 站在这种格里脚踩台面（地板语义见评估器的 getFloorLevel，给的是
+        // 真实顶面），落不落得上由扫掠仿真终审把关，这里只负责不把路判死。
+        //
+        // （此处曾反着写过一版：柱格一律改判 BLOCKED。那是把执行侧自救乱
+        // 舞的病投影到图上——她当年摔是图不认站位、sidestep 在柱旁 0.31
+        // 的缝里把她蹭下去，不是柱顶站不住。碑留此。）
+        if (type == BlockPathTypes.BLOCKED
+                && FootingRule.perchTop(level.getBlockState(pos)
+                        .getCollisionShape(level, pos))) {
+            return BlockPathTypes.WALKABLE;
+        }
         return type;
     }
 
-
-    /** 下方那格是不是真能站人。 */
+    /**
+     * 下方那格是不是真能站人——**给"这一格悬空、靠下面托底"的晋升用**。
+     *
+     * <p>盖住格心还不够，还得看下面那格的顶托在哪儿。细高柱按**顶面在哪
+     * 层**分家：石锥顶 0.69 探不出柱格，站顶的人脚在柱格自己的高度里——
+     * 节点属于柱格（它自己按高台面改判成可走），上格不晋升（拒的不是"站
+     * 不住"，是"节点安错了格"）；**末地烛顶恰在一格整**，站顶的人脚踩
+     * y=1.0、按方块归属已在上格里——上格就是该晋升的那格，烛顶就是它的
+     * 地板（玩家实测的中继跳，节点归属错一格边就连不出来）。
+     */
     private static boolean standableBelow(BlockGetter level, BlockPos pos) {
-        return FootingRule.coversCenter(level, pos.below());
+        VoxelShape below = level.getBlockState(pos.below())
+                .getCollisionShape(level, pos.below());
+        if (!FootingRule.coversCenter(below)) {
+            return false;
+        }
+        // （"顶过半格的支撑上格不晋升"的归属律曾在这里试过一刀，横杆桥
+        // 全族当场断连——旧图的连通隐式依赖上格双表达，动不得。归属唯一
+        // 性由自有寻路引擎（voxel/）原生保证，旧图冻结现状。）
+        return !FootingRule.slimPillar(below)
+                || below.max(Direction.Axis.Y) >= 0.99D;
     }
 }

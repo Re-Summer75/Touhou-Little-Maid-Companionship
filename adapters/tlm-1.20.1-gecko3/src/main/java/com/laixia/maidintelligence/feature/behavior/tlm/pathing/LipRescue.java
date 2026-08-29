@@ -62,11 +62,26 @@ final class LipRescue {
         if (mob.isInWater()) {
             return false;
         }
-        return !FootingRule.coversCenter(mob.level(), feetCell)
-                && !FootingRule.coversCenter(
-                        mob.level(), feetCell.below())
-                && !FootingRule.coversCenter(
-                        mob.level(), feetCell.below(2));
+        // **滞空也不是站在唇沿上。**"脚下三格没支撑"在空中恒真——她跳
+        // 烛顶的半路残了一次路，盲跳就把好好的弧改写成侧向乱跳（中继钉
+        // Leg2 实测 note=lip 摔在 z3.6）。自救只对"站着"成立，跳到一半
+        // 的交给落点锁和重力。
+        if (!mob.onGround()) {
+            return false;
+        }
+        // 柱顶（石锥、末地烛）不再算唇沿：图如今认这个站位（perchTop 分
+        // 类+真顶地板），站柱顶是有路可铺的正规立足，盲跳反而会把中继跳
+        // 废掉（跑酷图的柱顶就是要踩的中继，玩家实测点名）。当年"栖柱乱
+        // 舞摔"的病根是图不认位置时的自救乱动，路一通自救就不该再插手。
+        return lipAt(feetCell)
+                && lipAt(feetCell.below())
+                && lipAt(feetCell.below(2));
+    }
+
+    /** 这一格接不住站在格心的人：什么都没盖住格心。 */
+    private boolean lipAt(BlockPos pos) {
+        return !FootingRule.coversCenter(mob.level()
+                .getBlockState(pos).getCollisionShape(mob.level(), pos));
     }
 
     /** 路还活着：死完路计时清零。 */
@@ -185,6 +200,19 @@ final class LipRescue {
         if (sidestepAliveFreeze(branch)) {
             return "sidestep";
         }
+        // 栖在细柱顶、路铺不出、侧移又无处可去（孤柱四邻皆空）：**站稳
+        // 待命**。上层的跟随目标还在每 tick 推移动控制，微推与柱面弹回把
+        // 她搓成原地陀螺（实机：主人站在不可达处，她在末地烛顶不断旋
+        // 转）。停灯清速，人站定面向主人，等他回到可达域路自然就活。
+        if (mob.onGround() && FootingRule.slimPillar(mob.level()
+                .getBlockState(here.below())
+                .getCollisionShape(mob.level(), here.below()))) {
+            mob.getMoveControl().setWantedPosition(
+                    mob.getX(), mob.getY(), mob.getZ(), 0.0D);
+            var motion = mob.getDeltaMovement();
+            mob.setDeltaMovement(0.0D, motion.y, 0.0D);
+            return "perch-park";
+        }
         if (!here.equals(doneSpot)) {
             doneSpot = here;
             doneSince = 0;
@@ -214,6 +242,12 @@ final class LipRescue {
         if (dy < -1 || dy > 1 || flat < 0.35D || flat > 2.0D
                 || !FootingRule.coversCenter(
                         mob.level(), node.below())) {
+            // 带路小跳够不着（节点太远/太高）不等于没得救：静默返回会吞
+            // 掉这一 tick 的一切接管，她带着残速站在唇沿上自然溜出沿（中
+            // 继钉回程实测：脚的方块坐标漂进台条旁的挂格、lip 分支空转四
+            // tick、vy −0.16 坠落）。降级为就近盲跳——邻格里有真地板就
+            // 跳回去。
+            hopToAnyFooting(mob.blockPosition());
             return;
         }
         double rise = dy < 0 ? 0.25D : Leaper.JUMP_RISE;
