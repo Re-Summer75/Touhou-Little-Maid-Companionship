@@ -352,21 +352,6 @@ public final class StrideWalker {
         // b0.43 → approach t0.40 → regroup b0.43 → …，每次起跳前都要
         // 空耗几轮，面再窄一点就成了原地不动）。只有**逆着跳向**或横向
         // 偏出去才算走丢；顺着跳向的位移交给贴沿管。
-        double backDist = path.from().standDist(mob.getX(), mob.getZ());
-        double towardX = next.at().x - path.from().at().x;
-        double towardZ = next.at().z - path.from().at().z;
-        double towardLen = Math.hypot(towardX, towardZ);
-        double gained = towardLen < 1.0E-4D ? 0.0D
-                : ((mob.getX() - path.from().at().x) * towardX
-                        + (mob.getZ() - path.from().at().z) * towardZ)
-                        / towardLen;
-        if (backDist > 0.35D && gained <= 0.05D) {
-            double backX = path.from().at().x - mob.getX();
-            double backZ = path.from().at().z - mob.getZ();
-            walk(backX, backZ, Math.hypot(backX, backZ));
-            note = String.format("regroup b%.2f", backDist);
-            return;
-        }
         // 贴沿预走只配**常规面**：窄面（烛顶、杆条）上前挪是自杀——直
         // 驱带着横向漂移，0.125 的条上走两步就滑出侧沿（末地烛中继实测
         // 十副本全摔）。窄面的合同本就按锚心计价、仿真按锚心验收，站着
@@ -408,6 +393,28 @@ public final class StrideWalker {
                 note = String.format("approach t%.2f", toBrink);
                 return;
             }
+        }
+        // 走丢的判定**排在贴沿之后**：两者曾用互不相干的尺子打架——贴
+        // 沿看"前方支撑还有多远"（长平台上她本就该走出两三格），回锚看
+        // "离出发那一格的面多远"（0.35），她一走出那格就被拽回来，于是
+        // approach ↔ regroup 摆上几十秒（立门板案实测）。反过来，用"顺
+        // 跳向不算走丢"去绕，真沿口也不拽她了，她径直走出台沿摔下去（细
+        // 柱案九红）。次序才是答案：先把沿贴完，还偏着才是真偏了。
+        // 走丢＝离出发那一格的支撑面太远。
+        //
+        // 换过三种参照物，都更差：按"脚下有没有支撑"，踩着杆条边沿也算
+        // 有，她从偏心位起跳、跨度短一截（细柱七红）；再加"窄面拢心"仍
+        // 是八红；改按"离这条腿的走廊多远"更糟，十红。原版这把尺子在细
+        // 柱案上一直是零到一红——它虽然在长平台上会和贴沿争几轮（摆动
+        // 的来处，靠次序压住：贴沿先行，贴完才判），但**跳得准**是更贵
+        // 的东西。数据面前不硬扭。
+        double backDist = path.from().standDist(mob.getX(), mob.getZ());
+        if (backDist > 0.35D) {
+            double backX = path.from().at().x - mob.getX();
+            double backZ = path.from().at().z - mob.getZ();
+            walk(backX, backZ, Math.hypot(backX, backZ));
+            note = String.format("regroup b%.2f", backDist);
+            return;
         }
         regroupSince = -1;
         // 初速按**实际站位**重解：launchSpeed 与图侧、仿真同一条弧线方
