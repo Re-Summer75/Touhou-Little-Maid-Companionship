@@ -30,6 +30,29 @@ public final class SweptAcceptance {
     /** 到达语义的水平容差：执行侧按与节点的距离销账，不按落格。 */
     private static final double ARRIVAL_REACH = 0.8D;
 
+    /**
+     * 车道扫描的步长与半幅：1/16 格是 MC 形状的粒度（柱面在 6/16），扫
+     * 到 ±0.625 —— 再远起跳点就悬到支撑外了，站定预演自己会挡住。
+     */
+    private static final double LANE_STEP = 0.0625D;
+
+    private static final int LANE_STEPS = 10;
+
+    /**
+     * 车道最小宽度：**执行侧兑得起才算一条道**。
+     *
+     * <p>判到圈最紧一档是 0.10（{@code standMargin}），也就是她站上车道
+     * 点时垂直方向仍有 ±0.1 的合法游移；车道若比这更窄，图上"能过"、
+     * 人走过去抖一下就撞——挤缝案刚刚交过学费：柱面只剩 5 毫米余量时，
+     * 路铺得再对她也一步迈不动。所以车道不取"某个能过的偏移"，取**可行
+     * 区间最宽那段的中点**，且那段至少要有 0.1875 宽（三档）。
+     */
+    private static final double LANE_ROOM = 3 * LANE_STEP;
+
+    /** 车道起跳点要**站得住**才算数：身位塞得进只说明"没撞上"（贴边锚
+     *  第一版正是栽在这儿），让物理答——原地站三 tick，掉下去就不算。 */
+    private static final int SETTLE_TICKS = 3;
+
     private SweptAcceptance() {
     }
 
@@ -108,34 +131,181 @@ public final class SweptAcceptance {
             double width,
             double height
     ) {
+        return !Double.isNaN(laneFor(level, fromCenterX, fromFloor,
+                fromCenterZ, toX, toFloor, toZ, width, height));
+    }
+
+    /**
+     * 这条跳边**走哪条车道**才落得进去：0 是直线，非零是垂直于跳向的让
+     * 开量（左手侧为正），{@code NaN} 是无论怎么让都过不去。
+     *
+     * <p>让开量不是执行侧的临场微调，是**这条边的合同的一部分**：铺完路
+     * 由 {@code LeapLanes} 展开成两个真实站位（起跳前侧移到位、落到对岸
+     * 的车道点上再走回中线），执行器照常走、照常跳，一行不必改。
+     *
+     * @param fromFloor 起跳格真实脚高（门板 0.1875、台阶 0.5 都按真的算）
+     * @param toFloor   目标格真实地板高
+     */
+    public static double laneFor(
+            BlockGetter level,
+            double fromCenterX,
+            double fromFloor,
+            double fromCenterZ,
+            int toX,
+            double toFloor,
+            int toZ,
+            double width,
+            double height
+    ) {
         double aimX = toX + 0.5D;
         double aimZ = toZ + 0.5D;
         double dirX = aimX - fromCenterX;
         double dirZ = aimZ - fromCenterZ;
         double flat = Math.hypot(dirX, dirZ);
         if (flat < 1.0E-6D) {
-            return false;
+            return Double.NaN;
         }
         dirX /= flat;
         dirZ /= flat;
         int band = (int) Math.round(toFloor - fromFloor);
-        for (double lead : new double[]{BRINK_LEAD, 0.0D}) {
+        // 直线先行：绝大多数跳边走中线就成，一次扫掠了事，车道这一维
+        // 的代价只落在真需要绕的边上。
+        if (flies(level, fromCenterX, fromFloor, fromCenterZ, dirX, dirZ,
+                aimX, aimZ, band, 0.0D, width, height,
+                toX, toFloor, toZ)) {
+            return 0.0D;
+        }
+        // 直线不通，先问一句**为什么**：中线上空空如也的话，飞不到就是
+        // 跨度不够，往旁边让一步同样飞不到——那二十一次弹道纯属白烧。
+        // 车道只对"有东西挡着"的边有意义，而这一问只要几次身位箱查询。
+        if (!blockedAlong(level, fromCenterX, fromFloor, fromCenterZ,
+                dirX, dirZ, flat, width, height)) {
+            return Double.NaN;
+        }
+        // 扫出侧向可行区间。
+        boolean[] open = new boolean[2 * LANE_STEPS + 1];
+        for (int i = 0; i < open.length; i++) {
+            double lane = (i - LANE_STEPS) * LANE_STEP;
+            if (lane == 0.0D) {
+                continue;
+            }
+            open[i] = flies(level, fromCenterX, fromFloor, fromCenterZ,
+                    dirX, dirZ, aimX, aimZ, band, lane, width, height,
+                    toX, toFloor, toZ);
+        }
+        // 最宽那段的中点。
+        int bestFrom = -1;
+        int bestLen = 0;
+        int runFrom = -1;
+        for (int i = 0; i <= open.length; i++) {
+            boolean on = i < open.length && open[i];
+            if (on && runFrom < 0) {
+                runFrom = i;
+            } else if (!on && runFrom >= 0) {
+                if (i - runFrom > bestLen) {
+                    bestLen = i - runFrom;
+                    bestFrom = runFrom;
+                }
+                runFrom = -1;
+            }
+        }
+        if (bestLen * LANE_STEP < LANE_ROOM) {
+            return Double.NaN;
+        }
+        return (bestFrom + (bestLen - 1) / 2.0D - LANE_STEPS) * LANE_STEP;
+    }
+
+    /**
+     * 中线上有没有挡路的东西：半格一探，身位箱撞上任何真实碰撞就算有。
+     *
+     * <p>只探起跳脚高这一层——柱、门板、墙这类立着的障碍从地面长起，脚
+     * 高处必然撞得到；悬空的檐探不到，可那种形状横着挡，让开一步也过不
+     * 去，本就轮不到车道。
+     */
+    private static boolean blockedAlong(
+            BlockGetter level,
+            double fromCenterX,
+            double fromFloor,
+            double fromCenterZ,
+            double dirX,
+            double dirZ,
+            double flat,
+            double width,
+            double height
+    ) {
+        for (double step = 0.5D; step < flat; step += 0.5D) {
+            if (!SweptMotion.bodyClear(level,
+                    new Vec3(fromCenterX + dirX * step, fromFloor,
+                            fromCenterZ + dirZ * step),
+                    width, height)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 这条车道上的弧线飞得成吗：起跳点与瞄点**同时**侧移，整条弧平移进
+     * 侧缝，不是斜着切过去。
+     *
+     * <p>非零车道只认**站着起跳**（lead = 0）：车道点是窄口径站位，执行
+     * 侧不给它贴沿预走（窄面上前挪会滑出侧沿），图这边就不该拿贴沿档去
+     * 放行一条她跳不出来的弧。图与执行同源，这一条不能松。
+     *
+     * <p>落点也按车道判：非零车道的落点本来就故意偏出格心，落格判会把
+     * 每一条都错杀——用执行侧真在用的**到达语义**（与瞄点的距离）。
+     */
+    private static boolean flies(
+            BlockGetter level,
+            double fromCenterX,
+            double fromFloor,
+            double fromCenterZ,
+            double dirX,
+            double dirZ,
+            double aimX,
+            double aimZ,
+            int band,
+            double lane,
+            double width,
+            double height,
+            int toX,
+            double toFloor,
+            int toZ
+    ) {
+        double offX = -dirZ * lane;
+        double offZ = dirX * lane;
+        // 车道点得站得住：身位塞得进只说明"没撞上"（贴边锚第一版正是栽
+        // 在这儿），让物理答——原地站三 tick，掉下去就不算。
+        if (lane != 0.0D && SweptMotion.dropAhead(level,
+                new Vec3(fromCenterX + offX, fromFloor, fromCenterZ + offZ),
+                0.0D, 0.0D, width, height, SETTLE_TICKS) > 0.1D) {
+            return false;
+        }
+        double[] leads = lane == 0.0D
+                ? new double[]{BRINK_LEAD, 0.0D}
+                : new double[]{0.0D};
+        for (double lead : leads) {
             Vec3 start = new Vec3(
-                    fromCenterX + dirX * lead,
+                    fromCenterX + offX + dirX * lead,
                     fromFloor,
-                    fromCenterZ + dirZ * lead);
+                    fromCenterZ + offZ + dirZ * lead);
             // 贴沿前探可能把起点推进障碍体内（锚心 8.5 + 0.4 正落在柱心
             // 上）。嵌着起跳这一档不作数——仿真从墙里出发是答不出阻挡
             // 的，放行的会是一条穿墙的假边。
             if (!SweptMotion.bodyClear(level, start, width, height)) {
                 continue;
             }
-            double distance = Math.hypot(aimX - start.x, aimZ - start.z);
+            double runX = aimX + offX - start.x;
+            double runZ = aimZ + offZ - start.z;
+            double distance = Math.hypot(runX, runZ);
+            if (distance < 1.0E-6D) {
+                continue;
+            }
             double speed = LeapContract.launchSpeed(distance, band);
             SweptMotion.Flight flight = SweptMotion.fly(
                     level, start,
-                    new Vec3(dirX * speed, LeapContract.JUMP_RISE,
-                            dirZ * speed),
+                    new Vec3(runX / distance * speed,
+                            LeapContract.JUMP_RISE, runZ / distance * speed),
                     width, height, true);
             // PERCHED（窄立足：柱顶、烛顶）照收——onGround 物理成立就是
             // 合法落点；"栖在尖上必摔"是图不认站位年代的自救乱舞，不是
@@ -144,9 +314,15 @@ public final class SweptAcceptance {
                 continue;
             }
             Vec3 end = flight.end();
-            if ((int) Math.floor(end.x) == toX
-                    && (int) Math.floor(end.z) == toZ
-                    && Math.abs(end.y - toFloor) <= LANDING_SLACK) {
+            if (Math.abs(end.y - toFloor) > LANDING_SLACK) {
+                continue;
+            }
+            boolean landed = lane == 0.0D
+                    ? (int) Math.floor(end.x) == toX
+                            && (int) Math.floor(end.z) == toZ
+                    : Math.hypot(end.x - (aimX + offX),
+                            end.z - (aimZ + offZ)) <= ARRIVAL_REACH;
+            if (landed) {
                 return true;
             }
         }

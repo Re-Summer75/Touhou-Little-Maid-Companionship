@@ -86,15 +86,24 @@ public final class ParkourGameTests {
         double[] lowest = new double[]{deckFeet};
         double[] farthest = new double[]{maid.getX()};
         boolean[] flewOverGap = new boolean[]{false};
+        // 她**从哪条道过的缺口**：z 约 1.5 是直跳那条，约 2.5 是完好的
+        // 第三条（绕路）。这条红连红四十轮都只说"她没跳"，而"没跳"有三
+        // 种来处——边不成立、定价偏、或者她压根走了别处。前两种已经排
+        // 除（钉子答边成立、量尺算直跳更便宜），剩下的要靠这一条读数。
+        double[] crossZ = new double[]{-1.0D};
+        boolean[] crossGround = new boolean[]{true};
 
         drive(helper, maid, deckFeet, lowest, farthest, () -> {
             double relX = maid.getX()
                     - helper.absolutePos(BlockPos.ZERO).getX();
             double relZ = maid.getZ()
                     - helper.absolutePos(BlockPos.ZERO).getZ();
-            if (relX > 4.05D && relX < 4.95D && relZ < 1.95D
-                    && !maid.onGround()) {
-                flewOverGap[0] = true;
+            if (relX > 4.05D && relX < 4.95D) {
+                crossZ[0] = relZ;
+                crossGround[0] = maid.onGround();
+                if (relZ < 1.95D && !maid.onGround()) {
+                    flewOverGap[0] = true;
+                }
             }
         });
 
@@ -112,7 +121,10 @@ public final class ParkourGameTests {
             helper.assertTrue(
                     flewOverGap[0],
                     "The straight jump was shorter but she took the detour — "
-                            + "parkour-first pricing is off"
+                            + "she crossed the gap at z "
+                            + String.format("%.2f", crossZ[0])
+                            + (crossGround[0] ? " on the ground" : " airborne")
+                            + " (z~1.5 = the jump lane, z~2.5 = the detour)"
             );
             maid.discard();
             helper.succeed();

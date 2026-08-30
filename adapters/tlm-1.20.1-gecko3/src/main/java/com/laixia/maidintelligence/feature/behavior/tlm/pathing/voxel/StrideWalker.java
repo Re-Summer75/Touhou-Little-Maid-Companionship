@@ -21,6 +21,12 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class StrideWalker {
     /** 地面走速（每 tick 位移），随边合同的步速档缩放。 */
+    /**
+     * 走速**下限**：整批测试标定过的那一档。
+     *
+     * <p>实际步速由 {@code flight.paceStep()} 按原版口径算（倍率 × 移动
+     * 速度属性），这个数只兜住底——倍率给得极小时不至于让她爬。
+     */
     private static final double WALK_SPEED = 0.16D;
 
     /** 每 tick 最多拧多少度朝向——够灵活，不够甩尾。 */
@@ -99,8 +105,7 @@ public final class StrideWalker {
         // 条腿本来就能有七八格长（这正是 Theta* 的收益），按到站距离判
         // 就是每接到一条长直线立刻自我作废、原地打转（栅栏圈实测 stale
         // f7.4）。她被击退、摔落之后偏离的是**线**，量线才量得对。
-        double offLeg = segmentDist(path.from().at(), next.at(),
-                mob.getX(), mob.getZ());
+        double offLeg = path.offLeg(mob.getX(), mob.getZ());
         if (rise > 1.5D || rise < -7.0D || offLeg > 3.0D) {
             path = null;
             note = String.format("stale r%.1f o%.1f", rise, offLeg);
@@ -137,10 +142,25 @@ public final class StrideWalker {
         // 向——三 tick 转九十度、横漂 0.25，与站位偏差叠起来人已在杆
         // 外（横烛桥转角实测三红全是这一下）。抄路点只配直行；一拐弯，
         // 判到就收成点距（那才是"站上去了"）。
-        boolean turning = turnAt() >= 15.0D;
-        boolean onStand = !turning
-                && next.standDist(mob.getX(), mob.getZ()) <= standMargin
-                && Math.abs(rise) <= 0.5D;
+        // **跳、降过来的落点不收紧**：turning 防的是"脚尖搭着外沿就宣
+        // 布到站、随即开始转向"，那是**走**出来的路点才有的毛病。落点是
+        // 物理把她放在那儿的结果，位置不由她自己挑。
+        //
+        // 车道跳实测（崖沿柱）：她侧移上道、跳过缺口、稳稳落在对岸
+        // (6.2, 1.0)，可落点后面接着一个九十度的归中，turning 于是关掉
+        // 面判到、只留 0.15 的点距——她落在 0.3 处判不到，回锚把她一路
+        // 从 x=6.2 拽回 5.6，走进缺口摔到底（prog 全程 0/6）。
+        boolean turning = path.turnAt() >= 15.0D
+                && path.stride().move() == Stride.Move.WALK;
+        // 窄面判到问**物理**：0.25 的顶面上她中心必然偏在圈外，可她
+        // onGround、脚下托着她的正是这片面——那就是到了（sw147 读数带
+        // 46t：落在烛顶、中心偏 0.275，判不到，回锚把她拽下去）。
+        boolean perched = next.breadth() < 0.5D && mob.onGround()
+                && AnchorResolver.seatedOn(mob.level(),
+                        mob.getBoundingBox(), mob.getY(), next);
+        boolean onStand = !turning && Math.abs(rise) <= 0.5D
+                && (next.standDist(mob.getX(), mob.getZ()) <= standMargin
+                        || perched);
         if ((flat <= tolerance || onStand) && Math.abs(rise) <= 1.0D) {
             // 这条边实机走通了：账本上的前科（若有）一笔勾销。
             veto.absolve(path.from().cell(), next.cell());
@@ -171,33 +191,6 @@ public final class StrideWalker {
         return path != null && path.alive() ? path.next() : null;
     }
 
-    /** 下一站要拐多少度（没有下一段就是零）。 */
-    private double turnAt() {
-        if (path == null || !path.alive()) {
-            return 0.0D;
-        }
-        int i = path.cursor();
-        if (i + 1 >= path.length()
-                || path.strideAt(i).move() != Stride.Move.WALK) {
-            return 0.0D;
-        }
-        Anchor here = path.from();
-        Anchor corner = path.anchorAt(i);
-        Anchor after = path.anchorAt(i + 1);
-        double ax = corner.at().x - here.at().x;
-        double az = corner.at().z - here.at().z;
-        double bx = after.at().x - corner.at().x;
-        double bz = after.at().z - corner.at().z;
-        double la = Math.hypot(ax, az);
-        double lb = Math.hypot(bx, bz);
-        if (la < 1.0E-4D || lb < 1.0E-4D) {
-            return 0.0D;
-        }
-        double cos = (ax * bx + az * bz) / (la * lb);
-        return Math.toDegrees(Math.acos(
-                Math.max(-1.0D, Math.min(1.0D, cos))));
-    }
-
     /**
      * 过弯限速，**从她自己的转向动力学解出来**：每 tick 只拧得动
      * {@value #TURN_RATE} 度，转 θ 度就要 θ/30 tick，这段时间她会沿老
@@ -213,7 +206,7 @@ public final class StrideWalker {
         if (flat > 1.0D || path == null || !path.alive()) {
             return Double.MAX_VALUE;
         }
-        double turn = turnAt();
+        double turn = path.turnAt();
         if (turn < 15.0D) {
             return Double.MAX_VALUE;
         }
@@ -248,8 +241,19 @@ public final class StrideWalker {
         // 个内核）。会掉就换慢一档再问，档档都掉就刹住——由物理挑步速，
         // 不由我按地形写常数（玩家点破："总是在调参，这样很难说适应不
         // 明场景"）。杆桥转角上她自然会慢下来，因为快了真的会掉。
-        double want = Math.min(Math.min(WALK_SPEED, flat * 0.5D),
-                cornerLimit(flat));
+        // 步速上限还要过**脚下这片地**这一关：一 tick 的位移不该越过支
+        // 撑面的半宽——越过中心就等于这一步把她从面的一侧送到了另一
+        // 侧，落点本来就有的偏差再叠上去就出界了。末地烛顶只有 0.25 见
+        // 方，按赶路的 0.26 迈一步正好跨过整个落脚面（实测：落点 5.9 两
+        // 轮相同，慢的那轮站住了、快的那轮当场滑出去摔）。
+        //
+        // 宽面上这个上限远高于步速，自然不限速；窄面上它把人收回基准
+        // 档，所以既有场景一格不动——这是几何给的界，不是又一个常数。
+        double cap = Math.min(Math.max(WALK_SPEED, flight.paceStep()),
+                Math.max(WALK_SPEED,
+                        (path == null ? 1.0D : path.seatWidth()) * 0.5D));
+        double want = Math.min(cap,
+                Math.min(flat * 0.5D, cornerLimit(flat)));
         // 面内约束的路不必再预演：几何已担保不出界，而车道上她本就半
         // 个身子悬在道外，逐步预演每步都说"会掉"，人只能按最慢档爬。
         if (path != null && path.constrained()) {
@@ -469,19 +473,6 @@ public final class StrideWalker {
                 toX / flat * push, motion.y, toZ / flat * push);
         flight.lock(next.at(), push, toX / flat, toZ / flat);
         note = "stepoff";
-    }
-
-    /** 点到线段的水平距离：她偏离这条腿多远。 */
-    private static double segmentDist(Vec3 a, Vec3 b, double px, double pz) {
-        double abx = b.x - a.x;
-        double abz = b.z - a.z;
-        double len2 = abx * abx + abz * abz;
-        if (len2 < 1.0E-8D) {
-            return Math.hypot(px - a.x, pz - a.z);
-        }
-        double t = ((px - a.x) * abx + (pz - a.z) * abz) / len2;
-        t = Math.max(0.0D, Math.min(1.0D, t));
-        return Math.hypot(px - (a.x + abx * t), pz - (a.z + abz * t));
     }
 
     /** 站定：清水平残速，一步不写就是静止（原版移动控制无人喂自回落）。 */

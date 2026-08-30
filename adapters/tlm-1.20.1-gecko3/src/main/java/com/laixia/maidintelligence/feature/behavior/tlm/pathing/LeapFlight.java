@@ -3,6 +3,7 @@ package com.laixia.maidintelligence.feature.behavior.tlm.pathing;
 import com.laixia.maidintelligence.feature.behavior.domain.motion.BallisticArc;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -64,6 +65,43 @@ public final class LeapFlight {
         this.dirZ = dirZ;
         this.aloft = false;
         this.since = mob.tickCount;
+    }
+
+    /**
+     * 属性到位移的换算：每单位 {@code MOVEMENT_SPEED} 值多少格每 tick。
+     *
+     * <p>拿原版实体校准：僵尸属性 0.23、倍率 1.0，实测约 4.3 格每秒，
+     * 即 0.215 格每 tick——0.215 ÷ 0.23 ≈ 0.935。原版是把
+     * "倍率 × 属性"喂给 {@code travel()} 当加速度、由摩擦收敛出稳态速
+     * 度；自有执行器直写位移，就得自己走完这段换算。
+     */
+    private static final double GROUND_PACE = 0.935D;
+
+    /** 属性读不到时的兜底身手（女仆实测约 0.51）。 */
+    private static final double ASSUMED_SPEED = 0.5D;
+
+    /**
+     * 走路的每 tick 位移，**按原版的口径算**：速度倍率 × 移动速度属性。
+     *
+     * <p>自有执行器直写 {@code deltaMovement}，把原版那条
+     * "{@code MoveControl} → 倍率 × MOVEMENT_SPEED → {@code travel()}"
+     * 整个绕了过去——倍率与属性都不起作用，她只剩一档手调的步速。代价
+     * 是玩家点名的两桩：跟随跟不上（她 3.2 格每秒，玩家走路就有 4.3、
+     * 冲刺 5.6），战斗撤不开被怪追上。
+     *
+     * <p>算出来跟随约 5.2 格每秒、战斗约 5.7，正好咬住冲刺档——这不是
+     * 调出来的数，是把原版那条链补完的结果。
+     */
+    public double paceStep() {
+        double pace = nav.pace();
+        if (pace <= 1.0E-6D) {
+            // 没给倍率不等于要她站着：漏传一档就把人钉死，代价太大。
+            pace = 1.0D;
+        }
+        double attr = mob.getAttribute(Attributes.MOVEMENT_SPEED) == null
+                ? ASSUMED_SPEED
+                : mob.getAttributeValue(Attributes.MOVEMENT_SPEED);
+        return pace * attr * GROUND_PACE;
     }
 
     /** 滞空期间落点锁死；落地（或落水——水接住也算到）收腿后解锁。 */
@@ -140,8 +178,14 @@ public final class LeapFlight {
         // 顺带记一条更普遍的：**写速度收不住她**——收步、收腿、崖边刹停
         // 都是每 tick 写一次 deltaMovement，而移动控制紧接着又按全速把她推
         // 回去。要她慢，就得把控制器的步速一起降下来。
+        // **滞空时移动控制不插手**：弧线由 restoreTheArc 按合同管着，
+        // 多一份推力就是多一份偏差。这一行原本写的是 nav.pace()，而那
+        // 个值一直是 0（自有分支从不走 super.moveTo，speedModifier 没人
+        // 赋值）——于是"滞空按步速推"从未真正发生过，整套弹道其实是在
+        // 无推力下标定的。把倍率接上之后它当场开始推，落点全偏，末地烛
+        // 中继十副本齐摔。零推力才是这套弧线合同的前提。
         mob.getMoveControl().setWantedPosition(
-                aim.x, aim.y, aim.z, aloft ? nav.pace() : CREEP_PACE
+                aim.x, aim.y, aim.z, aloft ? 0.0D : CREEP_PACE
         );
     }
 

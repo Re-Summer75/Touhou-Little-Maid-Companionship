@@ -2,6 +2,8 @@ package com.laixia.maidintelligence.feature.behavior.tlm.pathing.voxel;
 
 import java.util.List;
 
+import net.minecraft.world.phys.Vec3;
+
 /**
  * 自有路径：锚点序列＋每步的边合同，带一个消费游标。
  *
@@ -71,6 +73,57 @@ public final class VoxelPath {
     /** 到站销账。 */
     public void advance() {
         cursor++;
+    }
+
+    /**
+     * 下一站要拐多少度（没有下一段、或下一段不是走，就是零）。
+     *
+     * <p>放在路径上而不是执行器里：问的全是路径自己的数据（游标、前后两
+     * 条腿的方向），执行器只是消费者。
+     */
+    public double turnAt() {
+        if (!alive() || cursor + 1 >= anchors.size()
+                || strides.get(cursor).move() != Stride.Move.WALK) {
+            return 0.0D;
+        }
+        Anchor here = from();
+        Anchor corner = anchors.get(cursor);
+        Anchor after = anchors.get(cursor + 1);
+        double ax = corner.at().x - here.at().x;
+        double az = corner.at().z - here.at().z;
+        double bx = after.at().x - corner.at().x;
+        double bz = after.at().z - corner.at().z;
+        double la = Math.hypot(ax, az);
+        double lb = Math.hypot(bx, bz);
+        if (la < 1.0E-4D || lb < 1.0E-4D) {
+            return 0.0D;
+        }
+        double cos = (ax * bx + az * bz) / (la * lb);
+        return Math.toDegrees(Math.acos(
+                Math.max(-1.0D, Math.min(1.0D, cos))));
+    }
+
+    /** 这一步两端支撑的窄边——步速的几何上限按它收。 */
+    public double seatWidth() {
+        return alive() ? Math.min(from().breadth(), next().breadth()) : 1.0D;
+    }
+
+    /** 她偏离当前这条腿多远（点到线段的水平距离）。 */
+    public double offLeg(double px, double pz) {
+        if (!alive()) {
+            return 0.0D;
+        }
+        Vec3 a = from().at();
+        Vec3 b = next().at();
+        double abx = b.x - a.x;
+        double abz = b.z - a.z;
+        double len2 = abx * abx + abz * abz;
+        if (len2 < 1.0E-8D) {
+            return Math.hypot(px - a.x, pz - a.z);
+        }
+        double t = ((px - a.x) * abx + (pz - a.z) * abz) / len2;
+        t = Math.max(0.0D, Math.min(1.0D, t));
+        return Math.hypot(px - (a.x + abx * t), pz - (a.z + abz * t));
     }
 
     /** 终点站。 */

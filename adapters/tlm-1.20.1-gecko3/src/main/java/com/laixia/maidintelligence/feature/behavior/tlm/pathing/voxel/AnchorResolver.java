@@ -1,6 +1,7 @@
 package com.laixia.maidintelligence.feature.behavior.tlm.pathing.voxel;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -51,6 +52,9 @@ public final class AnchorResolver {
      * 来再开回来。 */
     private static final boolean EDGE_ANCHORS = false;
 
+    /** 脚底往下认多深算"托着她"：贴脚小落差与半砖的边沿都在这一段里。 */
+    private static final double FOOTING_REACH = 0.55D;
+
     /** 站定预演推几 tick：脚下真有支撑的话，一 tick 就该停住。 */
     private static final int SETTLE_TICKS = 3;
 
@@ -72,6 +76,151 @@ public final class AnchorResolver {
     /** 兼容口径：按默认身位（0.6×1.8）解析。 */
     public static Anchor resolve(BlockGetter level, BlockPos cell) {
         return resolve(level, cell, 0.6D, 1.8D);
+    }
+
+    /**
+     * 她此刻的立足锚：先自己的格，再脚下真实支撑，最后贴身邻格。
+     *
+     * <p>三级次序都是拿场景换来的。中心格解不出锚**不等于她没站着**——
+     * 身位跨在格界上时（柱底座的边沿、烛占着格心的那一格），托着她的那
+     * 片面在邻格里；起点若直接退到邻格，回锚当场判她走丢，把站在沿上的
+     * 人往回推下去（末地烛中继：起点退到 1.3 格外的东台，regroup b0.79
+     * 六 tick 内推她出沿）。
+     *
+     * <p>但这一档只认**支撑跨在格界外**的情形。中心格解不出锚有两种来
+     * 处：支撑在邻格（她跨在格界上，脚下那片面正是答案），和**净空不够**
+     * （头顶压着东西，那儿本来就站不了人）。后者用 standingOn 会造出一
+     * 个假锚——围栏角实测（四副本齐红）：场沿一格高的角落被两层屏障压
+     * 着，假锚让她原地下单四百多次、一步没挪。支撑就在自己格里的，说明
+     * 拦住她的不是格界而是净空，那就老实退回邻格。
+     *
+     * <p>再加一道：脚下这片面还得**在图上连得出边**。她站在哪是一回事，
+     * 从那儿走不走得动是另一回事；连不出边的锚等于没有起点。
+     *
+     * @param web 边供给；传 null 表示只问"她站在哪"（诊断口径）
+     */
+    public static Anchor nearby(BlockGetter level, BlockPos here, AABB body,
+            double feet, StrideSupplier web) {
+        Anchor mine = resolve(level, here);
+        if (mine != null) {
+            return mine;
+        }
+        Anchor underfoot = standingOn(level, body, feet);
+        if (underfoot != null && !underfoot.cell().equals(here)
+                && (web == null || !web.from(underfoot).isEmpty())) {
+            return underfoot;
+        }
+        for (int dy = 0; dy >= -1; dy--) {
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    Anchor near = resolve(level, here.offset(dx, dy, dz));
+                    if (near != null) {
+                        return near;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 她是不是正踩在 {@code seat} 这片支撑面上——**问物理，不问距离**。
+     *
+     * <p>窄立足（杆顶、烛顶、柱尖）上"到没到"这个问题，用中心距离是问
+     * 错了：末地烛顶只有 0.25 见方，她身位 0.6 根本摆不进去，站上去本
+     * 来就是挂着大半个身子。实测（sw147 读数带 46t）她稳稳落在烛顶、
+     * onGround 成立，中心却偏出顶面 0.275——判到圈 0.125 够不着，回锚
+     * 于是判她"离出发面 3.01"，把站在烛顶的人往回拽。
+     *
+     * <p>宽面不走这条：那里她本来就该走到中心去，站上边沿就宣布到站会
+     * 让转弯提前发生，一步出沿（横烛桥转角实测三红）。
+     */
+    public static boolean seatedOn(BlockGetter level, AABB body, double feet,
+            Anchor seat) {
+        if (Math.abs(seat.at().y - feet) > 0.1D) {
+            return false;
+        }
+        Anchor here = standingOn(level, body, feet);
+        if (here == null) {
+            return false;
+        }
+        AABB mine = here.stand();
+        AABB theirs = seat.stand();
+        return mine.minX < theirs.maxX + 1.0E-3D
+                && mine.maxX > theirs.minX - 1.0E-3D
+                && mine.minZ < theirs.maxZ + 1.0E-3D
+                && mine.maxZ > theirs.minZ - 1.0E-3D;
+    }
+
+    /**
+     * 她**此刻站在什么上面**——不问"站不站得下"，物理已经替她答过了。
+     *
+     * <p>{@link #resolveAll} 回答的是"这一格能不能站人"，要过身位箱那一
+     * 关；起点解析问的却是另一件事：她人已经在那儿了，图只需如实记下她
+     * 的立足点。两者混用的代价实测过（末地烛中继）：她从烛顶滑到柱底座
+     * 的东边缘，底座那格因为烛占着格心解不出锚，起点于是退到一格三之外
+     * 的东台——回锚判她"走丢 0.79"，把她从只剩 0.1 格支撑的沿上一路推
+     * 下悬崖（读数带 110t..116t）。
+     *
+     * <p>代表点用**她自己的位置**，不是支撑面中心：起点问的是"她在
+     * 哪"，挪到面心就等于凭空替她走了一步。
+     *
+     * @param body 她的碰撞箱
+     * @param feet 脚底高度
+     */
+    public static Anchor standingOn(BlockGetter level, AABB body,
+            double feet) {
+        AABB best = null;
+        int lowest = Mth.floor(feet - FOOTING_REACH);
+        int highest = Mth.floor(feet + 0.05D);
+        for (int x = Mth.floor(body.minX); x <= Mth.floor(body.maxX); x++) {
+            for (int z = Mth.floor(body.minZ); z <= Mth.floor(body.maxZ);
+                    z++) {
+                for (int y = highest; y >= lowest; y--) {
+                    BlockPos at = new BlockPos(x, y, z);
+                    VoxelShape shape = level.getBlockState(at)
+                            .getCollisionShape(level, at);
+                    if (shape.isEmpty()) {
+                        continue;
+                    }
+                    for (AABB box : shape.toAabbs()) {
+                        AABB placed = box.move(x, y, z);
+                        // 托着她的面：顶面贴着脚底，且水平真压在身位箱下。
+                        if (placed.maxY > feet + 0.05D
+                                || placed.maxY < feet - FOOTING_REACH
+                                || placed.maxX <= body.minX
+                                || placed.minX >= body.maxX
+                                || placed.maxZ <= body.minZ
+                                || placed.minZ >= body.maxZ) {
+                            continue;
+                        }
+                        if (best == null || placed.maxY > best.maxY) {
+                            best = placed;
+                        }
+                    }
+                }
+            }
+        }
+        if (best == null) {
+            return null;
+        }
+        double breadth = Math.min(best.maxX - best.minX,
+                best.maxZ - best.minZ);
+        // 索引格按**支撑面**归，不按她的中心：她跨在格界上时中心那格是
+        // 空的，而边生成是从索引格向四邻找目标——用空格当起点，图会把
+        // "空格 → 邻台"当成一条走边连起来，中间那格根本没有地板。末地
+        // 烛中继实测（sw149 117t）：她站在柱底座西沿 x=4.9，路径铺成
+        // (4,10,2)→(3,10,2)，她照着往西走，两步就走进缺口摔下去。按支
+        // 撑归格，同一处出来的是"从底座跳到西台"，那才是真路。
+        double seatX = (best.minX + best.maxX) / 2.0D;
+        double seatZ = (best.minZ + best.maxZ) / 2.0D;
+        return new Anchor(
+                new Vec3(body.getCenter().x, best.maxY, body.getCenter().z),
+                breadth,
+                breadth < 0.5D ? Anchor.Kind.NARROW : Anchor.Kind.FLOOR,
+                new AABB(best.minX, best.maxY, best.minZ,
+                        best.maxX, best.maxY, best.maxZ),
+                BlockPos.containing(seatX, best.maxY + 0.05D, seatZ));
     }
 
     /**
@@ -189,8 +338,10 @@ public final class AnchorResolver {
         if (!bodyFits(level, px, pad.minY, pz, width, height)) {
             return face;
         }
+        // 索引格沿用原面：按车道挪过的站位可能落进邻格，账本记的却该是
+        // 这一格。
         return new Anchor(new Vec3(px, pad.minY, pz), face.breadth(),
-                face.kind(), pad);
+                face.kind(), pad, face.cell());
     }
 
     /**

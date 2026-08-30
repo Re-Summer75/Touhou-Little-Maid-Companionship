@@ -49,8 +49,13 @@ public final class SurfaceCarverGameTests {
 
     /**
      * 格心立柱：柱只占中间 0.375–0.625，雕完该剩下四条边带；每条净宽
-     * 0.375，减去半个身位（0.3）后还剩 0.075——**塞得下人**，这正是玩
-     * 家说的"像玩家一样贴边绕过去"。
+     * 0.375，减去半个身位（0.3）与碰撞皮厚（0.02）后还剩 0.055——**塞
+     * 得下人**，这正是玩家说的"像玩家一样贴边绕过去"。
+     *
+     * <p>皮厚是拿场景换来的：没有它时车道是 0.075，她挤进缝里身体北缘
+     * 离柱面只剩 5 毫米，路铺得再对也一步迈不动（窄道柱案实测 at= 恰在
+     * 车道首点、path=2/7 停摆整场）。雕厚两厘米，车道窄了、余量有了，
+     * 那一场当场转绿。
      */
     @GameTest(templateNamespace = "minecraft", template = "empty",
             batch = "pathing")
@@ -64,9 +69,10 @@ public final class SurfaceCarverGameTests {
                 "柱旁该留得下贴边的路，却一条都没雕出来");
         double widest = pads.stream().mapToDouble(Surface::breadth)
                 .max().orElse(0.0D);
-        helper.assertTrue(widest >= 0.07D,
+        helper.assertTrue(widest >= 0.05D,
                 "最宽的一条边带只有 " + String.format("%.3f", widest)
-                        + "，柱旁本该留出 0.075");
+                        + "，柱旁本该留出 0.055（0.375 净宽 − 0.3 半身位"
+                        + " − 0.02 皮厚）");
         helper.succeed();
     }
 

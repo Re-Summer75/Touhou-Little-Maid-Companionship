@@ -293,4 +293,86 @@ public final class FootingHazardGameTests {
         helper.getLevel().addFreshEntity(maid);
         return maid;
     }
+
+    /**
+     * 身位跨在格界上时，起点锚要认**脚下托着她的那片面**，不是邻格里碰
+     * 运气碰到的第一个。
+     *
+     * <p>场景照末地烛中继的摔点一比一搭：一格站位块顶上立着末地烛，她从
+     * 烛顶滑下来、站在块顶的东边沿——身位只有 0.1 格搭在块上，中心却已
+     * 经在东边那个空格里。块那格因为烛占着格心解不出锚（贴边锚总开关关
+     * 着），起点于是退到一格三之外的东台，回锚判她"走丢 0.79"，六 tick
+     * 内把她推出边沿摔下去（sw145 读数带 110t..116t，十副本红三）。
+     *
+     * <p>这颗钉子问的是最上游那一句：**她站在什么上面**。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            batch = "pathing")
+    public static void onARimSheStandsOnWhatHoldsHer(GameTestHelper helper) {
+        BlockPos zero = helper.absolutePos(BlockPos.ZERO);
+        helper.setBlock(new BlockPos(5, 2, 2), Blocks.WHITE_WOOL);
+        helper.setBlock(new BlockPos(5, 3, 2), Blocks.END_ROD);
+        double feet = zero.getY() + 3.0D;
+        double cx = zero.getX() + 6.2D;
+        double cz = zero.getZ() + 2.5D;
+        var seat = com.laixia.maidintelligence.feature.behavior.tlm.pathing
+                .voxel.AnchorResolver.standingOn(helper.getLevel(),
+                        new net.minecraft.world.phys.AABB(
+                                cx - 0.3D, feet, cz - 0.3D,
+                                cx + 0.3D, feet + 1.5D, cz + 0.3D),
+                        feet);
+        helper.assertTrue(seat != null,
+                "她明明有 0.1 格踩在块顶上，起点却说她无处可站");
+        helper.assertTrue(Math.abs(seat.at().y - feet) < 1.0E-3D,
+                "立足高度认错了：" + seat.at().y + " 应为 " + feet);
+        helper.assertTrue(seat.standDist(cx, cz) <= 0.25D,
+                "支撑面认到别处去了，离她 "
+                        + String.format("%.2f", seat.standDist(cx, cz))
+                        + " —— 回锚会按这个距离把她往回推");
+        helper.succeed();
+    }
+
+    /**
+     * 挂在窄顶边沿上**也算站在上面**——判到问物理，不问中心距离。
+     *
+     * <p>末地烛顶 0.25 见方，她身位 0.6 摆不进去："站上去"本来就是挂着
+     * 大半个身子。sw147 读数带 46t：她稳稳落在烛顶、onGround 成立，中心
+     * 却偏出顶面 0.275——判到圈 0.125 够不着，回锚于是判她"离出发面
+     * 3.01"，把站在烛顶的人往回拽下去。
+     *
+     * <p>反面一并钉住：离开这片面就**不许**再算数。判到放松过头的代价
+     * 同样实测过（横烛桥转角三红：站上边沿就宣布到站、随即转向，一步
+     * 出杆）。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            batch = "pathing")
+    public static void onANarrowTopEdgeSheStillCountsAsSeated(
+            GameTestHelper helper
+    ) {
+        BlockPos zero = helper.absolutePos(BlockPos.ZERO);
+        helper.setBlock(new BlockPos(5, 2, 2), Blocks.WHITE_WOOL);
+        helper.setBlock(new BlockPos(5, 3, 2), Blocks.END_ROD);
+        var resolver = com.laixia.maidintelligence.feature.behavior.tlm
+                .pathing.voxel.AnchorResolver.resolve(helper.getLevel(),
+                        new BlockPos(zero.getX() + 5, zero.getY() + 4,
+                                zero.getZ() + 2));
+        helper.assertTrue(resolver != null, "烛顶本该是个站位，却解不出锚");
+        double feet = zero.getY() + 4.0D;
+        double cz = zero.getZ() + 2.5D;
+        double cx = zero.getX() + 5.9D;
+        var perch = new net.minecraft.world.phys.AABB(
+                cx - 0.3D, feet, cz - 0.3D, cx + 0.3D, feet + 1.5D, cz + 0.3D);
+        helper.assertTrue(
+                com.laixia.maidintelligence.feature.behavior.tlm.pathing
+                        .voxel.AnchorResolver.seatedOn(helper.getLevel(),
+                                perch, feet, resolver),
+                "她挂在烛顶边沿上，判到却说她不在这片面上");
+        helper.assertTrue(
+                !com.laixia.maidintelligence.feature.behavior.tlm.pathing
+                        .voxel.AnchorResolver.seatedOn(helper.getLevel(),
+                                perch.move(1.0D, 0.0D, 0.0D), feet, resolver),
+                "离开烛顶一格还算站在上面，判到就太松了");
+        helper.succeed();
+    }
+
 }

@@ -42,7 +42,7 @@ public final class StrideWeb implements StrideSupplier {
     /** 跳边验收的记账：一次规划里同一条边会被问上好几遍（A* 会重开已
      *  改善的节点），而每问一次就是一整条弧的逐 tick 扫掠——最贵的东
      *  西不该算第二遍。 */
-    private final java.util.HashMap<JumpKey, Boolean> jumps =
+    private final java.util.HashMap<JumpKey, Double> jumps =
             new java.util.HashMap<>();
 
     private record JumpKey(int fx, int fy, int fz, int tx, int ty, int tz) {
@@ -53,8 +53,8 @@ public final class StrideWeb implements StrideSupplier {
     private final java.util.HashMap<JumpKey, Boolean> lines =
             new java.util.HashMap<>();
 
-    /** 缓存版的跳边终审。 */
-    private boolean jumpOk(Anchor from, Anchor to) {
+    /** 缓存版的跳边终审，答案是**车道**：0 直线、非零让开、NaN 过不去。 */
+    private double laneOf(Anchor from, Anchor to) {
         JumpKey key = new JumpKey(
                 (int) Math.round(from.at().x * 8.0D),
                 (int) Math.round(from.at().y * 8.0D),
@@ -62,16 +62,21 @@ public final class StrideWeb implements StrideSupplier {
                 (int) Math.round(to.at().x * 8.0D),
                 (int) Math.round(to.at().y * 8.0D),
                 (int) Math.round(to.at().z * 8.0D));
-        Boolean known = jumps.get(key);
+        Double known = jumps.get(key);
         if (known != null) {
             return known;
         }
-        boolean ok = SweptAcceptance.jumpAccepted(level,
+        double lane = SweptAcceptance.laneFor(level,
                 from.at().x, from.at().y, from.at().z,
                 to.cell().getX(), to.at().y, to.cell().getZ(),
                 width, height);
-        jumps.put(key, ok);
-        return ok;
+        jumps.put(key, lane);
+        return lane;
+    }
+
+    /** 这一跳成不成立（不关心走哪条道）。 */
+    private boolean jumpOk(Anchor from, Anchor to) {
+        return !Double.isNaN(laneOf(from, to));
     }
 
     public StrideWeb(BlockGetter level, double width, double height,
@@ -332,26 +337,33 @@ public final class StrideWeb implements StrideSupplier {
                 if (band > 1 || band < -1) {
                     continue;
                 }
-                if (!jumpOk(from, to)) {
+                double lane = laneOf(from, to);
+                if (Double.isNaN(lane)) {
                     continue;
                 }
                 double speed = LeapContract.launchSpeed(
                         from.flatTo(to), band);
-                // 极限跨度加价：有稳路先走稳路，同旧图的定价哲学。
-                // 跨度越远越贵：跳得远就越贴弹道极限，起跳点差半格就是
-                // 摔。按纯距离算，"从这儿跳三格"与"走一格再跳两格"恰好
-                // 一样贵，她会挑更险的那条——加价打破这个平手，先走近再
-                // 跳。极限跨度另有重罚。
-                // 极限跨度加价：有稳路先走稳路，同旧图的定价哲学。
+                // 极限跨度加价：有稳路先走稳路，同旧图的定价哲学——跳
+                // 得越远越贴弹道极限，起跳点差半格就是摔。按跨度递增的
+                // 加价试过两档（0.6、0.15/格），都在"直跳赢绕路"上翻车。
                 //
-                // 按跨度递增的加价试过两档（0.6、0.15/格），都在"直跳赢
-                // 绕路"上翻车——任意角把走路按纯直线距离计价，跳却背着
-                // 过路费，天平本来就偏；再加价就是逼她绕远。定价维持原
-                // 样：让她从台中央起跳的那桩病（末地烛中继）真正的药是
-                // 执行侧探真沿，不是图侧劝退。
-                double toll = reach >= LEAP_REACH ? 3.0D : 0.5D;
+                // **常规跨度的过路费已经撤到零**，理由是把天平摆平，不
+                // 是再调一次常数：任意角把走路按纯直线距离计价，跳却背
+                // 着固定过路费，两边本来就不是一杆秤。
+                //
+                // 早先那把量尺量的是**局部**（直跳 2.5 对绕行平滑后
+                // 2.828，直跳赢），可搜索算的是全程：走 2 + 跳 2.5 + 走
+                // 3 = 7.5，对上斜穿第三条道的 3.64×2 = 7.28——任意角把
+                // 绕道摊薄成多走 0.28 格，0.5 的过路费于是成了决定性的
+                // 那 0.22。取证坐实（sw147）：她**贴地**从 z=2.13 绕过
+                // 去，全程没离地。
+                //
+                // 过路费当初防的那桩病（她从台中央起跳、跨度比合同多一
+                // 格，末地烛中继）已由执行侧的探真沿还清——图侧劝退从来
+                // 不是那条病的药。极限跨度的重罚保留：那一档是真的险。
+                double toll = reach >= LEAP_REACH ? 3.0D : 0.0D;
                 outs.add(new Out(to,
-                        new Stride(Stride.Move.LEAP, speed),
+                        new Stride(Stride.Move.LEAP, speed, lane),
                         from.flatTo(to) + toll));
                 return;
             }

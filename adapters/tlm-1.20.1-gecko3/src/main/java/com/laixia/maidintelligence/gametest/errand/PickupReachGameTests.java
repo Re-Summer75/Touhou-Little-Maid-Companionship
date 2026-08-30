@@ -16,6 +16,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import com.laixia.maidintelligence.feature.perception.tlm.TlmLooseDrop;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -112,31 +113,96 @@ public final class PickupReachGameTests {
         // 她要先走到底下，寻路的目标却是半空中那个点。那一段才是真正会坏的地方。
         EntityMaid maid = maid(helper, 2, 2, 1, true);
         double floor = maid.getY();
-        floating(helper, Items.COBBLESTONE, 7, 4, 1);
+        ItemEntity aim = floating(helper, Items.COBBLESTONE, 7, 4, 1);
         TlmMaidIntentActions actions = actions();
         boolean[] airborne = new boolean[]{false};
+        // 每个条件单独看都满足，她却不跳——所以逐 tick 记账，看**起跳窗
+        // 口**到底开过没有：她进到 1.2 以内几次、那几 tick 里 needsAJump
+        // 与 onGround 各是什么。四个嫌疑（needsAJump、canStandUnder、
+        // arrived 抢先 commit、没走到下方）已逐一排除，剩下的只能问现场。
+        int[] inWindow = new int[]{0};
+        int[] needs = new int[]{0};
+        int[] grounded = new int[]{0};
+        // 竖直速度峰值把最后两条分岔劈开：**从没为正**说明起跳那一下压
+        // 根没发生（喊跳的人没喊，或喊了没生效）；**为正却没离地**说明
+        // 跳起来了又被按回去（每 tick 直写 deltaMovement 的执行器最可能
+        // 干这事）。三个判据都满了 149 tick 还不跳，只剩这两种可能。
+        double[] peakVy = new double[]{-9.0D};
+        // 竖直速度全程为负说明**没人喊过跳**——喊跳那句挂在
+        // whileApproaching 上，而它前面有四道早退（目标没选中、预订被
+        // 占、arrived 抢先 commit、canBrainMoving 为假）。差事的返回值
+        // 能把它们分开：FAILED 是前两道或第四道，RUNNING 才说明走到了
+        // 接近这一步。
+        int[] failed = new int[]{0};
+        int[] running = new int[]{0};
+        // FAILED 的来源只剩两个：目标不再被选中（够不着判定或耐心放
+        // 弃），或者她当下不许被脑子驱动。分别问一遍就知道是哪个。
+        int[] pickable = new int[]{0};
+        int[] movable = new int[]{0};
 
         for (int tick = 1; tick <= JUMP_WATCH; tick++) {
             helper.runAfterDelay(tick, () -> {
-                actions.execute(
+                ActionResult step = actions.execute(
                         maid,
                         CompanionIntentIds.PICK_UP_LOOSE_DROP,
                         PARAMETERS,
                         helper.getLevel().getGameTime(),
                         0
                 );
+                if (step == ActionResult.FAILED) {
+                    failed[0]++;
+                } else if (step == ActionResult.RUNNING) {
+                    running[0]++;
+                }
+                if (TlmLooseDrop.collectable(maid, aim)) {
+                    pickable[0]++;
+                }
+                if (maid.canBrainMoving()) {
+                    movable[0]++;
+                }
                 if (maid.getY() - floor > OFF_THE_GROUND) {
                     airborne[0] = true;
+                }
+                peakVy[0] = Math.max(peakVy[0], maid.getDeltaMovement().y);
+                if (Math.hypot(aim.getX() - maid.getX(),
+                        aim.getZ() - maid.getZ()) <= 1.2D) {
+                    inWindow[0]++;
+                    if (TlmLooseDrop.needsAJump(maid, aim)) {
+                        needs[0]++;
+                    }
+                    if (maid.onGround()) {
+                        grounded[0]++;
+                    }
                 }
             });
         }
 
         helper.runAfterDelay(JUMP_WATCH, () -> {
+            // 供词按**相对坐标**给，外加到目标的水平距离。绝对坐标答不了
+            // 这条红真正的分岔：她是没走到底下（寻路够不到空中的点），还
+            // 是站在底下却没起跳（喊跳的那句没轮到）。两者的修法在不同的
+            // 层上，而这条红连红四十轮都停在"她没跳"这一句上。
+            BlockPos zero = helper.absolutePos(BlockPos.ZERO);
+            double relX = maid.getX() - zero.getX();
+            double relZ = maid.getZ() - zero.getZ();
+            double flat = Math.hypot(relX - 7.5D, relZ - 1.5D);
             helper.assertTrue(
                     airborne[0],
                     "She never left the ground for a drop one jump up"
-                            + "; she got to " + maid.blockPosition()
-                            + " and the drop is at 7,4,1 (relative)"
+                            + "; she stopped at rel ("
+                            + String.format("%.2f", relX) + ", "
+                            + String.format("%.2f", relZ)
+                            + "), flat " + String.format("%.2f", flat)
+                            + " from the drop at 7,4,1 (jump wants <= 1.20)"
+                            + "; window " + inWindow[0] + "t, needsAJump "
+                            + needs[0] + "t, onGround " + grounded[0] + "t"
+                            + ", above " + String.format("%.2f",
+                                    aim.getY() - maid.getY())
+                            + ", peakVy " + String.format("%.3f", peakVy[0])
+                            + ", errand FAILED " + failed[0]
+                            + "t / RUNNING " + running[0] + "t"
+                            + ", collectable " + pickable[0]
+                            + "t, canBrainMoving " + movable[0] + "t"
             );
             helper.succeed();
         });

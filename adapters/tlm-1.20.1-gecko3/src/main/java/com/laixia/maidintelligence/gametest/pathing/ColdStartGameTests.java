@@ -461,4 +461,40 @@ public final class ColdStartGameTests {
             }
         }
     }
+
+    /**
+     * 直接下单她就得动——钉**配速链没断**。速度倍率只有
+     * {@code super.moveTo} 赋值，而自有分支从不走那条路：它恒为 0、人当
+     * 场钉死（实机点名"完全无法行动"）。测试里驱动写 WalkTarget 走原版
+     * sink，那条链上它有值，所以盖不住；这颗专走坐标版那一条。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            batch = "pathing", timeoutTicks = 120)
+    public static void anOrderOnItsOwnGetsHerMoving(GameTestHelper helper) {
+        for (int x = 0; x <= 8; x++) {
+            for (int z = 0; z <= 2; z++) {
+                helper.setBlock(new BlockPos(x, DECK, z), Blocks.STONE);
+            }
+        }
+        EntityMaid maid = new EntityMaid(helper.getLevel());
+        BlockPos zero = helper.absolutePos(BlockPos.ZERO);
+        maid.setPos(zero.getX() + 1.5D, zero.getY() + DECK + 1.0D,
+                zero.getZ() + 1.5D);
+        maid.setTame(true);
+        maid.setTask(TaskManager.findTask(FreedomMaidTask.UID).orElseThrow());
+        maid.setHomeModeEnable(false);
+        helper.getLevel().addFreshEntity(maid);
+        double from = maid.getX();
+        for (int tick = 1; tick <= 60; tick++) {
+            helper.runAfterDelay(tick, () -> maid.getNavigation().moveTo(
+                    zero.getX() + 7.5D, zero.getY() + DECK + 1.0D,
+                    zero.getZ() + 1.5D, 1.0D));
+        }
+        helper.runAfterDelay(70, () -> {
+            double moved = maid.getX() - from;
+            helper.assertTrue(moved > 1.5D, "下了单她却没动：60 tick 只挪了 "
+                    + String.format("%.2f", moved) + " 格——配速链断了");
+            helper.succeed();
+        });
+    }
 }

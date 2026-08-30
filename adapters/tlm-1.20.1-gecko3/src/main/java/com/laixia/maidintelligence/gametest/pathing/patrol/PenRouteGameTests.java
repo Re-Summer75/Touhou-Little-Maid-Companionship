@@ -86,8 +86,18 @@ public final class PenRouteGameTests {
     public static void fromInsideALargePenAPathOutExists(
             GameTestHelper helper
     ) {
-        for (int x = -8; x <= 24; x++) {
-            for (int z = -8; z <= 24; z++) {
+        // 这一场的圈本身就有十三见方（**大圈是考题**：圈一大，预算就可
+        // 能在她摸到开口之前烧光），所以场地必然溢出棋盘的十三格步长，
+        // 只能尽量少溢。整片 33×33 收成"圈外一圈绕行地 + 一条通往目标
+        // 的走廊"，覆盖面积降到不足四分之一；溢出去的部分只有**单一高
+        // 度**的草，不带任何高度差，落进邻场也改不了那场的地形语义。
+        for (int x = -1; x <= 13; x++) {
+            for (int z = -1; z <= 13; z++) {
+                helper.setBlock(new BlockPos(x, DECK, z), Blocks.GRASS_BLOCK);
+            }
+        }
+        for (int x = 13; x <= 19; x++) {
+            for (int z = 4; z <= 8; z++) {
                 helper.setBlock(new BlockPos(x, DECK, z), Blocks.GRASS_BLOCK);
             }
         }
@@ -243,8 +253,14 @@ public final class PenRouteGameTests {
 
     /** 玩家点名的那一种：九见方的圈只缺西北一角，缺角外面还矮一格。 */
     private static void droppedCornerPen(GameTestHelper helper) {
-        for (int x = -2; x <= 16; x++) {
-            for (int z = -2; z <= 16; z++) {
+        // 铺地不许出 0..12：GameTest 棋盘两轴的步长都是十三，写出去就是
+        // 写进邻场的领地。同一桩事故这个文件里已经犯过两回（z 方向的记在
+        // intoAPenWhoseCornerGapStepsUp 的注释里，x 方向让 run4 连红四轮，
+        // 供词是起点解不出锚 note=- path=null underfoot=none）——**带高度
+        // 差的越界尤其毒**：它把邻场的地面抬高或压低一格，那场的考题就变
+        // 了，而"谁红"只由棋盘上邻位有没有人决定。
+        for (int x = 0; x <= 12; x++) {
+            for (int z = 0; z <= 12; z++) {
                 boolean outsideNorthWest = x < 3 || z < 3;
                 helper.setBlock(new BlockPos(x,
                         outsideNorthWest ? DECK - 1 : DECK, z), Blocks.STONE);

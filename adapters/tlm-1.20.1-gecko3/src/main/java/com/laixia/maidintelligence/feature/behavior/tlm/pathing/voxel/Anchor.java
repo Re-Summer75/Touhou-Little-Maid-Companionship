@@ -20,8 +20,20 @@ import net.minecraft.world.phys.Vec3;
  * @param kind    支撑的性质，执行侧按它选步态
  * @param stand   支撑矩形：碰撞盒顶面的水平范围（y 即立足高）。站进这片
  *                面的任意点都算站上锚。
+ * @param home    索引格。常态就是代表点所在的格；**车道站位除外**——它
+ *                的代表点侧移出去可能跨进邻格，可它记的仍是原来那一格的
+ *                账。失败账本按格记边（{@code veto.strike/absolve}），索
+ *                引格一飘，实机走通的边就销不掉自己的前科，下次重铺又被
+ *                账本拒之门外。
  */
-public record Anchor(Vec3 at, double breadth, Kind kind, AABB stand) {
+public record Anchor(Vec3 at, double breadth, Kind kind, AABB stand,
+        BlockPos home) {
+
+    /** 常态：索引格就是代表点脚下那一格。 */
+    public Anchor(Vec3 at, double breadth, Kind kind, AABB stand) {
+        this(at, breadth, kind, stand,
+                BlockPos.containing(at.x, at.y + 0.05D, at.z));
+    }
 
     /** 支撑的性质。 */
     public enum Kind {
@@ -35,9 +47,9 @@ public record Anchor(Vec3 at, double breadth, Kind kind, AABB stand) {
         WATER
     }
 
-    /** 锚点所在的格（索引用）。 */
+    /** 锚点的索引格。 */
     public BlockPos cell() {
-        return BlockPos.containing(at.x, at.y + 0.05D, at.z);
+        return home;
     }
 
     /** 与另一锚点的水平距离（代表点之间）。 */

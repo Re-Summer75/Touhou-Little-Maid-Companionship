@@ -42,31 +42,34 @@ public final class FencePenGameTests {
 
     /** 开口在她背后那一面：直着走撞墙，得整个绕过去。 */
     static void outOfTheFencePenSheFindsTheGap(GameTestHelper helper) {
-        // 西沿多铺两列：她出西口绕外围回东时贴着场西走，原来只有两格余
-        // 地，偶发一步踏出场沿掉下去（rel −0.6 的 dropoff 摔，三十八轮里
-        // 闪过三回）。绕行的地就该够绕。
-        for (int x = -2; x <= 14; x++) {
+        // 铺地不许出 0..12（棋盘步长十三），写出去就是写进邻场的领地。
+        // 可这一场又需要绕行余地：她出西口绕外围回东时贴着场西走，只留
+        // 两格会偶发一步踏出场沿（rel −0.6 的 dropoff 摔，三十八轮闪过
+        // 三回）。两头都要，就把**圈**整体挪一格——圈心 (5,5)→(6,6)，
+        // 东西各留三格绕行地，场地收进 0..12，考题（开口在背后、必须整
+        // 圈绕过去）一字未动。
+        for (int x = 0; x <= 12; x++) {
             for (int z = 0; z <= 12; z++) {
                 helper.setBlock(new BlockPos(x, DECK, z), Blocks.STONE);
             }
         }
-        // 七乘七的栅栏圈，圈心 (5, 5)；开口在**西**面（x=2, z=5），
+        // 七乘七的栅栏圈，圈心 (6, 6)；开口在**西**面（x=3, z=6），
         // 而主人在东边——直线方向正对着墙，必须整圈绕过去。
-        for (int x = 2; x <= 8; x++) {
-            fence(helper, x, 2);
-            fence(helper, x, 8);
+        for (int x = 3; x <= 9; x++) {
+            fence(helper, x, 3);
+            fence(helper, x, 9);
         }
-        for (int z = 3; z <= 7; z++) {
-            if (z != 5) {
-                fence(helper, 2, z);
+        for (int z = 4; z <= 8; z++) {
+            if (z != 6) {
+                fence(helper, 3, z);
             }
-            fence(helper, 8, z);
+            fence(helper, 9, z);
         }
 
         BridgePatrol.followPatrol(helper,
-                at(helper, 5.5D, 4.5D),
-                at(helper, 12.5D, 5.5D),
-                at(helper, 5.5D, 4.5D),
+                at(helper, 6.5D, 5.5D),
+                at(helper, 11.5D, 6.5D),
+                at(helper, 6.5D, 5.5D),
                 1, helper.absolutePos(BlockPos.ZERO).getY() + DECK - 1.0D,
                 DRIVE_TICKS, "fence pen");
     }
@@ -89,8 +92,14 @@ public final class FencePenGameTests {
     static void outOfAWidePenSheCutsTheCornerGap(
             GameTestHelper helper
     ) {
-        for (int x = -2; x <= 16; x++) {
-            for (int z = -2; z <= 16; z++) {
+        // 铺地不许出 0..12：GameTest 棋盘两轴的步长都是十三，写出去就是
+        // 写进邻场的领地。同一桩事故这个文件里已经犯过两回（z 方向的记在
+        // intoAPenWhoseCornerGapStepsUp 的注释里，x 方向让 run4 连红四轮，
+        // 供词是起点解不出锚 note=- path=null underfoot=none）——**带高度
+        // 差的越界尤其毒**：它把邻场的地面抬高或压低一格，那场的考题就变
+        // 了，而"谁红"只由棋盘上邻位有没有人决定。
+        for (int x = 0; x <= 12; x++) {
+            for (int z = 0; z <= 12; z++) {
                 helper.setBlock(new BlockPos(x, DECK, z), Blocks.STONE);
             }
         }
@@ -124,8 +133,10 @@ public final class FencePenGameTests {
             GameTestHelper helper
     ) {
         // 圈内与东南半边在 DECK；西北角外整片矮一格。
-        for (int x = -2; x <= 16; x++) {
-            for (int z = -2; z <= 16; z++) {
+        // 铺地不许出 0..12（棋盘步长十三）：带高度差的越界会把邻场地面
+        // 抬高或压低一格，那场的考题当场改写。同族事故见本文件顶部。
+        for (int x = 0; x <= 12; x++) {
+            for (int z = 0; z <= 12; z++) {
                 boolean outsideNorthWest = x < 3 || z < 3;
                 helper.setBlock(new BlockPos(x,
                         outsideNorthWest ? DECK - 1 : DECK, z),
@@ -158,12 +169,26 @@ public final class FencePenGameTests {
     static void intoAPenWhoseCornerGapStepsUp(
             GameTestHelper helper
     ) {
+        // **先清场**：GameTest 在批次之间不还原世界，这片地上一批留下的
+        // 栅栏、屏障会原样待着。本场只写地面（DECK-1/DECK）与场沿
+        // （DECK+1/+2），没写到的格子就是上一场的遗产——run4 连红五轮，
+        // 读数带的俯视图里她四周整片都是立障（`|`），可这场的栅栏只在
+        // 3..11，她站的西北矮地一根都不该有。而"谁红"只由棋盘位置上先
+        // 跑的是谁决定，所以它一直伪装成间歇病。
+        com.laixia.maidintelligence.gametest.support.world.Arena.clear(
+                helper, DECK - 1, DECK + 3);
         // 场地 z 只许铺 0..12：棋盘的 z 步长是十三，写到 z16 就是把方块
         // 写进**邻场的领地**——本场的 z16 屏障墙恰好横贯 z+13 邻场的
         // rel z3 线，把那场栅栏圈唯一的缺角门槛封死（缺角钉 run2/3 稳定
         // 红、run1/4 绿，红绿只由棋盘上谁的邻位有人决定；追了预算、对角
         // 登阶两条歧路才用方块名矩阵拍到 Barrier 的脸）。
-        for (int x = -2; x <= 16; x++) {
+        // **x 也只许铺 0..12**，和 z 一样。棋盘两轴的步长都是十三，而这
+        // 块地原先 x 铺 -2..16（十九格）——本场 x=16 的屏障墙正好落在
+        // x+13 邻场的 rel x=3 线上，那是它栅栏圈的西界、缺角门槛所在。
+        // z 方向的同一桩事故下面注释里记着，当时只修了 z，x 漏了：run4
+        // 一直红在起点解不出锚（note=- path=null underfoot=none），而
+        // 红的是谁只由棋盘上邻位有没有人决定。
+        for (int x = 0; x <= 12; x++) {
             for (int z = 0; z <= 12; z++) {
                 boolean outsideNorthWest = x < 3 || z < 3;
                 helper.setBlock(new BlockPos(x,
@@ -174,7 +199,7 @@ public final class FencePenGameTests {
                 // 场景堵住了这条边；换成平坦虚空后她真的从西沿掉了下去
                 // （drops=1），摔在低两格的世界地表上再也爬不回来，考题
                 // 就变味了。围墙不是限制她，是补回"这块地没有尽头"。
-                boolean rim = x == -2 || x == 16 || z == 0 || z == 12;
+                boolean rim = x == 0 || x == 12 || z == 0 || z == 12;
                 if (rim) {
                     helper.setBlock(new BlockPos(x, DECK + 1, z),
                             Blocks.BARRIER);
@@ -193,12 +218,20 @@ public final class FencePenGameTests {
         }
         BlockPos zero = helper.absolutePos(BlockPos.ZERO);
         // 她在矮地上、圈外；主人在圈心——她得斜着上一格钻进来。
+        //
+        // 起点从 rel(0.5,0.5) 挪进一格：z=0 那一线是场沿屏障（rim），
+        // 上面盖着两层 BARRIER，而她脚在 DECK、头到 DECK+1.5——**生成
+        // 那一刻人就嵌在屏障里**，净空只有一格。这条一直没暴露，是因为
+        // 起点锚解析解不出她那格时会退到邻格去碰运气，歪打正着把她拽了
+        // 出来；起点解析改成先认脚下真实支撑之后，这个疏漏就露了原形
+        // （run4 稳定红，note=- path=null，四百多次下单一步没挪）。
+        // rel(1.5,1.5) 仍是矮地、仍在圈外，考题不变。
         BridgePatrol.followPatrol(helper,
-                new Vec3(zero.getX() + 0.5D, zero.getY() + DECK,
-                        zero.getZ() + 0.5D),
+                new Vec3(zero.getX() + 1.5D, zero.getY() + DECK,
+                        zero.getZ() + 1.5D),
                 at(helper, 7.5D, 7.5D),
-                new Vec3(zero.getX() + 0.5D, zero.getY() + DECK,
-                        zero.getZ() + 0.5D),
+                new Vec3(zero.getX() + 1.5D, zero.getY() + DECK,
+                        zero.getZ() + 1.5D),
                 1, zero.getY() + DECK - 2.0D,
                 DRIVE_TICKS, "corner gap steps up");
     }
@@ -234,8 +267,14 @@ public final class FencePenGameTests {
     /** 建圈、放人、跟随；判据只有一条：她进没进圈。 */
     private static void intoTheCornerGap(GameTestHelper helper,
             boolean notched, String what) {
-        for (int x = -2; x <= 16; x++) {
-            for (int z = -2; z <= 16; z++) {
+        // 铺地不许出 0..12：GameTest 棋盘两轴的步长都是十三，写出去就是
+        // 写进邻场的领地。同一桩事故这个文件里已经犯过两回（z 方向的记在
+        // intoAPenWhoseCornerGapStepsUp 的注释里，x 方向让 run4 连红四轮，
+        // 供词是起点解不出锚 note=- path=null underfoot=none）——**带高度
+        // 差的越界尤其毒**：它把邻场的地面抬高或压低一格，那场的考题就变
+        // 了，而"谁红"只由棋盘上邻位有没有人决定。
+        for (int x = 0; x <= 12; x++) {
+            for (int z = 0; z <= 12; z++) {
                 boolean pen = x >= 3 && x <= 11 && z >= 3 && z <= 11;
                 // 缺角那一格是**下沉的门槛**：与圈外同高，比圈内矮一格。
                 boolean high = pen && !(notched && x == 3 && z == 3);

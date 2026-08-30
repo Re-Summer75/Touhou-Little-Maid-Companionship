@@ -21,6 +21,9 @@ import java.util.List;
  */
 public final class SurfaceCarver {
 
+    /** 碰撞皮厚：贴着障碍走没有余量，抖一下就蹭上。 */
+    private static final double SKIN = 0.02D;
+
     /**
      * 边带窄到这个数以下就当没有。
      *
@@ -127,7 +130,11 @@ public final class SurfaceCarver {
      */
     private static void subtract(Surface piece, AABB blocker, double width,
             List<Surface> out) {
-        double half = width / 2.0D;
+        // 外扩半个身位**再加一层皮**：只按半身位扣，车道给出的余量恰好
+        // 是零——挤缝实测的折点 z=261.07，她身体北缘到 261.37，柱子从
+        // 261.375 起，只差五毫米，任何抖动都会蹭上去卡住。皮厚两厘米，
+        // 车道从 0.075 收到 0.055，仍旧存在，但走起来是真的过得去。
+        double half = width / 2.0D + SKIN;
         double bx0 = blocker.minX - half;
         double bx1 = blocker.maxX + half;
         double bz0 = blocker.minZ - half;

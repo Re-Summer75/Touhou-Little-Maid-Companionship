@@ -202,6 +202,14 @@ public final class SureFootedNavigation extends MaidPathNavigation {
             strideWalker.follow(null);
             return super.moveTo(x, y, z, speed);
         }
+        // **倍率要自己记**：{@code speedModifier} 是在 super.moveTo 里
+        // 赋值的，而自有分支从不走那条路——它于是一直是默认的 0。执行
+        // 器从前不读它，所以这个洞一直没露头；一接进走速，人就彻底不动
+        // 了（实机点名"女仆完全无法行动"）。
+        //
+        // 记在最前面：下面几条早退（同单节流、无路冷却、规划预算）都可
+        // 能不重铺路，可倍率是**这一单的属性**，跟铺不铺路无关。
+        this.speedModifier = speed;
         // 同一单短窗内不重铺：跟随的 sink 每 tick 把同一个目标塞回来，
         // 每 tick 重跑 A* 不止是白烧预算——执行侧的贴沿窗、回锚闹钟都
         // 需要连续的语境，每 tick 换一条"新路"等于把计时永远清在第一
@@ -229,16 +237,16 @@ public final class SureFootedNavigation extends MaidPathNavigation {
         lastGoalY = y;
         lastGoalZ = z;
         lastPlanTick = this.tick;
-        var start = anchorNearby();
+        var web = new com.laixia.maidintelligence.feature.behavior.tlm
+                .pathing.voxel.StrideWeb(this.level,
+                        this.mob.getBbWidth(), this.mob.getBbHeight(),
+                        edgeVeto);
+        var start = anchorNearby(web);
         if (start == null) {
             strideWalker.follow(null);
             lastFailTick = this.tick;
             return false;
         }
-        var web = new com.laixia.maidintelligence.feature.behavior.tlm
-                .pathing.voxel.StrideWeb(this.level,
-                        this.mob.getBbWidth(), this.mob.getBbHeight(),
-                        edgeVeto);
         var path = com.laixia.maidintelligence.feature.behavior.tlm
                 .pathing.voxel.VoxelAstar.find(web, start,
                         // 到站半径按**踩上那一格**给（半格出头）。0.75 是
@@ -318,28 +326,20 @@ public final class SureFootedNavigation extends MaidPathNavigation {
         return moveTo(target.getX(), target.getY(), target.getZ(), speed);
     }
 
-    /** 她此刻的立足锚：先自己的格，再贴身邻格（含上下一层）。 */
+    /** 诊断口径：只问"她站在哪"，不问那儿走不走得动。 */
     private com.laixia.maidintelligence.feature.behavior.tlm.pathing.voxel
             .Anchor anchorNearby() {
-        BlockPos here = this.mob.blockPosition();
-        var mine = com.laixia.maidintelligence.feature.behavior.tlm.pathing
-                .voxel.AnchorResolver.resolve(this.level, here);
-        if (mine != null) {
-            return mine;
-        }
-        for (int dy = 0; dy >= -1; dy--) {
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dz = -1; dz <= 1; dz++) {
-                    var near = com.laixia.maidintelligence.feature.behavior
-                            .tlm.pathing.voxel.AnchorResolver.resolve(
-                                    this.level, here.offset(dx, dy, dz));
-                    if (near != null) {
-                        return near;
-                    }
-                }
-            }
-        }
-        return null;
+        return anchorNearby(null);
+    }
+
+    /** 她此刻的立足锚：解析口径全在 {@code AnchorResolver.nearby} 里。 */
+    private com.laixia.maidintelligence.feature.behavior.tlm.pathing.voxel
+            .Anchor anchorNearby(
+                    com.laixia.maidintelligence.feature.behavior.tlm.pathing
+                            .voxel.StrideWeb web) {
+        return com.laixia.maidintelligence.feature.behavior.tlm.pathing.voxel
+                .AnchorResolver.nearby(this.level, this.mob.blockPosition(),
+                        this.mob.getBoundingBox(), this.mob.getY(), web);
     }
 
     @Override
@@ -416,14 +416,16 @@ public final class SureFootedNavigation extends MaidPathNavigation {
 
     /** 供词用：当场按上一次的目标重铺一遍，看图给不给得出路。 */
     private String describeReplan() {
-        var start = anchorNearby();
-        if (start == null) {
-            return "no-start";
-        }
+        // 供词要跟真铺路**同一口径**：起点解析也得带上边供给，否则探针
+        // 说得出路、实际铺不出（或反过来），供词就成了误导。
         var web = new com.laixia.maidintelligence.feature.behavior.tlm
                 .pathing.voxel.StrideWeb(this.level,
                         this.mob.getBbWidth(), this.mob.getBbHeight(),
                         edgeVeto);
+        var start = anchorNearby(web);
+        if (start == null) {
+            return "no-start";
+        }
         var probe = com.laixia.maidintelligence.feature.behavior.tlm
                 .pathing.voxel.VoxelAstar.find(web, start,
                         new net.minecraft.world.phys.Vec3(

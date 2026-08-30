@@ -3,6 +3,8 @@ package com.laixia.maidintelligence.gametest.pathing;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
 import com.laixia.maidintelligence.feature.behavior.tlm.freedom.FreedomMaidTask;
+import com.laixia.maidintelligence.feature.behavior.tlm.pathing.sweep
+        .SweptAcceptance;
 import com.laixia.maidintelligence.feature.behavior.tlm.pathing.sweep.SweptMotion;
 import com.laixia.maidintelligence.platform.resource.ModResources;
 import net.minecraft.core.BlockPos;
@@ -181,6 +183,116 @@ public final class SweptMotionGameTests {
                             + (free.end().x - zero.getX()));
             helper.succeed();
         });
+    }
+
+    /**
+     * 干净的缺口不该绕道：中线飞得过去就走中线。车道是**兜底的第二条
+     * 路**，不是常态——它若在常态上也生效，每条跳边都要多扫二十次。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            batch = "pathing")
+    public static void aCleanGapNeedsNoLane(GameTestHelper helper) {
+        BlockPos zero = helper.absolutePos(BlockPos.ZERO);
+        walkway(helper, 0, 3);
+        walkway(helper, 6, 9);
+        double lane = laneAcross(helper, zero, 3.5D, 6);
+        helper.assertTrue(lane == 0.0D,
+                "干净缺口该走中线，却让开了 " + lane);
+        helper.succeed();
+    }
+
+    /**
+     * 柱压在**弧线途中**（玩家实机场景）：中线正撞柱心，柱旁的侧缝三维
+     * 里是空的——扫掠该解出一条侧向车道，而不是把整条边否掉。
+     *
+     * <p>否掉的代价实测过：{@code path=null}、整场重下一百三十多次单，
+     * 行为层最后放弃（柱旁车道案）。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            batch = "pathing")
+    public static void aPostAcrossTheArcBendsTheLaneAside(
+            GameTestHelper helper
+    ) {
+        BlockPos zero = helper.absolutePos(BlockPos.ZERO);
+        walkway(helper, 0, 3);
+        walkway(helper, 5, 9);
+        helper.setBlock(new BlockPos(5, DECK + 1, 1), Blocks.OAK_FENCE);
+        double lane = laneAcross(helper, zero, 3.5D, 6);
+        helper.assertTrue(!Double.isNaN(lane),
+                "柱旁的缝是空的，这一跳却一条车道都没解出来");
+        helper.assertTrue(Math.abs(lane) > 0.0D,
+                "中线正撞柱心，车道却仍是 0");
+        helper.succeed();
+    }
+
+    /**
+     * 柱压在**起跳格**（玩家点名"边缘放一个栅栏试试"）：格心站不下人，
+     * 但沿地板边缘侧一步就绕得过去，那一步同样是车道。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            batch = "pathing")
+    public static void aPostOnTheBrinkBendsTheLaneAside(
+            GameTestHelper helper
+    ) {
+        BlockPos zero = helper.absolutePos(BlockPos.ZERO);
+        walkway(helper, 0, 3);
+        walkway(helper, 6, 9);
+        helper.setBlock(new BlockPos(3, DECK + 1, 1), Blocks.OAK_FENCE);
+        double lane = laneAcross(helper, zero, 2.5D, 6);
+        helper.assertTrue(!Double.isNaN(lane),
+                "崖沿柱旁绕得过去，这一跳却一条车道都没解出来");
+        helper.succeed();
+    }
+
+    /**
+     * 直跳的边**存不存在**：缺口断了两条道、第三条完好，直线跳过去只
+     * 有两格。
+     *
+     * <p>"她该跳却绕了路"这条红追过三轮定价（跳边加价 0.6、0.15、撤
+     * 销），全在症状上动手。量尺后来把账算清了——直跳 2.5、绕行 3.228，
+     * 平滑后也要 2.828，**直跳本来就该赢**。账既然不亏，那就只剩一种可
+     * 能：这条边在图上根本不成立。这颗钉子把问题劈成两半，答的是"边在
+     * 不在"，不是"贵不贵"。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            batch = "pathing")
+    public static void aTwoBlockGapStillOffersTheStraightJump(
+            GameTestHelper helper
+    ) {
+        BlockPos zero = helper.absolutePos(BlockPos.ZERO);
+        for (int x = 0; x <= 8; x++) {
+            for (int z = 0; z <= 2; z++) {
+                if (x == 4 && z <= 1) {
+                    continue;
+                }
+                helper.setBlock(new BlockPos(x, DECK, z), Blocks.STONE);
+            }
+        }
+        double floor = zero.getY() + DECK + 1;
+        double lane = SweptAcceptance.laneFor(helper.getLevel(),
+                zero.getX() + 3.5D, floor, zero.getZ() + 1.5D,
+                zero.getX() + 5, floor, zero.getZ() + 1,
+                WIDTH, HEIGHT);
+        helper.assertTrue(!Double.isNaN(lane),
+                "两格缺口的直跳在图上就不成立——定价再怎么改，她也只能绕路");
+        helper.succeed();
+    }
+
+    /** 一格宽的走道，{@code from}..{@code to} 闭区间。 */
+    private static void walkway(GameTestHelper helper, int from, int to) {
+        for (int x = from; x <= to; x++) {
+            helper.setBlock(new BlockPos(x, DECK, 1), Blocks.DIRT);
+        }
+    }
+
+    /** 从走道上的 {@code fromX} 跳到格 {@code toX}，问这条边走哪条道。 */
+    private static double laneAcross(GameTestHelper helper, BlockPos zero,
+            double fromX, int toX) {
+        double floor = zero.getY() + DECK + 1;
+        return SweptAcceptance.laneFor(helper.getLevel(),
+                zero.getX() + fromX, floor, zero.getZ() + 1.5D,
+                zero.getX() + toX, floor, zero.getZ() + 1,
+                WIDTH, HEIGHT);
     }
 
     private static Vec3 at(BlockPos zero, double x, double feetY, double z) {

@@ -10,8 +10,17 @@ package com.laixia.maidintelligence.feature.behavior.tlm.pathing.voxel;
  *
  * @param move  动作类型
  * @param speed 水平初速（跳/降的合同值；走类为步速档）
+ * @param lane  侧向车道：垂直于行进方向的让开量（左手侧为正）。柱压在
+ *              起跳格或落点格上时，直线弹道撞柱、侧缝却是空的——图侧
+ *              扫掠解出这个让开量，铺路后由 {@link LeapLanes} 展开成两
+ *              个真实站位，执行侧照常走、照常跳。
  */
-public record Stride(Move move, double speed) {
+public record Stride(Move move, double speed, double lane) {
+
+    /** 不让道的常态。 */
+    public Stride(Move move, double speed) {
+        this(move, speed, 0.0D);
+    }
 
     /** 动作类型。 */
     public enum Move {

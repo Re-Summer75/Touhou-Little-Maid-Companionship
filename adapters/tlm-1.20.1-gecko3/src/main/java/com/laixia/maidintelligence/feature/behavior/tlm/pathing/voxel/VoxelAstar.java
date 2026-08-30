@@ -150,7 +150,8 @@ public final class VoxelAstar {
                     <= acceptWithin
                     && Math.abs(here.at().y - goal.y) <= 2.0D) {
                 VoxelPath hit = rebuild(seen, here, true);
-                return hit == null ? null : straighten(hit, edges);
+                return hit == null ? null
+                        : LeapLanes.spread(straighten(hit, edges));
             }
 
             Double gHereBox = gScore.get(hereKey);
@@ -203,7 +204,8 @@ public final class VoxelAstar {
             return null;
         }
         VoxelPath partial = rebuild(seen, closest, false);
-        return partial == null ? null : straighten(partial, edges);
+        return partial == null ? null
+                : LeapLanes.spread(straighten(partial, edges));
     }
 
     /**
