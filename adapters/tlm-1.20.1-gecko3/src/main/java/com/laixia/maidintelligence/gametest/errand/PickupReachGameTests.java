@@ -113,7 +113,17 @@ public final class PickupReachGameTests {
         // 她要先走到底下，寻路的目标却是半空中那个点。那一段才是真正会坏的地方。
         EntityMaid maid = maid(helper, 2, 2, 1, true);
         double floor = maid.getY();
-        ItemEntity aim = floating(helper, Items.COBBLESTONE, 7, 4, 1);
+        // 摆到**三格高**。两格那一档是假题：她走到 0.88 格外就把东西收
+        // 进包里了（实测 inBag=true、t=12），"跳"这个动作根本不必发生
+        // ——needsAJump 按身高 1.5 判"够不着"，而本体实际够得着，两把
+        // 尺子不一样。这条测试要验的是"她愿意为够不着的东西起跳"，那件
+        // 东西就得真的够不着。
+        //
+        // 三格仍在跳得到的那一档内（站立可及 2.0 ＋ 起跳 1.25 = 3.25），
+        // 所以题目没变难，只是变真了。此前它连红四十轮一直记在寻路欠账
+        // 上，其实错在场景；而它偶尔转绿也是巧合——她走得慢时会在判定
+        // 圈里被喊一跳，跳完再拿到，断言就过了。
+        ItemEntity aim = floating(helper, Items.COBBLESTONE, 7, 5, 1);
         TlmMaidIntentActions actions = actions();
         boolean[] airborne = new boolean[]{false};
         // 每个条件单独看都满足，她却不跳——所以逐 tick 记账，看**起跳窗
@@ -139,8 +149,25 @@ public final class PickupReachGameTests {
         // 弃），或者她当下不许被脑子驱动。分别问一遍就知道是哪个。
         int[] pickable = new int[]{0};
         int[] movable = new int[]{0};
+        // collectable 只在她走过去那几 tick 为真，一到位就翻假。它里面
+        // 只剩两项可疑：**能不能站到正下方**（要跳的那一档额外要过这一
+        // 关），和本体自己的拾取判定。分开问。
+        int[] under = new int[]{0};
+        int[] hostOk = new int[]{0};
+        // 本体的 canPickup 转给 pickupItem，那里第一道门就是"这件东西还
+        // 在不在、拾取延迟过没过"。物品要是早被收走了，她当然不用跳
+        // ——那样红的就不是她的行为，是这条测试的前提。
+        int[] alive = new int[]{0};
+        int[] noDelay = new int[]{0};
+        // 东西在她走到之前就没了，那"她不跳"只是后果。记下它消失的那一
+        // 刻、她当时站在哪、以及**是不是进了她的包**——被她收走和凭空
+        // 消失，是完全不同的两件事。
+        int[] goneAt = new int[]{-1};
+        double[] goneWhere = new double[]{-1.0D};
+        boolean[] inBag = new boolean[]{false};
 
         for (int tick = 1; tick <= JUMP_WATCH; tick++) {
+            int at = tick;
             helper.runAfterDelay(tick, () -> {
                 ActionResult step = actions.execute(
                         maid,
@@ -156,6 +183,28 @@ public final class PickupReachGameTests {
                 }
                 if (TlmLooseDrop.collectable(maid, aim)) {
                     pickable[0]++;
+                }
+                BlockPos below = BlockPos.containing(
+                        aim.getX(), maid.getY(), aim.getZ());
+                if (helper.getLevel().getBlockState(below)
+                        .getCollisionShape(helper.getLevel(), below)
+                        .isEmpty()) {
+                    under[0]++;
+                }
+                if (maid.canPickup(aim, true)) {
+                    hostOk[0]++;
+                }
+                if (aim.isAlive()) {
+                    alive[0]++;
+                } else if (goneAt[0] < 0) {
+                    goneAt[0] = at;
+                    goneWhere[0] = maid.getX()
+                            - helper.absolutePos(BlockPos.ZERO).getX();
+                    inBag[0] = maid.getAvailableInv(false) != null
+                            && hasCobble(maid);
+                }
+                if (!aim.hasPickUpDelay()) {
+                    noDelay[0]++;
                 }
                 if (maid.canBrainMoving()) {
                     movable[0]++;
@@ -193,7 +242,7 @@ public final class PickupReachGameTests {
                             + String.format("%.2f", relX) + ", "
                             + String.format("%.2f", relZ)
                             + "), flat " + String.format("%.2f", flat)
-                            + " from the drop at 7,4,1 (jump wants <= 1.20)"
+                            + " from the drop at 7,5,1 (jump wants <= 1.20)"
                             + "; window " + inWindow[0] + "t, needsAJump "
                             + needs[0] + "t, onGround " + grounded[0] + "t"
                             + ", above " + String.format("%.2f",
@@ -203,6 +252,14 @@ public final class PickupReachGameTests {
                             + "t / RUNNING " + running[0] + "t"
                             + ", collectable " + pickable[0]
                             + "t, canBrainMoving " + movable[0] + "t"
+                            + ", underEmpty " + under[0]
+                            + "t, hostCanPickup " + hostOk[0] + "t"
+                            + ", dropAlive " + alive[0]
+                            + "t, noPickUpDelay " + noDelay[0] + "t"
+                            + "; gone at t" + goneAt[0]
+                            + " when she was at relX "
+                            + String.format("%.2f", goneWhere[0])
+                            + ", inBag=" + inBag[0]
             );
             helper.succeed();
         });
@@ -234,6 +291,17 @@ public final class PickupReachGameTests {
         );
         helper.assertTrue(onTop.isAlive(), "The unreachable drop vanished");
         helper.succeed();
+    }
+
+    /** 她包里有没有圆石——判断东西是被她收走了还是凭空没的。 */
+    private static boolean hasCobble(EntityMaid maid) {
+        var inv = maid.getAvailableInv(false);
+        for (int slot = 0; slot < inv.getSlots(); slot++) {
+            if (inv.getStackInSlot(slot).is(Items.COBBLESTONE)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 悬在空中不掉下来的一件——台子上、栅栏上那种。 */

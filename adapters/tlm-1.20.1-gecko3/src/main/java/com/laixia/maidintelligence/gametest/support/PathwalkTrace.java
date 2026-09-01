@@ -224,6 +224,22 @@ public final class PathwalkTrace {
     }
 
     /** 一条路的完整证词：能否到站 + 逐节点相对坐标。探图用。 */
+    /** 写单前先自己问一遍路并留档：sink 擦单案里"探路到底答了什么"
+     *  不用再从全冻读数带反推。答卷进的是同一个限频缓存，紧跟着的
+     *  sink 问询同格复用，行为不因取证而变。 */
+    public static void probeAndOrder(EntityMaid maid, BlockPos goal,
+            String tape, int tick) {
+        Path path = maid.getNavigation().createPath(goal, 0);
+        System.out.println("[rod-probe] " + tape + " t" + tick + " path="
+                + (path == null ? "null"
+                        : path.getNodeCount() + "n reach="
+                                + path.canReach()));
+        maid.getBrain().setMemory(MemoryModuleType.WALK_TARGET,
+                new WalkTarget(
+                        new net.minecraft.world.entity.ai.behavior
+                                .BlockPosTracker(goal), 0.45F, 0));
+    }
+
     public static String describe(Path path, BlockPos zero) {
         if (path == null) {
             return "null-path";

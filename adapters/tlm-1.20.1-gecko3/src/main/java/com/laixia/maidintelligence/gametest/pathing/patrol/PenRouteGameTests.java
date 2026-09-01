@@ -136,8 +136,8 @@ public final class PenRouteGameTests {
         EntityMaid maid = penned(helper, 5, 5);
         BlockPos zero = helper.absolutePos(BlockPos.ZERO);
         helper.runAfterDelay(20, () -> {
-            Path path = maid.getNavigation().createPath(
-                    helper.absolutePos(new BlockPos(12, DECK + 1, 5)), 0);
+            Path path = audit(maid, 
+                    helper.absolutePos(new BlockPos(12, DECK + 1, 5)));
             boolean reaches = path != null && path.canReach();
             String shown = PathwalkTrace.describe(path, zero);
             maid.discard();
@@ -177,8 +177,8 @@ public final class PenRouteGameTests {
                     maid.moveTo(zero.getX() + step + 0.5D,
                             zero.getY() + DECK + 1.0D,
                             zero.getZ() + step + 0.5D);
-                    Path path = maid.getNavigation().createPath(
-                            helper.absolutePos(new BlockPos(0, DECK, 0)), 0);
+                    Path path = audit(maid, 
+                            helper.absolutePos(new BlockPos(0, DECK, 0)));
                     all.append("  从 (").append(step).append(',').append(step)
                             .append(") 第").append(again).append("次: ")
                             .append(PathwalkTrace.describe(path, zero))
@@ -226,8 +226,8 @@ public final class PenRouteGameTests {
                 zero.getZ() + 3.5D));
         helper.runAfterDelay(30, () -> {
             double feet = maid.getY() - zero.getY();
-            Path path = maid.getNavigation().createPath(
-                    helper.absolutePos(new BlockPos(0, DECK, 0)), 0);
+            Path path = audit(maid, 
+                    helper.absolutePos(new BlockPos(0, DECK, 0)));
             String shown = PathwalkTrace.describe(path, zero);
             boolean grounded = maid.onGround();
             int startY = path == null || path.getNodeCount() == 0
@@ -314,9 +314,9 @@ public final class PenRouteGameTests {
                     maid.moveTo(zero.getX() + x + 0.5D,
                             zero.getY() + DECK + 1.0D,
                             zero.getZ() + z + 0.5D);
-                    Path path = maid.getNavigation().createPath(
+                    Path path = audit(maid, 
                             helper.absolutePos(
-                                    new BlockPos(12, DECK + 1, 5)), 0);
+                                    new BlockPos(12, DECK + 1, 5)));
                     boolean ok = path != null && path.canReach();
                     all.append("  (").append(x).append(',').append(z)
                             .append(")=").append(ok ? "ok" : "NO")
@@ -374,9 +374,9 @@ public final class PenRouteGameTests {
                     maid.moveTo(zero.getX() + x + 0.5D,
                             zero.getY() + DECK + 1.0D,
                             zero.getZ() + 2.5D);
-                    Path path = maid.getNavigation().createPath(
+                    Path path = audit(maid, 
                             helper.absolutePos(
-                                    new BlockPos(far, DECK + 1, 2)), 0);
+                                    new BlockPos(far, DECK + 1, 2)));
                     boolean ok = path != null && path.canReach();
                     all.append("  x=").append(x).append("→").append(far)
                             .append(" #").append(again).append('=')
@@ -402,8 +402,8 @@ public final class PenRouteGameTests {
         EntityMaid maid = penned(helper, fromX, fromZ);
         BlockPos zero = helper.absolutePos(BlockPos.ZERO);
         helper.runAfterDelay(20, () -> {
-            Path path = maid.getNavigation().createPath(
-                    helper.absolutePos(new BlockPos(toX, DECK + 1, toZ)), 0);
+            Path path = audit(maid, 
+                    helper.absolutePos(new BlockPos(toX, DECK + 1, toZ)));
             boolean reaches = path != null && path.canReach();
             String shown = PathwalkTrace.describe(path, zero);
             System.out.println("=== pen route: " + what + " ===\n" + shown);
@@ -439,5 +439,30 @@ public final class PenRouteGameTests {
 
     private static void fence(GameTestHelper helper, int x, int z) {
         helper.setBlock(new BlockPos(x, DECK + 1, z), Blocks.OAK_FENCE);
+    }
+
+    /** 审计问询：图的连通性直问引擎、不限时——完备性钉审的是几何
+     *  真理；生产链的 headroom 限时是运行时预算，靠部分路分段收敛。
+     *  两个口径各归各（sw234：钉借 createPath 吃到 2ms 保底而翻红）。 */
+    private static Path audit(EntityMaid maid, BlockPos goal) {
+        var web = new com.laixia.maidintelligence.feature.behavior.tlm
+                .pathing.voxel.StrideWeb(maid.level(), maid.getBbWidth(),
+                        maid.getBbHeight(),
+                        new com.laixia.maidintelligence.feature.behavior.tlm
+                                .pathing.voxel.EdgeVeto());
+        var start = com.laixia.maidintelligence.feature.behavior.tlm.pathing
+                .voxel.AnchorResolver.nearby(maid.level(),
+                        maid.blockPosition(), maid.getBoundingBox(),
+                        maid.getY(), web);
+        if (start == null) {
+            return null;
+        }
+        var found = com.laixia.maidintelligence.feature.behavior.tlm.pathing
+                .voxel.VoxelAstar.find(web, start,
+                        new net.minecraft.world.phys.Vec3(goal.getX() + 0.5D,
+                                goal.getY(), goal.getZ() + 0.5D), 0.45D);
+        return found == null ? null
+                : com.laixia.maidintelligence.feature.behavior.tlm.pathing
+                        .host.HostBridge.shadowOf(found, goal);
     }
 }

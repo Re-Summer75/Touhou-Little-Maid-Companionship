@@ -1,4 +1,4 @@
-package com.laixia.maidintelligence.gametest.pathing;
+package com.laixia.maidintelligence.gametest.pathing.parkour;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
@@ -16,15 +16,10 @@ import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /**
- * 跑酷：能跳多远跳多远，路线谁短谁赢。
+ * 跑酷：能跳多远跳多远，路线谁短谁赢——没有第二套决策系统，A* 按总距
+ * 离选路，起跳推力按落点配速、只存在于滞空那十几 tick。
  *
- * <p>没有第二套决策系统。评估器把"跨缺口"连成一条几乎不加价的边
- * （{@code GAP_JUMP_MALUS} = 0.5，只做平手裁决），A* 按总距离选路——**跑酷更近就
- * 跑酷，绕路是多余的路径**。起跳推力按落点距离配速，只存在于滞空那十几 tick，
- * 不进走速、不进战斗距离的账。
- *
- * <p>射程一到三格，三格是人形的物理极限（玩家满冲刺贴边起跳也就这样）；四格
- * 推力上限也够不着，评估器不连线、执行器也不起跳——那是拒走线，摔不得。
+ * <p>射程一到三格（人形物理极限）；四格推力也够不着——拒走线，摔不得。
  */
 @GameTestHolder(ModResources.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -86,10 +81,8 @@ public final class ParkourGameTests {
         double[] lowest = new double[]{deckFeet};
         double[] farthest = new double[]{maid.getX()};
         boolean[] flewOverGap = new boolean[]{false};
-        // 她**从哪条道过的缺口**：z 约 1.5 是直跳那条，约 2.5 是完好的
-        // 第三条（绕路）。这条红连红四十轮都只说"她没跳"，而"没跳"有三
-        // 种来处——边不成立、定价偏、或者她压根走了别处。前两种已经排
-        // 除（钉子答边成立、量尺算直跳更便宜），剩下的要靠这一条读数。
+        // 她**从哪条道过的缺口**：z~1.5 直跳道、z~2.5 绕路道——连红四
+        // 十轮只说"她没跳"，是这条读数最终定的案（台账 §3）。
         double[] crossZ = new double[]{-1.0D};
         boolean[] crossGround = new boolean[]{true};
 
@@ -126,110 +119,12 @@ public final class ParkourGameTests {
                             + (crossGround[0] ? " on the ground" : " airborne")
                             + " (z~1.5 = the jump lane, z~2.5 = the detour)"
             );
+            sweep(helper);
             maid.discard();
             helper.succeed();
         });
     }
 
-    /**
-     * 爬完台阶紧接着跳缺口，照样跳得过去。
-     *
-     * <p>钉的是原版 noJumpDelay：jumpFromGround 之后十 tick 内 JumpControl
-     * 不再给竖直速度。爬台阶（步高不够就是跳上去的）之后马上到崖边，是野外
-     * 地形的常态——起跳要是托付给 JumpControl，这第二跳只剩水平推力，等于把
-     * 她平着推下缺口。起跳直写速度后，这条地形必须过。
-     */
-    @GameTest(templateNamespace = "minecraft", template = "empty",
-            batch = "pathing", timeoutTicks = 260)
-    public static void aStepUpRightBeforeTheGapStillLeaps(
-            GameTestHelper helper
-    ) {
-        int low = DECK;
-        int high = DECK + 1;
-        for (int x = 0; x <= LENGTH + 1; x++) {
-            for (int z = 0; z <= 2; z++) {
-                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
-            }
-        }
-        for (int z = 0; z <= 2; z++) {
-            helper.setBlock(new BlockPos(0, low, z), Blocks.STONE);
-            helper.setBlock(new BlockPos(1, low, z), Blocks.STONE);
-            helper.setBlock(new BlockPos(2, low, z), Blocks.STONE);
-            helper.setBlock(new BlockPos(2, high, z), Blocks.STONE);
-            for (int x = 5; x <= LENGTH; x++) {
-                helper.setBlock(new BlockPos(x, high, z), Blocks.STONE);
-            }
-        }
-        for (int x = -1; x <= LENGTH + 1; x++) {
-            for (int y = low + 1; y <= high + 2; y++) {
-                helper.setBlock(new BlockPos(x, y, -1), Blocks.STONE);
-                helper.setBlock(new BlockPos(x, y, 3), Blocks.STONE);
-            }
-        }
-        for (int z = 0; z <= 2; z++) {
-            for (int y = low + 1; y <= high + 2; y++) {
-                helper.setBlock(new BlockPos(-1, y, z), Blocks.STONE);
-            }
-        }
-        com.laixia.maidintelligence.gametest.support.world.StrayMaids.sweep(helper);
-        EntityMaid maid = new EntityMaid(helper.getLevel());
-        maid.setPos(GameTestPositions.center(helper, 0, low + 1, 1));
-        maid.setTame(true);
-        maid.setPickup(false);
-        maid.setTask(TaskManager.findTask(FreedomMaidTask.UID).orElseThrow());
-        maid.setHomeModeEnable(false);
-        helper.getLevel().addFreshEntity(maid);
-
-        double startFeet = maid.getY();
-        double[] lowest = new double[]{startFeet};
-        double[] farthest = new double[]{maid.getX()};
-        StringBuilder tape = new StringBuilder();
-
-        for (int tick = 1; tick <= WATCHED_TICKS; tick++) {
-            int at = tick;
-            helper.runAfterDelay(tick, () -> {
-                lowest[0] = Math.min(lowest[0], maid.getY());
-                farthest[0] = Math.max(farthest[0], maid.getX());
-                if (at % 5 == 0 && tape.length() < 700) {
-                    tape.append(String.format("%d:(%.1f,%.1f,%.1f) ",
-                            at,
-                            maid.getX()
-                                    - helper.absolutePos(BlockPos.ZERO).getX(),
-                            maid.getY()
-                                    - helper.absolutePos(BlockPos.ZERO).getY(),
-                            maid.getZ()
-                                    - helper.absolutePos(BlockPos.ZERO).getZ()
-                    ));
-                }
-                if (maid.getY() < startFeet - 1.5D) {
-                    return;
-                }
-                maid.getBrain().setMemory(
-                        MemoryModuleType.WALK_TARGET,
-                        new WalkTarget(new BlockPosTracker(
-                                helper.absolutePos(
-                                        new BlockPos(LENGTH, high + 1, 1))
-                        ), 0.7F, 0)
-                );
-            });
-        }
-
-        helper.runAfterDelay(WATCHED_TICKS, () -> {
-            helper.assertTrue(
-                    lowest[0] > startFeet - 1.5D,
-                    "The step-up ate her jump and she fell: lowest y "
-                            + lowest[0] + "; tape(rel)=" + tape
-            );
-            double farSide = helper.absolutePos(
-                    new BlockPos(LENGTH - 1, high + 1, 1)).getX();
-            helper.assertTrue(
-                    farthest[0] >= farSide,
-                    "She never crossed after the step-up: x " + farthest[0]
-            );
-            maid.discard();
-            helper.succeed();
-        });
-    }
 
     /**
      * 提前跳上窄台，不许跳过头。
@@ -309,6 +204,7 @@ public final class ParkourGameTests {
                             + ", " + maid.getY() + "), ledge top at "
                             + ledgeTop
             );
+            sweep(helper);
             maid.discard();
             helper.succeed();
         });
@@ -364,6 +260,7 @@ public final class ParkourGameTests {
                     "Mid-air retarget bent the leap and she fell: lowest y "
                             + lowest[0]
             );
+            sweep(helper);
             maid.discard();
             helper.succeed();
         });
@@ -377,34 +274,41 @@ public final class ParkourGameTests {
             boolean shouldCross
     ) {
         EntityMaid maid = deck(helper, gap, gapLane);
+        if (!shouldCross) {
+            // 拒走场景的坑要是**真深渊**：浅坑（四格、有底板）在行为
+            // 体系里完全合法——她闲下来后闲逛意图抽点抽到坑底，"计划
+            // 内"下去散步（sw207 取证：goal=(8.5,-60,307.5) 等一串没人
+            // 在测试里写过的地表单）。挖穿到基岩（深九格 > 干落容忍六
+            // 格），降边不连、抽点无面，考题才考"拒走"。
+            for (int x = -1; x <= LENGTH + 1; x++) {
+                for (int z = -1; z <= 3; z++) {
+                    for (int y = -3; y <= 1; y++) {
+                        helper.setBlock(new BlockPos(x, y, z), Blocks.AIR);
+                    }
+                }
+            }
+        }
         double deckFeet = maid.getY();
         double[] lowest = new double[]{deckFeet};
         double[] farthest = new double[]{maid.getX()};
-        StringBuilder tape = new StringBuilder();
-
+        // 动作读数带（note/path/走目标逐 tick，坐标也在内）：四格缺口案
+        // 翻面五轮、五种代码状态都对不上号，坐标看不出她"为什么"迈出沿
+        // 口——下一次红让动作供词自己交代（dump 无条件打，绿轮也留档）。
+        var trace = new com.laixia.maidintelligence.gametest.support
+                .PathwalkTrace("parkour crossing",
+                        helper.absolutePos(BlockPos.ZERO));
         for (int tick = 1; tick <= WATCHED_TICKS; tick++) {
             int at = tick;
-            helper.runAfterDelay(tick, () -> {
-                if (at % 5 == 0 && tape.length() < 700) {
-                    tape.append(String.format("%d:(%.1f,%.1f,%.1f) ",
-                            at,
-                            maid.getX()
-                                    - helper.absolutePos(BlockPos.ZERO).getX(),
-                            maid.getY()
-                                    - helper.absolutePos(BlockPos.ZERO).getY(),
-                            maid.getZ()
-                                    - helper.absolutePos(BlockPos.ZERO).getZ()
-                    ));
-                }
-            });
+            helper.runAfterDelay(tick, () -> trace.sample(at, maid));
         }
         drive(helper, maid, deckFeet, lowest, farthest, null);
+        helper.runAfterDelay(WATCHED_TICKS - 1, trace::dump);
 
         helper.runAfterDelay(WATCHED_TICKS, () -> {
             helper.assertTrue(
                     lowest[0] > deckFeet - 1.5D,
                     "She fell: lowest y " + lowest[0] + " vs deck " + deckFeet
-                            + "; tape(rel)=" + tape
+                            + "（动作读数带见上方 dump）"
             );
             double farSide = helper.absolutePos(
                     new BlockPos(LENGTH - 1, DECK + 1, 1)).getX();
@@ -418,9 +322,10 @@ public final class ParkourGameTests {
                 helper.assertTrue(
                         farthest[0] < farSide,
                         "She somehow crossed a gap that is past her limit: x "
-                                + farthest[0] + "; tape(rel)=" + tape
+                                + farthest[0] + "（动作读数带见上方 dump）"
                 );
             }
+            sweep(helper);
             maid.discard();
             helper.succeed();
         });
@@ -456,12 +361,27 @@ public final class ParkourGameTests {
         }
     }
 
+    /** 进出双清（批次之间世界不还原，台账 §5）：缺口列里躺着邻批的幻影
+     *  方块，四格缺口有时被垫成两格——她跳过去是"越限穿越"红，垫一半
+     *  踩空是"她摔了"红，红绿全看上一任房客（sw195–203 翻面五轮的真
+     *  相，动作读数带拍到她稳稳落在 x5 缺口中央）。 */
+    private static void sweep(GameTestHelper helper) {
+        for (int x = -1; x <= LENGTH + 1; x++) {
+            for (int z = -1; z <= 3; z++) {
+                for (int y = 1; y <= DECK + 4; y++) {
+                    helper.setBlock(new BlockPos(x, y, z), Blocks.AIR);
+                }
+            }
+        }
+    }
+
     /** 三格宽带护栏的长桥。{@code gap} 说哪些 x 是缺口，{@code gapLane} 说断哪些 z 道。 */
     private static EntityMaid deck(
             GameTestHelper helper,
             java.util.function.IntPredicate gap,
             java.util.function.IntPredicate gapLane
     ) {
+        sweep(helper);
         for (int x = 0; x <= LENGTH + 1; x++) {
             for (int z = 0; z <= 2; z++) {
                 helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);

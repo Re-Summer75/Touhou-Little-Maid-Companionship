@@ -106,6 +106,145 @@ public final class WindingPatrolGameTests {
     }
 
     /**
+     * 平台沿口下一格：上台与下地之间往返，下行只是**走下去**。
+     *
+     * <p>实机点名的场景一比一："在方块边缘准备下方块时会抽搐一小会，或
+     * 者来回在边缘不下去。"这一场拿停滞表当尺：往返本身逼她真下去、真
+     * 爬回，沿口犹豫直接体现为原地打转或趟数不足。
+     *
+     * <p>**独立成批**：第一版挤进 windingpatrol，同批打包整体挪位、后续
+     * 批次又在同格继承了这场的 DECK+1 石台——杆桥一族全红、玻璃行连坐
+     * （sw188/189，台账 §5 的原案又添一例）。自己开一批，进出都不动别
+     * 人的格局。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            batch = "ledgestep", timeoutTicks = 470)
+    public static void offTheLedgeSheStepsDownToTheWallBase(
+            GameTestHelper helper
+    ) {
+        // 收场自清（先注册，收官 tick 先清后判）：画下的台面抹回空气。
+        // 批次之间世界不还原，这格后来的住户会继承幻影地板。
+        helper.runAfterDelay(WATCHED, () -> {
+            for (int x = 0; x <= 10; x++) {
+                for (int z = 0; z <= 6; z++) {
+                    for (int y = DECK - 2; y <= DECK + 5; y++) {
+                        helper.setBlock(new BlockPos(x, y, z), Blocks.AIR);
+                    }
+                }
+            }
+        });
+        // 建场前清本场（批次之间世界不还原，台账 §5）。
+        for (int x = 0; x <= 10; x++) {
+            for (int z = 0; z <= 6; z++) {
+                for (int y = DECK - 2; y <= DECK + 5; y++) {
+                    helper.setBlock(new BlockPos(x, y, z), Blocks.AIR);
+                }
+            }
+        }
+        // 下地一整片，西侧抬一格成台：沿墙在 x=4/5 之间，落差一格。
+        for (int x = 0; x <= 10; x++) {
+            for (int z = 0; z <= 6; z++) {
+                helper.setBlock(new BlockPos(x, DECK, z), Blocks.STONE);
+            }
+        }
+        for (int x = 0; x <= 4; x++) {
+            for (int z = 0; z <= 6; z++) {
+                helper.setBlock(new BlockPos(x, DECK + 1, z), Blocks.STONE);
+            }
+        }
+        // 远端放在离墙两格半外：贴着墙根的话，人站在沿口上方水平距离就
+        // 进了翻趟圈（<1.2），没下过台阶这条测试也会绿——那就白钉了。
+        patrol(helper, DECK + 2, 3, 0.5D,
+                new BlockPos(7, DECK + 1, 3), new BlockPos(1, DECK + 2, 3),
+                false, "the ledge step-down");
+    }
+
+    /**
+     * 奔跑档下台阶：**沿口不许犹豫**。实机点名："平地奔跑下方块时总在
+     * 边缘抽搐一会才决定下去"——安全判定慢半拍。慢档那条钉（上一场，
+     * 0.7 档）是绿的；抽搐随速度放大（预演视野 = 步速 × 前瞻 tick），
+     * 所以这条按奔跑档写单，专量**沿口滞留**：人在沿口一格带里、脚还在
+     * 上层的 tick 数。
+     */
+    @GameTest(templateNamespace = "minecraft", template = "empty",
+            batch = "ledgestep", timeoutTicks = 300)
+    public static void atARunSheStepsOffTheLedgeWithoutDithering(
+            GameTestHelper helper
+    ) {
+        for (int x = 0; x <= 10; x++) {
+            for (int z = 0; z <= 6; z++) {
+                for (int y = DECK - 2; y <= DECK + 5; y++) {
+                    helper.setBlock(new BlockPos(x, y, z), Blocks.AIR);
+                }
+            }
+        }
+        for (int x = 0; x <= 10; x++) {
+            for (int z = 0; z <= 6; z++) {
+                helper.setBlock(new BlockPos(x, DECK, z), Blocks.STONE);
+            }
+        }
+        for (int x = 0; x <= 4; x++) {
+            for (int z = 0; z <= 6; z++) {
+                helper.setBlock(new BlockPos(x, DECK + 1, z), Blocks.STONE);
+            }
+        }
+        BlockPos zero = helper.absolutePos(BlockPos.ZERO);
+        EntityMaid maid = BridgePatrol.maidAt(helper, zero.getX() + 1.5D,
+                zero.getY() + DECK + 2.0D, zero.getZ() + 3.5D);
+        var trace = new com.laixia.maidintelligence.gametest.support
+                .PathwalkTrace("run ledge step-down", zero);
+        int[] rimDwell = new int[]{0};
+        boolean[] down = new boolean[]{false};
+        double rimX = zero.getX() + 5.0D;
+        double upperFeet = zero.getY() + DECK + 2.0D;
+        for (int at = 2; at <= 260; at++) {
+            int tick = at;
+            helper.runAfterDelay(at, () -> {
+                trace.sample(tick, maid);
+                // 奔跑档写单（1.15 ≈ 冲刺跟随的步速档）。
+                maid.getBrain().setMemory(
+                        net.minecraft.world.entity.ai.memory
+                                .MemoryModuleType.WALK_TARGET,
+                        new net.minecraft.world.entity.ai.memory.WalkTarget(
+                                new net.minecraft.world.entity.ai.behavior
+                                        .BlockPosTracker(new BlockPos(
+                                                zero.getX() + 8,
+                                                zero.getY() + DECK + 1,
+                                                zero.getZ() + 3)),
+                                1.15F, 0));
+                if (maid.getY() < upperFeet - 0.5D) {
+                    down[0] = true;
+                }
+                if (!down[0] && Math.abs(maid.getX() - rimX) < 1.0D
+                        && maid.getY() > upperFeet - 0.1D) {
+                    rimDwell[0]++;
+                }
+            });
+        }
+        helper.runAfterDelay(280, () -> {
+            double left = Math.hypot(maid.getX() - (zero.getX() + 8.5D),
+                    maid.getZ() - (zero.getZ() + 3.5D));
+            for (int x = 0; x <= 10; x++) {
+                for (int z = 0; z <= 6; z++) {
+                    for (int y = DECK - 2; y <= DECK + 5; y++) {
+                        helper.setBlock(new BlockPos(x, y, z), Blocks.AIR);
+                    }
+                }
+            }
+            trace.dump();
+            maid.discard();
+            helper.assertTrue(down[0] && left < 1.5D,
+                    "奔跑档没下到台下（差 " + String.format("%.1f", left)
+                            + " 格）；沿口滞留 " + rimDwell[0]
+                            + "t（读数带见上方 dump）");
+            helper.assertTrue(rimDwell[0] <= 20,
+                    "沿口犹豫了 " + rimDwell[0] + " tick 才下去（限 20；"
+                            + "读数带见上方 dump）");
+            helper.succeed();
+        });
+    }
+
+    /**
      * 两个路标之间往返：到点掉头、计趟，全程记读数带与停滞表。
      *
      * <p>{@code watchFalls} 分开的是两种场景的主敌：悬空的路摔一次就是红，

@@ -28,6 +28,8 @@ public final class BenchmarkSwitch {
 
     private static final String DOJO = "COMPANIONSHIP_DOJO";
 
+    private static final String PATHS = "COMPANIONSHIP_PATHBENCH";
+
     private BenchmarkSwitch() {
     }
 
@@ -49,6 +51,21 @@ public final class BenchmarkSwitch {
      */
     public static boolean training() {
         return measuring() || set(DOJO);
+    }
+
+    /**
+     * 这一轮跑不跑**寻路**基准。
+     *
+     * <p>又一个单独的开关，理由同靶场：量寻路的时候不该陪跑战斗。实测
+     * 一轮开着 {@code COMPANIONSHIP_BENCHMARK} 要四十多分钟，而十八条寻
+     * 路读数在头几分钟就出完了，剩下全耗在战斗基准与跳劈靶场上。
+     *
+     * <pre>{@code
+     * COMPANIONSHIP_PATHBENCH=1 ./gradlew runGameTestServer  # 只量寻路
+     * }</pre>
+     */
+    public static boolean pathing() {
+        return measuring() || set(PATHS);
     }
 
     private static boolean set(String name) {

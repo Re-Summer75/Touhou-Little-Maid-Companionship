@@ -147,10 +147,43 @@ public final class SunkenLidGameTests {
         helper.getLevel().addFreshEntity(maid);
 
         double[] farthest = new double[]{maid.getX()};
+        var tape = new com.laixia.maidintelligence.gametest.support
+                .PathwalkTrace("sunken lid", helper.absolutePos(BlockPos.ZERO));
+        // 现场实验（落地后）：门板锚解不解得出、有几条出边、各是什么
+        // 步态——jumpOk 拒不拒 0.81 贴脸登阶，一炮定案。
+        helper.runAfterDelay(8, () -> {
+            var web = new com.laixia.maidintelligence.feature.behavior.tlm
+                    .pathing.voxel.StrideWeb(helper.getLevel(),
+                            maid.getBbWidth(), maid.getBbHeight(),
+                            new com.laixia.maidintelligence.feature.behavior
+                                    .tlm.pathing.voxel.EdgeVeto());
+            var seat = com.laixia.maidintelligence.feature.behavior.tlm
+                    .pathing.voxel.AnchorResolver.standingOn(
+                            helper.getLevel(), maid.getBoundingBox(),
+                            maid.getY());
+            var outs = seat == null ? null : web.from(seat);
+            System.out.println("[lid-edges] anchor=" + seat + " outs="
+                    + (outs == null ? "-" : outs.stream()
+                            .map(o -> o.stride().move() + ">"
+                                    + o.to().cell().toShortString())
+                            .toList()));
+        });
 
         for (int tick = 1; tick <= WATCHED_TICKS; tick++) {
+            int at = tick;
             helper.runAfterDelay(tick, () -> {
+                tape.sample(at, maid);
                 farthest[0] = Math.max(farthest[0], maid.getX());
+                // 每两秒带探针写单（其余 tick 素写）：两轮连红时先问
+                // "探路到底答了什么"，别再从冻住的终点反推。
+                if (at % 40 == 2) {
+                    com.laixia.maidintelligence.gametest.support
+                            .PathwalkTrace.probeAndOrder(maid,
+                                    helper.absolutePos(
+                                            new BlockPos(7, DECK + 1, 1)),
+                                    "sunken lid", at);
+                    return;
+                }
                 maid.getBrain().setMemory(
                         MemoryModuleType.WALK_TARGET,
                         new WalkTarget(new BlockPosTracker(
@@ -163,6 +196,7 @@ public final class SunkenLidGameTests {
         helper.runAfterDelay(WATCHED_TICKS, () -> {
             double roadTop = helper.absolutePos(
                     new BlockPos(6, DECK + 1, 1)).getX();
+            tape.dump();
             helper.assertTrue(
                     farthest[0] >= roadTop,
                     "She stayed stranded on the sunken lid: got to x "

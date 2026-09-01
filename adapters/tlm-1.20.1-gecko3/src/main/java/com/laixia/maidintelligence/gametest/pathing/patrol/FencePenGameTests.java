@@ -45,31 +45,34 @@ public final class FencePenGameTests {
         // 铺地不许出 0..12（棋盘步长十三），写出去就是写进邻场的领地。
         // 可这一场又需要绕行余地：她出西口绕外围回东时贴着场西走，只留
         // 两格会偶发一步踏出场沿（rel −0.6 的 dropoff 摔，三十八轮闪过
-        // 三回）。两头都要，就把**圈**整体挪一格——圈心 (5,5)→(6,6)，
-        // 东西各留三格绕行地，场地收进 0..12，考题（开口在背后、必须整
+        // 三回）。两头都要，就把**圈**整体挪两格——圈心 (5,5)→(7,7)，
+        // 西侧仍留四格绕行地，场地收进 0..12，考题（开口在背后、必须整
         // 圈绕过去）一字未动。
+        //
+        // 只挪一格试过（圈心 6,6、西侧三格），偶发踏空当场回来：run2 在
+        // rel x=−0.67 摔出场沿。西沿那四格是拿摔换来的，不能省。
         for (int x = 0; x <= 12; x++) {
             for (int z = 0; z <= 12; z++) {
                 helper.setBlock(new BlockPos(x, DECK, z), Blocks.STONE);
             }
         }
-        // 七乘七的栅栏圈，圈心 (6, 6)；开口在**西**面（x=3, z=6），
+        // 七乘七的栅栏圈，圈心 (7, 7)；开口在**西**面（x=4, z=7），
         // 而主人在东边——直线方向正对着墙，必须整圈绕过去。
-        for (int x = 3; x <= 9; x++) {
-            fence(helper, x, 3);
-            fence(helper, x, 9);
+        for (int x = 4; x <= 10; x++) {
+            fence(helper, x, 4);
+            fence(helper, x, 10);
         }
-        for (int z = 4; z <= 8; z++) {
-            if (z != 6) {
-                fence(helper, 3, z);
+        for (int z = 5; z <= 9; z++) {
+            if (z != 7) {
+                fence(helper, 4, z);
             }
-            fence(helper, 9, z);
+            fence(helper, 10, z);
         }
 
         BridgePatrol.followPatrol(helper,
-                at(helper, 6.5D, 5.5D),
-                at(helper, 11.5D, 6.5D),
-                at(helper, 6.5D, 5.5D),
+                at(helper, 7.5D, 6.5D),
+                at(helper, 11.5D, 7.5D),
+                at(helper, 7.5D, 6.5D),
                 1, helper.absolutePos(BlockPos.ZERO).getY() + DECK - 1.0D,
                 DRIVE_TICKS, "fence pen");
     }

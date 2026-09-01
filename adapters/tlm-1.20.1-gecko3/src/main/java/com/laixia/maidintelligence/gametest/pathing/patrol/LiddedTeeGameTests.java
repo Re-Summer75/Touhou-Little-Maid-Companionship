@@ -22,17 +22,10 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * 玩家实机截图的四桩：一格宽悬空梁上的门板与倒 T。
- *
- * <p>四条报告一一对应：横着的门板她认不认那是能站的地方；**竖着**的门板
- * （开着的活板门是一整格高的贴边竖片）她跨不跨得过去；倒 T（梁中间竖起一
- * 格，两侧各只剩一格落脚）会不会摔；以及在窄梁尽头**掉头**时会不会被跳的
- * 方向甩出去。
- *
- * <p>驾驶一律用奔跑跟随（{@link BridgePatrol#followPatrol}）——玩家点名，
- * 而且实机的摔全发生在这一种里：掉头不是测试喊的，是她自己在终点重新决定
- * 的，跳的方向也就此由她自己挑。每条各跑六遍：这些落点只有一格长，起跳点
- * 差半格结果就翻面，一次过说明不了什么。
+ * 玩家实机截图的四桩：一格宽悬空梁上的门板与倒 T（横/竖门板、倒 T、窄
+ * 梁尽头掉头）。驾驶一律奔跑跟随（{@link BridgePatrol#followPatrol}，实
+ * 机的摔全在这一种里）；每条跑六遍——落点只有一格长，起跳点差半格结果
+ * 就翻面，一次过说明不了什么。
  */
 @GameTestHolder(ModResources.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -239,9 +232,16 @@ public final class LiddedTeeGameTests {
 
     /** 摔下去落在自家院里，别搅进邻居的测试格。 */
     private static void safetyFloor(GameTestHelper helper) {
+        // 进场清（批次之间世界不还原，台账 §5）：杆桥族的红绿随棋盘打
+        // 包洗牌了一整晚——轮盘怎么转都不该由邻居决定考题，受害者自清。
         for (int x = -1; x <= 10; x++) {
-            for (int z = 0; z <= 4; z++) {
-                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
+            for (int z = -1; z <= 8; z++) {
+                for (int y = 1; y <= DECK + 5; y++) {
+                    helper.setBlock(new BlockPos(x, y, z), Blocks.AIR);
+                }
+                if (z >= 0 && z <= 4) {
+                    helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
+                }
             }
         }
     }
@@ -363,14 +363,10 @@ public final class LiddedTeeGameTests {
             helper.runAfterDelay(at, () -> trace.sample(tick, maid));
         }
         for (int at = 2; at <= 600; at += 40) {
-            helper.runAfterDelay(at, () -> maid.getBrain().setMemory(
-                    net.minecraft.world.entity.ai.memory.MemoryModuleType
-                            .WALK_TARGET,
-                    new net.minecraft.world.entity.ai.memory.WalkTarget(
-                            new net.minecraft.world.entity.ai.behavior
-                                    .BlockPosTracker(
-                                            helper.absolutePos(goal)),
-                            0.45F, 0)));
+            int tick = at;
+            helper.runAfterDelay(at, () -> com.laixia.maidintelligence
+                    .gametest.support.PathwalkTrace.probeAndOrder(
+                            maid, helper.absolutePos(goal), tape, tick));
         }
         double fallLine = zero.getY() + DECK + 1.0D;
         boolean[] fell = {false};
@@ -428,14 +424,10 @@ public final class LiddedTeeGameTests {
         // 慢速档（散步/注视那档 0.45×）：每两秒补写一次走目标，防 sink
         // 中途擦掉。
         for (int at = 2; at <= 600; at += 40) {
-            helper.runAfterDelay(at, () -> maid.getBrain().setMemory(
-                    net.minecraft.world.entity.ai.memory.MemoryModuleType
-                            .WALK_TARGET,
-                    new net.minecraft.world.entity.ai.memory.WalkTarget(
-                            new net.minecraft.world.entity.ai.behavior
-                                    .BlockPosTracker(
-                                            helper.absolutePos(goal)),
-                            0.45F, 0)));
+            int tick = at;
+            helper.runAfterDelay(at, () -> com.laixia.maidintelligence
+                    .gametest.support.PathwalkTrace.probeAndOrder(
+                            maid, helper.absolutePos(goal), tape, tick));
         }
         double fallLine = zero.getY() + DECK + 1.0D;
         boolean[] fell = {false};
