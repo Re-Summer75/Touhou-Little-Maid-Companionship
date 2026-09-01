@@ -43,10 +43,11 @@ public final class TargetPatience {
     private static final int RECONSIDER_TICKS = 600;
 
     /**
-     * 同时记几件放弃过的。八件：够覆盖一个角落里挤着的一小堆，又不至于把一整片
-     * 地都拉黑。满了挤掉最早的，而每一条本来也会到期。
+     * 同时记几件放弃过的。曾经八件，实机封圈拍出极端形态：两百多个不可达
+     * P 点轮流回锅，每件回锅都重新花全额审一遍——上限要盖得住一整圈挠不
+     * 到的堆，不只一个角落。满了挤掉最早的，条目也各自到期。
      */
-    private static final int SHUNNED_LIMIT = 8;
+    private static final int SHUNNED_LIMIT = 64;
 
     private final Map<EntityMaid, Attempt> attempts = new WeakHashMap<>();
 

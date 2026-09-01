@@ -31,10 +31,39 @@ public final class MeshWalk {
     private MeshWalk() {
     }
 
+    /** 雕刻缓存：同一只、中心偏移两格内、两秒内复用。雕刻是兜底最贵
+     *  的一段（实机卡栏外连发：每次换件都现雕 25×25，单价百毫秒量级，
+     *  P 点臂 74 次总账十四秒）；键放两格宽——沿栏蹭步换格就重雕的话
+     *  缓存形同虚设，网格半径十二格，中心偏两格覆盖率照旧够。 */
+    private static final java.util.Map<Mob, Carved> CARVED =
+            new java.util.WeakHashMap<>();
+
+    private record Carved(net.minecraft.core.BlockPos center, long stamp,
+            SurfaceMesh mesh) {
+    }
+
     /** 铺一条纯走路的路；铺不出返回 null。 */
     public static VoxelPath plan(Level level, Mob mob, Vec3 goal) {
-        SurfaceMesh mesh = SurfaceMesh.around(level, mob.blockPosition(),
-                REACH, BAND, mob.getBbWidth(), mob.getBbHeight());
+        var here = mob.blockPosition();
+        long now = level.getGameTime();
+        Carved kept = CARVED.get(mob);
+        boolean fresh = kept == null || kept.center.distSqr(here) > 4.0D
+                || now - kept.stamp >= 40L;
+        // 现雕要先问预算：雕刻自身不可中断，余额不够就这单不雕，
+        // 交给锚图的诚实前沿；下一 tick 预算回满再雕不迟。
+        if (fresh && com.laixia.maidintelligence.feature.behavior.tlm.pathing
+                .voxel.VoxelAstar.headroom(now) < 5_000_000L) {
+            return null;
+        }
+        SurfaceMesh mesh;
+        if (kept != null && kept.center.distSqr(here) <= 4.0D
+                && now - kept.stamp < 40L) {
+            mesh = kept.mesh;
+        } else {
+            mesh = SurfaceMesh.around(level, here,
+                    REACH, BAND, mob.getBbWidth(), mob.getBbHeight());
+            CARVED.put(mob, new Carved(here, now, mesh));
+        }
         List<Vec3> line = MeshRoute.plan(mesh, mob.position(), goal);
         if (line.size() < 2) {
             return null;

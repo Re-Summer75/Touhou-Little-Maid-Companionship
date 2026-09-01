@@ -29,8 +29,14 @@ public final class StrideWalker {
      */
     private static final double WALK_SPEED = 0.16D;
 
-    /** 每 tick 最多拧多少度朝向——够灵活，不够甩尾。 */
-    private static final float TURN_RATE = 30.0F;
+    /** 每 tick 最多拧多少度朝向——快到跟得上脚（实机点名"脚动了身子
+     *  还没转过来"：速度一 tick 对准新向、旧档半圈要拧六 tick），又不
+     *  至于甩尾。 */
+    private static final float TURN_RATE = 50.0F;
+
+    /** 过弯限速的标定转速：保持旧档 30——cornerLimit 由它推导，抬真转
+     *  速时限速只更保守，窄面转角的安全边际不跟着松。 */
+    private static final float TURN_DYNAMICS = 30.0F;
 
     /** 迈步前往前看多少 tick：转过九十度约要六 tick，看到转弯之后。 */
     private static final int LOOKAHEAD_TICKS = 8;
@@ -97,18 +103,20 @@ public final class StrideWalker {
         double toZ = next.at().z - mob.getZ();
         double flat = Math.hypot(toX, toZ);
         double rise = next.at().y - mob.getY();
-        // **路径要贴着现实**：摔落、被击退之后，旧路径的锚可能悬在头顶
-        // 五格——照单执行就是对着墙反复起跳（实测一轮一千七百跳、跑到超
-        // 时）。锚够不着（高差过大或水平走丢）就作废，等下一次下单按新
-        // 位置重铺。
-        // 作废的判据是**离这条腿多远**，不是"下一站多远"：任意角的一
-        // 条腿本来就能有七八格长（这正是 Theta* 的收益），按到站距离判
-        // 就是每接到一条长直线立刻自我作废、原地打转（栅栏圈实测 stale
-        // f7.4）。她被击退、摔落之后偏离的是**线**，量线才量得对。
+        // **路径要贴着现实**：摔落、击退后旧锚可能悬在头顶五格，照单
+        // 执行就是对墙反复起跳（实测一轮一千七百跳）。作废判据是**离
+        // 这条腿多远**（线距），不是"下一站多远"——任意角的腿本就七八
+        // 格长，按到站距离判等于接到长直线就自我作废（栅栏圈 f7.4）。
         double offLeg = path.offLeg(mob.getX(), mob.getZ());
         if (rise > 1.5D || rise < -7.0D || offLeg > 3.0D) {
             path = null;
             note = String.format("stale r%.1f o%.1f", rise, offLeg);
+            return false;
+        }
+        // 走不动也作废（原地怼壁一族），细账在 dragging 的 javadoc。
+        if (path.dragging(mob.getX(), mob.getZ())) {
+            path = null;
+            note = "frozen";
             return false;
         }
         // 判到：踏上支撑面就算到——面是"能站的地方"的精确集合，比对
@@ -167,7 +175,13 @@ public final class StrideWalker {
             path.advance();
             if (!path.alive()) {
                 note = "done";
-                halt();
+                // 到站收速：**真到站的宽面**交给摩擦滑两步自然停（实机
+                // 点名"原地瞬停、感觉不到惯性"）。窄面照旧钉停（杆顶滑
+                // 行=滑出侧沿）；诚实前沿的半截路也钉停——那种"到站"常
+                // 停在沿口，滑出去就是四格缺口案那种坑底。
+                if (next.breadth() < 0.5D || !path.reaches()) {
+                    halt();
+                }
                 return true;
             }
             next = path.next();
@@ -211,7 +225,7 @@ public final class StrideWalker {
             return Double.MAX_VALUE;
         }
         int i = path.cursor();
-        double ticks = Math.max(1.0D, turn / TURN_RATE);
+        double ticks = Math.max(1.0D, turn / TURN_DYNAMICS);
         double room = Math.min(path.anchorAt(i).breadth(),
                 path.anchorAt(i + 1).breadth());
         return room / ticks;
@@ -236,28 +250,31 @@ public final class StrideWalker {
             return;
         }
         faceToward(toX, toZ);
-        // **先预演再迈步**：按这股速度往前推几 tick，问物理"这么走会不
-        // 会真的掉下去"（{@link SweptMotion#dropAhead} 与图侧验跳边同一
-        // 个内核）。会掉就换慢一档再问，档档都掉就刹住——由物理挑步速，
-        // 不由我按地形写常数（玩家点破："总是在调参，这样很难说适应不
-        // 明场景"）。杆桥转角上她自然会慢下来，因为快了真的会掉。
-        // 步速上限还要过**脚下这片地**这一关：一 tick 的位移不该越过支
-        // 撑面的半宽——越过中心就等于这一步把她从面的一侧送到了另一
-        // 侧，落点本来就有的偏差再叠上去就出界了。末地烛顶只有 0.25 见
-        // 方，按赶路的 0.26 迈一步正好跨过整个落脚面（实测：落点 5.9 两
-        // 轮相同，慢的那轮站住了、快的那轮当场滑出去摔）。
-        //
-        // 宽面上这个上限远高于步速，自然不限速；窄面上它把人收回基准
-        // 档，所以既有场景一格不动——这是几何给的界，不是又一个常数。
+        // **先预演再迈步**：按这股速度往前推几 tick 问物理会不会掉，会
+        // 掉换慢档再问，档档都掉刹住——由物理挑步速不写地形常数。步速
+        // 上限另过"脚下这片地"：一 tick 位移不越支撑半宽（烛顶 0.25 见
+        // 方按赶路迈一步正好跨过整面，快的那轮当场滑出去摔）。宽面上限
+        // 远高于步速自然不限；窄面收回基准档——几何给的界。
         double cap = Math.min(Math.max(WALK_SPEED, flight.paceStep()),
                 Math.max(WALK_SPEED,
                         (path == null ? 1.0D : path.seatWidth()) * 0.5D));
         double want = Math.min(cap,
                 Math.min(flat * 0.5D, cornerLimit(flat)));
-        // 面内约束的路不必再预演：几何已担保不出界，而车道上她本就半
-        // 个身子悬在道外，逐步预演每步都说"会掉"，人只能按最慢档爬。
-        if (path != null && path.constrained()) {
-            faceToward(toX, toZ);
+        // "先转身再迈步"试过（>75° 收半档）：回锚/贴沿的小碎步本就靠
+        // 瞬间反向，被收半档后回锚慢三倍、组织超时作废循环，杆桥十二副
+        // 本齐红（sw210）。脚身一致只靠转速 50 本身——半圈 3.6 tick。
+        // 两种情形免预演。一是**面内约束**的路：几何已担保不出界，而车
+        // 道上她本就半个身子悬在道外，逐步预演每步都说"会掉"，人只能按
+        // 最慢档爬。二是**这一步整个走在同一片面内**：她与下一站都在这
+        // 片支撑上、且离边还剩得下八 tick 的路，那就无处可掉。
+        //
+        // 第二条起初只问"她离**出发面**的边多远"，倒 T 当场摔给我看
+        // （run3 t=73）：出发面再宽，也不代表这一步不跨到别的面上去。
+        // 省下的是执行侧的大头（基准：二十四只 115ms，规划仅占 0.36ms）。
+        if (path != null && (path.constrained() || (path.alive()
+                && path.from().rimDist(next().at().x, next().at().z) > 0.0D
+                && path.from().rimDist(mob.getX(), mob.getZ())
+                        > want * LOOKAHEAD_TICKS))) {
             Vec3 keep = mob.getDeltaMovement();
             mob.setDeltaMovement(toX / flat * want, keep.y,
                     toZ / flat * want);
@@ -279,11 +296,9 @@ public final class StrideWalker {
                 break;
             }
         }
-        // **危险不等于停步**：三档都判危时走最慢那档，不是钉在原地。
-        // 预演问的是"照这个速度直着走下去会不会掉"——在沿口附近它当然
-        // 说会，那正是该慢下来的信号，不是该停下的信号（图已经担保这条
-        // 腿走得通）。停过一轮：六类老红当场绿，杆桥却寸步难行（一百九
-        // 十次刹停、走不到对岸）。慢行两全。
+        // **危险不等于停步**：三档都判危时走最慢那档，不是钉在原地
+        // （停过一轮：六类老红当场绿，杆桥却一百九十次刹停走不到对
+        // 岸）。慢行两全。
         if (speed <= 0.0D) {
             halt();
             note = "brake";
@@ -425,20 +440,11 @@ public final class StrideWalker {
                 return;
             }
         }
-        // 走丢的判定**排在贴沿之后**：两者曾用互不相干的尺子打架——贴
-        // 沿看"前方支撑还有多远"（长平台上她本就该走出两三格），回锚看
-        // "离出发那一格的面多远"（0.35），她一走出那格就被拽回来，于是
-        // approach ↔ regroup 摆上几十秒（立门板案实测）。反过来，用"顺
-        // 跳向不算走丢"去绕，真沿口也不拽她了，她径直走出台沿摔下去（细
-        // 柱案九红）。次序才是答案：先把沿贴完，还偏着才是真偏了。
-        // 走丢＝离出发那一格的支撑面太远。
-        //
-        // 换过三种参照物，都更差：按"脚下有没有支撑"，踩着杆条边沿也算
-        // 有，她从偏心位起跳、跨度短一截（细柱七红）；再加"窄面拢心"仍
-        // 是八红；改按"离这条腿的走廊多远"更糟，十红。原版这把尺子在细
-        // 柱案上一直是零到一红——它虽然在长平台上会和贴沿争几轮（摆动
-        // 的来处，靠次序压住：贴沿先行，贴完才判），但**跳得准**是更贵
-        // 的东西。数据面前不硬扭。
+        // 走丢的判定**排在贴沿之后**（次序即答案：先把沿贴完，还偏着才
+        // 是真偏）——两把尺子曾打架，approach↔regroup 摆几十秒（立门板
+        // 案）；绕开又会走出台沿（细柱九红）。参照物换过三种都更差
+        // （脚下有支撑七红、窄面拢心八红、离走廊十红），"离出发那格的
+        // 面 0.35"在细柱案上一直零到一红——跳得准最贵，数据面前不硬扭。
         double backDist = path.from().standDist(mob.getX(), mob.getZ());
         if (backDist > 0.35D) {
             double backX = path.from().at().x - mob.getX();
@@ -481,11 +487,12 @@ public final class StrideWalker {
         mob.setDeltaMovement(0.0D, motion.y, 0.0D);
     }
 
-    /** 平滑拧向行进方向。 */
-    private void faceToward(double toX, double toZ) {
+    /** 平滑拧向行进方向；返回这一 tick 拧完还差多少度。 */
+    private float faceToward(double toX, double toZ) {
         float wanted = (float) (Mth.atan2(toZ, toX) * (180.0D / Math.PI))
                 - 90.0F;
         mob.setYRot(Mth.approachDegrees(mob.getYRot(), wanted, TURN_RATE));
         mob.yBodyRot = mob.getYRot();
+        return Math.abs(Mth.degreesDifference(mob.getYRot(), wanted));
     }
 }

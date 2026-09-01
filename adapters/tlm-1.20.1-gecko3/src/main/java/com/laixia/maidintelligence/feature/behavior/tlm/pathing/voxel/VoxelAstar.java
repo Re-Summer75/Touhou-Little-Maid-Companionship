@@ -24,23 +24,14 @@ import java.util.PriorityQueue;
  * 上不产它。
  */
 public final class VoxelAstar {
-    /** 展开预算。
-     *
-     * <p>绕行题吃的就是这个数：栅栏圈的正解是"向西出口→绕外圈往东"，
-     * 路长、节点多，预算烧完就只剩部分路径——她于是走到离主人最近的那
-     * 面墙前停住，看着像"以为墙能过"，其实是**没找到那条远路**（玩家一
-     * 语中的："出口在远处"）。多锚点又让每格能产出两个站位，节点数近乎
-     * 翻倍，旧的两千更不够用。
-     *
-     * <p>翻倍的底气来自记账：跳边与视线各自只算一次（{@code jumpOk}、
-     * {@code lineWalkable} 缓存），每个节点比从前便宜得多。 */
+    /** 展开预算。绕行题吃的就是这个数（栅栏圈的远路预算烧完就只剩部
+     *  分路径，她停在离主人最近的墙前）；多锚点让节点近乎翻倍，翻倍的
+     *  底气来自 jumpOk/lineWalkable 记账。 */
     private static final int VISIT_BUDGET = 4096;
 
-    /** 一次规划的**标称**开销：占位按它扣，不按最坏值。按 VISIT_BUDGET
-     *  （最坏值）占位等于把名额砍到四个，而"没路可走"的女仆每 tick 都
-     *  会重试——几只无路的就能把全服名额吃干净，其余的永远排不上队
-     *  （抬高石往返实测：她在原地钉了一百七十 tick，note 停在上一程的
-     *  done）。绝大多数规划展开量在两位数，标称值才是真实开销。 */
+    /** 一次规划的**标称**开销：占位按它扣不按最坏值——按最坏占位等于
+     *  名额砍到四个，几只无路的就吃干全服（抬高石实测钉柱一百七十
+     *  tick）。 */
     private static final int PLAN_COST = 256;
 
     /** 全 tick 预算：一 tick 内**全体**女仆共享的展开额度。玩家会养几
@@ -50,16 +41,62 @@ public final class VoxelAstar {
     private static long budgetStamp = Long.MIN_VALUE;
     private static int budgetSpent;
 
+    /** 全 tick 的**时间**硬顶。按次数放行会把 69ms 与 1ms 的规划当同一
+     *  个名额（n=24 实测两三次灾难规划就吃穿 tick）——按时间记账，次数
+     *  额度照旧。第一版 5ms 饿死过人（倒 T lastPlan=76t：按实体顺序下
+     *  单，饿的总是同几只——那会儿还没有"没路必放行"的保底，如今有）。
+     *  15ms 时代栏边 tick 被规划峰值顶到二十七（sealed p95）；8ms 试
+     *  过一轮，尖刺压到十四但拾取吞吐砍半（fenced 收货 235→101）、战
+     *  斗对双红——12ms 是两头都站得住的中间值。 */
+    private static final long NANO_BUDGET = 12_000_000L;
+    private static long nanosSpent;
+    private static long lastDenyLog = Long.MIN_VALUE;
+    private static long lastBrakeLog = Long.MIN_VALUE;
+
     private VoxelAstar() {
+    }
+
+    /** 兜底（mesh 雕刻）的耗时也计入本 tick 的时间账：强闯者烧的钱下
+     *  一单的 tryReserve 看得见，全场其他人自动让路。 */
+    public static void charge(long nanos) {
+        nanosSpent += nanos;
+    }
+
+    private static void rollTick(long gameTime) {
+        if (gameTime != budgetStamp) {
+            budgetStamp = gameTime;
+            budgetSpent = 0;
+            nanosSpent = 0L;
+        }
+    }
+
+    /** 本 tick 时间预算的余额（保底两毫秒）：生产规划的墙钟硬顶。
+     *  15ms 账是花完才记的后置账，拦不住正在爆炸的这一单（sealed
+     *  臂 p95 190ms 单发尖刺）——把余额传进 find 当硬顶，良图无
+     *  感（常规规划 1~3ms），毒图交诚实前沿分段推进；完备性钉
+     *  走四参版不受管。 */
+    public static long headroom(long gameTime) {
+        rollTick(gameTime);
+        return Math.max(2_000_000L, NANO_BUDGET - nanosSpent);
     }
 
     /** 在这一 tick 的全局预算里给一次规划占位；占不到就别铺。 */
     public static boolean tryReserve(long gameTime) {
-        if (gameTime != budgetStamp) {
-            budgetStamp = gameTime;
-            budgetSpent = 0;
-        }
-        if (budgetSpent + PLAN_COST > TICK_BUDGET) {
+        rollTick(gameTime);
+        if (budgetSpent + PLAN_COST > TICK_BUDGET
+                || nanosSpent >= NANO_BUDGET) {
+            // 拒单取证（每百 tick 至多一声）：长冻结全靠这行对质——是
+            // 纳秒帐还是名额帐、被吃到多少。zigzag 案排除到最后才指到
+            // 配额头上，因为它此前一言不发。
+            // MIN_VALUE 初值直接进减法会溢出成永远压声（confess 同案）。
+            if (gameTime - lastDenyLog >= 100L
+                    || lastDenyLog == Long.MIN_VALUE) {
+                lastDenyLog = gameTime;
+                com.mojang.logging.LogUtils.getLogger().warn(
+                        "[voxel-quota] denied t={} spent={}ms plans={}",
+                        gameTime, nanosSpent / 1_000_000L,
+                        budgetSpent / PLAN_COST);
+            }
             return false;
         }
         budgetSpent += PLAN_COST;
@@ -77,6 +114,43 @@ public final class VoxelAstar {
             Vec3 goal,
             double acceptWithin
     ) {
+        return find(edges, start, goal, acceptWithin, 0L);
+    }
+
+    public static VoxelPath find(
+            StrideSupplier edges,
+            Anchor start,
+            Vec3 goal,
+            double acceptWithin,
+            long hardCap
+    ) {
+        // 时间账在入口记：搜索自己花了多久，本 tick 的时间闸就按它关。
+        long clock = System.nanoTime();
+        try {
+            return search(edges, start, goal, acceptWithin, hardCap);
+        } finally {
+            nanosSpent += System.nanoTime() - clock;
+        }
+    }
+
+    /** 单次搜索的时间刹车：到点就交诚实前沿（展开预算是节点上限，可
+     *  节点有单价——毒图烧满 4096 节点一次 254ms，sw183 n=24 实测；时
+     *  间闸拦得住下一单、拦不住正在爆炸的这单）。 */
+    private static final long SEARCH_NANO_CAP = 8_000_000L;
+
+    /** 刹车前的**确定性地板**：不满 512 节点不许刹。纯时间刹车让同图
+     *  不同轮交出不同的路（玻璃行道案：贪心前沿把她引进爬不出的口袋）；
+     *  测试地形图总量都在几百节点内，给足即恢复确定，大世界超过才轮到
+     *  时间闸。 */
+    private static final int BRAKE_FLOOR = 512;
+
+    private static VoxelPath search(
+            StrideSupplier edges,
+            Anchor start,
+            Vec3 goal,
+            double acceptWithin,
+            long hardCap
+    ) {
         record Open(Anchor at, double f) {
         }
         Map<Key, Double> gScore = new HashMap<>();
@@ -92,8 +166,33 @@ public final class VoxelAstar {
         Anchor closest = start;
         double closestH = heuristic(start, goal);
         int visited = 0;
+        long began = System.nanoTime();
 
         while (!open.isEmpty() && visited < VISIT_BUDGET) {
+            // 每 8 个节点看一次表：毒图单节点 0.3ms，32 步粒度的刹车
+            // 惯性就是十毫秒超程（sealed p95 的另一成分）。地板期
+            // 内另设三倍时间的硬顶：地板保的是测试图的确定性，那些图
+            // 节点便宜、永远碰不到这条线；栅栏格的弹道图单节点贵，512
+            // 个保底节点一次上百毫秒（sealed 臂实测 plan 150ms/次），
+            // 地板反成了单价放大器。
+            if ((visited & 7) == 7
+                    && System.nanoTime() - began > SEARCH_NANO_CAP
+                    && (visited >= BRAKE_FLOOR
+                            || (hardCap > 0L
+                                    && System.nanoTime() - began
+                                            > hardCap))) {
+                // 刹车开火要自报（限频）：它是全引擎唯一按**墙钟**做决
+                // 定的地方——宿主一忙它就刹得更早、半截更短，载荷由此
+                // 漏进按 tick 计数的世界。杆桥悬案的最后一个嫌疑人。
+                if (began - lastBrakeLog > 5_000_000_000L
+                        || lastBrakeLog == Long.MIN_VALUE) {
+                    lastBrakeLog = began;
+                    com.mojang.logging.LogUtils.getLogger().warn(
+                            "[voxel-brake] visited={} ms={}", visited,
+                            (System.nanoTime() - began) / 1_000_000L);
+                }
+                break;
+            }
             Anchor here = open.poll().at;
             Key hereKey = key(here);
             visited++;
@@ -146,6 +245,12 @@ public final class VoxelAstar {
                 closestH = h;
                 closest = here;
             }
+            // 竖直验收留宽（上下各两格）：goal 的 y 常常不是站位口径
+            // ——杆顶的锚比路标格高一大截、灯塔目标悬在空中。曾把上方
+            // 收紧到半格（治"站在崖唇上宣布到站"），杆桥一族当场全红：
+            // 杆顶锚永远高过路标 y，验收永不放行，部分路径又被降边剪
+            // 刀截住，她钉死在半途（sw188 十一红）。沿口的病得在执行
+            // 侧治，不能拿验收的尺子改。
             if (Math.hypot(here.at().x - goal.x, here.at().z - goal.z)
                     <= acceptWithin
                     && Math.abs(here.at().y - goal.y) <= 2.0D) {
@@ -177,8 +282,15 @@ public final class VoxelAstar {
                 // 设祖父直线可视（真伪等它自己出队时兑付）——任意角的
                 // 直线代价从**搜索里**就在指路，不是事后拉直。跳与降带
                 // 着初速合同，父永远是脚下这一步。
+                // 捷径限长 8.5 格：视线验伪是按格数的碰撞扫掠＋逐半步踩
+                // 点，一条三十格捷径一次验伪抵几十个搜索步。跳边闸门上
+                // 线前这笔账被跳链遮着（LEAP 不参与捷径）；闸门一开全图
+                // 皆走，规划 p50 当场翻 2.8~6 倍（sw182），全是长线的验
+                // 伪费。八格半够把空地八格拉成一条直线（快照钉着），更
+                // 长的路多立几个路标，走起来没有分别。
                 if (out.stride().move() == Stride.Move.WALK
                         && grand != null && gGrand != null
+                        && grand.flatTo(to) <= 8.5D
                         && Math.abs(grand.at().y - to.at().y) <= 0.6D) {
                     double line = gGrand + grand.flatTo(to)
                             + Math.abs(to.at().y - grand.at().y) * 0.5D;
@@ -324,5 +436,10 @@ public final class VoxelAstar {
 
     private static double heuristic(Anchor a, Vec3 goal) {
         return Math.sqrt(a.at().distanceToSqr(goal));
+    }
+
+    /** 时间配额是否已吃紧（探路层据此改发乐观存根）。 */
+    public static boolean strained() {
+        return nanosSpent >= NANO_BUDGET;
     }
 }

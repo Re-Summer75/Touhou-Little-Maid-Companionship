@@ -57,6 +57,18 @@ public record Anchor(Vec3 at, double breadth, Kind kind, AABB stand,
         return Math.hypot(other.at.x - at.x, other.at.z - at.z);
     }
 
+    /**
+     * 她离这片支撑面的**边**还有多远（站在面外为负）。
+     *
+     * <p>与 {@link #standDist} 相反：那个问"离面多远"（面内恒零），这个
+     * 问"面内还剩多少余地"。走路预演拿它当免检凭据——八 tick 走不出这
+     * 片面，就不可能掉下去。
+     */
+    public double rimDist(double x, double z) {
+        return Math.min(Math.min(x - stand.minX, stand.maxX - x),
+                Math.min(z - stand.minZ, stand.maxZ - z));
+    }
+
     /** 水平点到支撑面的距离：脚心悬在面上方即 0。 */
     public double standDist(double x, double z) {
         double dx = Math.max(0.0D,

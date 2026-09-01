@@ -337,6 +337,45 @@ public final class StrideWeb implements StrideSupplier {
                 if (band > 1 || band < -1) {
                     continue;
                 }
+                // **能走到沿口迈下去就不跳**（走得通就不跳的下行版）。
+                // 下行走边背着 0.5 的落差费而跳边零过路费，三格外的下行
+                // 跳一律比"走两步＋下台阶"便宜——她于是为跑下一格台阶
+                // 组织起跳，贴沿与回锚打足十八 tick 的拉锯（奔跑下台阶
+                // 案读数带：approach t0.40 ↔ regroup b1.70 来回九轮才起
+                // 跳）。判据问**整条射线的剖面**：沿途每一格在出发高度
+                // 或低一格任一层站得住，就是楼梯剖面——走到沿口一步迈
+                // 下，不必跳；剖面里有两层皆空的真缺口才跳。单点探测扑
+                // 过两次空（一版戳进实心台面，二版被搜索滑去下一条没拦
+                // 的跳边绕过——拦不完的，得把整条道问全）。
+                if (band == -1) {
+                    boolean stairway = true;
+                    for (int i = 1; i < reach && stairway; i++) {
+                        BlockPos step = cell.relative(side, i);
+                        stairway = resolve(step) != null
+                                || resolve(step.above(-1)) != null;
+                    }
+                    if (stairway) {
+                        continue;
+                    }
+                }
+                // **走得通就不跳**。任意角把走路按纯直线计价，同一条线
+                // 的跳边恰好同价，A* 平手偏向节点更少的跳链——快照层首
+                // 跑当场拍到她把平地走成一串两格小跳（sw180：空地 8 格
+                // stops=5 moves=LEAP，清场后复测不变）。跳是为走不通准
+                // 备的：缺口、壕沟、柱挡、高差在这里都是一票否决，那些
+                // 跳照旧供。顺带省掉平地上每条候选跳边的弧线扫掠，也消
+                // 掉了拥挤局里同价节点互相改善的平手风暴。
+                //
+                // 先问 O(1) 的**同面**：落点就在出发面这块凸矩形里（离
+                // 边还有余量、同高），面本身按可站雕刻过，线必然可走。
+                // 全价的 lineWalkable（线扫碰撞＋逐半步踩点）只留给跨面
+                // ——第一版每个节点最多问它十二遍，规划 p50 当场翻了
+                // 2.8~6 倍（sw182/183），闸门比它拦下的弧线扫掠还贵。
+                if ((Math.abs(to.at().y - from.at().y) <= 0.1D
+                        && from.rimDist(to.at().x, to.at().z) > 0.05D)
+                        || lineWalkable(from, to)) {
+                    continue;
+                }
                 double lane = laneOf(from, to);
                 if (Double.isNaN(lane)) {
                     continue;

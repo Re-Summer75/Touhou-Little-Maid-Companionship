@@ -51,6 +51,30 @@ public final class VoxelPath {
     }
 
     /** 还有没走完的站。 */
+    /** 零位移看门的账本：上次盘点的位置与原地冻结的 tick 数。 */
+    private double watchX = Double.NaN;
+    private double watchZ;
+    private int frozenTicks;
+
+    /**
+     * 这条路是不是走不动了：贴地执行中连续三十 tick 没挪半步（怼着上
+     * 不去的高差、卡在角上、被人群挤死）。走丢量的是离线多远，量不到
+     * "人贴着线原地怼"；换单节流句句复用旧答卷——上层全瞎（沉门板案
+     * t7..t153：起点在空中解错、随后一百四十七 tick 无人发现她在怼壁，
+     * 差事耐心到点才解围）。路自己数位移最诚实；三十 tick 比起跳酝酿
+     * 的拉锯长，不误伤。
+     */
+    public boolean dragging(double x, double z) {
+        if (Double.isNaN(watchX)
+                || Math.hypot(x - watchX, z - watchZ) >= 0.02D) {
+            watchX = x;
+            watchZ = z;
+            frozenTicks = 0;
+            return false;
+        }
+        return ++frozenTicks >= 30;
+    }
+
     public boolean alive() {
         return cursor < anchors.size();
     }
