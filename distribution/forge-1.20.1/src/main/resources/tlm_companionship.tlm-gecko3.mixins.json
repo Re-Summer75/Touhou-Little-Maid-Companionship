@@ -3,6 +3,7 @@
   "minVersion": "0.8",
   "package": "com.laixia.maidintelligence.mixin.tlm",
   "compatibilityLevel": "JAVA_17",
+  "refmap": "tlm_companionship.refmap.json",
   "mixins": [
     "EntityMaidAiOptimizationMixin",
     "EntityMaidPlaceBlockMixin",

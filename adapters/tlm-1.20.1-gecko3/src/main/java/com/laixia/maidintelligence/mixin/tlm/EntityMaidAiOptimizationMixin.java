@@ -48,7 +48,9 @@ public abstract class EntityMaidAiOptimizationMixin
     private boolean maidIntelligence$coordinatingCombat;
 
     @Inject(
-            method = "getRestrictRadius()F",
+            // 混淆后这个覆写叫 m_21535_，两个名字都列上：开发环境命中前者，
+            // 玩家的游戏命中后者。
+            method = {"getRestrictRadius()F", "m_21535_()F"},
             at = @At("RETURN"),
             cancellable = true,
             require = 0,

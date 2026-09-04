@@ -22,7 +22,11 @@ public abstract class MaidFeedAnimalTaskMixin {
     @Shadow
     private Animal feedEntity;
 
+    // require = 0：这条只是把「这对动物是她撮合的」记下来好发成就。宿主的
+    // 兼容范围是 [1.5.3,)，上游哪天挪走这行喂食逻辑，注入落空最多是少一个
+    // 成就归属——没资格让玩家的女仆连带罢工、消失、掉帧。
     @Inject(
+            require = 0,
             method = "start(Lnet/minecraft/server/level/ServerLevel;"
                     + "Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;J)V",
             at = @At(

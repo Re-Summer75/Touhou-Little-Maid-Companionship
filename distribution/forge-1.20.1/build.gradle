@@ -108,8 +108,8 @@ minecraft {
 }
 
 mixin {
-    // MixinGradle emits one refmap per source set. MC/Forge configs share it;
-    // every TLM/Gecko target uses remap=false and intentionally has no refmap.
+    // MixinGradle emits one refmap per source set; every config names it, and
+    // verifyMixinProductionNames rejects one that needs it and does not.
     add sourceSets.main, 'tlm_companionship.refmap.json'
     config 'tlm_companionship.common.mixins.json'
     config 'tlm_companionship.client.mixins.json'
@@ -294,13 +294,15 @@ tasks.register('verifyMixinLayout') {
                         "${name} expected ${expectedMixins.size()} Mixins, found ${count}."
                 )
             }
-            if (name == tlmMixinConfig) {
-                if (config.contains('"refmap"')) {
-                    throw new GradleException(
-                            'TLM/Gecko Mixin config must not declare a refmap.'
-                    )
-                }
-            } else if (!config.contains(
+            // Every config names the refmap. The TLM/Gecko one used to be
+            // required *not* to, on the grounds that all of its mixins were
+            // remap-free; one of them then pointed an @At at a vanilla method
+            // and the rule kept the mapping table out of reach of the only
+            // mixin that needed it. Development never saw it — the readable
+            // name is the runtime name there — and 0.1.0 players lost maid
+            // feeding to it. verifyMixinProductionNames now decides per mixin
+            // whether mappings are needed; this line only keeps the wiring.
+            if (!config.contains(
                     '"refmap": "tlm_companionship.refmap.json"'
             )) {
                 throw new GradleException(
